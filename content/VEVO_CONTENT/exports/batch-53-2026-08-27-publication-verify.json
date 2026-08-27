@@ -1,0 +1,552 @@
+{
+  "batch": "batch-53",
+  "verified_at": "2026-08-27T12:23:24.586110+00:00",
+  "article_count": 4,
+  "minimum_visible_words": 2800,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Čo je rybia kosť: lámaný keper, smer vzoru a správne pranie",
+      "slug": "co-je-rybia-kost-lamany-keper-smer-vzoru-a-spravne-pranie",
+      "url": "https://www.vevo.sk/n/co-je-rybia-kost-lamany-keper-smer-vzoru-a-spravne-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-rybia-kost-lamany-keper-smer-vzoru-a-spravne-pranie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3561,
+      "h2_count": 30,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 10,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://cottonworks.com/encyclopedia-item/broken-twill/",
+        "https://cottonworks.com/learning-hub/weaving/basic-woven-fabric-designs/",
+        "https://cottonworks.com/wp-content/uploads/2023/03/Weaving-101.pdf",
+        "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+        "https://members.aatcc.org/store/tm135/543/",
+        "https://members.aatcc.org/store/tm61/495/",
+        "https://store.astm.org/d1336-07r25e01.html",
+        "https://store.astm.org/d1683_d1683m-17e01.html",
+        "https://store.astm.org/d4966-22r26.html",
+        "https://www.ginetex.net/share/article/4201/care-symbols"
+      ],
+      "body_length": 33501,
+      "ok": true,
+      "minimum_visible_words": 2800
+    },
+    {
+      "title": "Čo je voálová záclona: priesvitná tkanina, prach a pranie bez pokrčenia",
+      "slug": "co-je-voalova-zaclona-priesvitna-tkanina-prach-a-pranie-bez-pokrcenia",
+      "url": "https://www.vevo.sk/n/co-je-voalova-zaclona-priesvitna-tkanina-prach-a-pranie-bez-pokrcenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-voalova-zaclona-priesvitna-tkanina-prach-a-pranie-bez-pokrcenia",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3583,
+      "h2_count": 30,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 10,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://cottonworks.com/learning-hub/weaving/basic-woven-fabric-designs/",
+        "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+        "https://members.aatcc.org/store/tm135/543/",
+        "https://members.aatcc.org/store/tm61/495/",
+        "https://store.astm.org/d1683_d1683m-17e01.html",
+        "https://textileresearchlab.pratt.edu/construction/wovens",
+        "https://www.getty.edu/vow/AATFullDisplay?find=&logic=AND&note=&subjectid=300417858",
+        "https://www.ginetex.net/share/article/4201/care-symbols"
+      ],
+      "body_length": 33723,
+      "ok": true,
+      "minimum_visible_words": 2800
+    },
+    {
+      "title": "Čo je taft: šušťavá tkanina, vodné mapy a bezpečné čistenie",
+      "slug": "co-je-taft-sustava-tkanina-vodne-mapy-a-bezpecne-cistenie",
+      "url": "https://www.vevo.sk/n/co-je-taft-sustava-tkanina-vodne-mapy-a-bezpecne-cistenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-taft-sustava-tkanina-vodne-mapy-a-bezpecne-cistenie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3638,
+      "h2_count": 31,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 10,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://collections.lacma.org/object/130818",
+        "https://collections.lacma.org/object/131310",
+        "https://cottonworks.com/learning-hub/weaving/basic-woven-fabric-designs/",
+        "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+        "https://mci.si.edu/node/1317439",
+        "https://members.aatcc.org/store/tm135/543/",
+        "https://members.aatcc.org/store/tm61/495/",
+        "https://store.astm.org/d1683_d1683m-17e01.html",
+        "https://store.astm.org/d4966-22r26.html",
+        "https://www.ginetex.net/share/article/4201/care-symbols"
+      ],
+      "body_length": 34120,
+      "ok": true,
+      "minimum_visible_words": 2800
+    },
+    {
+      "title": "Čo je loden a varená vlna: valchovanie, plsť a bezpečné čistenie",
+      "slug": "co-je-loden-a-varena-vlna-valchovanie-plst-a-bezpecne-cistenie",
+      "url": "https://www.vevo.sk/n/co-je-loden-a-varena-vlna-valchovanie-plst-a-bezpecne-cistenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-loden-a-varena-vlna-valchovanie-plst-a-bezpecne-cistenie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 4117,
+      "h2_count": 33,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 11,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+        "https://iwto.org/the-science-of-wool-durability/",
+        "https://iwto.org/wool-supply-chain/chemicals-wool-processing/",
+        "https://members.aatcc.org/store/tm135/543/",
+        "https://store.astm.org/d4966-22r26.html",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.woolmark.com/care/how-to-dry-wool-sweater/",
+        "https://www.woolmark.com/care/washing-instruction-symbols-explained",
+        "https://www.woolmark.com/industry/product-development/processing-innovations/machine-washable-wool/"
+      ],
+      "body_length": 38108,
+      "ok": true,
+      "minimum_visible_words": 2800
+    }
+  ],
+  "link_checks": [
+    {
+      "url": "https://collections.lacma.org/object/130818",
+      "status": 200,
+      "final_url": "https://collections.lacma.org/object/130818",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://collections.lacma.org/object/131310",
+      "status": 200,
+      "final_url": "https://collections.lacma.org/object/131310",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://cottonworks.com/encyclopedia-item/broken-twill/",
+      "status": 200,
+      "final_url": "https://cottonworks.com/encyclopedia-item/broken-twill/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://cottonworks.com/learning-hub/weaving/basic-woven-fabric-designs/",
+      "status": 200,
+      "final_url": "https://cottonworks.com/learning-hub/weaving/basic-woven-fabric-designs/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://cottonworks.com/wp-content/uploads/2023/03/Weaving-101.pdf",
+      "status": 200,
+      "final_url": "https://cottonworks.com/wp-content/uploads/2023/03/Weaving-101.pdf",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+      "status": 202,
+      "final_url": "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+      "allowed_automation_block": true,
+      "automation_note": "Official EUR-Lex page accepts the automated request asynchronously",
+      "ok": true
+    },
+    {
+      "url": "https://iwto.org/the-science-of-wool-durability/",
+      "status": 200,
+      "final_url": "https://iwto.org/the-science-of-wool-durability/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://iwto.org/wool-supply-chain/chemicals-wool-processing/",
+      "status": 200,
+      "final_url": "https://iwto.org/wool-supply-chain/chemicals-wool-processing/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://mci.si.edu/node/1317439",
+      "status": 200,
+      "final_url": "https://mci.si.edu/node/1317439",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm135/543/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm135/543/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm61/495/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm61/495/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d1336-07r25e01.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d1336-07r25e01.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d1683_d1683m-17e01.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d1683_d1683m-17e01.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d4966-22r26.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d4966-22r26.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://textileresearchlab.pratt.edu/construction/wovens",
+      "status": 200,
+      "final_url": "https://textileresearchlab.pratt.edu/construction/wovens",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.getty.edu/vow/AATFullDisplay?find=&logic=AND&note=&subjectid=300417858",
+      "status": 200,
+      "final_url": "https://www.getty.edu/vow/AATFullDisplay?find=&logic=AND&note=&subjectid=300417858",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-krv-vosk-a-ine-skvrny-z-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-krv-vosk-a-ine-skvrny-z-oblecenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-jesenny-kabat-trenckot-a-lahky-vlneny-kabat-doma",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-jesenny-kabat-trenckot-a-lahky-vlneny-kabat-doma",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-spolocenske-saty-doma-a-kedy-zvolit-cistiaren",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-spolocenske-saty-doma-a-kedy-zvolit-cistiaren",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-vlneny-pled-a-deku-bez-zrazenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-vlneny-pled-a-deku-bez-zrazenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-zaclony",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-zaclony",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-zaclony-aby-zostali-biele-a-vonave",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-zaclony-aby-zostali-biele-a-vonave",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-zaclony-v-kuchyni-od-mastnoty-a-pachov",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-zaclony-v-kuchyni-od-mastnoty-a-pachov",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-zaclony-v-spalni-pri-alergii-na-prach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-zaclony-v-spalni-pri-alergii-na-prach",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-vyzehlit-zaclonu-kompletny-sprievodca",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-vyzehlit-zaclonu-kompletny-sprievodca",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-garnizu-a-kolajnice-zaclon-prach-mastnota-a-zasekavanie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-garnizu-a-kolajnice-zaclon-prach-mastnota-a-zasekavanie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vyzehlit-koselu-kompletny-sprievodca-pre-dokonaly-vysledok",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyzehlit-koselu-kompletny-sprievodca-pre-dokonaly-vysledok",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.woolmark.com/care/how-to-dry-wool-sweater/",
+      "status": 200,
+      "final_url": "https://www.woolmark.com/care/how-to-dry-wool-sweater/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.woolmark.com/care/washing-instruction-symbols-explained",
+      "status": 200,
+      "final_url": "https://www.woolmark.com/care/washing-instruction-symbols-explained",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.woolmark.com/industry/product-development/processing-innovations/machine-washable-wool/",
+      "status": 200,
+      "final_url": "https://www.woolmark.com/industry/product-development/processing-innovations/machine-washable-wool/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    }
+  ]
+}

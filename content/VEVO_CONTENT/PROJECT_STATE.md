@@ -34,7 +34,7 @@ Branch: codex/vevo-content-batch-53
 - Batch 48 underused-material guides are published as post IDs `3191-3194` through the repo-local hidden-first content MCP. All four clean URLs, long-form rich HTML bodies, authoritative sources, internal links, product/category cards, and responsive mobile layout passed independent verification.
 - Batch 51 woven-surface and yarn guides are published as post IDs `3206-3209` through the repo-local hidden-first content MCP. All four clean URLs, long-form rich HTML bodies, authoritative sources, internal links, product/category cards, and responsive mobile layout passed independent verification.
 - Batch 52 distinct textile-system guides are published as post IDs `3211-3214` through the repo-local hidden-first content MCP. Oxford, sypkovina, abaka and moleskin have clean URLs, `3273-3359` independently measured public words, rich responsive HTML, authoritative sources, verified internal links and conditional product/category cards without fixed prices.
-- Batch 53 preparation is complete on `codex/vevo-content-batch-53`. Sixteen candidate intents were checked against `863` merged records and live admin blocks `765`, `774` and `1905`; the selected subjects are rybia kosť, voálová záclona, taft and one combined loden/varená vlna/plsť terminology article. Final visible word counts are `3559`, `3581`, `3636` and `4115`; duplicate, public-wording, depth, HTML-safety and link preflight gates pass, and the full prepared check passes `50/50` tests with no project-audit blocker. Four new regression tests prevent English or adjacent names from re-entering as duplicate definitions. No batch 53 production mutation has occurred yet.
+- Batch 53 weave, curtain, formal-fabric and fulled-wool guides are published as post IDs `3216-3219` through the explicit repo-local hidden-first content MCP. Rybia kosť, voálová záclona, taft and the combined loden/varená vlna/plsť terminology guide have clean URLs, `3561-4117` independently measured public words, rich responsive HTML, authoritative sources, verified internal links and conditional product/category cards without fixed prices.
 - Cross-section duplicate audit and remediation on `2026-07-14` inspected all `829` admin records in glossary block `1905`, FAQ block `774`, and Blog block `765`. Exact public title/body duplicates were resolved and `23` semantic-overlap articles were expanded without changing their existing titles or slugs. The final audit has zero public exact-title and zero public exact-body groups.
 
 ## Verified
@@ -2123,6 +2123,40 @@ Branch: codex/vevo-content-batch-53
   - `imports/build_batch_52_distinct_textile_systems.py`, `imports/batch-52-2026-08-27-articles.json`, and `imports/verify_batch_52_public.py`;
   - prebuild/prepublication duplicate, link-preflight, wording, depth, HTML, MCP smoke, MCP publication, independent public verification, postpublication project-audit and mobile-QA reports under `exports/`.
 
+## Batch 53 Weaves, Curtains, Formal Fabric And Fulled Wool - Published 2026-08-27
+
+- Status: complete; all four articles were published through the explicit repo-local slug-safe MCP/API workflow, independently verified on the public website, and checked at a mobile breakpoint.
+- Sixteen candidate intents were explored across the merged Blog, FAQ, glossary, RSS and local catalog, exact admin scans of Blog block `765`, FAQ block `774` and glossary block `1905`, competitor and discussion coverage, and authoritative technical sources.
+- Selected topics and deliberate boundaries:
+  - `Čo je rybia kosť: lámaný keper, smer vzoru a správne pranie` separates herringbone from chevron, ordinary twill, tweed and printed imitation;
+  - `Čo je voálová záclona: priesvitná tkanina, prach a pranie bez pokrčenia` focuses on curtain construction, dust, greying, hanging hardware, creases and fibre-specific care rather than repeating generic curtain washing;
+  - `Čo je taft: šušťavá tkanina, vodné mapy a bezpečné čistenie` separates a plain-weave formal fabric from satin and distinguishes fibre, finish, water rings, permanent yarn breaks and structured-garment limits;
+  - `Čo je loden a varená vlna: valchovanie, plsť a bezpečné čistenie` keeps loden, boiled wool, felt and melton in one terminology system instead of publishing overlapping definitions.
+- Ticking was deferred because it remains too close to the newly published sypkovina guide. Nettle remains deferred because of structural proximity to ramie. Melton is now reserved as a related member of the loden/fulled-wool family, not a separate canonical definition.
+- Duplicate aliases now fold `herringbone`, `voile`, `taffeta`, `loden`, `boiled wool`, `felt/plsť` and related variants into their canonical families while keeping chevron distinct. Four regression tests block future alias-based re-entry.
+- Final prepublication duplicate guard passed all four titles against `863` merged records with zero existing duplicate-title groups and zero invalid slugs. All four exact public targets returned `404` before mutation.
+- Prepared articles contain `3559`, `3581`, `3636` and `4115` visible words; `30-33` H2 headings, two responsive tables, `10-11` styled blocks, one concrete product card, one category card, at least thirteen configured reader questions, and zero short or one-character paragraphs each.
+- Seven-word-shingle overlap is `0.0771-0.0884`, below the `0.13` ceiling. Definitions, diagnostics, procedures, comparison tables and expert sections remain topic-specific.
+- Link preflight initially rejected three museum URLs returning automation `403/429`. They were replaced with accessible Getty, Pratt and LACMA sources rather than allowlisted. The final preflight passes all current VEVO, product, category, CottonWorks, Woolmark, IWTO, museum, ASTM, AATCC, GINETEX and EU destinations.
+- Public wording, depth and HTML safety gates pass with zero fixed prices, internal workflow terms, escaped HTML, malformed links or structural failures. The prepared and final project checks pass `50/50` tests.
+- The mutation hard-gate confirmed account `vevo.flox.sk`, public domain `www.vevo.sk`, Slovak Blog page `309`, News block `765`, an admin Blog catalog of `610` records and zero exact title or slug matches for every candidate.
+- Disposable hidden smoke post `3215` preserved its explicit slug and HTML marker, remained public `404`, and was deleted. Follow-up admin lookup found zero matches and the public URL remained `404`.
+- Live posts and canonical public URLs:
+  - post `3216`: `https://www.vevo.sk/n/co-je-rybia-kost-lamany-keper-smer-vzoru-a-spravne-pranie`;
+  - post `3217`: `https://www.vevo.sk/n/co-je-voalova-zaclona-priesvitna-tkanina-prach-a-pranie-bez-pokrcenia`;
+  - post `3218`: `https://www.vevo.sk/n/co-je-taft-sustava-tkanina-vodne-mapy-a-bezpecne-cistenie`;
+  - post `3219`: `https://www.vevo.sk/n/co-je-loden-a-varena-vlna-valchovanie-plst-a-bezpecne-cistenie`.
+- Hidden-first publication preserved exact titles, clean slugs, metadata and `33470-38077` characters of rich HTML. Every final record has active state `1`, retained the same slug and body, and returned public HTTP `200`; the resumable report has `record_count=4`, `public_ok_count=4` and `all_ok=true`.
+- Independent public verification measured `3561`, `3583`, `3638` and `4117` visible words, retained `30-33` H2 headings, both responsive tables, `10-11` styled blocks, both product/category action buttons and zero short paragraphs. All `45` unique outgoing destinations passed.
+- Mobile QA at requested `390x844` produced an effective `375px` content viewport and confirmed a `351px` article column for every URL, both `680px` tables contained by `overflow-x:auto` wrappers, both action buttons contained, zero one-character paragraphs, no escaped HTML and no page-level horizontal overflow. Screenshot capture was unavailable, so the durable report records DOM and computed-layout verification; the viewport override was reset and the temporary tab was closed.
+- Final postpublication project audit reports live catalog `record_count=864`, zero duplicate-title groups, zero invalid slugs, both publication reports green and `block_count=0`. The stale global MCP registration remains a warning only; this batch used the explicit repo-local MCP script.
+- Planning commit `bdb19b6b` and prepared-content commit `75b1507f` are pushed on `codex/vevo-content-batch-53`.
+- Durable prepared and verification artifacts:
+  - `content-plan/batch-53-weaves-curtains-formal-and-fulled-wool-2026-08-27.md`;
+  - exploratory, candidate-scan and final candidate records under `batches/`;
+  - `imports/build_batch_53_weaves_curtains_formal_fulled_wool.py`, `imports/batch-53-2026-08-27-articles.json`, and `imports/verify_batch_53_public.py`;
+  - exploratory, prebuild and prepublication duplicate, link-preflight, wording, depth, HTML, MCP smoke, MCP publication, independent public verification, postpublication project-audit and mobile-QA reports under `exports/`.
+
 ## Known Issues
 
 - The initial VEVO snapshot migration and batch 43 work are isolated on `codex/vevo-content-batch-43`; they are not part of `main` until the branch is reviewed and merged through a pull request.
@@ -2145,6 +2179,7 @@ Branch: codex/vevo-content-batch-53
 - Batch 50 is complete; post IDs `3201-3204` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 50 title, canonical material subject or slug.
 - Batch 51 is complete; post IDs `3206-3209` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 51 title, canonical material subject, alias or slug.
 - Batch 52 is complete; post IDs `3211-3214` are live with exact clean slugs and verified rich HTML. Do not recreate Oxford cloth, sypkovina/inlet, abaca/Manila hemp, moleskin/mollskin or their aliases as new canonical definition articles.
+- Batch 53 is complete; post IDs `3216-3219` are live with exact clean slugs and verified rich HTML. Do not recreate herringbone/rybia kosť, voile/voál, taffeta/taft or loden/boiled wool/felt/plsť/melton as separate canonical definitions.
 - VEVO admin browser automation can be unstable on long loops. Use short stepwise source-mode saves, verify public URLs after each small block, and avoid relying on generic hidden-field selectors when old ExtJS form instances remain in the DOM.
 - The VEVO admin browser session was recovered on `2026-07-06` and used to finish batch 33 publication; no batch 33 publication blocker remains.
 - Batch 32 robot-vacuum batch is now published and verified; no batch 32 publication blocker remains.
@@ -2154,12 +2189,12 @@ Branch: codex/vevo-content-batch-53
 
 For the next VEVO work:
 
-1. Start batch 53 on a new `codex/vevo-content-batch-53` branch stacked on batch 52 and inspect at least twelve candidate intents across Blog, FAQ, glossary, RSS, admin and local records.
-2. Keep the next batch small and structurally diverse. Herringbone needs a strict broken-twill boundary; ticking needs a mattress-cover versus feather-casing terminology review; nettle fibre is still viable for a later plant-fibre article. Voile and taffeta remain candidates only after sharper use-specific intents exist.
-3. Treat loden, boiled wool and felt/plsť as one terminology-planning problem before selecting any of them. Do not publish isolated definitions that divide the same finishing mechanism into overlapping canonical pages.
-4. Run the strengthened canonical-definition-head and alias guard plus manual intent review before writing. Never recreate Oxford cloth, sypkovina/inlet, abaca/Manila hemp, moleskin/mollskin or any earlier canonical subject under an English alias.
+1. Start batch 54 on a new `codex/vevo-content-batch-54` branch stacked on batch 53 and inspect at least twelve candidate intents across Blog, FAQ, glossary, RSS, admin and local records.
+2. Re-evaluate buckram, pepito/Glen check, barchet/fustian, madras, shantung, challis and billiard cloth only after exact alias and intent scans. Do not select four topics from one indistinguishable care family.
+3. Keep ticking deferred until its mattress-cover terminology can be separated safely from sypkovina and the existing mattress guides. Keep nettle deferred until it has a practical boundary from ramie.
+4. Run the canonical-definition-head and alias guard plus manual intent review before writing. Never recreate batch 53 subjects under English, German or adjacent trade names.
 5. Continue the same minimum quality and hidden-first MCP/API verification: at least 2,800 visible words, rich responsive HTML, exact readback, public and link verification, and mobile layout checks.
-6. Keep batch 52 stacked on batch 51 until the earlier pull requests merge, push every durable checkpoint, and merge only through pull requests.
+6. Keep batch 53 stacked on batch 52 until the earlier pull requests merge, push every durable checkpoint, and merge only through pull requests.
 
 ## Handoff Template
 
