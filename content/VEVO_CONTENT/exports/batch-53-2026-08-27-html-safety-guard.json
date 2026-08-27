@@ -1,0 +1,63 @@
+{
+  "article_count": 4,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Čo je rybia kosť: lámaný keper, smer vzoru a správne pranie",
+      "slug": "co-je-rybia-kost-lamany-keper-smer-vzoru-a-spravne-pranie",
+      "body_length": 33470,
+      "styled_block_count": 10,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-53-2026-08-27-articles.json"
+    },
+    {
+      "title": "Čo je voálová záclona: priesvitná tkanina, prach a pranie bez pokrčenia",
+      "slug": "co-je-voalova-zaclona-priesvitna-tkanina-prach-a-pranie-bez-pokrcenia",
+      "body_length": 33692,
+      "styled_block_count": 10,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-53-2026-08-27-articles.json"
+    },
+    {
+      "title": "Čo je taft: šušťavá tkanina, vodné mapy a bezpečné čistenie",
+      "slug": "co-je-taft-sustava-tkanina-vodne-mapy-a-bezpecne-cistenie",
+      "body_length": 34089,
+      "styled_block_count": 10,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-53-2026-08-27-articles.json"
+    },
+    {
+      "title": "Čo je loden a varená vlna: valchovanie, plsť a bezpečné čistenie",
+      "slug": "co-je-loden-a-varena-vlna-valchovanie-plst-a-bezpecne-cistenie",
+      "body_length": 38077,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-53-2026-08-27-articles.json"
+    }
+  ]
+}
