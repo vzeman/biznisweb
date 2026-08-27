@@ -1,0 +1,41 @@
+VEVO batch 53 candidate scan - 2026-08-27
+
+Scope checked:
+- merged Blog, FAQ, glossary, RSS and local catalog: 863 records;
+- live admin Blog block 765: 610 records;
+- live admin FAQ block 774: 177 records;
+- live admin glossary block 1905: 95 records;
+- exact alias scan across all three admin sections: zero matches for all 16 exploratory subjects;
+- exploratory duplicate guard: zero duplicate-title groups, zero invalid slugs and no exact candidate block;
+- current PuellaVone and Giovani indexed results for the selected subjects: no relevant canonical guides found;
+- Modrý koník discussions about voálové záclony, low-spin washing, hanging while damp, greying, wrinkles and uncertain bleaching advice;
+- authoritative CottonWorks, Woolmark, IWTO, Smithsonian, Museum Conservation Institute, ASTM, AATCC, GINETEX and EU sources.
+
+Selected:
+1. Čo je rybia kosť: lámaný keper, smer vzoru a správne pranie
+   - Distinct from the general twill, denim, gabardine and pattern articles.
+   - The article must separate true herringbone's offset reversal from pointed chevron, then cover cut direction, seam matching, skew, ironing and care by fibre.
+2. Čo je voálová záclona: priesvitná tkanina, prach a pranie bez pokrčenia
+   - A curtain-specific decision guide, not another general chiffon, organza, batiste or curtain-whitening article.
+   - It must address hooks and weights, dry dust removal, safe load size, low mechanical stress, hanging damp, when ironing is still necessary and why fibre content decides whitening chemistry.
+3. Čo je taft: šušťavá tkanina, vodné mapy a bezpečné čistenie
+   - Distinct from satin, faille, organza and generic silk care.
+   - It must separate the plain-weave construction and crisp finish from fibre identity, then cover water rings, seam impressions, creases, perspiration, structured garments and professional cleaning boundaries.
+4. Čo je loden a varená vlna: valchovanie, plsť a bezpečné čistenie
+   - One combined terminology page for loden, boiled wool and felt rather than three overlapping definitions.
+   - It must separate woven fulling, knitted boiled-wool treatment and nonwoven felt, explain irreversible felting, then cover dry soil, spot cleaning, reshaping, drying and storage of coats and accessories.
+
+Deferred or blocked:
+- Mattress ticking: deferred because its feather-casing boundary remains too close to the newly published sypkovina guide.
+- Nettle fibre: viable, but deferred to avoid repeating the ramie article's plant-fibre structure in this batch.
+- Melton: blocked from this batch because its dense fulled-wool intent belongs inside the loden/boiled-wool terminology page.
+- Buckram: viable for a later rigid-interlining and shaped-object batch.
+- Pepito and glen check: pattern-focused topics are deferred until a separate comparison plan prevents overlap.
+- Barchet and fustian: deferred because flannel, brushed cotton, rips and moleskin boundaries need a joint plan.
+- Madras, shantung, challis and billiard cloth: viable, but held for a later structurally diverse batch.
+
+Duplicate-prevention change:
+- herringbone, herringbone fabric, herringbone weave and rybia kosť fold to one canonical definition family; chevron stays distinct;
+- voile, voile curtain, voál, voál na záclony and voálová záclona fold to one family;
+- taffeta, tafeta and taft fold to one family;
+- loden, boiled wool, varená vlna and plsť fold to one combined terminology family.

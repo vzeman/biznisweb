@@ -4,7 +4,7 @@ Date: 2026-08-27
 Project: VEVO_CONTENT
 Brand: VEVO
 Domain: vevo.sk
-Branch: codex/vevo-content-batch-52
+Branch: codex/vevo-content-batch-53
 
 ## Current State
 
@@ -34,6 +34,7 @@ Branch: codex/vevo-content-batch-52
 - Batch 48 underused-material guides are published as post IDs `3191-3194` through the repo-local hidden-first content MCP. All four clean URLs, long-form rich HTML bodies, authoritative sources, internal links, product/category cards, and responsive mobile layout passed independent verification.
 - Batch 51 woven-surface and yarn guides are published as post IDs `3206-3209` through the repo-local hidden-first content MCP. All four clean URLs, long-form rich HTML bodies, authoritative sources, internal links, product/category cards, and responsive mobile layout passed independent verification.
 - Batch 52 distinct textile-system guides are published as post IDs `3211-3214` through the repo-local hidden-first content MCP. Oxford, sypkovina, abaka and moleskin have clean URLs, `3273-3359` independently measured public words, rich responsive HTML, authoritative sources, verified internal links and conditional product/category cards without fixed prices.
+- Batch 53 planning is complete on `codex/vevo-content-batch-53`. Sixteen candidate intents were checked against `863` merged records and live admin blocks `765`, `774` and `1905`; the selected subjects are rybia kosť, voálová záclona, taft and one combined loden/varená vlna/plsť terminology article. The prebuild guard reports zero issues, and four new regression tests prevent English or adjacent names from re-entering as duplicate definitions. No batch 53 production mutation has occurred yet.
 - Cross-section duplicate audit and remediation on `2026-07-14` inspected all `829` admin records in glossary block `1905`, FAQ block `774`, and Blog block `765`. Exact public title/body duplicates were resolved and `23` semantic-overlap articles were expanded without changing their existing titles or slugs. The final audit has zero public exact-title and zero public exact-body groups.
 
 ## Verified
