@@ -102,6 +102,47 @@ class DuplicateGuardTests(unittest.TestCase):
         self.assertIn("clean", overlap["same_actions"])
         self.assertIn("radiator", overlap["shared_anchors"])
 
+    def test_reworded_encyclopedic_material_title_is_blocked(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia",
+                "https://www.vevo.sk/n/co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+                "rss",
+            )
+        ]
+
+        results = duplicate_guard.analyze(
+            ["Čo je ripstop: spevnená mriežková tkanina, trhliny a starostlivosť"],
+            existing,
+            0.28,
+        )
+
+        self.assertEqual(results[0]["status"], "block")
+        self.assertIn(
+            "canonical_definition_head",
+            {issue["type"] for issue in results[0]["issues"]},
+        )
+
+    def test_distinct_how_to_article_is_not_a_definition_head_duplicate(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je ripstop: mriežkovaná tkanina, odolnosť a pranie outdoorového oblečenia",
+                "https://www.vevo.sk/n/co-je-ripstop-mriezkovana-tkanina-odolnost-a-pranie-outdooroveho-oblecenia",
+                "rss",
+            )
+        ]
+
+        results = duplicate_guard.analyze(
+            ["Ako opraviť malú trhlinu v ripstopovej bunde"],
+            existing,
+            0.28,
+        )
+
+        self.assertNotIn(
+            "canonical_definition_head",
+            {issue["type"] for issue in results[0]["issues"]},
+        )
+
     def test_cross_section_title_tokens_remove_template_words(self):
         left = cross_section_audit.title_tokens(
             "Ako umyt okna bez smuh - Kompletny sprievodca"
