@@ -1,0 +1,251 @@
+{
+  "existing_count": 855,
+  "excluded_batch": 51,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je chambray: farebná osnova, svetlý útok a správne pranie",
+      "slug": "co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je matelassé: plastický tkaný reliéf, zrážanie a starostlivosť",
+      "slug": "co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je ženilka: vlasová priadza, uvoľňovanie chĺpkov a čistenie",
+      "slug": "co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je panamová väzba: košíková tkanina, posun nití a pranie",
+      "slug": "co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je seersucker: zvlnená tkanina, reliéf a šetrná starostlivosť",
+      "slug": "co-je-seersucker-zvlnena-tkanina-relief-a-setrna-starostlivost",
+      "status": "block",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "canonical_definition_head",
+          "severity": "block",
+          "definition_head": "seersucker",
+          "note": "VEVO already has an encyclopedic article for the same subject. Expand the canonical URL instead of changing only the subtitle.",
+          "matches": [
+            {
+              "title": "Čo je seersucker: zvlnená tkanina, priedušnosť a pranie bez žehlenia",
+              "link": "https://www.vevo.sk/n/co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+              "slug": "co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia"
+            }
+          ]
+        },
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.333,
+              "title": "Čo je seersucker: zvlnená tkanina, priedušnosť a pranie bez žehlenia",
+              "link": "https://www.vevo.sk/n/co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+              "slug": "co-je-seersucker-zvlnena-tkanina-priedusnost-a-pranie-bez-zehlenia",
+              "sources": [
+                "local:batch-45-2026-08-23-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je organza: priehľadná tuhá tkanina, zatrhávanie a pranie",
+      "slug": "co-je-organza-priehladna-tuha-tkanina-zatrhavanie-a-pranie",
+      "status": "block",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "canonical_definition_head",
+          "severity": "block",
+          "definition_head": "organza",
+          "note": "VEVO already has an encyclopedic article for the same subject. Expand the canonical URL instead of changing only the subtitle.",
+          "matches": [
+            {
+              "title": "Čo je organza: priesvitná tuhá látka, záhyby a šetrné pranie",
+              "link": "https://www.vevo.sk/n/co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+              "slug": "co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie"
+            }
+          ]
+        },
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.3,
+              "title": "Čo je organza: priesvitná tuhá látka, záhyby a šetrné pranie",
+              "link": "https://www.vevo.sk/n/co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+              "slug": "co-je-organza-priesvitna-tuha-latka-zahyby-a-setrne-pranie",
+              "sources": [
+                "local:batch-47-2026-08-24-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je voál: ľahká priesvitná tkanina, záclony a správna starostlivosť",
+      "slug": "co-je-voal-lahka-priesvitna-tkanina-zaclony-a-spravna-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je piké: reliéfna pletenina alebo tkanina, póly a pranie",
+      "slug": "co-je-pike-reliefna-pletenina-alebo-tkanina-poly-a-pranie",
+      "status": "block",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "canonical_definition_head",
+          "severity": "block",
+          "definition_head": "pike",
+          "note": "VEVO already has an encyclopedic article for the same subject. Expand the canonical URL instead of changing only the subtitle.",
+          "matches": [
+            {
+              "title": "Čo je piké: reliéfna pletenina, pórovitosť a správne pranie",
+              "link": "https://www.vevo.sk/n/co-je-pike-reliefna-pletenina-porovitost-a-spravne-pranie",
+              "slug": "co-je-pike-reliefna-pletenina-porovitost-a-spravne-pranie"
+            }
+          ]
+        },
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.5,
+              "title": "Čo je piké: reliéfna pletenina, pórovitosť a správne pranie",
+              "link": "https://www.vevo.sk/n/co-je-pike-reliefna-pletenina-porovitost-a-spravne-pranie",
+              "slug": "co-je-pike-reliefna-pletenina-porovitost-a-spravne-pranie",
+              "sources": [
+                "local:batch-47-2026-08-24-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je oxfordská tkanina: košeľová väzba, oder goliera a pranie",
+      "slug": "co-je-oxfordska-tkanina-koselova-vazba-oder-goliera-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je rybia kosť: lomený keper, deformácia a starostlivosť",
+      "slug": "co-je-rybia-kost-lomeny-keper-deformacia-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je sypkovina: hustá tkanina na perie, únik výplne a pranie",
+      "slug": "co-je-sypkovina-husta-tkanina-na-perie-unik-vyplne-a-pranie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.3,
+              "title": "Čo je perkál: hustá tkanina na obliečky, vlastnosti a pranie",
+              "link": "https://www.vevo.sk/n/co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+              "slug": "co-je-perkal-husta-tkanina-na-obliecky-vlastnosti-a-pranie",
+              "sources": [
+                "local:batch-44-2026-08-20-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je otoman: priečne rebrovaná tkanina, tlak a čistenie",
+      "slug": "co-je-otoman-priecne-rebrovana-tkanina-tlak-a-cistenie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.3,
+              "title": "Čo je rips: priečne rebrovaná tkanina, oder a správna starostlivosť",
+              "link": "https://www.vevo.sk/n/co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+              "slug": "co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+              "sources": [
+                "local:batch-50-2026-08-27-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je loden: valchovaná vlnená tkanina, vlhkosť a čistenie",
+      "slug": "co-je-loden-valchovana-vlnena-tkanina-vlhkost-a-cistenie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.333,
+              "title": "Čo je tvíd: hrubšia vlnená tkanina, žmolky a čistenie",
+              "link": "https://www.vevo.sk/n/co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+              "slug": "co-je-tvid-hrubsia-vlnena-tkanina-zmolky-a-cistenie",
+              "sources": [
+                "local:batch-48-2026-08-25-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je hopsack: otvorená košíková väzba, zachytávanie a starostlivosť",
+      "slug": "co-je-hopsack-otvorena-kosikova-vazba-zachytavanie-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "existing_count": 855,
+  "excluded_batch": 51,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je chambray: farebná osnova, svetlý útok a správne pranie",
+      "slug": "co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je matelassé: plastický tkaný reliéf, zrážanie a starostlivosť",
+      "slug": "co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je ženilka: vlasová priadza, uvoľňovanie chĺpkov a čistenie",
+      "slug": "co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je panamová väzba: košíková tkanina, posun nití a pranie",
+      "slug": "co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

@@ -1,0 +1,84 @@
+{
+  "batch": "batch-51",
+  "checked_at": "2026-08-27T12:28:06+02:00",
+  "browser": "Codex In-app Browser",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "all_ok": true,
+  "articles": [
+    {
+      "url": "https://www.vevo.sk/n/co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+      "article_width": 351,
+      "article_scroll_width": 351,
+      "document_scroll_width": 375,
+      "h1_width": 351,
+      "h1_scroll_width": 351,
+      "h2_count": 31,
+      "table_count": 2,
+      "table_wrapper_overflow_x": ["auto", "auto"],
+      "table_widths": [680, 680],
+      "styled_block_count": 10,
+      "action_button_count": 2,
+      "action_buttons_contained": true,
+      "one_character_paragraphs": 0,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+      "article_width": 351,
+      "article_scroll_width": 351,
+      "document_scroll_width": 375,
+      "h1_width": 351,
+      "h1_scroll_width": 351,
+      "h2_count": 31,
+      "table_count": 2,
+      "table_wrapper_overflow_x": ["auto", "auto"],
+      "table_widths": [680, 680],
+      "styled_block_count": 10,
+      "action_button_count": 2,
+      "action_buttons_contained": true,
+      "one_character_paragraphs": 0,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+      "article_width": 351,
+      "article_scroll_width": 351,
+      "document_scroll_width": 375,
+      "h1_width": 351,
+      "h1_scroll_width": 351,
+      "h2_count": 32,
+      "table_count": 2,
+      "table_wrapper_overflow_x": ["auto", "auto"],
+      "table_widths": [680, 680],
+      "styled_block_count": 10,
+      "action_button_count": 2,
+      "action_buttons_contained": true,
+      "one_character_paragraphs": 0,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+      "article_width": 351,
+      "article_scroll_width": 351,
+      "document_scroll_width": 375,
+      "h1_width": 351,
+      "h1_scroll_width": 351,
+      "h2_count": 32,
+      "table_count": 2,
+      "table_wrapper_overflow_x": ["auto", "auto"],
+      "table_widths": [680, 680],
+      "styled_block_count": 10,
+      "action_button_count": 2,
+      "action_buttons_contained": true,
+      "one_character_paragraphs": 0,
+      "ok": true
+    }
+  ],
+  "cleanup": {
+    "viewport_reset": true,
+    "temporary_tab_closed": true
+  }
+}

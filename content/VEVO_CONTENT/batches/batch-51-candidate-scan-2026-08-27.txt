@@ -1,0 +1,42 @@
+VEVO batch 51 candidate scan - 2026-08-27
+
+Scope checked:
+- merged Blog, FAQ, glossary, RSS and local catalog: 855 records;
+- live Blog admin block 765: 602 records;
+- public Blog page 309 and exact target slugs;
+- current VEVO, PuellaVone, Giovani and Slovak-language search results;
+- manual intent boundaries against published material and textile-construction guides.
+
+Selected:
+1. Čo je chambray: farebná osnova, svetlý útok a správne pranie
+   - Distinct from the existing denim, poplin and plain-weave guides.
+   - The article must explain yarn-dyed colour mixing, the plain-weave boundary, collar/cuff soil, fading and shirt care.
+2. Čo je matelassé: plastický tkaný reliéf, zrážanie a starostlivosť
+   - Distinct from the existing damask, jacquard, quilted-fill and bedding guides.
+   - The article must distinguish a woven relief from sewn quilting, padding and printed imitation.
+3. Čo je ženilka: vlasová priadza, uvoľňovanie chĺpkov a čistenie
+   - Distinct from the existing bouclé, velvet, velour and pilling guides.
+   - The article must distinguish loose surface fibre, pile loss, a pulled yarn and a structural break across garments, blankets and upholstery.
+4. Čo je panamová väzba: košíková tkanina, posun nití a pranie
+   - Distinct from the existing plain weave, Oxford, canvas and ripstop coverage.
+   - The article must explain grouped yarns, lower stability than simple plain weave, seam slippage and the retail use of the term hopsack.
+
+Blocked:
+- Seersucker: canonical article 3179 already exists.
+- Organza: canonical article 3186 already exists.
+- Piqué: canonical article 3188 already exists.
+- Ottoman: too close to the newly published transverse-rib rips guide; do not split the same practical problem by a retail synonym.
+- Hopsack: treated as an alias or retail member of the basket/panama-weave family, not a separate future canonical article.
+
+Deferred:
+- Voile: viable, but belongs with other lightweight sheer fabrics and needs a precise boundary from batiste and muslin.
+- Oxford cloth: viable, but should be paired with shirting constructions rather than duplicate the panama comparison table.
+- Herringbone: viable after a separate broken-twill intent review.
+- Sypkovina/ticking: viable as a product-system guide after comparing the existing feather-pillow and bedding coverage.
+- Loden: viable only in a future wool-finish batch with a strong boundary from felt, boiled wool and tweed.
+
+Duplicate-prevention change:
+- canonical definition aliases now fold ženilka/chenille together;
+- panamová väzba/panama weave/košíková väzba/hopsack fold to one canonical family;
+- chambray/šambré fold to one canonical family.
+

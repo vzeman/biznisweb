@@ -1,0 +1,63 @@
+{
+  "article_count": 4,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Čo je chambray: farebná osnova, svetlý útok a správne pranie",
+      "slug": "co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+      "body_length": 34953,
+      "styled_block_count": 10,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-51-2026-08-27-articles.json"
+    },
+    {
+      "title": "Čo je matelassé: plastický tkaný reliéf, zrážanie a starostlivosť",
+      "slug": "co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+      "body_length": 35226,
+      "styled_block_count": 10,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-51-2026-08-27-articles.json"
+    },
+    {
+      "title": "Čo je ženilka: vlasová priadza, uvoľňovanie chĺpkov a čistenie",
+      "slug": "co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+      "body_length": 35533,
+      "styled_block_count": 10,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-51-2026-08-27-articles.json"
+    },
+    {
+      "title": "Čo je panamová väzba: košíková tkanina, posun nití a pranie",
+      "slug": "co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+      "body_length": 35396,
+      "styled_block_count": 10,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-51-2026-08-27-articles.json"
+    }
+  ]
+}

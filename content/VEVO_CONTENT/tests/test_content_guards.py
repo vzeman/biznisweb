@@ -143,6 +143,48 @@ class DuplicateGuardTests(unittest.TestCase):
             {issue["type"] for issue in results[0]["issues"]},
         )
 
+    def test_chenille_alias_is_blocked_by_zenilka_definition(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je ženilka: vlasová priadza, uvoľňovanie chĺpkov a čistenie",
+                "https://www.vevo.sk/n/co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+                "rss",
+            )
+        ]
+
+        results = duplicate_guard.analyze(
+            ["Čo je chenille: mäkký vlas, čalúnenie a starostlivosť"],
+            existing,
+            0.28,
+        )
+
+        self.assertEqual(results[0]["status"], "block")
+        self.assertIn(
+            "canonical_definition_head",
+            {issue["type"] for issue in results[0]["issues"]},
+        )
+
+    def test_hopsack_alias_is_blocked_by_panama_weave_definition(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je panamová väzba: košíková tkanina, posun nití a pranie",
+                "https://www.vevo.sk/n/co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+                "rss",
+            )
+        ]
+
+        results = duplicate_guard.analyze(
+            ["Čo je hopsack: otvorená väzba, zachytávanie a čistenie"],
+            existing,
+            0.28,
+        )
+
+        self.assertEqual(results[0]["status"], "block")
+        self.assertIn(
+            "canonical_definition_head",
+            {issue["type"] for issue in results[0]["issues"]},
+        )
+
     def test_cross_section_title_tokens_remove_template_words(self):
         left = cross_section_audit.title_tokens(
             "Ako umyt okna bez smuh - Kompletny sprievodca"

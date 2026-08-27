@@ -1,0 +1,233 @@
+{
+  "started_at": "2026-08-27T12:23:09+02:00",
+  "mode": "slug-safe-mcp-publication",
+  "article_file": "D:\\CodexWorktrees\\Playground-vevo-b51\\content\\VEVO_CONTENT\\imports\\batch-51-2026-08-27-articles.json",
+  "block_id": "765",
+  "posts": [
+    {
+      "title": "Čo je chambray: farebná osnova, svetlý útok a správne pranie",
+      "slug": "co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+      "url": "https://www.vevo.sk/n/co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+      "post_id": "3206",
+      "create": {
+        "post_id": "3206",
+        "title": "Čo je chambray: farebná osnova, svetlý útok a správne pranie",
+        "link": "co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+        "active": "0",
+        "short_length": 187,
+        "long_length": 34953,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3206",
+        "title": "Čo je chambray: farebná osnova, svetlý útok a správne pranie",
+        "link": "co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+        "active": "1",
+        "short_length": 187,
+        "long_length": 34953,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 151480
+      }
+    },
+    {
+      "title": "Čo je matelassé: plastický tkaný reliéf, zrážanie a starostlivosť",
+      "slug": "co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+      "post_id": "3207",
+      "create": {
+        "post_id": "3207",
+        "title": "Čo je matelassé: plastický tkaný reliéf, zrážanie a starostlivosť",
+        "link": "co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+        "active": "0",
+        "short_length": 215,
+        "long_length": 35226,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3207",
+        "title": "Čo je matelassé: plastický tkaný reliéf, zrážanie a starostlivosť",
+        "link": "co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+        "active": "1",
+        "short_length": 215,
+        "long_length": 35226,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+        "status_code": 200,
+        "location": null,
+        "body_length": 151871
+      }
+    },
+    {
+      "title": "Čo je ženilka: vlasová priadza, uvoľňovanie chĺpkov a čistenie",
+      "slug": "co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+      "url": "https://www.vevo.sk/n/co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+      "post_id": "3208",
+      "create": {
+        "post_id": "3208",
+        "title": "Čo je ženilka: vlasová priadza, uvoľňovanie chĺpkov a čistenie",
+        "link": "co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+        "active": "0",
+        "short_length": 184,
+        "long_length": 35533,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3208",
+        "title": "Čo je ženilka: vlasová priadza, uvoľňovanie chĺpkov a čistenie",
+        "link": "co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+        "active": "1",
+        "short_length": 184,
+        "long_length": 35533,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 152094
+      }
+    },
+    {
+      "title": "Čo je panamová väzba: košíková tkanina, posun nití a pranie",
+      "slug": "co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+      "post_id": "3209",
+      "create": {
+        "post_id": "3209",
+        "title": "Čo je panamová väzba: košíková tkanina, posun nití a pranie",
+        "link": "co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+        "active": "0",
+        "short_length": 204,
+        "long_length": 35396,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "3209",
+        "title": "Čo je panamová väzba: košíková tkanina, posun nití a pranie",
+        "link": "co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+        "active": "1",
+        "short_length": 204,
+        "long_length": 35396,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 152007
+      }
+    }
+  ],
+  "status": "complete",
+  "all_ok": true,
+  "last_run_at": "2026-08-27T12:24:15+02:00",
+  "last_run_mode": "publish",
+  "admin_catalog_count": 602,
+  "preflight": [
+    {
+      "title": "Čo je chambray: farebná osnova, svetlý útok a správne pranie",
+      "slug": "co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-chambray-farebna-osnova-svetly-utok-a-spravne-pranie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124959
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je matelassé: plastický tkaný reliéf, zrážanie a starostlivosť",
+      "slug": "co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-matelasse-plasticky-tkany-relief-zrazanie-a-starostlivost",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124969
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je ženilka: vlasová priadza, uvoľňovanie chĺpkov a čistenie",
+      "slug": "co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-zenilka-vlasova-priadza-uvolnovanie-chlpkov-a-cistenie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124963
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Čo je panamová väzba: košíková tkanina, posun nití a pranie",
+      "slug": "co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/co-je-panamova-vazba-kosikova-tkanina-posun-niti-a-pranie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 124957
+      },
+      "mapped_post_id": null
+    }
+  ],
+  "last_preflight_at": "2026-08-27T12:23:16+02:00",
+  "last_preflight_ok": true,
+  "publish_requested": true,
+  "record_count": 4,
+  "public_ok_count": 4,
+  "completed_at": "2026-08-27T12:25:47+02:00"
+}
