@@ -80,6 +80,18 @@ CANONICAL_INTENTS = {
 }
 
 
+DEFINITION_HEAD_ALIASES = {
+    "chenille": "zenilka",
+    "zenilka": "zenilka",
+    "hopsack": "kosikova vazba",
+    "kosikova vazba": "kosikova vazba",
+    "panama vazba": "kosikova vazba",
+    "panamova vazba": "kosikova vazba",
+    "sambre": "chambray",
+    "chambray": "chambray",
+}
+
+
 STOPWORDS = {
     "ako",
     "a",
@@ -219,7 +231,10 @@ def canonical_definition_head(value):
         return ""
     normalized = norm(prefix)
     match = re.fullmatch(r"co je (.+)", normalized)
-    return match.group(1).strip() if match else ""
+    if not match:
+        return ""
+    head = match.group(1).strip()
+    return DEFINITION_HEAD_ALIASES.get(head, head)
 
 
 def tokens(value):
