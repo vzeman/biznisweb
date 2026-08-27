@@ -1,10 +1,10 @@
 # VEVO_CONTENT Project State
 
-Date: 2026-08-25
+Date: 2026-08-27
 Project: VEVO_CONTENT
 Brand: VEVO
 Domain: vevo.sk
-Branch: codex/vevo-content-batch-48
+Branch: codex/vevo-content-batch-49
 
 ## Current State
 
@@ -1993,6 +1993,22 @@ Branch: codex/vevo-content-batch-48
   - `batches/batch-48-candidate-scan-2026-08-25.txt` and `batches/batch-48-candidates-2026-08-25.txt`;
   - `imports/build_batch_48_underused_materials.py`, `imports/batch-48-2026-08-25-articles.json`, and `imports/verify_batch_48_public.py`;
   - duplicate, link-preflight, wording, depth, HTML, MCP smoke, MCP publication, independent public verification, and mobile QA reports under `exports/`.
+
+## Batch 49 Household Material Systems - Prepared 2026-08-27
+
+- Status: prepared and not yet published. Four distinct system-level material guides were selected after a fourteen-topic scan: damask as a reversible woven construction, kapok as a hollow fruit-fibre filling, sisal as a moisture-sensitive leaf-fibre floor covering, and vlizelin as a garment interlining system.
+- The final exact duplicate guard passed against `847` merged Blog, FAQ, glossary, RSS and local records. Catalog health remains at zero duplicate-title groups and zero invalid slugs. The broad nonwoven title remains blocked and was not bypassed; cork textile remains under review, and coconut fibre remains deferred because of proximity to the existing entrance-mat guide.
+- Prepared quality: visible word counts `3632`, `3644`, `3668`, and `3775`; every article has `32-33` H2 headings, two responsive tables, eleven styled blocks, one concrete product card, one category card, eleven reader-facing FAQ questions, and zero short or one-character paragraphs.
+- Seven-word-shingle overlap is `0.0784-0.0818`, below the `0.13` batch ceiling. Shared wording is limited to safety and layout conventions; definitions, failure mechanisms, diagnostics, procedures, tables, commercial boundaries and sources remain article-specific.
+- Link preflight passed after replacing two Met Museum URLs that returned HTTP `429` to automation with an accessible V&A collection source. All four exact future slugs return `404`; all current VEVO, product, category, EU, GINETEX, AATCC, ISO, ASTM, FAO, V&A, CottonWorks, Freudenberg and peer-reviewed destinations pass.
+- Public wording, depth and HTML safety guards pass with zero fixed prices, internal workflow wording, escaped HTML, malformed links or structural failures. The complete prepared project check passed `38/38` tests with project-audit `block_count=0`.
+- Product boundaries are explicit: the laundry product applies only to a washable damask item, removable kapok cover or whole washable garment; the carpet product is not presented as automatically compatible with natural sisal and requires manufacturer confirmation plus a fully dried hidden test.
+- Durable prepared artifacts:
+  - `content-plan/batch-49-household-material-systems-2026-08-27.md`;
+  - `batches/batch-49-candidate-scan-2026-08-27.txt` and `batches/batch-49-candidates-2026-08-27.txt`;
+  - `imports/build_batch_49_household_material_systems.py`, `imports/batch-49-2026-08-27-articles.json`, and `imports/verify_batch_49_public.py`;
+  - duplicate, link-preflight, wording, depth and HTML reports under `exports/`.
+- Next exact step: confirm the VEVO account, Slovak language, Blog page `309` and News block `765` through the repo-local MCP, run one disposable hidden create/readback/delete smoke test, rerun the exact duplicate guard immediately before mutation, and only then publish hidden-first with exact title, slug and rich-HTML readback.
 
 ## Known Issues
 

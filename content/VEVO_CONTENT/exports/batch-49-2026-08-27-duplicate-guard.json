@@ -1,0 +1,49 @@
+{
+  "existing_count": 847,
+  "excluded_batch": 49,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je damask: obojstranný tkaný vzor a starostlivosť o obrusy a obliečky",
+      "slug": "co-je-damask-obojstranny-tkany-vzor-a-starostlivost-o-obrusy-a-obliecky",
+      "status": "ok",
+      "clusters": [
+        {
+          "cluster": "bedding_sleep",
+          "terms": [
+            "obliecky"
+          ],
+          "intent_terms": [],
+          "note": "Bedding topics need clear separation by textile type and user problem."
+        }
+      ],
+      "issues": []
+    },
+    {
+      "title": "Čo je kapok: ľahká rastlinná výplň, vlhkosť a starostlivosť",
+      "slug": "co-je-kapok-lahka-rastlinna-vypln-vlhkost-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je sisal: pevné listové vlákno, škvrny od vody a čistenie kobercov",
+      "slug": "co-je-sisal-pevne-listove-vlakno-skvrny-od-vody-a-cistenie-kobercov",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je vlizelín: výstuž odevu, lepidlo a bezpečné čistenie",
+      "slug": "co-je-vlizelin-vystuz-odevu-lepidlo-a-bezpecne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}
