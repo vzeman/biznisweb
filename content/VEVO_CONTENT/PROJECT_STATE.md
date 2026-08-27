@@ -2044,6 +2044,7 @@ Branch: codex/vevo-content-batch-49
 - Independent public verification confirmed every article with `30` H2 headings, two responsive tables, ten styled blocks, both product/category action buttons and zero short paragraphs. All `31` unique outgoing destinations passed.
 - Mobile QA at `390x844` confirmed a `351px` article column for every URL, both `680px` tables contained by `overflow-x:auto` wrappers, both action buttons contained, zero one-character paragraphs and no page-level horizontal overflow. The first article was also visually inspected; the heading, introductory copy and first styled block wrap cleanly. The temporary viewport override was reset and the QA tab was closed.
 - Final post-publication project check passed `40/40` tests with project-audit `block_count=0`, live catalog `record_count=852`, zero duplicate-title groups, zero invalid slugs and both publication reports green. The known stale global MCP registration remains safely bypassed by the explicit repo-local script.
+- Prepared commit `0b51f457` and publication commit `dcaa0d84` are pushed on `codex/vevo-content-batch-50`. Stacked PR `#471` targets `codex/vevo-content-batch-49`; `env-check`, `secret-scan`, `security-baseline` and `observability-baseline` all passed.
 - Durable prepared artifacts:
   - `content-plan/batch-50-textile-structures-and-fillings-2026-08-27.md`;
   - `batches/batch-50-candidate-scan-2026-08-27.txt`, `batches/batch-50-candidates-2026-08-27.txt`, and the exploratory candidate list;
