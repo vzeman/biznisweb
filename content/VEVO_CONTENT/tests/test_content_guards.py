@@ -185,6 +185,90 @@ class DuplicateGuardTests(unittest.TestCase):
             {issue["type"] for issue in results[0]["issues"]},
         )
 
+    def test_oxford_cloth_alias_is_blocked_by_slovak_definition(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je oxfordská tkanina: košeľová väzba, golier a správne pranie",
+                "https://www.vevo.sk/n/co-je-oxfordska-tkanina-koselova-vazba-golier-a-spravne-pranie",
+                "rss",
+            )
+        ]
+
+        results = duplicate_guard.analyze(
+            ["Čo je Oxford cloth: košeľovina, väzba a údržba"],
+            existing,
+            0.28,
+        )
+
+        self.assertEqual(results[0]["status"], "block")
+        self.assertIn(
+            "canonical_definition_head",
+            {issue["type"] for issue in results[0]["issues"]},
+        )
+
+    def test_inlet_alias_is_blocked_by_sypkovina_definition(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je sypkovina: hustá tkanina na perie, škvrny a pranie",
+                "https://www.vevo.sk/n/co-je-sypkovina-husta-tkanina-na-perie-skvrny-a-pranie",
+                "rss",
+            )
+        ]
+
+        results = duplicate_guard.analyze(
+            ["Čo je inlet: poťah na perie, únik páperia a čistenie"],
+            existing,
+            0.28,
+        )
+
+        self.assertEqual(results[0]["status"], "block")
+        self.assertIn(
+            "canonical_definition_head",
+            {issue["type"] for issue in results[0]["issues"]},
+        )
+
+    def test_manila_hemp_alias_is_blocked_by_abaka_definition(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je abaka: pevné listové vlákno, vlhkosť a starostlivosť",
+                "https://www.vevo.sk/n/co-je-abaka-pevne-listove-vlakno-vlhkost-a-starostlivost",
+                "rss",
+            )
+        ]
+
+        results = duplicate_guard.analyze(
+            ["Čo je Manila hemp: prírodné vlákno, košíky a údržba"],
+            existing,
+            0.28,
+        )
+
+        self.assertEqual(results[0]["status"], "block")
+        self.assertIn(
+            "canonical_definition_head",
+            {issue["type"] for issue in results[0]["issues"]},
+        )
+
+    def test_mollskin_alias_is_blocked_by_moleskin_definition(self):
+        existing = [
+            duplicate_guard.row_from_title_link(
+                "Čo je moleskin: hustá brúsená bavlna, lesk a správne pranie",
+                "https://www.vevo.sk/n/co-je-moleskin-husta-brusena-bavlna-lesk-a-spravne-pranie",
+                "rss",
+            )
+        ]
+
+        results = duplicate_guard.analyze(
+            ["Čo je mollskin: mäkký povrch, nohavice a čistenie"],
+            existing,
+            0.28,
+        )
+
+        self.assertEqual(results[0]["status"], "block")
+        self.assertIn(
+            "canonical_definition_head",
+            {issue["type"] for issue in results[0]["issues"]},
+        )
+
     def test_cross_section_title_tokens_remove_template_words(self):
         left = cross_section_audit.title_tokens(
             "Ako umyt okna bez smuh - Kompletny sprievodca"

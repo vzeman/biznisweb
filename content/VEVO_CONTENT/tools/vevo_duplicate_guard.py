@@ -81,7 +81,23 @@ CANONICAL_INTENTS = {
 
 
 DEFINITION_HEAD_ALIASES = {
+    "abaca": "abaka",
+    "abaka": "abaka",
     "chenille": "zenilka",
+    "downproof fabric": "sypkovina",
+    "inlet": "sypkovina",
+    "manila hemp": "abaka",
+    "manilske konope": "abaka",
+    "moleskin": "moleskin",
+    "moleskin tkanina": "moleskin",
+    "mollskin": "moleskin",
+    "oxford cloth": "oxford tkanina",
+    "oxford fabric": "oxford tkanina",
+    "oxford tkanina": "oxford tkanina",
+    "oxford weave": "oxford tkanina",
+    "oxfordska tkanina": "oxford tkanina",
+    "perova sypkovina": "sypkovina",
+    "sypkovina": "sypkovina",
     "zenilka": "zenilka",
     "hopsack": "kosikova vazba",
     "kosikova vazba": "kosikova vazba",

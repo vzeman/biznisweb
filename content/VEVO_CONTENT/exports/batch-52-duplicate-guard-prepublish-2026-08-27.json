@@ -1,0 +1,40 @@
+{
+  "existing_count": 859,
+  "excluded_batch": 52,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je oxfordská tkanina: košeľová väzba, golier a správne pranie",
+      "slug": "co-je-oxfordska-tkanina-koselova-vazba-golier-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je sypkovina: prečo uniká perie, kontrola švov a bezpečné čistenie",
+      "slug": "co-je-sypkovina-preco-unika-perie-kontrola-svov-a-bezpecne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je abaka: pevné listové vlákno, vlhkosť a starostlivosť",
+      "slug": "co-je-abaka-pevne-listove-vlakno-vlhkost-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je moleskin: hustá brúsená bavlna, lesk a správne pranie",
+      "slug": "co-je-moleskin-husta-brusena-bavlna-lesk-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}
