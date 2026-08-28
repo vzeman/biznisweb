@@ -353,6 +353,46 @@ class DuplicateGuardTests(unittest.TestCase):
                     {issue["type"] for issue in results[0]["issues"]},
                 )
 
+    def test_batch_54_trade_aliases_are_blocked_by_canonical_definitions(self):
+        families = (
+            (
+                "Čo je buckram: vystužená tkanina, tvarovanie, prach a bezpečné čistenie",
+                "co-je-buckram-vystuzena-tkanina-tvarovanie-prach-a-bezpecne-cistenie",
+                "Čo je bougran: tuhá kníhviazačská tkanina a čistenie",
+            ),
+            (
+                "Čo je madras: károvaná košeľovina, púšťanie farby a správne pranie",
+                "co-je-madras-karovana-koselovina-pustanie-farby-a-spravne-pranie",
+                "Čo je bleeding madras: farebné káro a údržba",
+            ),
+            (
+                "Čo je šantán: nepravidelný povrch, hodvábne a zmesové varianty",
+                "co-je-santan-nepravidelny-povrch-hodvabne-a-zmesove-varianty",
+                "Čo je shantung silk: nopkovaný hodváb a čistenie",
+            ),
+            (
+                "Čo je challis: mäkká splývavá tkanina, zrážanie a pranie",
+                "co-je-challis-makka-splyvava-tkanina-zrazanie-a-pranie",
+                "Čo je chally: ľahká šatová látka a pranie",
+            ),
+        )
+
+        for title, slug, candidate in families:
+            with self.subTest(candidate=candidate):
+                existing = [
+                    duplicate_guard.row_from_title_link(
+                        title,
+                        f"https://www.vevo.sk/n/{slug}",
+                        "rss",
+                    )
+                ]
+                results = duplicate_guard.analyze([candidate], existing, 0.28)
+                self.assertEqual(results[0]["status"], "block")
+                self.assertIn(
+                    "canonical_definition_head",
+                    {issue["type"] for issue in results[0]["issues"]},
+                )
+
     def test_cross_section_title_tokens_remove_template_words(self):
         left = cross_section_audit.title_tokens(
             "Ako umyt okna bez smuh - Kompletny sprievodca"

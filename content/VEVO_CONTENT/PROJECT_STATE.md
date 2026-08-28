@@ -1,10 +1,10 @@
 # VEVO_CONTENT Project State
 
-Date: 2026-08-27
+Date: 2026-08-28
 Project: VEVO_CONTENT
 Brand: VEVO
 Domain: vevo.sk
-Branch: codex/vevo-content-batch-53
+Branch: codex/vevo-content-batch-54
 
 ## Current State
 
@@ -2157,6 +2157,16 @@ Branch: codex/vevo-content-batch-53
   - `imports/build_batch_53_weaves_curtains_formal_fulled_wool.py`, `imports/batch-53-2026-08-27-articles.json`, and `imports/verify_batch_53_public.py`;
   - exploratory, prebuild and prepublication duplicate, link-preflight, wording, depth, HTML, MCP smoke, MCP publication, independent public verification, postpublication project-audit and mobile-QA reports under `exports/`.
 
+## Batch 54 Stiffness, Colour, Slubs And Drape - Planned 2026-08-28
+
+- Status: planning complete; article generation and prepared-content verification are next.
+- Sixteen candidate intents were checked against `867` merged Blog, FAQ, glossary, RSS and local records plus exact live admin scans of Blog block `765`, FAQ block `774` and glossary block `1905`.
+- The live admin contains zero title or slug alias matches for all sixteen exploratory subjects. The four selected public targets return HTTP `404`; the concrete product and category targets return HTTP `200`.
+- Selected topics are buckram, madras, šantán and challis. Their boundaries are respectively water-sensitive sizing and hidden support, yarn-dyed check and colour transfer, deliberate slub versus damage, and soft plain-weave drape across multiple fibre families.
+- Pepito/Glen check and barchet/fustian remain reserved for paired comparison plans. Billiard cloth and several specialist support or upholstery topics were deferred because a concrete VEVO product recommendation would not be honest for the primary care method.
+- Canonical aliases were added for buckram/bougran, madras/bleeding Madras, šantán/shantung and challis/chally families; a regression test blocks alias-based re-entry after publication.
+- Durable planning artifacts are the exploratory and final candidate lists, exact admin report, candidate-scan record and `content-plan/batch-54-stiff-colour-slub-and-drape-2026-08-28.md`.
+
 ## Known Issues
 
 - The initial VEVO snapshot migration and batch 43 work are isolated on `codex/vevo-content-batch-43`; they are not part of `main` until the branch is reviewed and merged through a pull request.
@@ -2189,12 +2199,12 @@ Branch: codex/vevo-content-batch-53
 
 For the next VEVO work:
 
-1. Start batch 54 on a new `codex/vevo-content-batch-54` branch stacked on batch 53 and inspect at least twelve candidate intents across Blog, FAQ, glossary, RSS, admin and local records.
-2. Re-evaluate buckram, pepito/Glen check, barchet/fustian, madras, shantung, challis and billiard cloth only after exact alias and intent scans. Do not select four topics from one indistinguishable care family.
-3. Keep ticking deferred until its mattress-cover terminology can be separated safely from sypkovina and the existing mattress guides. Keep nettle deferred until it has a practical boundary from ramie.
-4. Run the canonical-definition-head and alias guard plus manual intent review before writing. Never recreate batch 53 subjects under English, German or adjacent trade names.
-5. Continue the same minimum quality and hidden-first MCP/API verification: at least 2,800 visible words, rich responsive HTML, exact readback, public and link verification, and mobile layout checks.
-6. Keep batch 53 stacked on batch 52 until the earlier pull requests merge, push every durable checkpoint, and merge only through pull requests.
+1. Build the four planned batch 54 articles without changing the selected titles or slugs.
+2. Keep every article above 2,800 visible words with topic-specific diagnostics, two responsive tables, rich visual blocks, a conditional concrete-product card and a category card without fixed prices.
+3. Run final merged-catalog duplicate, public-wording, depth, HTML-safety, link and seven-word-shingle checks before any mutation.
+4. Confirm the exact account, domain, Slovak language, Blog page and block again, then use the explicit repo-local hidden-first MCP/API workflow with disposable smoke verification.
+5. Independently verify admin readback, activation, public URLs, every outgoing link and the `390x844` layout before recording publication complete.
+6. Keep batch 54 stacked on batch 53 until the earlier pull requests merge, push every durable checkpoint and merge only through pull requests.
 
 ## Handoff Template
 
