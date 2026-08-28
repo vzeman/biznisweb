@@ -388,6 +388,61 @@ class DuplicateGuardTests(unittest.TestCase):
                 ]
                 results = duplicate_guard.analyze([candidate], existing, 0.28)
                 self.assertEqual(results[0]["status"], "block")
+
+    def test_batch_55_pattern_finish_and_trade_aliases_are_blocked(self):
+        families = (
+            (
+                "Čo je pepito, kohútia stopa a Glen check: rozdiely vo vzore, farbe a starostlivosti",
+                "co-je-pepito-kohutia-stopa-a-glen-check-rozdiely-vo-vzore-farbe-a-starostlivosti",
+                (
+                    "Čo je houndstooth: lomené káro a pranie",
+                    "Čo je Glen plaid: oblekový vzor a údržba",
+                    "Čo je shepherd's check: malé káro a čistenie",
+                ),
+            ),
+            (
+                "Čo je barchet a fustian: počesané tkaniny, žmolky a správne pranie",
+                "co-je-barchet-a-fustian-pocesane-tkaniny-zmolky-a-spravne-pranie",
+                (
+                    "Čo je barchent: hrejivá bavlnená látka a pranie",
+                    "Čo je flannelette: počesaný povrch a starostlivosť",
+                    "Čo je fustian: historická tkanina a čistenie",
+                ),
+            ),
+            (
+                "Čo je dobby tkanina: malé tkané vzory, zatrhávanie a pranie",
+                "co-je-dobby-tkanina-male-tkane-vzory-zatrhavanie-a-pranie",
+                (
+                    "Čo je dobby weave: malé geometrické motívy a údržba",
+                    "Čo je dobby cloth: košeľová tkanina a pranie",
+                ),
+            ),
+            (
+                "Čo je moaré: zvlnený lesklý efekt, voda, tlak a bezpečné čistenie",
+                "co-je-moare-zvlneny-leskly-efekt-voda-tlak-a-bezpecne-cistenie",
+                (
+                    "Čo je moire antique: vlnitý lesk a čistenie",
+                    "Čo je watered silk: vodovaný hodváb a starostlivosť",
+                ),
+            ),
+        )
+
+        for title, slug, candidates in families:
+            existing = [
+                duplicate_guard.row_from_title_link(
+                    title,
+                    f"https://www.vevo.sk/n/{slug}",
+                    "rss",
+                )
+            ]
+            for candidate in candidates:
+                with self.subTest(candidate=candidate):
+                    results = duplicate_guard.analyze([candidate], existing, 0.28)
+                    self.assertEqual(results[0]["status"], "block")
+                    self.assertIn(
+                        "canonical_definition_head",
+                        {issue["type"] for issue in results[0]["issues"]},
+                    )
                 self.assertIn(
                     "canonical_definition_head",
                     {issue["type"] for issue in results[0]["issues"]},
