@@ -1,14 +1,51 @@
 {
-  "checked_at": "2026-08-28T01:57:35.800871+00:00",
+  "checked_at": "2026-08-28T02:44:40.558475+00:00",
   "account": "vevo.flox.sk",
   "public_domain": "www.vevo.sk",
   "language_id": "1",
   "sections": {
     "blog": {
       "block_id": "765",
-      "record_count": 614,
-      "match_count": 0,
-      "matches": []
+      "record_count": 618,
+      "match_count": 4,
+      "matches": [
+        {
+          "id": null,
+          "title": "Čo je challis: mäkká splývavá tkanina, zrážanie a pranie",
+          "link": "co-je-challis-makka-splyvava-tkanina-zrazanie-a-pranie",
+          "active": "1",
+          "subjects": [
+            "challis"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Čo je šantán: nepravidelný povrch, hodvábne a zmesové varianty",
+          "link": "co-je-santan-nepravidelny-povrch-hodvabne-a-zmesove-varianty",
+          "active": "1",
+          "subjects": [
+            "santan"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Čo je madras: károvaná košeľovina, púšťanie farby a správne pranie",
+          "link": "co-je-madras-karovana-koselovina-pustanie-farby-a-spravne-pranie",
+          "active": "1",
+          "subjects": [
+            "madras"
+          ]
+        },
+        {
+          "id": null,
+          "title": "Čo je buckram: vystužená tkanina, tvarovanie, prach a bezpečné čistenie",
+          "link": "co-je-buckram-vystuzena-tkanina-tvarovanie-prach-a-bezpecne-cistenie",
+          "active": "1",
+          "subjects": [
+            "buckram"
+          ]
+        }
+      ]
     },
     "faq": {
       "block_id": "774",
@@ -24,6 +61,6 @@
     }
   },
   "subject_count": 16,
-  "total_match_count": 0,
+  "total_match_count": 4,
   "mutation_performed": false
 }
