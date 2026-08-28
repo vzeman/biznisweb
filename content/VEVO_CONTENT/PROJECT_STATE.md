@@ -2183,9 +2183,9 @@ Branch: codex/vevo-content-batch-54
 - Planning commit `2ccb7859` and prepared-content commit `d88f3a5d` are pushed on `codex/vevo-content-batch-54`; the publication verification commit follows this state update.
 - Durable prepared and verification artifacts include the content plan, candidate records, builder, article JSON, independent verifier, prepublication guards, hidden smoke, MCP publication, independent public verification, postpublication admin scan, project audit and mobile-QA reports.
 
-## Batch 55 Pattern, Nap, Dobby And Moire - Planned 2026-08-28
+## Batch 55 Pattern, Nap, Dobby And Moire - Prepared 2026-08-28
 
-- Status: planning and duplicate prevention complete; article construction and publication remain pending.
+- Status: planning, duplicate prevention and prepared-content verification complete; publication remains pending.
 - Sixteen exploratory subjects and eighteen alias families were checked against `871` merged Blog, FAQ, glossary, RSS and local records.
 - Exact live-admin scans found zero candidate matches in Blog block `765` (`618` records), FAQ block `774` (`177` records) and glossary block `1905` (`95` records). No admin mutation was performed.
 - The selected subjects are one combined pepito/kohútia stopa/Glen check comparison, one combined barchet/fustian terminology guide, dobby tkanina and moaré.
@@ -2193,10 +2193,15 @@ Branch: codex/vevo-content-batch-54
 - Charmeuse, faille, Ottoman, pongé, sharkskin and broadcloth were deferred because their current intent would overlap too closely with existing satén, taft, rips, šantán, popelín or general garment-care coverage. Specialist upholstery and support fabrics were deferred where a VEVO product recommendation would not be honest.
 - Canonical alias protection now groups pepito/houndstooth/Glen-check names, barchet/fustian/flannelette names, dobby names and moaré/moire/watered-silk names. The focused content-guard suite passes `27/27` tests.
 - The final prebuild duplicate guard reports all four candidates `ok`, zero duplicate-title groups and zero invalid slugs.
-- Accessible evidence is recorded from the Museum at FIT, Technical University of Liberec, Getty Art & Architecture Thesaurus, Metropolitan Museum of Art, North Carolina State University, Pratt Textile Research Lab, Smithsonian Museum Conservation Institute, GINETEX, AATCC, the EU and the National Park Service. Links that returned `403` or `410` during direct preflight are excluded from article plans rather than allowlisted.
+- Accessible evidence is recorded from the Museum at FIT, Technical University of Liberec, Getty Art & Architecture Thesaurus, North Carolina State University, Pratt Textile Research Lab, Smithsonian Museum Conservation Institute, GINETEX, AATCC, the EU and the National Park Service. Links that returned `403`, `410` or rate-limit failures during direct preflight were excluded rather than allowlisted.
 - Product recommendations will be conditional: the current VEVO laundry-gel product and category may appear only for a simple explicitly washable compatible article. Tailored wool, formal silk, historic objects, structured accessories, coatings, glued parts and professional-care labels are explicitly outside that recommendation.
-- Durable planning artifacts include the exploratory and final candidate lists, live-admin candidate scanner, content plan, duplicate-guard aliases and regression coverage.
-- Next exact step for this batch: build all four long rich-HTML articles, pass the full prepared-content gate and commit the prepared payload before any publication mutation.
+- The four prepared articles contain `3756`, `3654`, `3630` and `3761` visible words; `31-32` H2 headings, two responsive tables, ten styled blocks, one conditional concrete-product card, one category card and thirteen authored FAQ answers each.
+- Seven-word-shingle overlap is `0.0977-0.1027`, below the `0.13` ceiling. Definitions, comparisons, failure mechanisms, procedures, tables and expert sections remain topic-specific.
+- All outgoing links pass without an automation exception. Two inactive legacy batch-31 definitions returned public `404`, so the builder replaced them with current live contextual links instead of exposing dead URLs.
+- Public wording, fixed-price, depth and HTML-safety guards pass with zero findings. The complete prepared project check passes `52/52` tests and the prepublication audit has `block_count=0`.
+- The known stale global MCP registration remains a warning only; publication will use the explicit repo-local helper that preserves clean slugs and rich HTML.
+- Durable artifacts now include the exploratory and final candidate lists, live-admin scanner, content plan, builder, prepared article JSON, link preflight, duplicate, wording, depth, HTML and prepublication audit reports.
+- Next exact step for this batch: commit and push the prepared payload, then reconfirm the live MCP mutation hard-gate and hidden smoke before one publication attempt.
 
 ## Known Issues
 
@@ -2231,11 +2236,11 @@ Branch: codex/vevo-content-batch-54
 
 For the next VEVO work:
 
-1. Build the four selected batch 55 articles from the committed plan without changing their canonical titles or slugs.
-2. Require topic-specific procedures, evidence, responsive tables and narrowly conditional product recommendations; reject generic filler and unsupported universal care rules.
-3. Run the complete duplicate, wording, depth, HTML and link-preflight suite before any publication mutation.
-4. Confirm the live MCP mutation hard-gate and run the disposable hidden slug/rich-HTML smoke before publishing the batch once.
-5. Independently verify admin readback, activation, public URLs, every outgoing link and the `390x844` layout before recording publication complete.
+1. Commit and push the verified batch 55 builder and prepared article payload without changing the selected titles or slugs.
+2. Confirm the live MCP mutation hard-gate and run the disposable hidden slug/rich-HTML smoke before publishing the batch once.
+3. Do not retry a timed-out publication blindly; inspect the resumable report and live admin state first.
+4. Independently verify admin readback, activation, public URLs, every outgoing link and the `390x844` layout before recording publication complete.
+5. Add all batch 55 aliases to occupied subjects after publication and retain the product-suitability limits in future internal links.
 6. Keep batch 55 stacked on batch 54 until the earlier pull requests merge, push every durable checkpoint and merge only through pull requests.
 
 ## Handoff Template
