@@ -2157,15 +2157,19 @@ Branch: codex/vevo-content-batch-54
   - `imports/build_batch_53_weaves_curtains_formal_fulled_wool.py`, `imports/batch-53-2026-08-27-articles.json`, and `imports/verify_batch_53_public.py`;
   - exploratory, prebuild and prepublication duplicate, link-preflight, wording, depth, HTML, MCP smoke, MCP publication, independent public verification, postpublication project-audit and mobile-QA reports under `exports/`.
 
-## Batch 54 Stiffness, Colour, Slubs And Drape - Planned 2026-08-28
+## Batch 54 Stiffness, Colour, Slubs And Drape - Prepared 2026-08-28
 
-- Status: planning complete; article generation and prepared-content verification are next.
+- Status: prepared; publication through the explicit repo-local MCP/API workflow and independent public verification are next.
 - Sixteen candidate intents were checked against `867` merged Blog, FAQ, glossary, RSS and local records plus exact live admin scans of Blog block `765`, FAQ block `774` and glossary block `1905`.
 - The live admin contains zero title or slug alias matches for all sixteen exploratory subjects. The four selected public targets return HTTP `404`; the concrete product and category targets return HTTP `200`.
 - Selected topics are buckram, madras, šantán and challis. Their boundaries are respectively water-sensitive sizing and hidden support, yarn-dyed check and colour transfer, deliberate slub versus damage, and soft plain-weave drape across multiple fibre families.
 - Pepito/Glen check and barchet/fustian remain reserved for paired comparison plans. Billiard cloth and several specialist support or upholstery topics were deferred because a concrete VEVO product recommendation would not be honest for the primary care method.
 - Canonical aliases were added for buckram/bougran, madras/bleeding Madras, šantán/shantung and challis/chally families; a regression test blocks alias-based re-entry after publication.
-- Durable planning artifacts are the exploratory and final candidate lists, exact admin report, candidate-scan record and `content-plan/batch-54-stiff-colour-slub-and-drape-2026-08-28.md`.
+- The prepared articles contain `3547`, `3527`, `3327` and `3484` visible words; `30-31` H2 headings, two responsive tables, `10-11` styled blocks, one conditional concrete-product card, one category card, fifteen detected reader questions and zero short paragraphs each.
+- Seven-word-shingle overlap is `0.0847-0.0923`, below the `0.13` ceiling. Definitions, comparisons, diagnostics, procedures and expert sections remain topic-specific.
+- Link preflight initially rejected eight museum URLs returning automation `403/429/502`. They were replaced with accessible University of Virginia, National Park Service, National Library of Medicine, LACMA, Montana State University, Co-optex, University of the Free State and University of Trinidad and Tobago sources rather than allowlisted.
+- Final prepublication duplicate, public-wording, depth and HTML-safety gates pass. The full prepared project check passes `51/51` tests with no blocking audit finding.
+- Durable prepared artifacts are the exploratory and final candidate lists, exact admin report, candidate-scan record, content plan, builder, article JSON, independent verifier and prepublication guard reports.
 
 ## Known Issues
 
@@ -2199,10 +2203,10 @@ Branch: codex/vevo-content-batch-54
 
 For the next VEVO work:
 
-1. Build the four planned batch 54 articles without changing the selected titles or slugs.
-2. Keep every article above 2,800 visible words with topic-specific diagnostics, two responsive tables, rich visual blocks, a conditional concrete-product card and a category card without fixed prices.
-3. Run final merged-catalog duplicate, public-wording, depth, HTML-safety, link and seven-word-shingle checks before any mutation.
-4. Confirm the exact account, domain, Slovak language, Blog page and block again, then use the explicit repo-local hidden-first MCP/API workflow with disposable smoke verification.
+1. Reconfirm account `vevo.flox.sk`, public domain `www.vevo.sk`, language `1`, Blog page `309`, News block `765`, current record count and zero exact title/slug matches immediately before mutation.
+2. Run the disposable hidden MCP/API smoke post and verify its explicit slug, rich-HTML marker, public `404` state and deletion.
+3. Publish the four prepared articles hidden-first, confirm their exact slugs and bodies, activate them, then run independent public, outgoing-link and mobile-layout verification.
+4. Record post IDs and live URLs here, commit all durable reports, push the branch and open the stacked pull request.
 5. Independently verify admin readback, activation, public URLs, every outgoing link and the `390x844` layout before recording publication complete.
 6. Keep batch 54 stacked on batch 53 until the earlier pull requests merge, push every durable checkpoint and merge only through pull requests.
 
