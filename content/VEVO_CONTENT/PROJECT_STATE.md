@@ -2183,6 +2183,36 @@ Branch: codex/vevo-content-batch-54
 - Planning commit `2ccb7859` and prepared-content commit `d88f3a5d` are pushed on `codex/vevo-content-batch-54`; the publication verification commit follows this state update.
 - Durable prepared and verification artifacts include the content plan, candidate records, builder, article JSON, independent verifier, prepublication guards, hidden smoke, MCP publication, independent public verification, postpublication admin scan, project audit and mobile-QA reports.
 
+## Batch 55 Pattern, Nap, Dobby And Moire - Published 2026-08-28
+
+- Status: complete; all four articles were published through the explicit repo-local slug-safe MCP/API workflow, independently verified in the live admin and on the public website, and checked at a mobile breakpoint.
+- Sixteen exploratory subjects and eighteen alias families were checked against `871` merged Blog, FAQ, glossary, RSS and local records.
+- Exact prepublication live-admin scans found zero candidate matches in Blog block `765` (`618` records), FAQ block `774` (`177` records) and glossary block `1905` (`95` records).
+- The selected subjects are one combined pepito/kohútia stopa/Glen check comparison, one combined barchet/fustian terminology guide, dobby tkanina and moaré.
+- The four topics are separated by mechanism: colour patterning, a brushed fabric family, loom-controlled small figures and a pressure-created surface finish.
+- Charmeuse, faille, Ottoman, pongé, sharkskin and broadcloth were deferred because their current intent would overlap too closely with existing satén, taft, rips, šantán, popelín or general garment-care coverage. Specialist upholstery and support fabrics were deferred where a VEVO product recommendation would not be honest.
+- Canonical alias protection now groups pepito/houndstooth/Glen-check names, barchet/fustian/flannelette names, dobby names and moaré/moire/watered-silk names. The focused content-guard suite passes `27/27` tests.
+- The final prebuild duplicate guard reports all four candidates `ok`, zero duplicate-title groups and zero invalid slugs.
+- Accessible evidence is recorded from the Museum at FIT, Technical University of Liberec, Getty Art & Architecture Thesaurus, North Carolina State University, Pratt Textile Research Lab, Smithsonian Museum Conservation Institute, GINETEX, AATCC, the EU and the National Park Service. Links that returned `403`, `410` or rate-limit failures during direct preflight were excluded rather than allowlisted.
+- Product recommendations are conditional: the current VEVO laundry-gel product and category appear only for a simple explicitly washable compatible article. Tailored wool, formal silk, historic objects, structured accessories, coatings, glued parts and professional-care labels are explicitly outside that recommendation.
+- The four prepared articles contain `3756`, `3654`, `3630` and `3761` visible words; `31-32` H2 headings, two responsive tables, ten styled blocks, one conditional concrete-product card, one category card and thirteen authored FAQ answers each.
+- Seven-word-shingle overlap is `0.0977-0.1027`, below the `0.13` ceiling. Definitions, comparisons, failure mechanisms, procedures, tables and expert sections remain topic-specific.
+- All outgoing links pass without an automation exception. Two inactive legacy batch-31 definitions returned public `404`, so the builder replaced them with current live contextual links instead of exposing dead URLs.
+- Public wording, fixed-price, depth and HTML-safety guards pass with zero findings. The complete prepared project check passes `52/52` tests and the prepublication audit has `block_count=0`.
+- The mutation hard-gate confirmed server `biznisweb-vevo-content` version `0.3.3`, admin and API host `vevo.flox.sk`, public domain `www.vevo.sk`, language `1`, Blog page `309`, News block `765`, public block `765`, an admin Blog catalog of `618` records and zero exact selected-title or selected-slug matches.
+- Disposable hidden smoke post `3225` preserved its explicit clean slug and rich-HTML marker, remained inactive and public `404`, and was deleted. The follow-up admin lookup found zero matches and the public URL remained `404`.
+- Live posts and canonical public URLs:
+  - post `3226`: `https://www.vevo.sk/n/co-je-pepito-kohutia-stopa-a-glen-check-rozdiely-vo-vzore-farbe-a-starostlivosti`;
+  - post `3227`: `https://www.vevo.sk/n/co-je-barchet-a-fustian-pocesane-tkaniny-zmolky-a-spravne-pranie`;
+  - post `3228`: `https://www.vevo.sk/n/co-je-dobby-tkanina-male-tkane-vzory-zatrhavanie-a-pranie`;
+  - post `3229`: `https://www.vevo.sk/n/co-je-moare-zvlneny-leskly-efekt-voda-tlak-a-bezpecne-cistenie`.
+- The resumable MCP publication report has `record_count=4`, `public_ok_count=4` and `all_ok=true`. Independent admin readback found each exact title and slug once, all active, in a Blog catalog of `622` posts.
+- Independent public verification measured `3758`, `3656`, `3632` and `3763` visible words, retained `31-32` H2 headings, both responsive tables, ten styled blocks and zero one-character paragraphs. All `37` unique outgoing destinations passed.
+- Mobile QA at requested `390x844` confirmed a `351px` article column for every URL, both `680px` tables contained by `overflow-x:auto` wrappers, both article action buttons contained, zero one-character paragraphs, no escaped HTML and no page-level horizontal overflow. The viewport override was reset and the temporary tab was closed.
+- Final postpublication project audit reports live catalog `record_count=872`, zero duplicate-title groups, zero invalid slugs, both publication reports green and `block_count=0`. The stale global MCP registration remains a warning only; this batch used the explicit repo-local MCP script.
+- Planning commit `d6cc2c9c`, prepared-content commit `fadf1a95` and publication verification commit `bcb9b6f2` are pushed on `codex/vevo-content-batch-55`. Stacked PR `#476` targets `codex/vevo-content-batch-54`; `env-check`, `secret-scan`, `security-baseline` and `observability-baseline` passed.
+- Durable prepared and verification artifacts include the content plan, exploratory and final candidate records, live-admin scanner, builder, article JSON, independent admin and public verifiers, prepublication guards, hidden smoke, MCP publication, public verification, postpublication project audit and mobile-QA reports.
+
 ## Known Issues
 
 - The initial VEVO snapshot migration and batch 43 work are isolated on `codex/vevo-content-batch-43`; they are not part of `main` until the branch is reviewed and merged through a pull request.
@@ -2207,6 +2237,7 @@ Branch: codex/vevo-content-batch-54
 - Batch 52 is complete; post IDs `3211-3214` are live with exact clean slugs and verified rich HTML. Do not recreate Oxford cloth, sypkovina/inlet, abaca/Manila hemp, moleskin/mollskin or their aliases as new canonical definition articles.
 - Batch 53 is complete; post IDs `3216-3219` are live with exact clean slugs and verified rich HTML. Do not recreate herringbone/rybia kosť, voile/voál, taffeta/taft or loden/boiled wool/felt/plsť/melton as separate canonical definitions.
 - Batch 54 is complete; post IDs `3221-3224` are live with exact clean slugs and verified rich HTML. Do not recreate buckram/bougran, madras/bleeding Madras, šantán/shantung or challis/chally as separate canonical definitions.
+- Batch 55 is complete; post IDs `3226-3229` are live with exact clean slugs and verified rich HTML. Do not recreate pepito/houndstooth/kohútia stopa/dogtooth/Glen check/Glen plaid/Prince of Wales/shepherd's check, barchet/barchent/flanelet/flannelette/fustian, dobby or moaré/moire/moire antique/watered silk as separate canonical definitions.
 - VEVO admin browser automation can be unstable on long loops. Use short stepwise source-mode saves, verify public URLs after each small block, and avoid relying on generic hidden-field selectors when old ExtJS form instances remain in the DOM.
 - The VEVO admin browser session was recovered on `2026-07-06` and used to finish batch 33 publication; no batch 33 publication blocker remains.
 - Batch 32 robot-vacuum batch is now published and verified; no batch 32 publication blocker remains.
@@ -2216,12 +2247,11 @@ Branch: codex/vevo-content-batch-54
 
 For the next VEVO work:
 
-1. Start batch 55 from unclaimed canonical subjects in the content plan and a fresh broad candidate pool.
-2. Rebuild the merged Blog, FAQ, glossary, RSS and local catalog before selecting topics; treat batch 54 aliases as occupied.
-3. Keep the next batch small and expert-led, with topic-specific procedures, evidence, responsive tables and conditional product recommendations.
-4. Use the same duplicate, wording, depth, HTML, link, hidden-smoke, independent public and mobile-layout gates before marking the batch complete.
-5. Independently verify admin readback, activation, public URLs, every outgoing link and the `390x844` layout before recording publication complete.
-6. Keep batch 54 stacked on batch 53 until the earlier pull requests merge, push every durable checkpoint and merge only through pull requests.
+1. Start batch 56 from a broad exploratory candidate pool and check every intent and alias against the merged Blog, FAQ, glossary, RSS and local catalog before selecting topics.
+2. Treat all batch 55 canonical subjects and aliases as occupied, including pattern-family terminology that could otherwise look like separate article opportunities.
+3. Prefer topics with a clearly distinct material mechanism and an honest VEVO product/category bridge; defer any topic whose safe primary care method conflicts with the proposed product.
+4. Preserve the small-batch quality baseline: substantial topic-specific depth, accessible expert sources, responsive rich HTML, no fixed prices or internal workflow wording, and independent public/mobile verification.
+5. Keep batch 56 stacked on batch 55 until the earlier pull requests merge, push every durable checkpoint and merge only through pull requests.
 
 ## Handoff Template
 
