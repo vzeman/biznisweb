@@ -2210,7 +2210,7 @@ Branch: codex/vevo-content-batch-54
 - Independent public verification measured `3758`, `3656`, `3632` and `3763` visible words, retained `31-32` H2 headings, both responsive tables, ten styled blocks and zero one-character paragraphs. All `37` unique outgoing destinations passed.
 - Mobile QA at requested `390x844` confirmed a `351px` article column for every URL, both `680px` tables contained by `overflow-x:auto` wrappers, both article action buttons contained, zero one-character paragraphs, no escaped HTML and no page-level horizontal overflow. The viewport override was reset and the temporary tab was closed.
 - Final postpublication project audit reports live catalog `record_count=872`, zero duplicate-title groups, zero invalid slugs, both publication reports green and `block_count=0`. The stale global MCP registration remains a warning only; this batch used the explicit repo-local MCP script.
-- Planning commit `d6cc2c9c` and prepared-content commit `fadf1a95` are pushed on `codex/vevo-content-batch-55`; the publication verification commit follows this state update.
+- Planning commit `d6cc2c9c`, prepared-content commit `fadf1a95` and publication verification commit `bcb9b6f2` are pushed on `codex/vevo-content-batch-55`. Stacked PR `#476` targets `codex/vevo-content-batch-54`; `env-check`, `secret-scan`, `security-baseline` and `observability-baseline` passed.
 - Durable prepared and verification artifacts include the content plan, exploratory and final candidate records, live-admin scanner, builder, article JSON, independent admin and public verifiers, prepublication guards, hidden smoke, MCP publication, public verification, postpublication project audit and mobile-QA reports.
 
 ## Known Issues
