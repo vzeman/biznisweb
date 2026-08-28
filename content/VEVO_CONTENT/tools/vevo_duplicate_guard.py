@@ -124,6 +124,22 @@ DEFINITION_HEAD_ALIASES = {
     "voalova zaclona": "voal",
     "voile": "voal",
     "voile curtain": "voal",
+    "bleeding madras": "madras",
+    "bougran": "buckram",
+    "buckram": "buckram",
+    "buckram cloth": "buckram",
+    "bookbinder s buckram": "buckram",
+    "challie": "challis",
+    "challis": "challis",
+    "chally": "challis",
+    "shalle": "challis",
+    "madras": "madras",
+    "madras cloth": "madras",
+    "madras fabric": "madras",
+    "santan": "santan",
+    "santung": "santan",
+    "shantung": "santan",
+    "shantung silk": "santan",
 }
 
 

@@ -1,0 +1,182 @@
+{
+  "existing_count": 867,
+  "excluded_batch": 54,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Čo je buckram: vystužená tkanina, tvarovanie, prach a bezpečné čistenie",
+      "slug": "co-je-buckram-vystuzena-tkanina-tvarovanie-prach-a-bezpecne-cistenie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "candidate_batch_overlap",
+          "severity": "review",
+          "matches": [
+            {
+              "title": "Čo je barkcloth: štruktúrovaná dekoračná tkanina, prach a čistenie",
+              "slug": "co-je-barkcloth-strukturovana-dekoracna-tkanina-prach-a-cistenie",
+              "score": 0.3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je madras: károvaná košeľovina, púšťanie farby a správne pranie",
+      "slug": "co-je-madras-karovana-koselovina-pustanie-farby-a-spravne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je šantán: nepravidelný povrch, hodvábne a zmesové varianty",
+      "slug": "co-je-santan-nepravidelny-povrch-hodvabne-a-zmesove-varianty",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je challis: mäkká splývavá tkanina, zrážanie a pranie",
+      "slug": "co-je-challis-makka-splyvava-tkanina-zrazanie-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je biliardové súkno: vlnený povrch, krieda a bezpečné čistenie stola",
+      "slug": "co-je-biliardove-sukno-vlneny-povrch-krieda-a-bezpecne-cistenie-stola",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je pepito: dvojfarebný lomený vzor, mierka a starostlivosť",
+      "slug": "co-je-pepito-dvojfarebny-lomeny-vzor-mierka-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je glenček: károvaný vzor, oblek a profesionálne čistenie",
+      "slug": "co-je-glencek-karovany-vzor-oblek-a-profesionalne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je barchet: počesaná bavlnená tkanina, žmolky a pranie",
+      "slug": "co-je-barchet-pocesana-bavlnena-tkanina-zmolky-a-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je fustian: hustá česaná tkanina, oder a starostlivosť",
+      "slug": "co-je-fustian-husta-cesana-tkanina-oder-a-starostlivost",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.3,
+              "title": "Čo je rips: priečne rebrovaná tkanina, oder a správna starostlivosť",
+              "link": "https://www.vevo.sk/n/co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+              "slug": "co-je-rips-priecne-rebrovana-tkanina-oder-a-spravna-starostlivost",
+              "sources": [
+                "local:batch-50-2026-08-27-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je barkcloth: štruktúrovaná dekoračná tkanina, prach a čistenie",
+      "slug": "co-je-barkcloth-strukturovana-dekoracna-tkanina-prach-a-cistenie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "candidate_batch_overlap",
+          "severity": "review",
+          "matches": [
+            {
+              "title": "Čo je buckram: vystužená tkanina, tvarovanie, prach a bezpečné čistenie",
+              "slug": "co-je-buckram-vystuzena-tkanina-tvarovanie-prach-a-bezpecne-cistenie",
+              "score": 0.3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je konské súkno: vlasová výstuž, tvar odevu a starostlivosť",
+      "slug": "co-je-konske-sukno-vlasova-vystuz-tvar-odevu-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je sharkskin: hladká obleková tkanina, lesk a čistenie",
+      "slug": "co-je-sharkskin-hladka-oblekova-tkanina-lesk-a-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je cavalry twill: strmý dvojitý keper, oder a pranie",
+      "slug": "co-je-cavalry-twill-strmy-dvojity-keper-oder-a-pranie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.3,
+              "title": "Čo je keper alebo twill: šikmá väzba, odolnosť a pranie",
+              "link": "https://www.vevo.sk/n/co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+              "slug": "co-je-keper-alebo-twill-sikma-vazba-odolnost-a-pranie",
+              "sources": [
+                "local:batch-45-2026-08-23-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Čo je faille: priečne rebrovaná tkanina, záhyby a bezpečné čistenie",
+      "slug": "co-je-faille-priecne-rebrovana-tkanina-zahyby-a-bezpecne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je scrim: riedka výstužná tkanina, deformácia a starostlivosť",
+      "slug": "co-je-scrim-riedka-vystuzna-tkanina-deformacia-a-starostlivost",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Čo je moaré: zvlnený lesklý vzor, voda a bezpečné čistenie",
+      "slug": "co-je-moare-zvlneny-leskly-vzor-voda-a-bezpecne-cistenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

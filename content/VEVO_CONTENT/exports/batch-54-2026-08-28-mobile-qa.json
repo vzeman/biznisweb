@@ -1,0 +1,72 @@
+{
+  "batch": "batch-54",
+  "checked_at": "2026-08-28T04:45:00+02:00",
+  "requested_viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "effective_content_viewport_width": 375,
+  "all_ok": true,
+  "checks": [
+    {
+      "url": "https://www.vevo.sk/n/co-je-buckram-vystuzena-tkanina-tvarovanie-prach-a-bezpecne-cistenie",
+      "article_column_width": 351,
+      "tables": 2,
+      "table_widths": [680, 680],
+      "responsive_table_wrappers": 2,
+      "wrappers_contained": true,
+      "action_buttons": 2,
+      "actions_contained": true,
+      "one_character_paragraphs": 0,
+      "escaped_html": false,
+      "page_horizontal_overflow": false,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-madras-karovana-koselovina-pustanie-farby-a-spravne-pranie",
+      "article_column_width": 351,
+      "tables": 2,
+      "table_widths": [680, 680],
+      "responsive_table_wrappers": 2,
+      "wrappers_contained": true,
+      "action_buttons": 2,
+      "actions_contained": true,
+      "one_character_paragraphs": 0,
+      "escaped_html": false,
+      "page_horizontal_overflow": false,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-santan-nepravidelny-povrch-hodvabne-a-zmesove-varianty",
+      "article_column_width": 351,
+      "tables": 2,
+      "table_widths": [680, 680],
+      "responsive_table_wrappers": 2,
+      "wrappers_contained": true,
+      "action_buttons": 2,
+      "actions_contained": true,
+      "one_character_paragraphs": 0,
+      "escaped_html": false,
+      "page_horizontal_overflow": false,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-challis-makka-splyvava-tkanina-zrazanie-a-pranie",
+      "article_column_width": 351,
+      "tables": 2,
+      "table_widths": [680, 680],
+      "responsive_table_wrappers": 2,
+      "wrappers_contained": true,
+      "action_buttons": 2,
+      "actions_contained": true,
+      "one_character_paragraphs": 0,
+      "escaped_html": false,
+      "page_horizontal_overflow": false,
+      "ok": true
+    }
+  ],
+  "cleanup": {
+    "viewport_override_reset": true,
+    "temporary_tab_closed": true
+  }
+}

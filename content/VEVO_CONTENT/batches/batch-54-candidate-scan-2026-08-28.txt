@@ -1,0 +1,43 @@
+VEVO batch 54 candidate scan - 2026-08-28
+
+Scope checked:
+- merged Blog, FAQ, glossary, RSS and local catalog: 867 records;
+- live admin Blog block 765: 614 records;
+- live admin FAQ block 774: 177 records;
+- live admin glossary block 1905: 95 records;
+- exact title and alias scan across all three admin sections: zero matches for all 16 exploratory subjects;
+- exploratory duplicate guard: zero existing duplicate-title groups and zero invalid slugs;
+- exact public targets for the four selected slugs: HTTP 404 before any mutation;
+- PuellaVone and Giovani indexed results: no canonical guide for any selected subject;
+- Modrý koník discussions: repeated uncertainty about colour transfer, black-and-white garments, washing new coloured textiles and unsupported vinegar or bleach fixes;
+- authoritative CAMEO/MFA, Smithsonian, Metropolitan Museum, Co-optex, ISO, AATCC and GINETEX sources.
+
+Selected:
+1. Čo je buckram: vystužená tkanina, tvarovanie, prach a bezpečné čistenie
+   - A sized or coated supporting fabric used in interlinings, hats, books and shaped objects, not another ordinary canvas or washable-cotton guide.
+   - The article must explain why water can soften, move or mark the sizing; separate removable washable interfacing from built-in support; and prefer dry soil removal or specialist care when the whole object cannot be washed.
+2. Čo je madras: károvaná košeľovina, púšťanie farby a správne pranie
+   - A yarn-dyed lightweight cotton check with a separate historical "bleeding Madras" variant, not a generic plaid or all-purpose colour-transfer article.
+   - The article must explain that not every modern madras is designed to bleed, cover first-wash isolation, wet crocking, mixed light/dark checks, shrinkage, patchwork and when persistent transfer is grounds for complaint.
+3. Čo je šantán: nepravidelný povrch, hodvábne a zmesové varianty
+   - A plain-weave fabric whose irregular filling yarn creates deliberate slubs, distinct from the crisp cross-rib and uniform surface of taft.
+   - The article must separate a design slub from a snag, broken yarn or pulled seam; distinguish silk and synthetic variants; and cover water marks, pressing, structured garments and professional-care boundaries.
+4. Čo je challis: mäkká splývavá tkanina, zrážanie a pranie
+   - A soft lightweight plain-weave construction made from wool, cotton, rayon/viscose or other staple fibres, not a synonym for viscose.
+   - The article must cover drape, grain distortion, seam slippage, wet-weight support, shrinkage, pressing and why the fibre label overrides the trade name.
+
+Deferred or blocked:
+- Billiard cloth/baize: technically distinct, but a concrete VEVO product card would not honestly fit a surface that normally should not be domestically laundered.
+- Pepito and Glen check: reserve for one pattern-comparison plan that distinguishes houndstooth, shepherd's check, Glen plaid, Prince of Wales check and printed imitations.
+- Barchet and fustian: reserve for one brushed/dense-cotton plan with explicit boundaries from flannel, moleskin, corduroy and rips.
+- Cavalry twill: too close to the existing canonical twill and newly published herringbone intents.
+- Faille: too close to rips and the immediately preceding taft comparison.
+- Barkcloth and buckram triggered exploratory title overlap; only buckram advances because its water-sensitive sizing and shaped-object decision tree are more distinct.
+- Horsehair cloth, sharkskin, scrim and moiré: exact-title clear, but either too specialist for a useful VEVO product path or too close to formal-fabric, support-fabric and surface-effect coverage in this batch.
+- Billiard cloth, barkcloth, horsehair cloth, sharkskin, scrim and moiré remain possible only after a separate practical-use and commercial-fit plan.
+
+Duplicate-prevention change:
+- buckram, buckram cloth, bookbinder's buckram and bougran fold to one canonical definition;
+- madras, madras cloth/fabric and bleeding Madras fold to one canonical definition while the article explains the historical subtype;
+- šantán, šantung, shantung and shantung silk fold to one canonical definition;
+- challis, challie, chally and shalle fold to one canonical definition.

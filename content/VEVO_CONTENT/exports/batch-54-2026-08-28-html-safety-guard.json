@@ -1,0 +1,63 @@
+{
+  "article_count": 4,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Čo je buckram: vystužená tkanina, tvarovanie, prach a bezpečné čistenie",
+      "slug": "co-je-buckram-vystuzena-tkanina-tvarovanie-prach-a-bezpecne-cistenie",
+      "body_length": 33431,
+      "styled_block_count": 10,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-54-2026-08-28-articles.json"
+    },
+    {
+      "title": "Čo je madras: károvaná košeľovina, púšťanie farby a správne pranie",
+      "slug": "co-je-madras-karovana-koselovina-pustanie-farby-a-spravne-pranie",
+      "body_length": 33335,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-54-2026-08-28-articles.json"
+    },
+    {
+      "title": "Čo je šantán: nepravidelný povrch, hodvábne a zmesové varianty",
+      "slug": "co-je-santan-nepravidelny-povrch-hodvabne-a-zmesove-varianty",
+      "body_length": 32259,
+      "styled_block_count": 10,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-54-2026-08-28-articles.json"
+    },
+    {
+      "title": "Čo je challis: mäkká splývavá tkanina, zrážanie a pranie",
+      "slug": "co-je-challis-makka-splyvava-tkanina-zrazanie-a-pranie",
+      "body_length": 33308,
+      "styled_block_count": 10,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-54-2026-08-28-articles.json"
+    }
+  ]
+}

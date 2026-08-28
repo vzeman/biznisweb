@@ -1,10 +1,10 @@
 # VEVO_CONTENT Project State
 
-Date: 2026-08-27
+Date: 2026-08-28
 Project: VEVO_CONTENT
 Brand: VEVO
 Domain: vevo.sk
-Branch: codex/vevo-content-batch-53
+Branch: codex/vevo-content-batch-54
 
 ## Current State
 
@@ -2157,6 +2157,32 @@ Branch: codex/vevo-content-batch-53
   - `imports/build_batch_53_weaves_curtains_formal_fulled_wool.py`, `imports/batch-53-2026-08-27-articles.json`, and `imports/verify_batch_53_public.py`;
   - exploratory, prebuild and prepublication duplicate, link-preflight, wording, depth, HTML, MCP smoke, MCP publication, independent public verification, postpublication project-audit and mobile-QA reports under `exports/`.
 
+## Batch 54 Stiffness, Colour, Slubs And Drape - Published 2026-08-28
+
+- Status: complete; all four articles were published through the explicit repo-local slug-safe MCP/API workflow, independently verified on the public website and checked at a mobile breakpoint.
+- Sixteen candidate intents were checked against `867` merged Blog, FAQ, glossary, RSS and local records plus exact live admin scans of Blog block `765`, FAQ block `774` and glossary block `1905`.
+- The live admin contains zero title or slug alias matches for all sixteen exploratory subjects. The four selected public targets return HTTP `404`; the concrete product and category targets return HTTP `200`.
+- Selected topics are buckram, madras, šantán and challis. Their boundaries are respectively water-sensitive sizing and hidden support, yarn-dyed check and colour transfer, deliberate slub versus damage, and soft plain-weave drape across multiple fibre families.
+- Pepito/Glen check and barchet/fustian remain reserved for paired comparison plans. Billiard cloth and several specialist support or upholstery topics were deferred because a concrete VEVO product recommendation would not be honest for the primary care method.
+- Canonical aliases were added for buckram/bougran, madras/bleeding Madras, šantán/shantung and challis/chally families; a regression test blocks alias-based re-entry after publication.
+- The prepared articles contain `3547`, `3527`, `3327` and `3484` visible words; `30-31` H2 headings, two responsive tables, `10-11` styled blocks, one conditional concrete-product card, one category card, fifteen detected reader questions and zero short paragraphs each.
+- Seven-word-shingle overlap is `0.0847-0.0923`, below the `0.13` ceiling. Definitions, comparisons, diagnostics, procedures and expert sections remain topic-specific.
+- Link preflight initially rejected eight museum URLs returning automation `403/429/502`. They were replaced with accessible University of Virginia, National Park Service, National Library of Medicine, LACMA, Montana State University, Co-optex, University of the Free State and University of Trinidad and Tobago sources rather than allowlisted.
+- Final prepublication duplicate, public-wording, depth and HTML-safety gates pass. The full prepared project check passes `51/51` tests with no blocking audit finding.
+- The mutation hard-gate confirmed account `vevo.flox.sk`, public domain `www.vevo.sk`, language `1`, Blog page `309`, News block `765`, an admin Blog catalog of `614` records and zero exact title or slug matches for every selected article.
+- Disposable hidden smoke post `3220` preserved its explicit slug and rich-HTML marker, remained public `404`, and was deleted. The follow-up admin lookup found zero matches and the public URL remained `404`.
+- Live posts and canonical public URLs:
+  - post `3221`: `https://www.vevo.sk/n/co-je-buckram-vystuzena-tkanina-tvarovanie-prach-a-bezpecne-cistenie`;
+  - post `3222`: `https://www.vevo.sk/n/co-je-madras-karovana-koselovina-pustanie-farby-a-spravne-pranie`;
+  - post `3223`: `https://www.vevo.sk/n/co-je-santan-nepravidelny-povrch-hodvabne-a-zmesove-varianty`;
+  - post `3224`: `https://www.vevo.sk/n/co-je-challis-makka-splyvava-tkanina-zrazanie-a-pranie`.
+- The resumable MCP publication report has `record_count=4`, `public_ok_count=4` and `all_ok=true`. The postpublication admin catalog contains exactly four selected matches, all active, and no selected-topic match in FAQ or glossary.
+- Independent public verification measured `3549`, `3529`, `3329` and `3486` visible words, retained `30-31` H2 headings, both responsive tables, `10-11` styled blocks and zero short paragraphs. All `34` unique outgoing destinations passed.
+- Mobile QA at requested `390x844` produced an effective `375px` content viewport and confirmed a `351px` article column for every URL, both `680px` tables contained by `overflow-x:auto` wrappers, both article action buttons contained, zero one-character paragraphs, no escaped HTML and no page-level horizontal overflow. The viewport override was reset and the temporary tab was closed.
+- Final postpublication project audit reports live catalog `record_count=868`, zero duplicate-title groups, zero invalid slugs, both publication reports green and `block_count=0`. The stale global MCP registration remains a warning only; this batch used the explicit repo-local MCP script.
+- Planning commit `2ccb7859` and prepared-content commit `d88f3a5d` are pushed on `codex/vevo-content-batch-54`; the publication verification commit follows this state update.
+- Durable prepared and verification artifacts include the content plan, candidate records, builder, article JSON, independent verifier, prepublication guards, hidden smoke, MCP publication, independent public verification, postpublication admin scan, project audit and mobile-QA reports.
+
 ## Known Issues
 
 - The initial VEVO snapshot migration and batch 43 work are isolated on `codex/vevo-content-batch-43`; they are not part of `main` until the branch is reviewed and merged through a pull request.
@@ -2180,6 +2206,7 @@ Branch: codex/vevo-content-batch-53
 - Batch 51 is complete; post IDs `3206-3209` are live with exact clean slugs and verified rich HTML. Do not recreate any batch 51 title, canonical material subject, alias or slug.
 - Batch 52 is complete; post IDs `3211-3214` are live with exact clean slugs and verified rich HTML. Do not recreate Oxford cloth, sypkovina/inlet, abaca/Manila hemp, moleskin/mollskin or their aliases as new canonical definition articles.
 - Batch 53 is complete; post IDs `3216-3219` are live with exact clean slugs and verified rich HTML. Do not recreate herringbone/rybia kosť, voile/voál, taffeta/taft or loden/boiled wool/felt/plsť/melton as separate canonical definitions.
+- Batch 54 is complete; post IDs `3221-3224` are live with exact clean slugs and verified rich HTML. Do not recreate buckram/bougran, madras/bleeding Madras, šantán/shantung or challis/chally as separate canonical definitions.
 - VEVO admin browser automation can be unstable on long loops. Use short stepwise source-mode saves, verify public URLs after each small block, and avoid relying on generic hidden-field selectors when old ExtJS form instances remain in the DOM.
 - The VEVO admin browser session was recovered on `2026-07-06` and used to finish batch 33 publication; no batch 33 publication blocker remains.
 - Batch 32 robot-vacuum batch is now published and verified; no batch 32 publication blocker remains.
@@ -2189,12 +2216,12 @@ Branch: codex/vevo-content-batch-53
 
 For the next VEVO work:
 
-1. Start batch 54 on a new `codex/vevo-content-batch-54` branch stacked on batch 53 and inspect at least twelve candidate intents across Blog, FAQ, glossary, RSS, admin and local records.
-2. Re-evaluate buckram, pepito/Glen check, barchet/fustian, madras, shantung, challis and billiard cloth only after exact alias and intent scans. Do not select four topics from one indistinguishable care family.
-3. Keep ticking deferred until its mattress-cover terminology can be separated safely from sypkovina and the existing mattress guides. Keep nettle deferred until it has a practical boundary from ramie.
-4. Run the canonical-definition-head and alias guard plus manual intent review before writing. Never recreate batch 53 subjects under English, German or adjacent trade names.
-5. Continue the same minimum quality and hidden-first MCP/API verification: at least 2,800 visible words, rich responsive HTML, exact readback, public and link verification, and mobile layout checks.
-6. Keep batch 53 stacked on batch 52 until the earlier pull requests merge, push every durable checkpoint, and merge only through pull requests.
+1. Start batch 55 from unclaimed canonical subjects in the content plan and a fresh broad candidate pool.
+2. Rebuild the merged Blog, FAQ, glossary, RSS and local catalog before selecting topics; treat batch 54 aliases as occupied.
+3. Keep the next batch small and expert-led, with topic-specific procedures, evidence, responsive tables and conditional product recommendations.
+4. Use the same duplicate, wording, depth, HTML, link, hidden-smoke, independent public and mobile-layout gates before marking the batch complete.
+5. Independently verify admin readback, activation, public URLs, every outgoing link and the `390x844` layout before recording publication complete.
+6. Keep batch 54 stacked on batch 53 until the earlier pull requests merge, push every durable checkpoint and merge only through pull requests.
 
 ## Handoff Template
 

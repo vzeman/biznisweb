@@ -1,0 +1,452 @@
+{
+  "batch": "batch-54",
+  "verified_at": "2026-08-28T02:44:24.107190+00:00",
+  "article_count": 4,
+  "minimum_visible_words": 2800,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Čo je buckram: vystužená tkanina, tvarovanie, prach a bezpečné čistenie",
+      "slug": "co-je-buckram-vystuzena-tkanina-tvarovanie-prach-a-bezpecne-cistenie",
+      "url": "https://www.vevo.sk/n/co-je-buckram-vystuzena-tkanina-tvarovanie-prach-a-bezpecne-cistenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-buckram-vystuzena-tkanina-tvarovanie-prach-a-bezpecne-cistenie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3549,
+      "h2_count": 30,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 10,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+        "https://explore.lib.virginia.edu/exhibits/show/preservation-services/fabrics",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.nlm.nih.gov/hmd/preservation/textiles.html",
+        "https://www.nps.gov/subjects/museums/upload/MHI_AppK_TextilesObjects.pdf"
+      ],
+      "body_length": 33462,
+      "ok": true,
+      "minimum_visible_words": 2800
+    },
+    {
+      "title": "Čo je madras: károvaná košeľovina, púšťanie farby a správne pranie",
+      "slug": "co-je-madras-karovana-koselovina-pustanie-farby-a-spravne-pranie",
+      "url": "https://www.vevo.sk/n/co-je-madras-karovana-koselovina-pustanie-farby-a-spravne-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-madras-karovana-koselovina-pustanie-farby-a-spravne-pranie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3529,
+      "h2_count": 31,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 11,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://cooptex.gov.in/image/data/PPT/Co-optexStory.pdf",
+        "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+        "https://www.aatcc.org/testing/standards",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.iso.org/standard/51276.html",
+        "https://www.iso.org/standard/75934.html"
+      ],
+      "body_length": 33366,
+      "ok": true,
+      "minimum_visible_words": 2800
+    },
+    {
+      "title": "Čo je šantán: nepravidelný povrch, hodvábne a zmesové varianty",
+      "slug": "co-je-santan-nepravidelny-povrch-hodvabne-a-zmesove-varianty",
+      "url": "https://www.vevo.sk/n/co-je-santan-nepravidelny-povrch-hodvabne-a-zmesove-varianty",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-santan-nepravidelny-povrch-hodvabne-a-zmesove-varianty",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3329,
+      "h2_count": 30,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 10,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://arc.lib.montana.edu/msu-extension/objects/ext1-000316.pdf",
+        "https://collections.lacma.org/object/130818",
+        "https://collections.lacma.org/object/71338",
+        "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.iso.org/standard/67602.html",
+        "https://www.iso.org/standard/75934.html"
+      ],
+      "body_length": 32290,
+      "ok": true,
+      "minimum_visible_words": 2800
+    },
+    {
+      "title": "Čo je challis: mäkká splývavá tkanina, zrážanie a pranie",
+      "slug": "co-je-challis-makka-splyvava-tkanina-zrazanie-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-challis-makka-splyvava-tkanina-zrazanie-a-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-challis-makka-splyvava-tkanina-zrazanie-a-pranie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3486,
+      "h2_count": 31,
+      "table_count": 2,
+      "responsive_table_count": 2,
+      "styled_block_count": 10,
+      "action_button_count": 2,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "internal_wording_found": [],
+      "fixed_price_found": false,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+        "https://scholar.ufs.ac.za/server/api/core/bitstreams/72a78a86-ca25-49f9-80da-b2c912699326/content",
+        "https://utt.edu.tt/fashion/cafd_student_handbook.pdf",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.iso.org/standard/67602.html",
+        "https://www.iso.org/standard/75934.html",
+        "https://www.woolmark.com/care/care-for-wool/"
+      ],
+      "body_length": 33339,
+      "ok": true,
+      "minimum_visible_words": 2800
+    }
+  ],
+  "link_checks": [
+    {
+      "url": "https://arc.lib.montana.edu/msu-extension/objects/ext1-000316.pdf",
+      "status": 200,
+      "final_url": "https://arc.lib.montana.edu/msu-extension/objects/ext1-000316.pdf",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://collections.lacma.org/object/130818",
+      "status": 200,
+      "final_url": "https://collections.lacma.org/object/130818",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://collections.lacma.org/object/71338",
+      "status": 200,
+      "final_url": "https://collections.lacma.org/object/71338",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://cooptex.gov.in/image/data/PPT/Co-optexStory.pdf",
+      "status": 200,
+      "final_url": "https://cooptex.com/image/data/PPT/Co-optexStory.pdf",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+      "status": 200,
+      "final_url": "https://eur-lex.europa.eu/eli/reg/2011/1007/oj",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://explore.lib.virginia.edu/exhibits/show/preservation-services/fabrics",
+      "status": 200,
+      "final_url": "https://explore.lib.virginia.edu/exhibits/show/preservation-services/fabrics",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://scholar.ufs.ac.za/server/api/core/bitstreams/72a78a86-ca25-49f9-80da-b2c912699326/content",
+      "status": 200,
+      "final_url": "https://scholar.ufs.ac.za/server/api/core/bitstreams/72a78a86-ca25-49f9-80da-b2c912699326/content",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://utt.edu.tt/fashion/cafd_student_handbook.pdf",
+      "status": 200,
+      "final_url": "https://utt.edu.tt/fashion/cafd_student_handbook.pdf",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.aatcc.org/testing/standards",
+      "status": 200,
+      "final_url": "https://www.aatcc.org/testing/standards",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/51276.html",
+      "status": 403,
+      "final_url": "https://www.iso.org/standard/51276.html",
+      "allowed_automation_block": true,
+      "automation_note": "Official ISO page blocks the automated link checker",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/67602.html",
+      "status": 403,
+      "final_url": "https://www.iso.org/standard/67602.html",
+      "allowed_automation_block": true,
+      "automation_note": "Official ISO page blocks the automated link checker",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/75934.html",
+      "status": 403,
+      "final_url": "https://www.iso.org/standard/75934.html",
+      "allowed_automation_block": true,
+      "automation_note": "Official ISO page blocks the automated link checker",
+      "ok": true
+    },
+    {
+      "url": "https://www.nlm.nih.gov/hmd/preservation/textiles.html",
+      "status": 200,
+      "final_url": "https://www.nlm.nih.gov/hmd/preservation/textiles.html",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.nps.gov/subjects/museums/upload/MHI_AppK_TextilesObjects.pdf",
+      "status": 200,
+      "final_url": "https://www.nps.gov/subjects/museums/upload/MHI_AppK_TextilesObjects.pdf",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-krv-vosk-a-ine-skvrny-z-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-krv-vosk-a-ine-skvrny-z-oblecenia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-spolocenske-saty-doma-a-kedy-zvolit-cistiaren",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-spolocenske-saty-doma-a-kedy-zvolit-cistiaren",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vyzehlit-koselu-kompletny-sprievodca-pre-dokonaly-vysledok",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyzehlit-koselu-kompletny-sprievodca-pre-dokonaly-vysledok",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-batist-jemna-platnova-tkanina-priesvitnost-a-pranie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-canvas-pevne-platno-skvrny-a-spravne-pranie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-krep-zrnity-povrch-krcivost-a-spravna-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-krep-zrnity-povrch-krcivost-a-spravna-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-taft-sustava-tkanina-vodne-mapy-a-bezpecne-cistenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-taft-sustava-tkanina-vodne-mapy-a-bezpecne-cistenie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    },
+    {
+      "url": "https://www.woolmark.com/care/care-for-wool/",
+      "status": 200,
+      "final_url": "https://www.woolmark.com/care/care-for-wool/",
+      "allowed_automation_block": false,
+      "automation_note": null,
+      "ok": true
+    }
+  ]
+}
