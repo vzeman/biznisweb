@@ -4205,23 +4205,28 @@ class BizniWebExporter:
         orders_df["cm3_profit"] = orders_df["cm2_profit"] - orders_df["allocated_fixed_overhead"]
         orders_df["pre_ad_contribution"] = orders_df["cm1_profit"]
 
-        item_df = df[
-            [
-                "order_num",
-                "customer_email",
-                "purchase_date",
-                "product_sku",
-                "item_label",
-                "item_quantity",
-                "item_total_without_tax",
-                "item_total_with_tax",
-                "item_unit_price",
-                "item_line_sum_original",
-                "item_line_sum_with_tax_original",
-                "item_unit_price_original",
-                "total_expense",
-            ]
-        ].copy()
+        item_columns = [
+            "order_num",
+            "customer_email",
+            "purchase_date",
+            "product_sku",
+            "item_label",
+            "item_quantity",
+            "item_total_without_tax",
+            "item_total_with_tax",
+            "item_unit_price",
+            "item_line_sum_original",
+            "item_line_sum_with_tax_original",
+            "item_unit_price_original",
+            "total_expense",
+        ]
+        for optional_column in (
+            "purchase_cost_reference_per_item",
+            "purchase_cost_reference_source",
+        ):
+            if optional_column in df.columns:
+                item_columns.append(optional_column)
+        item_df = df[item_columns].copy()
         item_df["purchase_datetime"] = pd.to_datetime(item_df["purchase_date"], errors="coerce")
         item_df = item_df.dropna(subset=["purchase_datetime"]).copy()
         item_df["customer_email"] = item_df["customer_email"].astype(str).str.strip().str.lower()
@@ -12269,6 +12274,13 @@ class BizniWebExporter:
             )
         else:
             demand_df["gross_profit"] = pd.to_numeric(demand_df["cm1_profit"], errors="coerce").fillna(0.0)
+        if "purchase_cost_reference_per_item" in demand_df.columns:
+            demand_df["known_cost_per_unit"] = pd.to_numeric(
+                demand_df["purchase_cost_reference_per_item"],
+                errors="coerce",
+            )
+        else:
+            demand_df["known_cost_per_unit"] = np.nan
         if has_allocated_paid_spend:
             demand_df["allocated_paid_spend"] = pd.to_numeric(
                 demand_df["allocated_paid_spend"], errors="coerce"
@@ -12282,6 +12294,11 @@ class BizniWebExporter:
         demand_df["week_start"] = demand_df["purchase_datetime"].dt.to_period("W").dt.start_time
         demand_df["month_start"] = demand_df["purchase_datetime"].dt.to_period("M").dt.to_timestamp()
 
+        def _single_unambiguous_unit_cost(values: pd.Series) -> float:
+            numeric = pd.to_numeric(values, errors="coerce")
+            finite_values = numeric.loc[np.isfinite(numeric)].unique()
+            return float(finite_values[0]) if len(finite_values) == 1 else np.nan
+
         product_summary = (
             demand_df.groupby("product_sku")
             .agg(
@@ -12290,6 +12307,7 @@ class BizniWebExporter:
                 units=("item_quantity", "sum"),
                 revenue=("item_total_without_tax", "sum"),
                 gross_profit=("gross_profit", "sum"),
+                known_cost_per_unit=("known_cost_per_unit", _single_unambiguous_unit_cost),
                 profit_without_fixed=("cm2_profit", "sum"),
                 profit_with_fixed=("cm3_profit", "sum"),
                 first_sale=("purchase_datetime", "min"),
@@ -13212,7 +13230,10 @@ class BizniWebExporter:
                                 "inventory_cost_value": 0.0,
                                 "inventory_retail_value": 0.0,
                                 "mapped_inventory_retail_value": 0.0,
-                                "known_cost_per_unit": np.nan,
+                                "known_cost_per_unit": pd.to_numeric(
+                                    missing_historical_products["known_cost_per_unit"],
+                                    errors="coerce",
+                                ),
                                 "known_retail_unit_price": 0.0,
                                 "history_only_inventory_flag": True,
                             }

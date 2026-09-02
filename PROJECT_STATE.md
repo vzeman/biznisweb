@@ -1,9 +1,36 @@
 # PROJECT_STATE
 
-Last updated: 2026-08-26
+Last updated: 2026-09-02
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
+
+## 2026-09-02 — ROY overdue inbound valuation and stock-alert fix ready for PR
+
+Date: 2026-09-02
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-inbound-overdue-valuation`
+
+What changed:
+
+- History-only ROY products now retain a single unambiguous mapped purchase cost from the order-item pipeline, so inbound orders can be valued even when the product is absent from the current warehouse snapshot.
+- An inbound order whose ETA is before the current UTC date remains listed and valued, but no longer increases stock coverage, suppresses a low-stock alert, or changes `Order now` into an inbound-covered state.
+- The dashboard now identifies overdue inbound rows as `po termíne` and explains that they are not counted toward stock coverage. Summary metrics separate overdue units from units that still count toward stock-risk coverage.
+
+What is verified:
+
+- Infra hard-gate was established from protected production smoke run `32447411582`: ECS/Fargate task IP `172.31.21.89`, service `roy-daily-report-email`, task definition `roy-reporting-daily:67`, runtime path `/app`, localhost marker `http://127.0.0.1:8000/marker.json`; marker and `roy:daily-profit-loss` UI smoke passed. App Runner service is `biznisweb-roy-operations-dashboard`, production path `/production/roy`.
+- Focused ROY inventory/dashboard tests passed: `63` tests. The exact production-image test suite from `.github/workflows/build-and-push-ecr.yml` passed: `285` tests. Python compilation and `git diff --check` passed.
+- Regression coverage proves mapped costs `18.40 EUR/ks` for SKU `14832` and `12.90 EUR/ks` for SKU `622_M33`, and proves that overdue inbound remains valued without hiding an out-of-stock alert.
+
+Known issues:
+
+- The SD-card inbound row remains intentionally unpriced because no unambiguous purchase cost exists; the dashboard must continue to report it as missing rather than guess.
+- Production deploy and live UI verification are pending PR review and protected workflow completion.
+
+Next exact step:
+
+- Commit and push this branch, merge only after required PR checks pass, deploy the exact merged image through the protected ROY App Runner workflow, verify localhost marker first, then verify live inbound value and the MACO STOP 150 ml alert in `/production/roy`.
 
 ## 0) How To Use This File
 
