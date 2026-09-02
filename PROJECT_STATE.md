@@ -7019,3 +7019,27 @@ Known issues:
 Next exact step:
 
 - Commit and push this canonical checkpoint record, open a PR, and merge only after required CI passes. Then delete and independently confirm removal of the local temporary ZIP/JSON/dry-run files. At the next frozen gate on `2026-09-03 03:45 Europe/Bratislava`, consume the earliest successful checkpoint-index `2` artifact; resolve only if its cumulative eligible-device count reaches `1,000`, otherwise extend by exactly one further full local day.
+
+## 2026-09-02 — First outcome-blind checkpoint merge verified
+
+Date: 2026-09-02
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-window-checkpoint-1-state`
+
+What changed:
+
+- PR `#484` merged the canonical checkpoint-index `1` record into `main` as `112760bf434d8cc09f6bf542c6a15ed959b0e82e` after `env-check`, `secret-scan`, `observability-baseline`, and `security-baseline` passed on exact head `843380ef60f9a447f9338b8c154dc28f4a815d7a`.
+- The temporary ZIP, extracted checkpoint JSON, and recorder dry-run output were deleted after the hash/run/head-bound record was committed and pushed; their temporary directory was independently confirmed absent.
+
+What is verified:
+
+- Exact clean `main` equals `origin/main`, and `validate_growthbook_aa_measurement_window.py` passes after the merge.
+- The first stopping decision remains outcome-blind: `769` cumulative eligible devices, below the fixed `1,000` minimum, therefore exactly one full local-day extension. No arm or outcome data was opened and no external allocation or commerce state changed.
+
+Known issues:
+
+- The A/A window is unresolved. Protected evidence production, the manual A/A stop, GrowthBook Pro billing, and CTA activation remain closed.
+
+Next exact step:
+
+- At or after the next frozen gate on `2026-09-03 03:45 Europe/Bratislava`, first inspect the repository-owned scheduled checkpoint-index `2` run. Do not duplicate an active run. Use a same-gate manual fallback only if no canonical scheduled artifact exists and the original daily gate remains open; independently verify and record the earliest artifact, resolving only at a cumulative count of at least `1,000`.
