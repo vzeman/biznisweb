@@ -69,10 +69,9 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             )
             if resolution_status is not None:
                 snapshot["measurement_window"]["resolution_status"] = resolution_status
-            if checkpoint_history is not None:
-                snapshot["measurement_window"]["checkpoint_history"] = (
-                    checkpoint_history
-                )
+            snapshot["measurement_window"]["checkpoint_history"] = (
+                checkpoint_history if checkpoint_history is not None else []
+            )
             snapshot_path = temporary / "snapshot.json"
             snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
             github_env = temporary / "github.env"

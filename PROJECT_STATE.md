@@ -6990,3 +6990,32 @@ Known issues:
 Next exact step:
 
 - Validate, commit, push, and merge this one-line page-boundary fix through required CI. Then synchronize exact clean `main` and make one final same-gate checkpoint fallback only if no canonical artifact or active run exists. Independently verify and record the artifact if successful; otherwise stop fail-closed on the new sanitized classification.
+
+## 2026-09-02 — First outcome-blind checkpoint recorded; extend one full local day
+
+Date: 2026-09-02
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-window-checkpoint-1`
+
+What changed:
+
+- PR `#483` merged the strict three-slot Athena result page into `main` as `05bbd2154330321231119d2c5d7dd75ea7975f00` after all required checks passed.
+- With no active run or canonical artifact, the final same-gate fallback ran on that exact `main` as run `33604314796`. Every protected gate passed and the run uploaded exactly one canonical artifact `vevo-growthbook-aa-window-checkpoint`.
+- Independently verified the exact run/head, GitHub ZIP SHA-256 `ba0e42aa7db7341548025501fd1c7fabf23da3b4e98b933b2bbab3d006c78d8b`, one-file ZIP contract, canonical JSON SHA-256 `14add33881278dcd7ed89c3e5f0a4692c980a72ae2e2100ff087fa4e2757c7b1`, and an offline dry-run of the hash/run/head-bound recorder.
+- Recorded checkpoint index `1` only through `record_growthbook_aa_window_checkpoint.py`. The cumulative eligible-device count is `769`, below the preregistered minimum `1,000`, so the frozen stopping rule extends the window by exactly one full Europe/Bratislava local day.
+- Stabilized recorder/workflow unit fixtures by explicitly clearing live checkpoint history in test setup; the tests no longer inherit production history as it grows.
+
+What is verified:
+
+- The recorded checkpoint states `extend_one_full_local_day`; arm counts, arm outcomes, outcome metrics, event/device identities, and customer/order data were not read.
+- `validate_growthbook_aa_measurement_window.py`, all `27` focused recorder/workflow tests, `scripts/security_ci.py`, and `git diff --check` pass.
+- No A/A winner was called, no allocation changed, and no GrowthBook, GTM, Meta Ads, BiznisWeb, reporting, product, price, cart, checkout, payment, or order mutation occurred.
+
+Known issues:
+
+- The window is not resolved because checkpoint `1` has only `769` eligible devices. Protected A/A evidence, manual stop, Pro purchase, and CTA activation remain closed.
+- This checkpoint record is not yet merged. The temporary artifact download must be deleted after the branch record is committed and its hashes are preserved in Git state.
+
+Next exact step:
+
+- Commit and push this canonical checkpoint record, open a PR, and merge only after required CI passes. Then delete and independently confirm removal of the local temporary ZIP/JSON/dry-run files. At the next frozen gate on `2026-09-03 03:45 Europe/Bratislava`, consume the earliest successful checkpoint-index `2` artifact; resolve only if its cumulative eligible-device count reaches `1,000`, otherwise extend by exactly one further full local day.
