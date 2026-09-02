@@ -6936,3 +6936,30 @@ Known issues:
 Next exact step:
 
 - Validate, commit, push, and merge this classifier through required CI. Then synchronize clean exact `main` and make one same-gate checkpoint retry only if the repository-owned scheduled artifact is still absent. Use only the sanitized reason class/hash to repair a safely identifiable query defect; otherwise stop fail-closed without opening raw AWS payloads or experiment outcomes.
+
+## 2026-09-02 — Checkpoint query wrapper failed before the classifier marker
+
+Date: 2026-09-02
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-checkpoint-athena-status-envelope`
+
+What changed:
+
+- PR `#481` merged the allowlisted Athena reason classifier into `main` as `cf0ffc65e88a11c73ef0b7bbba544d8adb594124` after all required checks passed.
+- A delayed scheduled run `33602805439` appeared on the preceding diagnostic commit but failed at the same aggregate query and produced no artifact. With no scheduled artifact and no active run, one current-main same-gate fallback ran as `33603054826` and also failed before the classifier emitted a populated marker.
+- Replaced the fragile CLI field projection with runner-local JSON envelopes for Athena query submission and status. Python validates the opaque query-ID shape without emitting the ID, validates the bounded state enum, and classifies a failed status from the same temporary payload. The unconditional cleanup boundary remains unchanged.
+
+What is verified:
+
+- Run `33603054826` stopped at the aggregate-only query after all infrastructure/control gates passed; no evidence or artifact was produced and cleanup passed.
+- The failed log contains no populated diagnostic or raw reason. It was inspected only in memory through fixed boolean markers and was not printed or committed.
+- The new wrapper never prints the query ID, full Athena status, raw reason, SQL result, identity, arm, or outcome.
+
+Known issues:
+
+- The first checkpoint remains unresolved and the A/A experiment must stay unchanged.
+- This robust status envelope is not yet merged. No further checkpoint retry is allowed until it reaches exact `main`, no artifact exists, no run is active, and the original gate remains open.
+
+Next exact step:
+
+- Validate, commit, push, and merge the status envelope through required CI. Then synchronize exact clean `main` and retry the checkpoint once inside the original gate only if no canonical scheduled artifact or active run exists. Continue only with a verified canonical artifact or a fixed sanitized failure class; otherwise remain fail-closed.

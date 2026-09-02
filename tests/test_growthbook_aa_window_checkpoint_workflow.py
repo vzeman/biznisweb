@@ -459,7 +459,11 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
 
     def test_athena_failure_emits_only_structured_sanitized_metadata(self) -> None:
         for marker in (
-            "QueryExecution.Status.{AthenaError:AthenaError,StateChangeReason:StateChangeReason}",
+            "athena-query-start.json",
+            "athena-query-status.json",
+            "PRODUCTION_AA_WINDOW_ATHENA_QUERY_SUBMITTED:id-valid=true:raw-id-emitted=false",
+            "re.fullmatch(r'[0-9a-f-]{36}', query_id)",
+            "state not in {'QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED'}",
             "PRODUCTION_AA_WINDOW_ATHENA_ERROR:",
             "reason_classes = (",
             "reason_sha256 = hashlib.sha256(reason.encode()).hexdigest()",
@@ -470,7 +474,8 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             self.assertIn(marker, WORKFLOW)
         for forbidden in (
             "print(reason)",
-            "cat \"${TEMP_CHECKPOINT_DIR}/athena-failure-status.json\"",
+            "cat \"${TEMP_CHECKPOINT_DIR}/athena-query-status.json\"",
+            "echo \"${QUERY_ID}\"",
             "StateChangeReason: text",
         ):
             self.assertNotIn(forbidden, WORKFLOW)
