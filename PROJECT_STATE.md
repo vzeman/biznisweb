@@ -5,11 +5,11 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
-## 2026-09-02 — BiznisWeb API pacing and HTTP 429 recovery ready for PR
+## 2026-09-02 — ROY HTTP 429 recovery deployed; 7,600 EUR fixed cost is live
 
 Date: 2026-09-02
 Repo: `vzeman/biznisweb`
-Branch: `codex/biznisweb-api-rate-limit-backoff`
+Branch: `codex/biznisweb-api-rate-limit-final-state`
 
 What changed:
 
@@ -18,6 +18,7 @@ What changed:
 - HTTP `429` receives explicit exponential cooldowns of `15 s` and `30 s` around the transport retry layer; HTTP `509` remains fail-fast because it represents a daily or monthly quota rather than a short-term rate limit.
 - The transport backoff is raised to `2 s` and continues to respect a server-provided `Retry-After` header. Safe environment overrides are documented in `.env.example`.
 - Product-inventory pagination was raised from `0.1 s` to the documented `0.5 s` minimum.
+- PR `#489` merged the rate-limit hardening to `main` as `fcf6e26341b1e4c1d47f71f6f688b3e09dcbe14b`; this merge also contains the previously merged ROY `7600 EUR/month` fixed-cost configuration.
 
 What is verified:
 
@@ -26,14 +27,20 @@ What is verified:
 - `python scripts/reporting_qa_smoke.py` passed, including the ROY `7600 EUR/month` fixed-cost assertion.
 - The exact ECR build regression suite passed all `291` tests.
 - Python compilation and `git diff --check` passed. No local application server, worker, watcher, tunnel, or persistent runtime was started.
+- ECR build run `33627015408` passed and published the exact merged image digest `sha256:9ff4738f998e3d80e7b76dc543f11bc36413d9d016e72b4a78eb3411433bc541`.
+- Protected ROY production run `33627278825` completed successfully. Its hard-gate identity was ECS/Fargate task `66d639a15d624ee2a7330aa0580a992f`, private IP `172.31.33.77`, service `roy-daily-report-email`, task definition `roy-reporting-daily:71`, runtime `/app`, and localhost marker `http://127.0.0.1:8000/marker.json`; the task used the exact digest above and exited with code `0`.
+- The same run emitted `LOCALHOST_MARKER_OK`, `UI_SMOKE_OK:roy:daily-profit-loss`, and `PRODUCTION_SMOKE_OK`, then promoted the complete live generation. The export contains `343` daily rows, `182` positive days, and `161` negative days.
+- Read-only diagnostic run `33630468048` independently confirmed that the live S3 alias now points to generation `20260902T122926Z`, the scheduler is `ENABLED`, and it uses task definition `:71`.
+- Browser verification of `https://qvfzvh82c3.eu-central-1.awsapprunner.com/production/roy` succeeded after the localhost marker: the authenticated dashboard loaded live data from `2026-09-02T12:29:25Z`, rendered accounting and operations KPIs, and produced no browser console warnings or errors.
+- The ROY fixed overhead source of truth is therefore live at `7600 EUR/month`; September allocates approximately `253.33 EUR/day` before display rounding. Project configuration kept daily email disabled, so the smoke did not send a real report email.
 
 Known issues:
 
-- The change is not yet merged, built, or deployed. The live ROY dashboard still points to generation `20260902T055120Z`, created before the fixed-cost change, until a complete protected export succeeds.
+- Direct browser navigation to the accounting JSON endpoint was blocked locally by the Chrome extension with `ERR_BLOCKED_BY_CLIENT`. This is not a production failure: the rendered authenticated dashboard, protected host/API/UI gates, task exit code, and independently refreshed S3 generation all passed.
 
 Next exact step:
 
-- Merge the PR after required checks, build the exact merged image, then run the ROY-only protected workflow. Before code execution confirm the ECS/Fargate task identity, private IP, service `roy-daily-report-email`, runtime `/app`, and marker path `http://127.0.0.1:8000/marker.json`; require exit code `0` and localhost marker before UI verification.
+- No code or production action remains for the ROY `7600 EUR/month` fixed-cost change or the HTTP `429` blocker. Monitor the next scheduled ROY run; only tune the documented pacing overrides if a later run records new `429` cooldown warnings.
 
 ## 2026-09-02 — ROY 7,600 EUR fixed-cost image scheduled; live refresh blocked by ROY API rate limit
 
