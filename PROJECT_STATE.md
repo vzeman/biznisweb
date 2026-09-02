@@ -6880,3 +6880,32 @@ Known issues:
 Next exact step:
 
 - At the next daily post-reconciliation readback, first inspect the scheduled exact-main infrastructure run. Do not dispatch a duplicate while one is queued or in progress. If no relevant run exists after its slot, dispatch exactly one `confirm_health=true` fallback from current exact `main`; accept only a successful run with one canonical sanitized artifact. If the marker/summary gate fails again, use only the new cardinality diagnostic to identify the producer/observer mismatch and continue fail-closed without raw-log or outcome access.
+
+## 2026-09-02 — First Production A/A checkpoint failed closed at aggregate query
+
+Date: 2026-09-02
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-checkpoint-athena-diagnostic`
+
+What changed:
+
+- At the first frozen due gate, no current-day scheduled infrastructure or checkpoint run existed and no related run was queued or in progress.
+- Exactly one infrastructure fallback ran on exact `main` commit `19b8ca75dedc2b3f9861c4c7c2df4b4c44029e89` as run `33601560892`; it succeeded and its sole canonical sanitized artifact passed independent run/head, ZIP digest, one-JSON, JSON hash, and offline-validator checks. The temporary download was deleted and independently confirmed absent.
+- Exactly one same-gate checkpoint fallback ran on the same exact `main` as run `33601772806`. The pre-AWS, managed-credential, runtime identity, success-marker, alarm, and DLQ gates passed, but the aggregate-only Athena query failed before evidence construction. No checkpoint artifact was uploaded.
+- Added a fail-closed Athena diagnostic that requests only the structured numeric `ErrorCategory`, numeric `ErrorType`, and boolean `Retryable` fields. It explicitly never requests or emits `StateChangeReason`, SQL output, row data, identities, arms, or outcomes.
+
+What is verified:
+
+- The failed checkpoint stopped at `Query only the cumulative eligible-device count`; all evidence and upload steps were skipped and cleanup completed.
+- GitHub reports zero artifacts for checkpoint run `33601772806`. The failed log was handled only in memory, was not printed or committed, and had SHA-256 `f8f267d0f38959c74794c66584ddbc0691d4389e15f6f61f48188c099b76434a`.
+- The focused checkpoint workflow suite passes `16` tests, `scripts/security_ci.py` passes, and `git diff --check` passes.
+- No arm allocation, outcome, conversion, revenue, CM1, Meta dimension, event/device/customer/order identity, GrowthBook action, GTM/Meta/BiznisWeb mutation, commerce mutation, or local AWS credential was read or used.
+
+Known issues:
+
+- The first checkpoint is not recorded because its protected aggregate query failed and produced no canonical artifact. The stopping decision therefore remains unresolved and the A/A experiment must remain unchanged.
+- This sanitized diagnostic is not yet merged. A second checkpoint attempt is prohibited until it reaches exact `main`; it remains allowed only inside the original 24-hour checkpoint gate and only while no scheduled artifact or active run exists.
+
+Next exact step:
+
+- Commit and push this diagnostic, open a PR, merge only after required CI passes, synchronize exact clean `main`, and then rerun one same-gate checkpoint fallback if no scheduled artifact or active run exists. Read only the structured sanitized Athena error marker if it fails again; otherwise independently verify and record the sole canonical checkpoint artifact through `record_growthbook_aa_window_checkpoint.py` on a new branch.

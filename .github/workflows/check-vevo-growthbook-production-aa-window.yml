@@ -639,7 +639,41 @@ jobs:
           for _ in $(seq 1 30); do
             STATE="$(aws athena get-query-execution --query-execution-id "${QUERY_ID}" --region "${AWS_REGION}" --query 'QueryExecution.Status.State' --output text)"
             if [[ "${STATE}" == 'SUCCEEDED' ]]; then break; fi
-            if [[ "${STATE}" == 'FAILED' || "${STATE}" == 'CANCELLED' ]]; then exit 1; fi
+            if [[ "${STATE}" == 'FAILED' || "${STATE}" == 'CANCELLED' ]]; then
+              aws athena get-query-execution \
+                --query-execution-id "${QUERY_ID}" \
+                --region "${AWS_REGION}" \
+                --query 'QueryExecution.Status.AthenaError.{ErrorCategory:ErrorCategory,ErrorType:ErrorType,Retryable:Retryable}' \
+                --output json > "${TEMP_CHECKPOINT_DIR}/athena-error.json"
+              python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          error = json.loads(
+              Path(os.environ['TEMP_CHECKPOINT_DIR'], 'athena-error.json').read_text(
+                  encoding='utf-8'
+              )
+          )
+          category = error.get('ErrorCategory')
+          error_type = error.get('ErrorType')
+          retryable = error.get('Retryable')
+          if (
+              not isinstance(category, int)
+              or isinstance(category, bool)
+              or not isinstance(error_type, int)
+              or isinstance(error_type, bool)
+              or not isinstance(retryable, bool)
+          ):
+              raise SystemExit('Athena structured error metadata shape drift')
+          print(
+              'PRODUCTION_AA_WINDOW_ATHENA_ERROR:'
+              f'category={category}:type={error_type}:'
+              f'retryable={str(retryable).lower()}:raw-reason-emitted=false'
+          )
+          PY
+              exit 1
+            fi
             sleep 5
           done
           [[ "${STATE}" == 'SUCCEEDED' ]]

@@ -457,6 +457,18 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(marker, WORKFLOW)
 
+    def test_athena_failure_emits_only_structured_sanitized_metadata(self) -> None:
+        for marker in (
+            "QueryExecution.Status.AthenaError.{ErrorCategory:ErrorCategory,ErrorType:ErrorType,Retryable:Retryable}",
+            "PRODUCTION_AA_WINDOW_ATHENA_ERROR:",
+            "raw-reason-emitted=false",
+            "not isinstance(category, int)",
+            "not isinstance(error_type, int)",
+            "not isinstance(retryable, bool)",
+        ):
+            self.assertIn(marker, WORKFLOW)
+        self.assertNotIn("StateChangeReason", WORKFLOW)
+
     def test_uploads_only_one_canonical_sanitized_artifact_after_cleanup(self) -> None:
         self.assertEqual(1, WORKFLOW.count("uses: actions/upload-artifact@v4.6.2"))
         cleanup = WORKFLOW.index("Remove every temporary AWS response and query file")
