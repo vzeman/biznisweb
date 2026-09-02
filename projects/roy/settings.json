@@ -76,7 +76,7 @@
   ],
   "packaging_cost_per_order": 0.05,
   "shipping_net_per_order": -0.2,
-  "fixed_monthly_cost": 6500,
+  "fixed_monthly_cost": 7600,
   "missing_cost_margin_pct": 35,
   "authoritative_margin_override_skus": {
     "H-94491FEF": 90,
