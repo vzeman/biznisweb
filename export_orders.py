@@ -110,6 +110,13 @@ DEFAULT_PROJECT = BASE_DEFAULT_PROJECT
 GRAPHQL_TIMEOUT_SEC = int(
     os.getenv("BIZNISWEB_API_TIMEOUT_SEC", os.getenv("REPORT_HTTP_READ_TIMEOUT_SEC", "30"))
 )
+BIZNISWEB_API_MIN_REQUEST_INTERVAL_SEC = 0.5
+BIZNISWEB_API_LONG_PAUSE_EVERY_REQUESTS = 100
+BIZNISWEB_API_LONG_PAUSE_SEC = 5.0
+BIZNISWEB_API_RATE_LIMIT_MAX_ATTEMPTS = 3
+BIZNISWEB_API_RATE_LIMIT_BACKOFF_SEC = 15.0
+BIZNISWEB_API_TRANSPORT_RETRIES = 3
+BIZNISWEB_API_TRANSPORT_BACKOFF_SEC = 2.0
 
 # Fixed costs
 PACKAGING_COST_PER_ORDER = 0.3  # EUR per order
@@ -367,6 +374,19 @@ def env_int(name: str, default: int, min_value: int = 0) -> int:
         parsed = int(value)
     except ValueError as exc:
         raise ValueError(f"{name} must be an integer, got {value!r}") from exc
+    if parsed < min_value:
+        raise ValueError(f"{name} must be >= {min_value}, got {parsed}")
+    return parsed
+
+
+def env_float(name: str, default: float, min_value: float = 0.0) -> float:
+    value = os.getenv(name, "").strip()
+    if not value:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a number, got {value!r}") from exc
     if parsed < min_value:
         raise ValueError(f"{name} must be >= {min_value}, got {parsed}")
     return parsed
@@ -771,10 +791,48 @@ class BizniWebExporter:
             url=api_url,
             headers={'BW-API-Key': f'Token {api_token}'},
             verify=True,
-            retries=3,
+            retries=env_int(
+                "BIZNISWEB_API_TRANSPORT_RETRIES",
+                BIZNISWEB_API_TRANSPORT_RETRIES,
+                min_value=0,
+            ),
+            # urllib3's Retry honors Retry-After by default. This slower fallback
+            # backoff protects BiznisWeb installations which omit that header.
+            retry_backoff_factor=env_float(
+                "BIZNISWEB_API_TRANSPORT_BACKOFF_SEC",
+                BIZNISWEB_API_TRANSPORT_BACKOFF_SEC,
+                min_value=0.0,
+            ),
             timeout=GRAPHQL_TIMEOUT_SEC,
         )
         self.client = Client(transport=transport, fetch_schema_from_transport=False)
+        self.api_min_request_interval_sec = env_float(
+            "BIZNISWEB_API_MIN_REQUEST_INTERVAL_SEC",
+            BIZNISWEB_API_MIN_REQUEST_INTERVAL_SEC,
+            min_value=BIZNISWEB_API_MIN_REQUEST_INTERVAL_SEC,
+        )
+        self.api_long_pause_every_requests = env_int(
+            "BIZNISWEB_API_LONG_PAUSE_EVERY_REQUESTS",
+            BIZNISWEB_API_LONG_PAUSE_EVERY_REQUESTS,
+            min_value=1,
+        )
+        self.api_long_pause_sec = env_float(
+            "BIZNISWEB_API_LONG_PAUSE_SEC",
+            BIZNISWEB_API_LONG_PAUSE_SEC,
+            min_value=BIZNISWEB_API_LONG_PAUSE_SEC,
+        )
+        self.api_rate_limit_max_attempts = env_int(
+            "BIZNISWEB_API_RATE_LIMIT_MAX_ATTEMPTS",
+            BIZNISWEB_API_RATE_LIMIT_MAX_ATTEMPTS,
+            min_value=1,
+        )
+        self.api_rate_limit_backoff_sec = env_float(
+            "BIZNISWEB_API_RATE_LIMIT_BACKOFF_SEC",
+            BIZNISWEB_API_RATE_LIMIT_BACKOFF_SEC,
+            min_value=1.0,
+        )
+        self._api_request_count = 0
+        self._api_last_request_completed_at: Optional[float] = None
         self.fb_client = FacebookAdsClient()
         self.google_ads_client = GoogleAdsClient()
         self.cache_dir = self.project_root_dir / 'cache'
@@ -847,6 +905,71 @@ class BizniWebExporter:
         if not self.output_tag:
             return path
         return path.with_name(f"{path.stem}__{self.output_tag}{path.suffix}")
+
+    @staticmethod
+    def _is_rate_limit_error(error: Exception) -> bool:
+        message = str(error or "").lower()
+        return bool(
+            re.search(r"\b429\b", message)
+            or "too many requests" in message
+            or "rate exceeded" in message
+        )
+
+    def _wait_for_api_request_slot(self) -> None:
+        """Pace every BiznisWeb request, including fallbacks and detail lookups."""
+        now = time.monotonic()
+        delay = 0.0
+        pause_reason = "minimum request interval"
+
+        if (
+            self._api_request_count > 0
+            and self._api_request_count % self.api_long_pause_every_requests == 0
+        ):
+            delay = self.api_long_pause_sec
+            pause_reason = (
+                f"long pause after {self._api_request_count} BiznisWeb API requests"
+            )
+        elif self._api_last_request_completed_at is not None:
+            elapsed = max(0.0, now - self._api_last_request_completed_at)
+            delay = max(0.0, self.api_min_request_interval_sec - elapsed)
+
+        if delay > 0:
+            logger.debug("BiznisWeb API pacing: %.3fs (%s)", delay, pause_reason)
+            time.sleep(delay)
+
+        self._api_request_count += 1
+
+    def _execute_graphql(
+        self,
+        query: Any,
+        *,
+        variable_values: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Execute one paced request and cool down explicitly after HTTP 429."""
+        for attempt in range(1, self.api_rate_limit_max_attempts + 1):
+            self._wait_for_api_request_slot()
+            try:
+                return self.client.execute(query, variable_values=variable_values)
+            except Exception as exc:
+                if (
+                    not self._is_rate_limit_error(exc)
+                    or attempt >= self.api_rate_limit_max_attempts
+                ):
+                    raise
+
+                cooldown = self.api_rate_limit_backoff_sec * (2 ** (attempt - 1))
+                logger.warning(
+                    "BiznisWeb API rate limit reached (attempt %s/%s); "
+                    "cooling down for %.1fs before retry",
+                    attempt,
+                    self.api_rate_limit_max_attempts,
+                    cooldown,
+                )
+                time.sleep(cooldown)
+            finally:
+                self._api_last_request_completed_at = time.monotonic()
+
+        raise RuntimeError("BiznisWeb API retry loop exhausted unexpectedly")
 
     def _resolve_exact_product_sku_setting(self, setting_name: str) -> frozenset[str]:
         """Load a project SKU allowlist and fail closed on malformed configuration."""
@@ -3297,7 +3420,7 @@ class BizniWebExporter:
             return False
 
         try:
-            result = self.client.execute(
+            result = self._execute_graphql(
                 ORDER_PAYMENT_QUERY,
                 variable_values={"order_num": order_num},
             )
@@ -3366,7 +3489,7 @@ class BizniWebExporter:
         variables: Dict[str, Any],
     ) -> Dict[str, Any]:
         try:
-            return self.client.execute(ORDER_QUERY, variable_values=variables)
+            return self._execute_graphql(ORDER_QUERY, variable_values=variables)
         except Exception as exc:
             if not self._is_price_elements_error(exc):
                 raise
@@ -3377,7 +3500,7 @@ class BizniWebExporter:
                 "retrying page without price_elements "
                 f"(sort={params.get('sort')}, cursor_present={bool(params.get('cursor'))})"
             )
-            result = self.client.execute(
+            result = self._execute_graphql(
                 ORDER_QUERY_WITHOUT_PRICE_ELEMENTS,
                 variable_values=variables,
             )
@@ -3984,7 +4107,7 @@ class BizniWebExporter:
         limit = max(1, min(int(page_limit or 30), 30))
         cursor = None
         has_next_page = True
-        page_delay = 0.1
+        page_delay = 0.5
         retry_delay = 5
         max_retries = 3
         page_count = 0
@@ -4005,7 +4128,10 @@ class BizniWebExporter:
             result = None
             while retry_count < max_retries:
                 try:
-                    result = self.client.execute(PRODUCT_INVENTORY_QUERY, variable_values=variables)
+                    result = self._execute_graphql(
+                        PRODUCT_INVENTORY_QUERY,
+                        variable_values=variables,
+                    )
                     break
                 except Exception as exc:
                     retry_count += 1

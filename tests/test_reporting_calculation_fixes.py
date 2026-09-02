@@ -3361,6 +3361,83 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual("Dobierkou", exporter._price_element_info(orders[0], "payment")["title"])
         self.assertEqual(3, len(exporter.client.calls))
 
+    def test_api_request_slot_enforces_minimum_interval(self) -> None:
+        exporter = make_exporter()
+        exporter._api_request_count = 1
+        exporter._api_last_request_completed_at = 100.0
+
+        with (
+            patch("export_orders.time.monotonic", return_value=100.2),
+            patch("export_orders.time.sleep") as sleep_mock,
+        ):
+            exporter._wait_for_api_request_slot()
+
+        sleep_mock.assert_called_once()
+        self.assertAlmostEqual(0.3, sleep_mock.call_args.args[0], places=6)
+        self.assertEqual(2, exporter._api_request_count)
+
+    def test_api_request_slot_adds_long_pause_after_each_hundred_requests(self) -> None:
+        exporter = make_exporter()
+        exporter._api_request_count = 100
+        exporter._api_last_request_completed_at = 100.0
+
+        with (
+            patch("export_orders.time.monotonic", return_value=100.2),
+            patch("export_orders.time.sleep") as sleep_mock,
+        ):
+            exporter._wait_for_api_request_slot()
+
+        sleep_mock.assert_called_once_with(5.0)
+        self.assertEqual(101, exporter._api_request_count)
+
+    def test_graphql_rate_limit_retries_with_exponential_cooldown(self) -> None:
+        exporter = make_exporter()
+
+        class RateLimitedClient:
+            def __init__(self) -> None:
+                self.call_count = 0
+
+            def execute(self, query, variable_values=None):
+                self.call_count += 1
+                if self.call_count < 3:
+                    raise RuntimeError("HTTP 429: too many 429 error responses")
+                return {"ok": True}
+
+        exporter.client = RateLimitedClient()
+
+        with (
+            patch.object(exporter, "_wait_for_api_request_slot") as wait_mock,
+            patch("export_orders.time.monotonic", return_value=100.0),
+            patch("export_orders.time.sleep") as sleep_mock,
+        ):
+            result = exporter._execute_graphql("query", variable_values={"page": 1})
+
+        self.assertEqual({"ok": True}, result)
+        self.assertEqual(3, exporter.client.call_count)
+        self.assertEqual(3, wait_mock.call_count)
+        self.assertEqual(
+            [15.0, 30.0],
+            [item.args[0] for item in sleep_mock.call_args_list],
+        )
+
+    def test_graphql_non_rate_error_is_not_retried(self) -> None:
+        exporter = make_exporter()
+        exporter.client.execute = unittest.mock.Mock(
+            side_effect=RuntimeError("HTTP 509: quota exceeded")
+        )
+
+        with (
+            patch.object(exporter, "_wait_for_api_request_slot") as wait_mock,
+            patch("export_orders.time.monotonic", return_value=100.0),
+            patch("export_orders.time.sleep") as sleep_mock,
+            self.assertRaisesRegex(RuntimeError, "509"),
+        ):
+            exporter._execute_graphql("query")
+
+        exporter.client.execute.assert_called_once()
+        wait_mock.assert_called_once()
+        sleep_mock.assert_not_called()
+
     def test_payment_metadata_enrichment_retries_only_unresolved_candidates(self) -> None:
         exporter = make_exporter()
         fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]

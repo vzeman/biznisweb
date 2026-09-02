@@ -5,6 +5,36 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-02 — BiznisWeb API pacing and HTTP 429 recovery ready for PR
+
+Date: 2026-09-02
+Repo: `vzeman/biznisweb`
+Branch: `codex/biznisweb-api-rate-limit-backoff`
+
+What changed:
+
+- Every BiznisWeb GraphQL request now passes through one pacing and retry boundary, including order pages, inventory pages, the `price_elements` fallback, and individual payment-metadata lookups.
+- Requests keep at least `0.5 s` separation and pause for `5 s` after every `100` calls, matching the current BiznisWeb Partner API guidance.
+- HTTP `429` receives explicit exponential cooldowns of `15 s` and `30 s` around the transport retry layer; HTTP `509` remains fail-fast because it represents a daily or monthly quota rather than a short-term rate limit.
+- The transport backoff is raised to `2 s` and continues to respect a server-provided `Retry-After` header. Safe environment overrides are documented in `.env.example`.
+- Product-inventory pagination was raised from `0.1 s` to the documented `0.5 s` minimum.
+
+What is verified:
+
+- Focused pacing, long-pause, `429` recovery, `509` fail-fast, order fallback, and payment fail-closed tests passed.
+- Reporting, dashboard, and ROY inventory suites passed all `135` tests.
+- `python scripts/reporting_qa_smoke.py` passed, including the ROY `7600 EUR/month` fixed-cost assertion.
+- The exact ECR build regression suite passed all `291` tests.
+- Python compilation and `git diff --check` passed. No local application server, worker, watcher, tunnel, or persistent runtime was started.
+
+Known issues:
+
+- The change is not yet merged, built, or deployed. The live ROY dashboard still points to generation `20260902T055120Z`, created before the fixed-cost change, until a complete protected export succeeds.
+
+Next exact step:
+
+- Merge the PR after required checks, build the exact merged image, then run the ROY-only protected workflow. Before code execution confirm the ECS/Fargate task identity, private IP, service `roy-daily-report-email`, runtime `/app`, and marker path `http://127.0.0.1:8000/marker.json`; require exit code `0` and localhost marker before UI verification.
+
 ## 2026-09-02 — ROY 7,600 EUR fixed-cost image scheduled; live refresh blocked by ROY API rate limit
 
 Date: 2026-09-02
