@@ -5,6 +5,34 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-02 — ROY serialized inbound valuation follow-up ready for PR
+
+Date: 2026-09-02
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-inbound-reference-values`
+
+What changed:
+
+- Production readback after PR `#477` found that history-only MACO STOP costs were correct inside the analyzer but were omitted by the modern dashboard payload serializer because zero-stock history-only products do not enter the display-limited `inventory_rows` collection.
+- A new minimal `inventory_reference_rows` payload carries SKU, current quantity and unambiguous unit values for every inventory-model product. Operations lookups use this reference collection without treating it as a visible alert/display collection.
+- The first merged fix remains in place: overdue inbound is visible and valued, is labelled `po termíne`, and does not suppress current stock alerts.
+
+What is verified:
+
+- PR `#477` merged as `fd1aef8c562cd26198d258245cfd5b08c1d8e07f`; ECR build run `33590855429` published digest `sha256:a641fcc26040b288e3bedb6fd76401531daafbc281a02a474fe40aedf330eae6`.
+- Deploy run `33591049151` used ECS/Fargate task `800f869177f644baa2805df33ea0e28d`, private IP `172.31.16.213`, service `roy-daily-report-email`, candidate task definition `roy-reporting-daily:68`, runtime path `/app`, and localhost marker path `http://127.0.0.1:8000/marker.json`. The generated ROY report is timestamped `2026-09-02 04:54:45`.
+- Production HTML contains the new overdue UI markers. The generated artifact shows both SKU `14832` and `622_M33` as zero/negative-stock alert rows, proving overdue inbound no longer hides them. It also exposed the missing serialized cost field, which this follow-up closes.
+- The exact production scenario now passes end to end: `250 × 18.40 EUR = 4,600 EUR`, `40 × 12.90 EUR = 516 EUR`, total known inbound cost `5,116 EUR`; the 10-unit SD-card row remains the sole unpriced item. ROY/dashboard suite passed `77` tests and the full production-image suite passed `287` tests; compilation and `git diff --check` passed.
+
+Known issues:
+
+- Live operations data refresh is temporarily receiving BiznisWeb HTTP `429`; avoid repeated refresh attempts. The published S3-backed report remains available and was used for fail-closed production artifact inspection.
+- The serialized reference-row follow-up is not deployed yet. Do not consider the `5,116 EUR` live operations value verified until its PR, exact-image build, protected deploy, host marker and final UI/API readback all pass.
+
+Next exact step:
+
+- Commit and push this follow-up, merge only after required checks pass, deploy the exact merged ECR digest through the protected ROY workflow, verify the localhost marker, then perform one controlled live operations readback after the BiznisWeb rate-limit cooldown.
+
 ## 2026-09-02 — ROY overdue inbound valuation and stock-alert fix ready for PR
 
 Date: 2026-09-02

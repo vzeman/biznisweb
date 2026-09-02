@@ -1786,9 +1786,16 @@ def _inventory_row_collections(inventory: Dict[str, Any]) -> Iterable[Tuple[str,
             yield key, rows
 
 
+def _inventory_lookup_row_collections(inventory: Dict[str, Any]) -> Iterable[Tuple[str, List[Dict[str, Any]]]]:
+    yield from _inventory_row_collections(inventory)
+    reference_rows = inventory.get("inventory_reference_rows")
+    if isinstance(reference_rows, list):
+        yield "inventory_reference_rows", reference_rows
+
+
 def _current_availability_by_sku(inventory: Dict[str, Any]) -> Dict[str, float]:
     availability: Dict[str, float] = {}
-    for _, rows in _inventory_row_collections(inventory):
+    for _, rows in _inventory_lookup_row_collections(inventory):
         for row in rows:
             sku = str(row.get("sku") or "").strip()
             if not sku:
@@ -1808,7 +1815,7 @@ def _finite_nonnegative_float(value: Any) -> Optional[float]:
 
 def _inventory_unit_values_by_sku(inventory: Dict[str, Any]) -> Dict[str, Dict[str, Optional[float]]]:
     values_by_sku: Dict[str, Dict[str, Optional[float]]] = {}
-    for _, rows in _inventory_row_collections(inventory):
+    for _, rows in _inventory_lookup_row_collections(inventory):
         for row in rows:
             sku = str(row.get("sku") or "").strip()
             if not sku:
@@ -2371,7 +2378,7 @@ def _apply_current_stock_to_inventory(
         return
     checked_at = _state_now_iso()
     touched = 0
-    for _, rows in _inventory_row_collections(inventory):
+    for collection_key, rows in _inventory_lookup_row_collections(inventory):
         for row in rows:
             sku = str(row.get("sku") or "").strip()
             stock = current_stock_by_sku.get(sku)
@@ -2393,7 +2400,8 @@ def _apply_current_stock_to_inventory(
                     "live_stock_ean": stock.get("matched_ean"),
                 }
             )
-            _recalculate_inventory_row_after_stock_update(row, project_settings)
+            if collection_key != "inventory_reference_rows":
+                _recalculate_inventory_row_after_stock_update(row, project_settings)
     summary = inventory.setdefault("summary", {})
     summary["live_stock_overlay_touched_rows"] = touched
     summary["live_stock_overlay_matched_products"] = len(current_stock_by_sku)
@@ -2854,6 +2862,7 @@ def build_inventory_snapshot(
         "alert_rows": list(roy_inventory.get("alert_rows") or [])[:120],
         "stock_risk_rows": list(roy_inventory.get("stock_risk_rows") or [])[:120],
         "inventory_rows": list(roy_inventory.get("inventory_rows") or [])[:160],
+        "inventory_reference_rows": list(roy_inventory.get("inventory_reference_rows") or [])[:10000],
         "restock_priority_rows": list(roy_inventory.get("restock_priority_rows") or [])[:120],
         "revenue_at_risk_rows": list(roy_inventory.get("revenue_at_risk_rows") or [])[:120],
         "forecast_rows": list(roy_inventory.get("forecast_rows") or [])[:80],

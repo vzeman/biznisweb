@@ -1033,6 +1033,93 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertTrue(inventory["inbound_order_rows"][0]["overdue"])
         self.assertFalse(inventory["inbound_order_rows"][0]["counts_toward_stock_risk"])
 
+    def test_history_only_inventory_reference_values_price_known_maco_inbound(self) -> None:
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "summary": {
+                        "inventory_available_units": 0,
+                        "inventory_cost_value": 0,
+                        "inventory_retail_value": 0,
+                    },
+                    "inventory_reference_rows": [
+                        {
+                            "sku": "14832",
+                            "product": "MACO STOP Extreme 300ml",
+                            "active": False,
+                            "available_quantity": 0,
+                            "mapped_available_quantity": 0,
+                            "cost_per_unit": 18.4,
+                            "retail_unit_price": 39.69,
+                            "history_only_inventory_flag": True,
+                        },
+                        {
+                            "sku": "622_M33",
+                            "product": "MACO STOP Extreme 150ml",
+                            "active": False,
+                            "available_quantity": 0,
+                            "mapped_available_quantity": 0,
+                            "cost_per_unit": 12.9,
+                            "retail_unit_price": 29.16,
+                            "history_only_inventory_flag": True,
+                        },
+                    ],
+                    "alert_rows": [],
+                    "stock_risk_rows": [],
+                    "restock_priority_rows": [],
+                    "revenue_at_risk_rows": [],
+                    "inventory_rows": [],
+                }
+            }
+        }
+        state = {
+            "version": 1,
+            "loss_acknowledgements": {},
+            "inbound_orders": {
+                "14832": {
+                    "sku": "14832",
+                    "product": "MACO STOP Extreme 300ml",
+                    "ordered_units": 250,
+                    "expected_arrival_date": "2026-08-25",
+                    "baseline_available_quantity": 0,
+                },
+                "622_M33": {
+                    "sku": "622_M33",
+                    "product": "MACO STOP Extreme 150ml",
+                    "ordered_units": 40,
+                    "expected_arrival_date": "2026-08-10",
+                    "baseline_available_quantity": 0,
+                },
+                "H-CF3B7CAD": {
+                    "sku": "H-CF3B7CAD",
+                    "product": "SD card",
+                    "ordered_units": 10,
+                    "expected_arrival_date": "2026-08-10",
+                    "baseline_available_quantity": 0,
+                },
+            },
+            "auto_cleared_inbound_orders": [],
+        }
+
+        inventory, state_changed = build_inventory_snapshot(
+            payload,
+            state=state,
+            project_settings={"inventory_model": {}},
+        )
+
+        self.assertFalse(state_changed)
+        inbound_by_sku = {row["sku"]: row for row in inventory["inbound_order_rows"]}
+        self.assertEqual(18.4, inbound_by_sku["14832"]["cost_per_unit"])
+        self.assertEqual(4600, inbound_by_sku["14832"]["inbound_cost_value"])
+        self.assertEqual(12.9, inbound_by_sku["622_M33"]["cost_per_unit"])
+        self.assertEqual(516, inbound_by_sku["622_M33"]["inbound_cost_value"])
+        self.assertIsNone(inbound_by_sku["H-CF3B7CAD"]["inbound_cost_value"])
+        self.assertEqual(5116, inventory["summary"]["inbound_cost_value"])
+        self.assertEqual(2, inventory["summary"]["inbound_costed_order_count"])
+        self.assertEqual(1, inventory["summary"]["inbound_unpriced_order_count"])
+        self.assertEqual(290, inventory["summary"]["inbound_costed_units"])
+        self.assertEqual(300, inventory["summary"]["inbound_overdue_units"])
+
     def test_inbound_inventory_value_reports_missing_purchase_cost_without_guessing(self) -> None:
         payload = {
             "dashboard": {
@@ -1500,6 +1587,57 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual({}, state["inbound_orders"])
         self.assertEqual([], inventory["inbound_order_rows"])
         self.assertEqual(1, len(state["auto_cleared_inbound_orders"]))
+
+    def test_live_stock_overlay_updates_reference_row_before_inbound_auto_clear(self) -> None:
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "summary": {},
+                    "inventory_reference_rows": [
+                        {
+                            "sku": "14832",
+                            "product": "MACO STOP Extreme 300ml",
+                            "available_quantity": 0,
+                            "cost_per_unit": 18.4,
+                        }
+                    ],
+                }
+            }
+        }
+        state = {
+            "version": 1,
+            "loss_acknowledgements": {},
+            "inbound_orders": {
+                "14832": {
+                    "sku": "14832",
+                    "product": "MACO STOP Extreme 300ml",
+                    "ordered_units": 250,
+                    "expected_arrival_date": "2026-08-25",
+                    "baseline_available_quantity": 0,
+                }
+            },
+            "auto_cleared_inbound_orders": [],
+        }
+
+        inventory, state_changed = build_inventory_snapshot(
+            payload,
+            state=state,
+            project_settings={"inventory_model": {}},
+            current_stock_by_sku={
+                "14832": {
+                    "available_quantity": 250,
+                    "available_quantity_raw": 250,
+                    "quantity": 250,
+                    "quantity_raw": 250,
+                    "active": True,
+                }
+            },
+        )
+
+        self.assertTrue(state_changed)
+        self.assertEqual({}, state["inbound_orders"])
+        self.assertEqual(250, inventory["inventory_reference_rows"][0]["available_quantity"])
+        self.assertEqual([], inventory["inbound_order_rows"])
 
     def test_current_stock_overlay_clears_stale_out_of_stock_alert(self) -> None:
         payload = {
