@@ -5,33 +5,35 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
-## 2026-09-02 — ROY serialized inbound valuation follow-up ready for PR
+## 2026-09-02 — ROY overdue inbound valuation and stock alerts deployed
 
 Date: 2026-09-02
 Repo: `vzeman/biznisweb`
-Branch: `codex/roy-inbound-reference-values`
+Branch: `codex/roy-inbound-fix-state`
 
 What changed:
 
-- Production readback after PR `#477` found that history-only MACO STOP costs were correct inside the analyzer but were omitted by the modern dashboard payload serializer because zero-stock history-only products do not enter the display-limited `inventory_rows` collection.
-- A new minimal `inventory_reference_rows` payload carries SKU, current quantity and unambiguous unit values for every inventory-model product. Operations lookups use this reference collection without treating it as a visible alert/display collection.
-- The first merged fix remains in place: overdue inbound is visible and valued, is labelled `po termíne`, and does not suppress current stock alerts.
+- PR `#477` fixed the business rules: overdue inbound remains visible and valued, is labelled `po termíne`, and no longer suppresses current stock alerts.
+- PR `#478` completed production serialization for history-only zero-stock products through `inventory_reference_rows`, so operations valuation can use the mapped purchase costs for MACO STOP 300 ml and 150 ml.
+- The exact inbound scenario is covered end to end: `250 × 18.40 EUR = 4,600 EUR`, `40 × 12.90 EUR = 516 EUR`, total known inbound cost `5,116 EUR`; the 10-unit SD-card row is the only unpriced item.
 
 What is verified:
 
-- PR `#477` merged as `fd1aef8c562cd26198d258245cfd5b08c1d8e07f`; ECR build run `33590855429` published digest `sha256:a641fcc26040b288e3bedb6fd76401531daafbc281a02a474fe40aedf330eae6`.
-- Deploy run `33591049151` used ECS/Fargate task `800f869177f644baa2805df33ea0e28d`, private IP `172.31.16.213`, service `roy-daily-report-email`, candidate task definition `roy-reporting-daily:68`, runtime path `/app`, and localhost marker path `http://127.0.0.1:8000/marker.json`. The generated ROY report is timestamped `2026-09-02 04:54:45`.
-- Production HTML contains the new overdue UI markers. The generated artifact shows both SKU `14832` and `622_M33` as zero/negative-stock alert rows, proving overdue inbound no longer hides them. It also exposed the missing serialized cost field, which this follow-up closes.
-- The exact production scenario now passes end to end: `250 × 18.40 EUR = 4,600 EUR`, `40 × 12.90 EUR = 516 EUR`, total known inbound cost `5,116 EUR`; the 10-unit SD-card row remains the sole unpriced item. ROY/dashboard suite passed `77` tests and the full production-image suite passed `287` tests; compilation and `git diff --check` passed.
+- PR `#477` merged as `fd1aef8c562cd26198d258245cfd5b08c1d8e07f`. PR `#478` merged as `d204dccff75d8a55ab1c6af09d9d69e94dd8dc33`.
+- ECR build run `33594886080` published the exact merged image digest `sha256:ea2b92e37761bac2c89d8aafa475a837e05e8b71d92e588c875bdf31c3ec6c9a`.
+- Protected deploy run `33595077546` completed successfully in `33m57s`. Its pre-code hard gate identified ECS/Fargate task `de1c23a2bead4851be24f40c1799eee4`, private IP `172.31.4.185`, service `roy-daily-report-email`, candidate task definition `roy-reporting-daily:69`, task role `BiznisWebReportingTaskRole-roy`, image digest `sha256:ea2b92e37761bac2c89d8aafa475a837e05e8b71d92e588c875bdf31c3ec6c9a`, runtime path `/app`, and localhost marker path `http://127.0.0.1:8000/marker.json`.
+- The protected deploy step passed all mandatory generation, localhost-marker, live-artifact, App Runner operations/API, PDF, maintenance and production endpoint gates before promoting the image. App Runner service is `biznisweb-roy-operations-dashboard` at `/production/roy`.
+- The generated production artifact before the serialization follow-up already showed both SKU `14832` and `622_M33` as zero/negative-stock alert rows, proving overdue inbound no longer hides MACO STOP 150 ml. The follow-up regression proves both serialized reference costs survive the same production-image path.
+- ROY/dashboard suite passed `77` tests and the full production-image suite passed `287` tests; compilation and `git diff --check` passed. No local application runtime was started.
 
 Known issues:
 
-- Live operations data refresh is temporarily receiving BiznisWeb HTTP `429`; avoid repeated refresh attempts. The published S3-backed report remains available and was used for fail-closed production artifact inspection.
-- The serialized reference-row follow-up is not deployed yet. Do not consider the `5,116 EUR` live operations value verified until its PR, exact-image build, protected deploy, host marker and final UI/API readback all pass.
+- The browser profile currently blocks the App Runner domain locally with Comet `ERR_BLOCKED_BY_CLIENT` after reload. A second user-visible reload produced the same client-side block, so no further requests were sent. This is separate from the successful protected App Runner/API smoke and is not evidence of a production failure.
+- Because of that local browser block, the final visual DOM readback of the rendered `5,116 EUR` and the MACO STOP 150 ml row could not be captured after deploy. Do not repeat refreshes until the Comet block is cleared; the production fix itself is merged, digest-pinned and deployed.
 
 Next exact step:
 
-- Commit and push this follow-up, merge only after required checks pass, deploy the exact merged ECR digest through the protected ROY workflow, verify the localhost marker, then perform one controlled live operations readback after the BiznisWeb rate-limit cooldown.
+- After the local Comet block is cleared, perform one manual readback of `/production/roy`: expected known inbound value is `5,116 EUR`, one inbound row remains unpriced, all 300 inbound units are overdue and count as zero coverage, and MACO STOP 150 ml must be present in stock alerts at zero stock. No code or deploy action remains for this fix.
 
 ## 2026-09-02 — ROY overdue inbound valuation and stock-alert fix ready for PR
 
