@@ -5,6 +5,34 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-02 — ROY fixed monthly expenses raised to 7,600 EUR (ready for PR)
+
+Date: 2026-09-02
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-monthly-fixed-expenses-7600`
+
+What changed:
+
+- `projects/roy/settings.json` now sets the ROY source-of-truth `fixed_monthly_cost` from `6500` to `7600` EUR.
+- `scripts/reporting_qa_smoke.py` now guards the exact `7600.0` runtime value against future configuration drift.
+- With no daily override, the runtime continues to divide the monthly amount by the calendar days in each month; September therefore uses approximately `253.33 EUR/day` before output rounding.
+
+What is verified:
+
+- ROY settings JSON parsing and Python compilation passed.
+- `python scripts/reporting_qa_smoke.py` passed.
+- `python -m unittest tests.test_reporting_calculation_fixes tests.test_dashboard_modern` passed all `108` tests.
+- `git diff --check` passed. No local application server, worker, watcher, tunnel, or persistent runtime was started.
+- Implementation commit `b8ac70ee` is pushed to `origin/codex/roy-monthly-fixed-expenses-7600`.
+
+Known issues:
+
+- The source change is not yet merged or deployed, so production still uses the preceding image/configuration until the protected rollout completes.
+
+Next exact step:
+
+- Open and merge the PR after required checks, wait for the immutable ECR build, then run the ROY-only protected production smoke with task-image refresh. Before deployment, confirm the current ECS/Fargate task identity, private IP, service/task definition, runtime `/app`, and localhost marker path; after deployment, verify the exact `7600.0` marker directly on the task before any UI check.
+
 ## 2026-09-02 — ROY overdue inbound valuation and stock alerts deployed
 
 Date: 2026-09-02

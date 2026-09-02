@@ -408,7 +408,7 @@ def assert_roy_fixed_cost_source_of_truth() -> None:
         default_fixed_monthly_cost=FIXED_MONTHLY_COST,
         default_fixed_daily_cost=FIXED_DAILY_COST,
     )
-    assert math.isclose(runtime.fixed_monthly_cost, 6500.0, rel_tol=1e-9, abs_tol=1e-9), runtime.to_dict()
+    assert math.isclose(runtime.fixed_monthly_cost, 7600.0, rel_tol=1e-9, abs_tol=1e-9), runtime.to_dict()
     assert math.isclose(runtime.fixed_daily_cost, 0.0, rel_tol=1e-9, abs_tol=1e-9), runtime.to_dict()
     assert math.isclose(runtime.missing_cost_margin_pct, 35.0, rel_tol=1e-9, abs_tol=1e-9), runtime.to_dict()
 
