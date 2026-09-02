@@ -339,6 +339,20 @@ class DashboardModernTests(unittest.TestCase):
                         "demand_model_version": "order-aware-tsb-v1",
                     },
                     "inventory_rows": pd.DataFrame([smart_row]),
+                    "inventory_reference_rows": pd.DataFrame(
+                        [
+                            {
+                                "sku": "HISTORY-ONLY",
+                                "product": "History-only product",
+                                "active": False,
+                                "available_quantity": 0,
+                                "mapped_available_quantity": 0,
+                                "cost_per_unit": 18.4,
+                                "retail_unit_price": 39.69,
+                                "history_only_inventory_flag": True,
+                            }
+                        ]
+                    ),
                     "demand_anomaly_rows": pd.DataFrame([smart_row]),
                     "demand_signal_history_rows": pd.DataFrame(
                         [
@@ -359,6 +373,8 @@ class DashboardModernTests(unittest.TestCase):
         )
 
         payload = extract_embedded_dashboard_payload(html)["roy_product_demand"]
+        self.assertEqual(18.4, payload["inventory_reference_rows"][0]["cost_per_unit"])
+        self.assertTrue(payload["inventory_reference_rows"][0]["history_only_inventory_flag"])
         self.assertEqual(40, payload["inventory_rows"][0]["raw_recent_30d_units"])
         self.assertEqual(1.25, payload["inventory_rows"][0]["combined_typical_order_units"])
         self.assertEqual(0.16, payload["inventory_rows"][0]["combined_order_rate_per_day"])

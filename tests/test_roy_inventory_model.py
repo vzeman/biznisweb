@@ -260,6 +260,9 @@ class RoyInventoryModelTests(unittest.TestCase):
             item_df=item_df,
         )
 
+        reference_rows = result["inventory_reference_rows"].set_index("sku")
+        self.assertEqual(18.4, float(reference_rows.loc["14832", "cost_per_unit"]))
+        self.assertEqual(12.9, float(reference_rows.loc["622_M33", "cost_per_unit"]))
         rows = result["alert_rows"].set_index("sku")
         self.assertTrue(bool(rows.loc["14832", "history_only_inventory_flag"]))
         self.assertEqual(18.4, float(rows.loc["14832", "cost_per_unit"]))

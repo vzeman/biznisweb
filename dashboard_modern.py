@@ -1519,6 +1519,23 @@ def generate_modern_dashboard(
         ],
         limit=160,
     )
+    roy_inventory_reference_rows = _frame_rows(
+        (roy_product_demand or {}).get("inventory_reference_rows"),
+        [
+            "sku",
+            "product",
+            "active",
+            "available_quantity",
+            "available_quantity_raw",
+            "mapped_available_quantity",
+            "cost_per_unit",
+            "retail_unit_price",
+            "inventory_cost_value",
+            "inventory_retail_value",
+            "history_only_inventory_flag",
+        ],
+        limit=10000,
+    )
     roy_inventory_cost_history_rows = _frame_rows(
         (roy_product_demand or {}).get("inventory_cost_history_rows"),
         [
@@ -2536,6 +2553,7 @@ def generate_modern_dashboard(
             "seasonality_rows": roy_seasonality_rows,
             "forecast_rows": roy_forecast_rows,
             "inventory_rows": roy_inventory_rows,
+            "inventory_reference_rows": roy_inventory_reference_rows,
             "inventory_cost_history_rows": roy_inventory_cost_history_rows,
             "stock_risk_rows": roy_stock_risk_rows,
             "dead_stock_rows": roy_dead_stock_rows,

@@ -12165,6 +12165,7 @@ class BizniWebExporter:
                 "seasonality_rows": pd.DataFrame(),
                 "forecast_rows": pd.DataFrame(),
                 "inventory_rows": pd.DataFrame(),
+                "inventory_reference_rows": pd.DataFrame(),
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
                 "alert_rows": pd.DataFrame(),
@@ -12196,6 +12197,7 @@ class BizniWebExporter:
                 "seasonality_rows": pd.DataFrame(),
                 "forecast_rows": pd.DataFrame(),
                 "inventory_rows": pd.DataFrame(),
+                "inventory_reference_rows": pd.DataFrame(),
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
                 "alert_rows": pd.DataFrame(),
@@ -12225,6 +12227,7 @@ class BizniWebExporter:
                 "seasonality_rows": pd.DataFrame(),
                 "forecast_rows": pd.DataFrame(),
                 "inventory_rows": pd.DataFrame(),
+                "inventory_reference_rows": pd.DataFrame(),
                 "stock_risk_rows": pd.DataFrame(),
                 "dead_stock_rows": pd.DataFrame(),
                 "alert_rows": pd.DataFrame(),
@@ -13073,6 +13076,7 @@ class BizniWebExporter:
         )
 
         inventory_rows_df = pd.DataFrame()
+        inventory_reference_rows_df = pd.DataFrame()
         stock_risk_rows_df = pd.DataFrame()
         dead_stock_rows_df = pd.DataFrame()
         alert_rows_df = pd.DataFrame()
@@ -14500,6 +14504,26 @@ class BizniWebExporter:
             secondary_value_sort_column = (
                 "inventory_cost_value" if value_sort_column == "inventory_retail_value" else "inventory_retail_value"
             )
+            inventory_reference_columns = [
+                "sku",
+                "product",
+                "active",
+                "available_quantity",
+                "available_quantity_raw",
+                "mapped_available_quantity",
+                "cost_per_unit",
+                "retail_unit_price",
+                "inventory_cost_value",
+                "inventory_retail_value",
+                "history_only_inventory_flag",
+            ]
+            inventory_reference_rows_df = (
+                inventory_products_df[inventory_reference_columns]
+                .sort_values("sku", kind="stable")
+                .reset_index(drop=True)
+                if not inventory_products_df.empty
+                else pd.DataFrame(columns=inventory_reference_columns)
+            )
             inventory_rows_df = (
                 inventory_products_df.loc[
                     (inventory_products_df["available_quantity"] > 0)
@@ -14849,6 +14873,7 @@ class BizniWebExporter:
             "seasonality_rows": seasonality_rows_df,
             "forecast_rows": forecast_rows_df,
             "inventory_rows": inventory_rows_df,
+            "inventory_reference_rows": inventory_reference_rows_df,
             "stock_risk_rows": stock_risk_rows_df,
             "dead_stock_rows": dead_stock_rows_df,
             "alert_rows": alert_rows_df,
