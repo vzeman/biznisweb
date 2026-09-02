@@ -459,15 +459,21 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
 
     def test_athena_failure_emits_only_structured_sanitized_metadata(self) -> None:
         for marker in (
-            "QueryExecution.Status.AthenaError.{ErrorCategory:ErrorCategory,ErrorType:ErrorType,Retryable:Retryable}",
+            "QueryExecution.Status.{AthenaError:AthenaError,StateChangeReason:StateChangeReason}",
             "PRODUCTION_AA_WINDOW_ATHENA_ERROR:",
+            "reason_classes = (",
+            "reason_sha256 = hashlib.sha256(reason.encode()).hexdigest()",
+            "reason-class={reason_class}:reason-sha256={reason_sha256}",
             "raw-reason-emitted=false",
-            "not isinstance(category, int)",
-            "not isinstance(error_type, int)",
-            "not isinstance(retryable, bool)",
+            "structured_available = (",
         ):
             self.assertIn(marker, WORKFLOW)
-        self.assertNotIn("StateChangeReason", WORKFLOW)
+        for forbidden in (
+            "print(reason)",
+            "cat \"${TEMP_CHECKPOINT_DIR}/athena-failure-status.json\"",
+            "StateChangeReason: text",
+        ):
+            self.assertNotIn(forbidden, WORKFLOW)
 
     def test_uploads_only_one_canonical_sanitized_artifact_after_cleanup(self) -> None:
         self.assertEqual(1, WORKFLOW.count("uses: actions/upload-artifact@v4.6.2"))

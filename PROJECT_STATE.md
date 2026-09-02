@@ -6909,3 +6909,30 @@ Known issues:
 Next exact step:
 
 - Commit and push this diagnostic, open a PR, merge only after required CI passes, synchronize exact clean `main`, and then rerun one same-gate checkpoint fallback if no scheduled artifact or active run exists. Read only the structured sanitized Athena error marker if it fails again; otherwise independently verify and record the sole canonical checkpoint artifact through `record_growthbook_aa_window_checkpoint.py` on a new branch.
+
+## 2026-09-02 — Structured Athena fields were unavailable on the first retry
+
+Date: 2026-09-02
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-checkpoint-athena-reason-class`
+
+What changed:
+
+- PR `#480` merged the numeric-only Athena diagnostic into `main` as `82eb62d267778808d0c3f510dd7a5c579f0b3abb` after all four required checks passed.
+- With no scheduled checkpoint artifact and no active run, one same-gate retry ran on that exact `main` as run `33602443977`. It again failed at the aggregate-only Athena query, before evidence construction, and uploaded no artifact.
+- The structured Athena error fields were unavailable. The diagnostic now reads the failure reason only into a runner-local temporary file, maps it to a fixed allowlisted reason class, hashes it, and emits only that class/hash plus any available structured numeric fields. The raw reason is never printed, uploaded, or committed and remains covered by the unconditional cleanup step.
+
+What is verified:
+
+- Run `33602443977` passed the pre-AWS, managed-credential, runtime identity, marker, alarm, and DLQ gates; cleanup passed after the query failure and all evidence/upload/summary steps were skipped.
+- GitHub reports zero artifacts. Its failed log was processed only in memory, was not printed or committed, and had SHA-256 `9c5e487a2402f0ce4f55571764aa7a828678faee114b72d4398e5dc3e153954f`.
+- No aggregate count, arm, outcome, identity, customer/order data, or external mutation was exposed or performed.
+
+Known issues:
+
+- The first checkpoint remains unresolved and unrecorded. The A/A experiment must remain unchanged.
+- This allowlisted reason classifier is not yet merged. Do not rerun the checkpoint until it reaches exact `main`, and then only inside the still-open original daily gate while no scheduled artifact or active run exists.
+
+Next exact step:
+
+- Validate, commit, push, and merge this classifier through required CI. Then synchronize clean exact `main` and make one same-gate checkpoint retry only if the repository-owned scheduled artifact is still absent. Use only the sanitized reason class/hash to repair a safely identifiable query defect; otherwise stop fail-closed without opening raw AWS payloads or experiment outcomes.
