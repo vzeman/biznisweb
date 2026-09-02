@@ -5,7 +5,7 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
-## 2026-09-02 — ROY fixed monthly expenses raised to 7,600 EUR (ready for PR)
+## 2026-09-02 — ROY fixed monthly expenses raised to 7,600 EUR; rollout blocked by ROY API rate limit
 
 Date: 2026-09-02
 Repo: `vzeman/biznisweb`
@@ -16,6 +16,7 @@ What changed:
 - `projects/roy/settings.json` now sets the ROY source-of-truth `fixed_monthly_cost` from `6500` to `7600` EUR.
 - `scripts/reporting_qa_smoke.py` now guards the exact `7600.0` runtime value against future configuration drift.
 - With no daily override, the runtime continues to divide the monthly amount by the calendar days in each month; September therefore uses approximately `253.33 EUR/day` before output rounding.
+- PR `#486` merged the change to `main` as `a4622526ad74163af6b1f56c23556f2b39f13fcd`.
 
 What is verified:
 
@@ -23,15 +24,19 @@ What is verified:
 - `python scripts/reporting_qa_smoke.py` passed.
 - `python -m unittest tests.test_reporting_calculation_fixes tests.test_dashboard_modern` passed all `108` tests.
 - `git diff --check` passed. No local application server, worker, watcher, tunnel, or persistent runtime was started.
-- Implementation commit `b8ac70ee` is pushed to `origin/codex/roy-monthly-fixed-expenses-7600`.
+- PR checks `env-check`, `observability-baseline`, `secret-scan`, and `security-baseline` passed.
+- ECR build run `33618684191` passed its reporting and invoice gates and published exact digest `sha256:e296ef75e24e263e0cd1e1f772997ac75c0514e87ad43864b7b4bc0b14f86b1f` for the merged commit.
+- Two non-live predeploy smokes confirmed the current production identity before any image update: instance-id `N/A (scheduled ECS/Fargate task)`, service `roy-daily-report-email`, task definition `roy-reporting-daily:69`, runtime `/app`, marker path `http://127.0.0.1:8000/marker.json`, and current image digest `sha256:ea2b92e37761bac2c89d8aafa475a837e05e8b71d92e588c875bdf31c3ec6c9a`.
+- Predeploy task `52ea0a3ecbd7423dbc701c8cc7c0edf6` used private IP `172.31.6.188`; retry task `efa28b91b64b4da196bcf4ad99dceb8a` used private IP `172.31.20.156`. Both explicitly reported `task-image-updated=false`.
 
 Known issues:
 
-- The source change is not yet merged or deployed, so production still uses the preceding image/configuration until the protected rollout completes.
+- Both predeploy tasks stopped with exit code `1` before localhost marker creation because `www.roy.sk/api/graphql` repeatedly returned HTTP `429` while the inventory snapshot was paginating. The retry was performed only after cooldown and failed at the same external boundary.
+- The protected deploy was therefore not started. The scheduler remains on task definition `:69` and production still uses the preceding `6500 EUR/month` configuration until a successful host gate can verify the new image.
 
 Next exact step:
 
-- Open and merge the PR after required checks, wait for the immutable ECR build, then run the ROY-only protected production smoke with task-image refresh. Before deployment, confirm the current ECS/Fargate task identity, private IP, service/task definition, runtime `/app`, and localhost marker path; after deployment, verify the exact `7600.0` marker directly on the task before any UI check.
+- After the ROY GraphQL rate limit clears, rerun the ROY-only protected production smoke from merged `main` with `send_email=true`, `update_task_image=true`, and a unique marker. Require the exact new digest, successful localhost marker and `7600.0` runtime evidence directly on the task before any UI check; confirm no ROY report email is sent because project configuration keeps daily email disabled.
 
 ## 2026-09-02 — ROY overdue inbound valuation and stock alerts deployed
 
