@@ -628,23 +628,56 @@ jobs:
           """.strip()
           Path(os.environ['TEMP_CHECKPOINT_DIR'], 'eligible-count.sql').write_text(query + '\n', encoding='utf-8')
           PY
-          QUERY_ID="$(aws athena start-query-execution \
+          aws athena start-query-execution \
             --query-string "file://${TEMP_CHECKPOINT_DIR}/eligible-count.sql" \
             --query-execution-context "Database=${PRODUCTION_DATABASE}" \
             --work-group "${PRODUCTION_WORKGROUP}" \
-            --region "${AWS_REGION}" \
-            --query QueryExecutionId \
-            --output text)"
-          [[ -n "${QUERY_ID}" && "${QUERY_ID}" != 'None' ]]
+            --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/athena-query-start.json"
+          QUERY_ID="$(python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          payload = json.loads(
+              Path(
+                  os.environ['TEMP_CHECKPOINT_DIR'],
+                  'athena-query-start.json',
+              ).read_text(encoding='utf-8')
+          )
+          query_id = str(payload.get('QueryExecutionId') or '')
+          if re.fullmatch(r'[0-9a-f-]{36}', query_id) is None:
+              raise SystemExit('Athena query submission response shape drift')
+          print(query_id)
+          PY
+          )"
+          echo 'PRODUCTION_AA_WINDOW_ATHENA_QUERY_SUBMITTED:id-valid=true:raw-id-emitted=false'
           for _ in $(seq 1 30); do
-            STATE="$(aws athena get-query-execution --query-execution-id "${QUERY_ID}" --region "${AWS_REGION}" --query 'QueryExecution.Status.State' --output text)"
+            aws athena get-query-execution \
+              --query-execution-id "${QUERY_ID}" \
+              --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/athena-query-status.json"
+            STATE="$(python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(
+              Path(
+                  os.environ['TEMP_CHECKPOINT_DIR'],
+                  'athena-query-status.json',
+              ).read_text(encoding='utf-8')
+          )
+          state = str(
+              ((payload.get('QueryExecution') or {}).get('Status') or {}).get('State')
+              or ''
+          )
+          if state not in {'QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED'}:
+              raise SystemExit('Athena query status response shape drift')
+          print(state)
+          PY
+          )"
             if [[ "${STATE}" == 'SUCCEEDED' ]]; then break; fi
             if [[ "${STATE}" == 'FAILED' || "${STATE}" == 'CANCELLED' ]]; then
-              aws athena get-query-execution \
-                --query-execution-id "${QUERY_ID}" \
-                --region "${AWS_REGION}" \
-                --query 'QueryExecution.Status.{AthenaError:AthenaError,StateChangeReason:StateChangeReason}' \
-                --output json > "${TEMP_CHECKPOINT_DIR}/athena-failure-status.json"
               python - <<'PY'
           import hashlib
           import json
@@ -654,11 +687,12 @@ jobs:
           status = json.loads(
               Path(
                   os.environ['TEMP_CHECKPOINT_DIR'],
-                  'athena-failure-status.json',
+                  'athena-query-status.json',
               ).read_text(
                   encoding='utf-8'
               )
           )
+          status = (status.get('QueryExecution') or {}).get('Status') or {}
           error = status.get('AthenaError') or {}
           category = error.get('ErrorCategory')
           error_type = error.get('ErrorType')
