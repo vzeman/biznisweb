@@ -131,6 +131,7 @@ def checkpoint_evidence(
 class GrowthBookAaWindowCheckpointRecorderTests(unittest.TestCase):
     def setUp(self) -> None:
         self.snapshot = load("growthbook_aa_snapshot.json")
+        self.snapshot["measurement_window"]["checkpoint_history"] = []
         self.activation = load("growthbook_production_aa_activation.json")
         self.acceptance = load("growthbook_aa_acceptance.json")
         self.reconciliation = load(
