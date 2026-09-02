@@ -6963,3 +6963,30 @@ Known issues:
 Next exact step:
 
 - Validate, commit, push, and merge the status envelope through required CI. Then synchronize exact clean `main` and retry the checkpoint once inside the original gate only if no canonical scheduled artifact or active run exists. Continue only with a verified canonical artifact or a fixed sanitized failure class; otherwise remain fail-closed.
+
+## 2026-09-02 — Aggregate query succeeded but the two-row page boundary was ambiguous
+
+Date: 2026-09-02
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-checkpoint-athena-result-page`
+
+What changed:
+
+- PR `#482` merged the robust Athena submission/status envelope into `main` as `a76ba4ddd940106460e7c88e391e4c335993a49a` after all required checks passed.
+- With no canonical checkpoint artifact or active run, one same-gate fallback ran on that exact `main` as run `33603774177`. The query submission marker was emitted and no failed-state classifier marker appeared; the query therefore reached the result readback and failed on the strict aggregate result shape gate.
+- Increased Athena `get-query-results` page size from `2` to `3`. The canonical parser still requires exactly the header plus one aggregate row and rejects any third row or `NextToken`; the extra slot only removes the ambiguous token-at-an-exact-two-row-page boundary.
+
+What is verified:
+
+- Run `33603774177` emitted the populated query-submitted marker and then the populated `eligible-device aggregate result shape drift` failure. It emitted no population marker, produced zero artifacts, and cleanup passed.
+- The failed log was processed only in memory, never printed or committed, and had SHA-256 `f0e067cc146e273f14bb7ea75f2b25c2bbe879b5d9711b2b77ffb77831b7141d`.
+- The change does not broaden the SQL, expose the aggregate value, permit extra rows, read arms/outcomes/identities, or change external state.
+
+Known issues:
+
+- The first checkpoint remains unresolved and unrecorded; the A/A experiment must stay unchanged.
+- The page-boundary fix is not yet merged. Do not retry until it reaches exact `main` and no artifact or active run exists inside the original gate.
+
+Next exact step:
+
+- Validate, commit, push, and merge this one-line page-boundary fix through required CI. Then synchronize exact clean `main` and make one final same-gate checkpoint fallback only if no canonical artifact or active run exists. Independently verify and record the artifact if successful; otherwise stop fail-closed on the new sanitized classification.

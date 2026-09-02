@@ -747,7 +747,7 @@ jobs:
             sleep 5
           done
           [[ "${STATE}" == 'SUCCEEDED' ]]
-          aws athena get-query-results --query-execution-id "${QUERY_ID}" --max-results 2 --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/eligible-count-result.json"
+          aws athena get-query-results --query-execution-id "${QUERY_ID}" --max-results 3 --region "${AWS_REGION}" > "${TEMP_CHECKPOINT_DIR}/eligible-count-result.json"
           python - <<'PY'
           import hashlib
           import json

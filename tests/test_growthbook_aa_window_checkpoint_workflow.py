@@ -448,6 +448,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, query.lower())
         for marker in (
+            "get-query-results --query-execution-id \"${QUERY_ID}\" --max-results 3",
             "header != ['eligible_devices']",
             "only_aggregate_count_retained': True",
             "arm_counts_read': False",
@@ -456,6 +457,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             "PRODUCTION_AA_WINDOW_POPULATION_OK:aggregate-only=true:arm-outcomes=false",
         ):
             self.assertIn(marker, WORKFLOW)
+        self.assertNotIn('--max-results 2 --region "${AWS_REGION}"', WORKFLOW)
 
     def test_athena_failure_emits_only_structured_sanitized_metadata(self) -> None:
         for marker in (
