@@ -1902,13 +1902,20 @@ def build_roy_operations_dashboard_html(
         metric('Osobné odbery', fmtInt(orders.personal_pickups), `${readyPickupActions} pripraviť + ${shipPickupActions} odovzdať`),
         metric('Kritický sklad', fmtInt(inv.stock_risk_critical_count), `${fmtInt(inv.stock_risk_30d_count)} položiek v 30d riziku`),
         metric('Objednať teraz', fmtInt(inv.alert_reorder_now_count), `${fmtInt(inv.alert_prepare_po_count)} pripraviť PO`),
-        metric('Objednané na ceste', fmtQty(inv.inbound_ordered_units), `${fmtInt(inv.inbound_order_count)} položiek · ETA ${text(inv.inbound_next_arrival_date)}`),
+        metric('Objednané na ceste', fmtQty(inv.inbound_ordered_units), inboundSummary(inv)),
         metric(
           'Hodnota skladu',
           fmtMoney(inv.inventory_cost_value_including_inbound ?? inv.inventory_cost_value),
           `${fmtMoney(inv.inventory_cost_value)} skladom + ${fmtMoney(inv.inbound_cost_value)} na ceste${Number(inv.inbound_unpriced_order_count || 0) ? ` · ${fmtInt(inv.inbound_unpriced_order_count)} bez ceny` : ''}`,
         ),
       ].join('');
+    }
+    function inboundSummary(summary) {
+      const parts = [`${fmtInt(summary.inbound_order_count)} položiek`];
+      const overdue = Number(summary.inbound_overdue_order_count || 0);
+      if (overdue > 0) parts.push(`${fmtInt(overdue)} po termíne`);
+      if (summary.inbound_next_arrival_date) parts.push(`ETA ${text(summary.inbound_next_arrival_date)}`);
+      return parts.join(' · ');
     }
     function orderItemsHtml(order) {
       const items = order.items || [];
@@ -2150,13 +2157,13 @@ def build_roy_operations_dashboard_html(
         metric('Dead stock', fmtMoney(summary.dead_stock_cost_value), `${fmtInt(summary.dead_stock_count)} položiek`),
         metric('Tržby v riziku', fmtMoney(summary.revenue_at_risk_30d), `zisk ${fmtMoney(summary.profit_at_risk_30d)}`),
         metric('Oddelené one-off objednávky', fmtInt(summary.demand_anomaly_count), `${fmtQty(summary.demand_anomaly_adjustment_units_30d)} ks mimo baseline`),
-        metric('Inbound objednávky', fmtQty(summary.inbound_ordered_units), `${fmtInt(summary.inbound_order_count)} položiek · ETA ${text(summary.inbound_next_arrival_date)}`),
+        metric('Inbound objednávky', fmtQty(summary.inbound_ordered_units), inboundSummary(summary)),
       ].join('');
       el('inboundRowsBody').innerHTML = inboundRows.length ? inboundRows.map((row) => `<tr>
         <td><strong>${safe(row.product)}</strong><div class="muted mono">${safe(row.sku)}</div></td>
         <td>${fmtQty(row.ordered_units)} ks</td>
         <td>${row.inbound_cost_value === null || row.inbound_cost_value === undefined ? '<span class="muted">chýba nákupná cena</span>' : `<strong>${fmtMoney(row.inbound_cost_value)}</strong><div class="muted">${fmtMoney(row.cost_per_unit)} / ks</div>`}</td>
-        <td>${safe(row.expected_arrival_date)}</td>
+        <td>${safe(row.expected_arrival_date)}${row.overdue ? '<div><span class="badge bad">po termíne</span></div><div class="muted">nepočíta sa do krytia skladu</div>' : ''}</td>
         <td>${fmtQty(row.baseline_available_quantity)} ks</td>
         <td>${fmtQty(row.current_available_quantity)} ks</td>
         <td><button type="button" data-clear-inbound="${safe(row.sku)}">Zrušiť</button></td>

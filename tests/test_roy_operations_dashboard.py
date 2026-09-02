@@ -3,6 +3,7 @@ import io
 import json
 import shutil
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -718,6 +719,9 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("inventory_cost_value_including_inbound", html)
         self.assertIn("inbound_cost_value", html)
         self.assertIn("chýba nákupná cena", html)
+        self.assertIn("inbound_overdue_order_count", html)
+        self.assertIn("po termíne", html)
+        self.assertIn("nepočíta sa do krytia skladu", html)
         self.assertIn("soundToggleBtn", html)
         self.assertIn("playNewOrderSound", html)
         self.assertIn("loud-two-tone-v2", html)
@@ -841,6 +845,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         )
 
     def test_inbound_order_units_suppress_covered_stock_alert_until_restock(self) -> None:
+        future_eta = (datetime.now(timezone.utc).date() + timedelta(days=30)).isoformat()
         payload = {
             "dashboard": {
                 "roy_product_demand": {
@@ -919,7 +924,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                     "sku": "LOW-1",
                     "product": "Low stock product",
                     "ordered_units": 20,
-                    "expected_arrival_date": "2026-06-05",
+                    "expected_arrival_date": future_eta,
                     "baseline_available_quantity": 0,
                     "created_at": "2026-05-27T10:00:00Z",
                     "updated_at": "2026-05-27T10:00:00Z",
@@ -946,7 +951,87 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertEqual(30, inventory["summary"]["inventory_units_including_inbound"])
         self.assertEqual(4, inventory["inbound_order_rows"][0]["cost_per_unit"])
         self.assertEqual(80, inventory["inbound_order_rows"][0]["inbound_cost_value"])
+        self.assertFalse(inventory["inbound_order_rows"][0]["overdue"])
+        self.assertTrue(inventory["inbound_order_rows"][0]["counts_toward_stock_risk"])
         self.assertEqual("Inbound ordered", inventory["inventory_rows"][0]["reorder_action_label"])
+
+    def test_overdue_inbound_stays_valued_but_does_not_suppress_stock_alert(self) -> None:
+        overdue_eta = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat()
+        row = {
+            "sku": "LOW-1",
+            "product": "Low stock product",
+            "available_quantity": 0,
+            "available_quantity_raw": 0,
+            "alert_30d_units": 3,
+            "lead_time_working_days": 5,
+            "suggested_reorder_units": 8,
+            "stock_risk_level": "Out of stock",
+            "reorder_action_label": "Order now",
+            "restock_priority_score": 90,
+            "alert_30d_revenue": 90,
+            "alert_30d_profit_estimate": 30,
+            "cost_per_unit": 4,
+            "retail_unit_price": 10,
+        }
+        payload = {
+            "dashboard": {
+                "roy_product_demand": {
+                    "summary": {
+                        "inventory_available_units": 10,
+                        "inventory_cost_value": 100,
+                        "inventory_retail_value": 250,
+                    },
+                    "alert_rows": [copy.deepcopy(row)],
+                    "stock_risk_rows": [copy.deepcopy(row)],
+                    "restock_priority_rows": [copy.deepcopy(row)],
+                    "revenue_at_risk_rows": [copy.deepcopy(row)],
+                    "inventory_rows": [copy.deepcopy(row)],
+                }
+            }
+        }
+        state = {
+            "version": 1,
+            "loss_acknowledgements": {},
+            "inbound_orders": {
+                "LOW-1": {
+                    "sku": "LOW-1",
+                    "product": "Low stock product",
+                    "ordered_units": 20,
+                    "expected_arrival_date": overdue_eta,
+                    "baseline_available_quantity": 0,
+                }
+            },
+            "auto_cleared_inbound_orders": [],
+        }
+
+        inventory, state_changed = build_inventory_snapshot(
+            payload,
+            state=state,
+            project_settings={
+                "inventory_model": {
+                    "critical_days_of_cover": 14,
+                    "warning_days_of_cover": 30,
+                    "watch_days_of_cover": 45,
+                    "reorder_cover_days": 30,
+                }
+            },
+        )
+
+        self.assertFalse(state_changed)
+        self.assertEqual(["LOW-1"], [item["sku"] for item in inventory["alert_rows"]])
+        self.assertEqual(["LOW-1"], [item["sku"] for item in inventory["restock_priority_rows"]])
+        self.assertEqual("Out of stock", inventory["inventory_rows"][0]["stock_risk_level"])
+        self.assertEqual("Order now", inventory["inventory_rows"][0]["reorder_action_label"])
+        self.assertEqual(0, inventory["inventory_rows"][0]["net_available_quantity"])
+        self.assertFalse(inventory["inventory_rows"][0]["inbound_covers_reorder_flag"])
+        self.assertTrue(inventory["inventory_rows"][0]["inbound_overdue_flag"])
+        self.assertEqual(80, inventory["summary"]["inbound_cost_value"])
+        self.assertEqual(180, inventory["summary"]["inventory_cost_value_including_inbound"])
+        self.assertEqual(1, inventory["summary"]["inbound_overdue_order_count"])
+        self.assertEqual(20, inventory["summary"]["inbound_overdue_units"])
+        self.assertIsNone(inventory["summary"]["inbound_next_arrival_date"])
+        self.assertTrue(inventory["inbound_order_rows"][0]["overdue"])
+        self.assertFalse(inventory["inbound_order_rows"][0]["counts_toward_stock_risk"])
 
     def test_inbound_inventory_value_reports_missing_purchase_cost_without_guessing(self) -> None:
         payload = {

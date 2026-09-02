@@ -35,6 +35,8 @@ def item_row(
     cm3_profit: float | None = None,
     cm1_profit: float | None = None,
     total_expense: float | None = None,
+    purchase_cost_reference_per_item: float | None = None,
+    purchase_cost_reference_source: str | None = None,
     allocated_paid_spend: float = 0.0,
     country: str = "SK",
 ) -> dict:
@@ -55,6 +57,9 @@ def item_row(
     }
     if total_expense is not None:
         row["total_expense"] = total_expense
+    if purchase_cost_reference_per_item is not None:
+        row["purchase_cost_reference_per_item"] = purchase_cost_reference_per_item
+        row["purchase_cost_reference_source"] = purchase_cost_reference_source or "mapped_product_sku"
     return row
 
 
@@ -215,6 +220,51 @@ class RoyInventoryModelTests(unittest.TestCase):
         ].iloc[0]
         self.assertEqual(2.5, float(row["cost_per_unit"]))
         self.assertEqual(10.0, float(row["retail_unit_price"]))
+
+    def test_history_only_maco_rows_keep_resolved_purchase_cost_for_inbound_valuation(self) -> None:
+        exporter = RoyInventoryModelExporter(inventory_snapshot=pd.DataFrame())
+        item_df = pd.DataFrame(
+            [
+                item_row(
+                    f"R-300-{index}",
+                    "14832",
+                    "Najsilnejší sprej na medvede MACO STOP Extreme 300ml hmla",
+                    f"2026-08-{index + 1:02d}",
+                    1,
+                    39.69,
+                    total_expense=18.4,
+                    purchase_cost_reference_per_item=18.4,
+                    purchase_cost_reference_source="mapped_product_sku",
+                )
+                for index in range(3)
+            ]
+            + [
+                item_row(
+                    f"R-150-{index}",
+                    "622_M33",
+                    "Najsilnejší sprej na medvede MACO STOP Extreme 150ml hmla",
+                    f"2026-08-{index + 1:02d}",
+                    1,
+                    29.16,
+                    total_expense=12.9,
+                    purchase_cost_reference_per_item=12.9,
+                    purchase_cost_reference_source="mapped_product_identifier",
+                )
+                for index in range(3)
+            ]
+        )
+
+        result = exporter.analyze_roy_product_demand_analytics(
+            df=pd.DataFrame(),
+            orders_df=pd.DataFrame(),
+            item_df=item_df,
+        )
+
+        rows = result["alert_rows"].set_index("sku")
+        self.assertTrue(bool(rows.loc["14832", "history_only_inventory_flag"]))
+        self.assertEqual(18.4, float(rows.loc["14832", "cost_per_unit"]))
+        self.assertTrue(bool(rows.loc["622_M33", "history_only_inventory_flag"]))
+        self.assertEqual(12.9, float(rows.loc["622_M33", "cost_per_unit"]))
 
     def test_short_history_keeps_legacy_demand_floor(self) -> None:
         exporter = RoyInventoryModelExporter(

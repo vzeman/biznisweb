@@ -2559,6 +2559,16 @@ def _auto_clear_restocked_inbound_orders(state: Dict[str, Any], inventory: Dict[
     return True
 
 
+def _inbound_arrival_timing(record: Dict[str, Any], today: Any) -> Tuple[str, bool, bool]:
+    expected_arrival_date = str(record.get("expected_arrival_date") or "").strip()
+    try:
+        arrival_date = datetime.strptime(expected_arrival_date, "%Y-%m-%d").date()
+    except ValueError:
+        return expected_arrival_date, False, False
+    overdue = arrival_date < today
+    return expected_arrival_date, overdue, not overdue
+
+
 def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any], project_settings: Dict[str, Any]) -> None:
     inbound = state.get("inbound_orders") if isinstance(state.get("inbound_orders"), dict) else {}
     summary = inventory.setdefault("summary", {})
@@ -2571,9 +2581,13 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
             {
                 "inbound_order_count": 0,
                 "inbound_ordered_units": 0.0,
+                "inbound_next_arrival_date": None,
                 "inbound_costed_order_count": 0,
                 "inbound_unpriced_order_count": 0,
                 "inbound_costed_units": 0.0,
+                "inbound_overdue_order_count": 0,
+                "inbound_overdue_units": 0.0,
+                "inbound_stock_risk_counted_units": 0.0,
                 "inbound_cost_value": 0.0,
                 "inbound_retail_value": 0.0,
                 "inventory_cost_value_including_inbound": round(inventory_cost_value, 2),
@@ -2604,8 +2618,13 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
         if ordered_units <= 0:
             return
 
+        expected_arrival_date, inbound_overdue, counts_toward_stock_risk = _inbound_arrival_timing(
+            record,
+            today,
+        )
+        risk_counted_units = ordered_units if counts_toward_stock_risk else 0.0
         available = _to_float(row.get("available_quantity"))
-        net_available = available + ordered_units
+        net_available = available + risk_counted_units
         alert_30d_units = _to_float(row.get("alert_30d_units"))
         if alert_30d_units <= 0:
             alert_30d_units = _to_float(row.get("recent_30d_units")) or _to_float(row.get("forecast_30d_units"))
@@ -2617,7 +2636,7 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
         lead_time_probability, lead_time_risk, lead_time_expected_orders = _smart_lead_time_stockout_risk(
             row,
             available=net_available,
-            available_raw=available_raw + ordered_units,
+            available_raw=available_raw + risk_counted_units,
             demand_30d=alert_30d_units,
             lead_time_calendar_days=lead_time_calendar,
         )
@@ -2627,7 +2646,7 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
         if daily_units > 0:
             suggested = max(math.ceil((daily_units * target_cover) - net_available), 0.0)
         else:
-            suggested = max(existing_suggested - ordered_units, 0.0)
+            suggested = max(existing_suggested - risk_counted_units, 0.0)
 
         current_risk = str(row.get("stock_risk_level") or "")
         if daily_units > 0:
@@ -2654,8 +2673,11 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
         elif daily_units <= 0:
             projected_stockout_date = None
 
-        expected_arrival_date = str(record.get("expected_arrival_date") or "").strip()
-        inbound_covers = bool(ordered_units > 0 and (suggested <= 0 or current_risk not in risk_30d))
+        inbound_covers = bool(
+            counts_toward_stock_risk
+            and ordered_units > 0
+            and (suggested <= 0 or current_risk not in risk_30d)
+        )
         unit_values = unit_values_by_sku.get(sku) or {}
         cost_per_unit = unit_values.get("cost_per_unit")
         retail_per_unit = unit_values.get("retail_per_unit")
@@ -2668,6 +2690,8 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
                 "inbound_retail_value": round(ordered_units * retail_per_unit, 2) if retail_per_unit is not None else None,
                 "inbound_valuation_status": "costed" if cost_per_unit is not None else "missing_cost",
                 "inbound_expected_arrival_date": expected_arrival_date,
+                "inbound_overdue_flag": inbound_overdue,
+                "inbound_counts_toward_stock_risk": counts_toward_stock_risk,
                 "inbound_created_at": record.get("created_at"),
                 "inbound_updated_at": record.get("updated_at"),
                 "inbound_baseline_available_quantity": record.get("baseline_available_quantity"),
@@ -2686,7 +2710,7 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
             row["reorder_action_label"] = "Inbound ordered"
             row["reorder_now_flag"] = False
             row["prepare_po_flag"] = False
-        elif ordered_units > 0 and str(row.get("reorder_action_label") or "") in {"Order now", "Prepare PO", "30d alert"}:
+        elif counts_toward_stock_risk and ordered_units > 0 and str(row.get("reorder_action_label") or "") in {"Order now", "Prepare PO", "30d alert"}:
             row["reorder_action_label"] = "Partially ordered"
         _refresh_inventory_alert_reason(row)
         _refresh_stockout_business_impact(row)
@@ -2720,12 +2744,18 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
         unit_values = unit_values_by_sku.get(sku) or {}
         cost_per_unit = unit_values.get("cost_per_unit")
         retail_per_unit = unit_values.get("retail_per_unit")
+        expected_arrival_date, overdue, counts_toward_stock_risk = _inbound_arrival_timing(
+            record,
+            today,
+        )
         active_inbound_rows.append(
             {
                 "sku": sku,
                 "product": str(record.get("product") or ""),
                 "ordered_units": round(ordered_units, 2),
-                "expected_arrival_date": record.get("expected_arrival_date"),
+                "expected_arrival_date": expected_arrival_date,
+                "overdue": overdue,
+                "counts_toward_stock_risk": counts_toward_stock_risk,
                 "baseline_available_quantity": _to_float(record.get("baseline_available_quantity")),
                 "current_available_quantity": round(
                     availability.get(sku, _to_float(record.get("baseline_available_quantity"))),
@@ -2746,9 +2776,15 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
     )
     active_inbound = inventory["inbound_order_rows"]
     next_eta = min(
-        (str(row.get("expected_arrival_date")) for row in active_inbound if row.get("expected_arrival_date")),
+        (
+            str(row.get("expected_arrival_date"))
+            for row in active_inbound
+            if row.get("expected_arrival_date") and bool(row.get("counts_toward_stock_risk"))
+        ),
         default=None,
     )
+    overdue_inbound = [row for row in active_inbound if bool(row.get("overdue"))]
+    stock_risk_counted_inbound = [row for row in active_inbound if bool(row.get("counts_toward_stock_risk"))]
     costed_inbound = [row for row in active_inbound if row.get("inbound_cost_value") is not None]
     inbound_cost_value = round(sum(_to_float(row.get("inbound_cost_value")) for row in costed_inbound), 2)
     inbound_retail_value = round(
@@ -2767,6 +2803,15 @@ def _apply_inbound_to_inventory(inventory: Dict[str, Any], state: Dict[str, Any]
             "inbound_costed_order_count": len(costed_inbound),
             "inbound_unpriced_order_count": len(active_inbound) - len(costed_inbound),
             "inbound_costed_units": round(sum(_to_float(row.get("ordered_units")) for row in costed_inbound), 1),
+            "inbound_overdue_order_count": len(overdue_inbound),
+            "inbound_overdue_units": round(
+                sum(_to_float(row.get("ordered_units")) for row in overdue_inbound),
+                1,
+            ),
+            "inbound_stock_risk_counted_units": round(
+                sum(_to_float(row.get("ordered_units")) for row in stock_risk_counted_inbound),
+                1,
+            ),
             "inbound_cost_value": inbound_cost_value,
             "inbound_retail_value": inbound_retail_value,
             "inventory_cost_value_including_inbound": round(inventory_cost_value + inbound_cost_value, 2),
