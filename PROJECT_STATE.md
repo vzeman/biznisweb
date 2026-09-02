@@ -5,7 +5,7 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
-## 2026-09-02 — ROY fixed monthly expenses raised to 7,600 EUR; rollout blocked by ROY API rate limit
+## 2026-09-02 — ROY 7,600 EUR fixed-cost image scheduled; live refresh blocked by ROY API rate limit
 
 Date: 2026-09-02
 Repo: `vzeman/biznisweb`
@@ -28,15 +28,19 @@ What is verified:
 - ECR build run `33618684191` passed its reporting and invoice gates and published exact digest `sha256:e296ef75e24e263e0cd1e1f772997ac75c0514e87ad43864b7b4bc0b14f86b1f` for the merged commit.
 - Two non-live predeploy smokes confirmed the current production identity before any image update: instance-id `N/A (scheduled ECS/Fargate task)`, service `roy-daily-report-email`, task definition `roy-reporting-daily:69`, runtime `/app`, marker path `http://127.0.0.1:8000/marker.json`, and current image digest `sha256:ea2b92e37761bac2c89d8aafa475a837e05e8b71d92e588c875bdf31c3ec6c9a`.
 - Predeploy task `52ea0a3ecbd7423dbc701c8cc7c0edf6` used private IP `172.31.6.188`; retry task `efa28b91b64b4da196bcf4ad99dceb8a` used private IP `172.31.20.156`. Both explicitly reported `task-image-updated=false`.
+- Protected retry run `33621380934` updated the enabled ROY scheduler to task definition `roy-reporting-daily:70` and exact digest `sha256:e296ef75e24e263e0cd1e1f772997ac75c0514e87ad43864b7b4bc0b14f86b1f`; the image contains the merged `7600 EUR/month` configuration and passed its build-time reporting QA assertion.
+- Retry hard-gate identity: instance-id `N/A (scheduled ECS/Fargate task)`, private IP `172.31.44.67`, service `roy-daily-report-email`, task `01af1c3efc3149c9bc528b566ad5782a`, task definition `:70`, runtime `/app`, and marker path `http://127.0.0.1:8000/marker.json`; the workflow explicitly reported `task-image-updated=true`.
+- Read-only diagnostic run `33622383551` succeeded and independently confirmed the scheduler is `ENABLED` on task definition `:70`. The still-live S3 dashboard generation is `20260902T055120Z`, created before the fixed-cost source change merged.
 
 Known issues:
 
-- Both predeploy tasks stopped with exit code `1` before localhost marker creation because `www.roy.sk/api/graphql` repeatedly returned HTTP `429` while the inventory snapshot was paginating. The retry was performed only after cooldown and failed at the same external boundary.
-- The protected deploy was therefore not started. The scheduler remains on task definition `:69` and production still uses the preceding `6500 EUR/month` configuration until a successful host gate can verify the new image.
+- The first two predeploy tasks stopped with exit code `1` before localhost marker creation because `www.roy.sk/api/graphql` repeatedly returned HTTP `429` while the inventory snapshot was paginating.
+- The protected retry on task definition `:70` also stopped with exit code `1` before localhost marker creation. It progressed further, but repeated HTTP `429` responses prevented payment-metadata enrichment for realized-revenue candidate order `2677001216`; fail-closed accounting correctly aborted the export.
+- The scheduler now has the new `7600 EUR/month` image, but no successful host marker or UI gate exists for that image and the live dashboard artifact has not refreshed. Do not claim the live dashboard uses `7600` until a complete export succeeds.
 
 Next exact step:
 
-- After the ROY GraphQL rate limit clears, rerun the ROY-only protected production smoke from merged `main` with `send_email=true`, `update_task_image=true`, and a unique marker. Require the exact new digest, successful localhost marker and `7600.0` runtime evidence directly on the task before any UI check; confirm no ROY report email is sent because project configuration keeps daily email disabled.
+- After the ROY GraphQL rate limit clears, rerun the ROY-only protected production smoke from merged `main` with `send_email=true`, `update_task_image=false`, and a unique marker. Require task definition `:70`, exact digest `sha256:e296ef75e24e263e0cd1e1f772997ac75c0514e87ad43864b7b4bc0b14f86b1f`, exit code `0`, localhost marker, and UI smoke; verify the refreshed payload allocates September fixed overhead as approximately `253.33 EUR/day` and confirm no ROY report email is sent because project configuration keeps daily email disabled.
 
 ## 2026-09-02 — ROY overdue inbound valuation and stock alerts deployed
 
