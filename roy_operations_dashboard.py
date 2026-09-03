@@ -424,6 +424,58 @@ def _state_s3_location(project: str, project_settings: Dict[str, Any]) -> Option
     return bucket, f"{prefix}/operations/state.json", region
 
 
+def _snapshot_s3_location(project: str, project_settings: Dict[str, Any]) -> Optional[Tuple[str, str, str]]:
+    location = _state_s3_location(project, project_settings)
+    if location is None:
+        return None
+    bucket, state_key, region = location
+    return bucket, f"{state_key.rsplit('/', 1)[0]}/live_snapshot.json", region
+
+
+def _load_shared_operations_snapshot(
+    project: str,
+    project_settings: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    location = _snapshot_s3_location(project, project_settings)
+    if location is None:
+        return None
+    bucket, key, region = location
+    try:
+        import boto3  # type: ignore
+
+        response = boto3.client("s3", region_name=region).get_object(Bucket=bucket, Key=key)
+        payload = json.loads(response["Body"].read().decode("utf-8"))
+        if isinstance(payload, dict) and payload.get("marker") == "roy-operations-dashboard":
+            return payload
+    except Exception:
+        pass
+    return None
+
+
+def _save_shared_operations_snapshot(
+    project: str,
+    project_settings: Dict[str, Any],
+    payload: Dict[str, Any],
+) -> None:
+    location = _snapshot_s3_location(project, project_settings)
+    if location is None:
+        return
+    bucket, key, region = location
+    try:
+        import boto3  # type: ignore
+
+        boto3.client("s3", region_name=region).put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            ContentType="application/json; charset=utf-8",
+            ServerSideEncryption="AES256",
+        )
+    except Exception:
+        # The shared cache is an availability optimization, never the source of truth.
+        pass
+
+
 def _normalize_operations_state(raw: Any) -> Dict[str, Any]:
     state = _empty_operations_state()
     if not isinstance(raw, dict):
@@ -3074,6 +3126,8 @@ def _start_background_operations_refresh(project: str, report_payload: Optional[
         try:
             payload = generate_roy_operations_snapshot(project, report_payload=report_payload_copy)
             stored = _cache_payload(project, payload, token=token)
+            if stored:
+                _save_shared_operations_snapshot(project, load_project_settings(project), payload)
             with _CACHE_LOCK:
                 state = _BACKGROUND_REFRESH.setdefault(project, {})
                 state["running"] = False
@@ -3110,6 +3164,19 @@ def get_cached_roy_operations_snapshot(
     now = time.monotonic()
     with _CACHE_LOCK:
         cached = _CACHE.get(cache_key)
+    if cached is None and not force_refresh:
+        shared_payload = _load_shared_operations_snapshot(project, project_settings)
+        if shared_payload is not None:
+            _cache_payload(cache_key, shared_payload)
+            _start_background_operations_refresh(project, report_payload)
+            result = copy.deepcopy(shared_payload)
+            result["cache"] = {
+                "status": "shared_stale_revalidating",
+                "age_seconds": 0,
+                "ttl_seconds": settings["cache_ttl_seconds"],
+                "refresh_in_progress": True,
+            }
+            return result
     if cached and not force_refresh:
         cached_at, payload = cached
         age_seconds = now - cached_at
@@ -3161,6 +3228,7 @@ def get_cached_roy_operations_snapshot(
         raise last_error or RuntimeError("Failed to generate ROY operations snapshot")
 
     _cache_payload(cache_key, payload)
+    _save_shared_operations_snapshot(project, project_settings, payload)
     payload["cache"] = {
         "status": "refreshed",
         "age_seconds": 0,
