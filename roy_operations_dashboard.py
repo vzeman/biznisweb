@@ -363,6 +363,7 @@ def _clear_operations_cache(project: str) -> None:
         _CACHE.pop(project, None)
         _BACKGROUND_REFRESH.pop(project, None)
         _CACHE_TOKENS[project] = _CACHE_TOKENS.get(project, 0) + 1
+    _delete_shared_operations_snapshot(project)
 
 
 def _empty_operations_state() -> Dict[str, Any]:
@@ -473,6 +474,20 @@ def _save_shared_operations_snapshot(
         )
     except Exception:
         # The shared cache is an availability optimization, never the source of truth.
+        pass
+
+
+def _delete_shared_operations_snapshot(project: str) -> None:
+    try:
+        location = _snapshot_s3_location(project, load_project_settings(project))
+        if location is None:
+            return
+        bucket, key, region = location
+        import boto3  # type: ignore
+
+        boto3.client("s3", region_name=region).delete_object(Bucket=bucket, Key=key)
+    except Exception:
+        # Mutations still invalidate this process even when the optional shared cache is unavailable.
         pass
 
 

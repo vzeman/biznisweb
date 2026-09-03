@@ -19,6 +19,7 @@ What changed:
 - A cold live cache no longer retries the entire multi-page snapshot three times; request-level retries handle transient errors without multiplying API traffic.
 - The first protected deployment exposed a second availability defect: the operations snapshot cache was process-local, so a cold App Runner instance could exceed the gateway deadline even when another instance had valid data.
 - A completed live snapshot is now stored in the existing encrypted reporting S3 bucket. Cold instances return that shared snapshot immediately and revalidate it in the background.
+- Any order or inventory-state mutation also deletes the shared snapshot, so another instance cannot serve pre-mutation operational state.
 
 What is verified:
 
@@ -28,16 +29,18 @@ What is verified:
 - Protected deploy run `33735918229` deployed digest `sha256:05b77efed10e81353308b5f1d5a458dcd9aaf4f9557d4e2ed949e57a505e2ed9` and emitted `LOCALHOST_LIVE_DASHBOARD_OK`, `APP_RUNNER_ROY_OPERATIONS_OK`, `APP_RUNNER_MAINTENANCE_INACTIVE_OK`, and `APP_RUNNER_DEPLOY_OK`.
 - The post-deploy browser check still reproduced gateway `502/504` behavior on a cold instance, which identified the missing shared cache.
 - The shared-cache regression passes all `45` focused tests and all `158` dashboard/reporting tests. Ruff, Python compilation, and `git diff --check` pass.
+- PR `#492` merged the initial shared-cache implementation as `9b53879b2b1444d8aa4e011a882ce926162d14b6`; ECR build run `33739246064` passed and published digest `sha256:0e55b98ffa13ac2adfd5217c81a3826dee646e152a3e6d5fb6863bd73628df2e`.
+- Protected run `33739477526` deployed that digest and passed `LOCALHOST_LIVE_DASHBOARD_OK` plus `APP_RUNNER_ROY_OPERATIONS_OK`, but correctly failed the restock mutation roundtrip because the first implementation did not invalidate the shared snapshot after a write.
 - No local application server, worker, watcher, tunnel, or persistent process was started.
 
 Known issues:
 
-- Shared-cache PR review, image build, protected deployment, localhost marker verification, and final browser verification are pending.
+- Shared-cache invalidation PR review, image build, protected redeployment, final marker verification, and final browser verification are pending.
 - App Runner has no stable instance ID or host IP; the listed public DNS addresses are dynamic frontend addresses.
 
 Next exact step:
 
-- Commit and push the shared-cache fix, merge only through a reviewed PR, deploy through the protected ROY workflow, and require the runtime localhost marker before final browser verification.
+- Commit and push the shared-cache invalidation fix, merge only through a reviewed PR, redeploy through the protected ROY workflow, and require the full mutation roundtrip plus runtime marker before final browser verification.
 
 ## 2026-09-02 — ROY HTTP 429 recovery deployed; 7,600 EUR fixed cost is live
 

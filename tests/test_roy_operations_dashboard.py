@@ -873,6 +873,12 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                 rod._CACHE_TOKENS.clear()
                 rod._CACHE_TOKENS.update(previous_tokens)
 
+    def test_cache_invalidation_removes_shared_snapshot(self) -> None:
+        with patch("roy_operations_dashboard._delete_shared_operations_snapshot") as delete_shared:
+            rod._clear_operations_cache("roy")
+
+        delete_shared.assert_called_once_with("roy")
+
     def test_force_refresh_bypasses_stale_cache_and_generates_snapshot(self) -> None:
         project = "roy"
         settings = make_project_settings()
