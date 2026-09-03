@@ -34,16 +34,19 @@ What is verified:
 - Protected run `33739477526` deployed that digest and passed `LOCALHOST_LIVE_DASHBOARD_OK` plus `APP_RUNNER_ROY_OPERATIONS_OK`, but correctly failed the restock mutation roundtrip because the first implementation did not invalidate the shared snapshot after a write.
 - PR `#493` merged shared-object invalidation as `9f892e1db27dec5ce1a8e1d1bb17b547f382c1fe`; build run `33740968121` passed and protected run `33741170936` deployed digest `sha256:723c83b4aa33f914e7d5c36cad785f7484380a318d88e8248c73ead0840215aa`.
 - Run `33741170936` again passed localhost and live operations gates but exposed a second consistency layer: a different warm App Runner instance could still serve its old in-memory snapshot. ETag validation now closes that cross-instance gap.
+- PR `#494` merged ETag validation as `1f9f0437bda190008433b0e5163d0c91364509bd`; ECR build run `33742590128` passed.
+- Protected deploy run `33742820220` deployed digest `sha256:8c602cc5632e5da12cc3d07c21b4c312f4b1e49f8118d63af8133b174674fc92` and passed `LOCALHOST_LIVE_DASHBOARD_OK`, `APP_RUNNER_ROY_OPERATIONS_OK`, `APP_RUNNER_MAINTENANCE_INACTIVE_OK`, the full restock preference roundtrip with restoration, and `APP_RUNNER_DEPLOY_OK`.
+- Final authenticated Chrome verification after reload showed no error banner, fresh operations timestamp `2026-09-03T10:25:47Z`, `5` fulfillable orders, `160` inventory rows, and MACO STOP Extreme 300 ml SKU `14832` at `168 ks` live stock.
 - No local application server, worker, watcher, tunnel, or persistent process was started.
 
 Known issues:
 
-- State-revision PR review, image build, protected redeployment, full mutation roundtrip, and final browser verification are pending.
+- No known blocker remains for the ROY live operations dashboard. App Runner has no stable instance ID or host IP; its managed identity remains the service ARN and digest.
 - App Runner has no stable instance ID or host IP; the listed public DNS addresses are dynamic frontend addresses.
 
 Next exact step:
 
-- Commit and push the state-revision fix, merge only through a reviewed PR, redeploy through the protected ROY workflow, and require the full mutation roundtrip plus runtime marker before final browser verification.
+- Monitor normal 90-second auto-refresh behavior and investigate only if a new visible error banner appears with a timestamp newer than the successful deployment.
 
 ## 2026-09-02 — ROY HTTP 429 recovery deployed; 7,600 EUR fixed cost is live
 
