@@ -43,6 +43,9 @@ DEFAULT_SCAN_MIN_PAGES = 8
 DEFAULT_STOP_AFTER_EMPTY_FULFILLABLE_PAGES = 3
 DEFAULT_CACHE_TTL_SECONDS = 60
 DEFAULT_AUTO_REFRESH_SECONDS = 90
+DEFAULT_API_MIN_REQUEST_INTERVAL_SECONDS = 0.5
+DEFAULT_API_RATE_LIMIT_MAX_ATTEMPTS = 3
+DEFAULT_API_RATE_LIMIT_BACKOFF_SECONDS = 15.0
 DEFAULT_WHOLESALE_DETECTION_DISCOUNT_THRESHOLD_PCT = 10.0
 DEFAULT_WHOLESALE_DETECTION_REQUIRE_COMPANY = True
 DEFAULT_WHOLESALE_RETAIL_TAX_RATE = 23.0
@@ -69,6 +72,96 @@ LATIN_FOLD_TRANSLATION = str.maketrans(
         "ı": "i",
     }
 )
+
+
+_API_REQUEST_LOCK = threading.Lock()
+_API_LAST_REQUEST_COMPLETED_AT: Optional[float] = None
+
+
+def _env_float(name: str, default: float, *, minimum: float = 0.0) -> float:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a number, got {raw!r}") from exc
+    if value < minimum:
+        raise ValueError(f"{name} must be >= {minimum}, got {value}")
+    return value
+
+
+def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer, got {raw!r}") from exc
+    if value < minimum:
+        raise ValueError(f"{name} must be >= {minimum}, got {value}")
+    return value
+
+
+def _is_transient_api_error(error: Exception) -> bool:
+    message = str(error or "").lower()
+    return bool(
+        re.search(r"\b429\b", message)
+        or "too many requests" in message
+        or "rate exceeded" in message
+        or "not a json answer" in message
+        or "server did not return a graphql result" in message
+    )
+
+
+def _execute_graphql(
+    client: Client,
+    query: Any,
+    *,
+    variable_values: Optional[Dict[str, Any]] = None,
+    retry_transient: bool = True,
+) -> Dict[str, Any]:
+    """Serialize and pace live API calls; retry only read-safe transient failures."""
+    global _API_LAST_REQUEST_COMPLETED_AT
+
+    min_interval = _env_float(
+        "BIZNISWEB_API_MIN_REQUEST_INTERVAL_SEC",
+        DEFAULT_API_MIN_REQUEST_INTERVAL_SECONDS,
+        minimum=DEFAULT_API_MIN_REQUEST_INTERVAL_SECONDS,
+    )
+    max_attempts = (
+        _env_int(
+            "BIZNISWEB_API_RATE_LIMIT_MAX_ATTEMPTS",
+            DEFAULT_API_RATE_LIMIT_MAX_ATTEMPTS,
+            minimum=1,
+        )
+        if retry_transient
+        else 1
+    )
+    backoff = _env_float(
+        "BIZNISWEB_API_RATE_LIMIT_BACKOFF_SEC",
+        DEFAULT_API_RATE_LIMIT_BACKOFF_SECONDS,
+        minimum=1.0,
+    )
+
+    for attempt in range(1, max_attempts + 1):
+        with _API_REQUEST_LOCK:
+            now = time.monotonic()
+            if _API_LAST_REQUEST_COMPLETED_AT is not None:
+                time.sleep(max(0.0, min_interval - (now - _API_LAST_REQUEST_COMPLETED_AT)))
+            try:
+                return client.execute(query, variable_values=variable_values)
+            except Exception as exc:
+                if attempt >= max_attempts or not _is_transient_api_error(exc):
+                    raise
+                # Hold the shared boundary during cooldown so another live
+                # request cannot immediately hit the same upstream limit.
+                time.sleep(backoff * (2 ** (attempt - 1)))
+            finally:
+                _API_LAST_REQUEST_COMPLETED_AT = time.monotonic()
+
+    raise RuntimeError("BiznisWeb live API retry loop exhausted unexpectedly")
 
 
 ROY_OPERATIONS_ORDER_QUERY = gql(
@@ -1464,9 +1557,6 @@ def fetch_open_orders_for_roy_operations(project: str, settings: Dict[str, Any])
     fulfillable_seen = 0
     pickup_seen = 0
     stop_reason = "api_exhausted"
-    max_page_retries = 3
-    retry_delay_seconds = 2.0
-
     while has_next_page and page_count < settings["scan_max_pages"]:
         params: Dict[str, Any] = {
             "limit": 30,
@@ -1476,18 +1566,11 @@ def fetch_open_orders_for_roy_operations(project: str, settings: Dict[str, Any])
         if cursor is not None:
             params["cursor"] = cursor
 
-        last_error: Optional[Exception] = None
-        for attempt in range(max_page_retries):
-            try:
-                result = client.execute(ROY_OPERATIONS_ORDER_QUERY, variable_values={"params": params})
-                break
-            except Exception as exc:
-                last_error = exc
-                if attempt + 1 >= max_page_retries:
-                    raise
-                time.sleep(retry_delay_seconds * (attempt + 1))
-        else:
-            raise RuntimeError(f"Failed to fetch ROY operations orders page: {last_error}")
+        result = _execute_graphql(
+            client,
+            ROY_OPERATIONS_ORDER_QUERY,
+            variable_values={"params": params},
+        )
         payload = result.get("getOrderList") or {}
         page_orders = [order for order in (payload.get("data") or []) if order]
         orders.extend(page_orders)
@@ -2046,7 +2129,7 @@ def _execute_product_stock_searches(
             + "\n".join(field_blocks)
             + "\n}"
         )
-        payload = client.execute(query, variable_values=variables)
+        payload = _execute_graphql(client, query, variable_values=variables)
         batch_results: Dict[str, List[Dict[str, Any]]] = {}
         for index, term in enumerate(batch):
             block = (payload or {}).get(f"p{index}") or {}
@@ -3051,7 +3134,9 @@ def get_cached_roy_operations_snapshot(
             result["cache"]["last_refresh_error"] = str(background_state["last_error"])
         return result
 
-    generate_attempts = 3 if cached is None else 1
+    # Individual read-only GraphQL calls already perform paced transient retries.
+    # Repeating the complete multi-page snapshot amplifies upstream throttling.
+    generate_attempts = 1
     last_error: Optional[Exception] = None
     payload = None
     for attempt in range(generate_attempts):
@@ -3094,7 +3179,11 @@ def _resolve_order_status_id(
     configured = int(configured_id or 0)
     if configured > 0:
         return configured
-    result = client.execute(LIST_ORDER_STATUSES_QUERY, variable_values={"lang_code": "SK"})
+    result = _execute_graphql(
+        client,
+        LIST_ORDER_STATUSES_QUERY,
+        variable_values={"lang_code": "SK"},
+    )
     for row in result.get("listOrderStatuses") or []:
         if _normalize_text(row.get("name")) == target_status_name_normalized:
             return int(row["id"])
@@ -3135,7 +3224,8 @@ def _mark_personal_pickup_status(project: str, order_num: str, action: str) -> D
         raise ValueError("Missing order number.")
 
     client = _build_client(project, project_settings)
-    result = client.execute(
+    result = _execute_graphql(
+        client,
         gql(
             """
 query GetOrderForPickupAction($order_num: String!) {
@@ -3177,9 +3267,11 @@ query GetOrderForPickupAction($order_num: String!) {
     else:
         raise ValueError(f"Unknown pickup action '{action}'.")
 
-    mutation_result = client.execute(
+    mutation_result = _execute_graphql(
+        client,
         CHANGE_ORDER_STATUS_MUTATION,
         variable_values={"order_num": order_num, "status_id": status_id},
+        retry_transient=False,
     )
     _clear_operations_cache(project)
     return {
