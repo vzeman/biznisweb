@@ -491,6 +491,25 @@ def _delete_shared_operations_snapshot(project: str) -> None:
         pass
 
 
+def _snapshot_matches_operations_state(
+    project: str,
+    project_settings: Dict[str, Any],
+    payload: Dict[str, Any],
+) -> bool:
+    snapshot_revision = str(payload.get("operations_state_revision") or "").strip()
+    if not snapshot_revision:
+        return False
+    try:
+        state = load_roy_operations_state(
+            project,
+            project_settings,
+            require_configured_remote=True,
+        )
+    except Exception:
+        return False
+    return snapshot_revision == str(state.get("_storage_etag") or "").strip()
+
+
 def _normalize_operations_state(raw: Any) -> Dict[str, Any]:
     state = _empty_operations_state()
     if not isinstance(raw, dict):
@@ -3079,10 +3098,16 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
     )
     if state_changed:
         save_roy_operations_state(project, operations_state, project_settings)
+        operations_state = load_roy_operations_state(
+            project,
+            project_settings,
+            require_configured_remote=True,
+        )
     return {
         "marker": "roy-operations-dashboard",
         "project": project,
         "generated_at": order_snapshot["generated_at"],
+        "operations_state_revision": str(operations_state.get("_storage_etag") or "").strip(),
         "auto_refresh_seconds": order_snapshot["auto_refresh_seconds"],
         "orders": order_snapshot,
         "executive_kpis": build_executive_kpi_snapshot(payload),
@@ -3179,9 +3204,21 @@ def get_cached_roy_operations_snapshot(
     now = time.monotonic()
     with _CACHE_LOCK:
         cached = _CACHE.get(cache_key)
+    if cached and not force_refresh and not _snapshot_matches_operations_state(
+        project,
+        project_settings,
+        cached[1],
+    ):
+        with _CACHE_LOCK:
+            _CACHE.pop(cache_key, None)
+        cached = None
     if cached is None and not force_refresh:
         shared_payload = _load_shared_operations_snapshot(project, project_settings)
-        if shared_payload is not None:
+        if shared_payload is not None and _snapshot_matches_operations_state(
+            project,
+            project_settings,
+            shared_payload,
+        ):
             _cache_payload(cache_key, shared_payload)
             _start_background_operations_refresh(project, report_payload)
             result = copy.deepcopy(shared_payload)
