@@ -5,6 +5,35 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-03 — ROY live dashboard GraphQL throttling fix in progress
+
+Date: 2026-09-03
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-live-dashboard-rate-limit`
+
+What changed:
+
+- The ROY live operations GraphQL path now uses one process-wide serialized pacing boundary with at least `0.5 s` between requests.
+- Read-only live queries treat HTTP `429` and BiznisWeb non-JSON GraphQL responses as transient and use `15 s` / `30 s` shared cooldowns before retrying.
+- Mutation requests are paced but never automatically retried after an ambiguous response.
+- A cold live cache no longer retries the entire multi-page snapshot three times; request-level retries handle transient errors without multiplying API traffic.
+
+What is verified:
+
+- Pre-change production identity: instance-id `N/A (AWS App Runner managed)`, DNS IPs `3.120.216.162`, `3.75.104.192`, `3.126.228.15`, service `biznisweb-roy-operations-dashboard`, runtime `/app`, UI `/production/roy`, live API `/api/operations/roy/live`.
+- The visible failure was reproduced on production: BiznisWeb returned a non-JSON GraphQL response; an earlier refresh also reported repeated HTTP `429` responses.
+- `python -m unittest tests.test_roy_operations_dashboard` passes all `44` tests, including new transient retry and mutation no-retry regressions.
+- No local application server, worker, watcher, tunnel, or persistent process was started.
+
+Known issues:
+
+- Broader tests, PR review, image build, protected deployment, localhost marker verification, and final browser verification are still pending.
+- App Runner has no stable instance ID or host IP; the listed public DNS addresses are dynamic frontend addresses.
+
+Next exact step:
+
+- Run the dashboard/reporting regression suites and static checks, commit and push the branch, merge only through a reviewed PR, then deploy through the protected ROY workflow and require the runtime localhost marker before browser verification.
+
 ## 2026-09-02 — ROY HTTP 429 recovery deployed; 7,600 EUR fixed cost is live
 
 Date: 2026-09-02

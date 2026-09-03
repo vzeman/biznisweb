@@ -128,6 +128,62 @@ class FakePickupActionClient:
 
 
 class RoyOperationsDashboardTests(unittest.TestCase):
+    def test_live_graphql_retries_non_json_response_with_shared_cooldown(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def execute(self, query, variable_values=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise RuntimeError(
+                        "Server did not return a GraphQL result: Not a JSON answer"
+                    )
+                return {"ok": True}
+
+        client = FakeClient()
+        previous_completed_at = rod._API_LAST_REQUEST_COMPLETED_AT
+        rod._API_LAST_REQUEST_COMPLETED_AT = None
+        try:
+            with (
+                patch.dict(
+                    rod.os.environ,
+                    {
+                        "BIZNISWEB_API_RATE_LIMIT_MAX_ATTEMPTS": "2",
+                        "BIZNISWEB_API_RATE_LIMIT_BACKOFF_SEC": "1",
+                    },
+                ),
+                patch("roy_operations_dashboard.time.monotonic", return_value=0.0),
+                patch("roy_operations_dashboard.time.sleep") as sleep,
+            ):
+                result = rod._execute_graphql(client, "query")
+
+            self.assertEqual({"ok": True}, result)
+            self.assertEqual(2, client.calls)
+            self.assertEqual([unittest.mock.call(1.0), unittest.mock.call(0.5)], sleep.call_args_list)
+        finally:
+            rod._API_LAST_REQUEST_COMPLETED_AT = previous_completed_at
+
+    def test_live_graphql_does_not_retry_mutation_after_transient_error(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def execute(self, query, variable_values=None):
+                self.calls += 1
+                raise RuntimeError("429 too many requests")
+
+        client = FakeClient()
+        previous_completed_at = rod._API_LAST_REQUEST_COMPLETED_AT
+        rod._API_LAST_REQUEST_COMPLETED_AT = None
+        try:
+            with patch("roy_operations_dashboard.time.monotonic", return_value=0.0):
+                with self.assertRaisesRegex(RuntimeError, "429"):
+                    rod._execute_graphql(client, "mutation", retry_transient=False)
+            self.assertEqual(1, client.calls)
+        finally:
+            rod._API_LAST_REQUEST_COMPLETED_AT = previous_completed_at
+
     def test_roy_settings_enable_operations_dashboard_and_lead_times(self) -> None:
         project_settings = json.loads((ROOT_DIR / "projects" / "roy" / "settings.json").read_text(encoding="utf-8"))
         operations = resolve_roy_operations_settings(project_settings)
