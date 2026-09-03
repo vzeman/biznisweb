@@ -816,6 +816,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
             with (
                 patch("roy_operations_dashboard.load_project_settings", return_value=settings),
                 patch("roy_operations_dashboard.time.monotonic", return_value=105.0),
+                patch("roy_operations_dashboard._snapshot_matches_operations_state", return_value=True),
                 patch("roy_operations_dashboard._start_background_operations_refresh") as start_background,
                 patch("roy_operations_dashboard.generate_roy_operations_snapshot") as generate_snapshot,
             ):
@@ -855,6 +856,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                     "roy_operations_dashboard._load_shared_operations_snapshot",
                     return_value=shared_payload,
                 ),
+                patch("roy_operations_dashboard._snapshot_matches_operations_state", return_value=True),
                 patch("roy_operations_dashboard._start_background_operations_refresh") as start_background,
                 patch("roy_operations_dashboard.generate_roy_operations_snapshot") as generate_snapshot,
             ):
@@ -878,6 +880,23 @@ class RoyOperationsDashboardTests(unittest.TestCase):
             rod._clear_operations_cache("roy")
 
         delete_shared.assert_called_once_with("roy")
+
+    def test_snapshot_revision_must_match_current_operations_state(self) -> None:
+        settings = make_project_settings()
+        with patch(
+            "roy_operations_dashboard.load_roy_operations_state",
+            return_value={"_storage_etag": '"current"'},
+        ):
+            self.assertTrue(
+                rod._snapshot_matches_operations_state(
+                    "roy", settings, {"operations_state_revision": '"current"'}
+                )
+            )
+            self.assertFalse(
+                rod._snapshot_matches_operations_state(
+                    "roy", settings, {"operations_state_revision": '"old"'}
+                )
+            )
 
     def test_force_refresh_bypasses_stale_cache_and_generates_snapshot(self) -> None:
         project = "roy"
