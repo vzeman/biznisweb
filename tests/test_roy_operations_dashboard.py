@@ -834,6 +834,45 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                 rod._CACHE_TOKENS.clear()
                 rod._CACHE_TOKENS.update(previous_tokens)
 
+    def test_cold_instance_returns_shared_snapshot_and_revalidates_in_background(self) -> None:
+        project = "roy"
+        settings = make_project_settings()
+        shared_payload = {
+            "marker": "roy-operations-dashboard",
+            "generated_at": "shared",
+        }
+        with rod._CACHE_LOCK:
+            previous_cache = copy.deepcopy(rod._CACHE)
+            previous_background = copy.deepcopy(rod._BACKGROUND_REFRESH)
+            previous_tokens = copy.deepcopy(rod._CACHE_TOKENS)
+            rod._CACHE.clear()
+            rod._BACKGROUND_REFRESH.clear()
+            rod._CACHE_TOKENS.clear()
+        try:
+            with (
+                patch("roy_operations_dashboard.load_project_settings", return_value=settings),
+                patch(
+                    "roy_operations_dashboard._load_shared_operations_snapshot",
+                    return_value=shared_payload,
+                ),
+                patch("roy_operations_dashboard._start_background_operations_refresh") as start_background,
+                patch("roy_operations_dashboard.generate_roy_operations_snapshot") as generate_snapshot,
+            ):
+                result = rod.get_cached_roy_operations_snapshot(project)
+
+            self.assertEqual("shared", result["generated_at"])
+            self.assertEqual("shared_stale_revalidating", result["cache"]["status"])
+            start_background.assert_called_once_with(project, None)
+            generate_snapshot.assert_not_called()
+        finally:
+            with rod._CACHE_LOCK:
+                rod._CACHE.clear()
+                rod._CACHE.update(previous_cache)
+                rod._BACKGROUND_REFRESH.clear()
+                rod._BACKGROUND_REFRESH.update(previous_background)
+                rod._CACHE_TOKENS.clear()
+                rod._CACHE_TOKENS.update(previous_tokens)
+
     def test_force_refresh_bypasses_stale_cache_and_generates_snapshot(self) -> None:
         project = "roy"
         settings = make_project_settings()

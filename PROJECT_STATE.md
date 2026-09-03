@@ -5,11 +5,11 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
-## 2026-09-03 — ROY live dashboard GraphQL throttling fix in progress
+## 2026-09-03 — ROY live dashboard GraphQL throttling and shared-cache fix
 
 Date: 2026-09-03
 Repo: `vzeman/biznisweb`
-Branch: `codex/roy-live-dashboard-rate-limit`
+Branch: `codex/roy-shared-live-cache`
 
 What changed:
 
@@ -17,22 +17,27 @@ What changed:
 - Read-only live queries treat HTTP `429` and BiznisWeb non-JSON GraphQL responses as transient and use `15 s` / `30 s` shared cooldowns before retrying.
 - Mutation requests are paced but never automatically retried after an ambiguous response.
 - A cold live cache no longer retries the entire multi-page snapshot three times; request-level retries handle transient errors without multiplying API traffic.
+- The first protected deployment exposed a second availability defect: the operations snapshot cache was process-local, so a cold App Runner instance could exceed the gateway deadline even when another instance had valid data.
+- A completed live snapshot is now stored in the existing encrypted reporting S3 bucket. Cold instances return that shared snapshot immediately and revalidate it in the background.
 
 What is verified:
 
 - Pre-change production identity: instance-id `N/A (AWS App Runner managed)`, DNS IPs `3.120.216.162`, `3.75.104.192`, `3.126.228.15`, service `biznisweb-roy-operations-dashboard`, runtime `/app`, UI `/production/roy`, live API `/api/operations/roy/live`.
 - The visible failure was reproduced on production: BiznisWeb returned a non-JSON GraphQL response; an earlier refresh also reported repeated HTTP `429` responses.
-- `python -m unittest tests.test_roy_operations_dashboard` passes all `44` tests, including new transient retry and mutation no-retry regressions.
+- PR `#491` merged the request pacing fix as `ad490172f5ba50427163fd555d43b40257331f89`; ECR build run `33735681844` passed.
+- Protected deploy run `33735918229` deployed digest `sha256:05b77efed10e81353308b5f1d5a458dcd9aaf4f9557d4e2ed949e57a505e2ed9` and emitted `LOCALHOST_LIVE_DASHBOARD_OK`, `APP_RUNNER_ROY_OPERATIONS_OK`, `APP_RUNNER_MAINTENANCE_INACTIVE_OK`, and `APP_RUNNER_DEPLOY_OK`.
+- The post-deploy browser check still reproduced gateway `502/504` behavior on a cold instance, which identified the missing shared cache.
+- The shared-cache regression passes all `45` focused tests and all `158` dashboard/reporting tests. Ruff, Python compilation, and `git diff --check` pass.
 - No local application server, worker, watcher, tunnel, or persistent process was started.
 
 Known issues:
 
-- Broader tests, PR review, image build, protected deployment, localhost marker verification, and final browser verification are still pending.
+- Shared-cache PR review, image build, protected deployment, localhost marker verification, and final browser verification are pending.
 - App Runner has no stable instance ID or host IP; the listed public DNS addresses are dynamic frontend addresses.
 
 Next exact step:
 
-- Run the dashboard/reporting regression suites and static checks, commit and push the branch, merge only through a reviewed PR, then deploy through the protected ROY workflow and require the runtime localhost marker before browser verification.
+- Commit and push the shared-cache fix, merge only through a reviewed PR, deploy through the protected ROY workflow, and require the runtime localhost marker before final browser verification.
 
 ## 2026-09-02 — ROY HTTP 429 recovery deployed; 7,600 EUR fixed cost is live
 
