@@ -3,13 +3,30 @@ from __future__ import annotations
 import ast
 import pathlib
 import unittest
+from unittest.mock import MagicMock
 
-from scripts.inspect_growthbook_preview_sleep import canonical, digest, require, schedule_fingerprint, summarize_changes, validate_command
+from scripts.inspect_growthbook_preview_sleep import STACK, RECONCILIATION, canonical, digest, inspect_change_sets, require, schedule_fingerprint, summarize_changes, validate_command
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class PreviewSleepPreflightTests(unittest.TestCase):
+    def test_missing_second_plan_keeps_first_sanitized_diagnostic(self):
+        from botocore.exceptions import ClientError
+
+        class ChangeSetNotFoundException(ClientError):
+            pass
+
+        cf, ecs, session = MagicMock(), MagicMock(), MagicMock()
+        session.client.side_effect = lambda name, **kwargs: cf if name == "cloudformation" else ecs
+        cf.describe_stacks.side_effect = lambda StackName: {"Stacks": [{"StackName": StackName, "StackStatus": "UPDATE_COMPLETE", "Parameters": [{"ParameterKey": "ClusterArn", "ParameterValue": "test"}], "Outputs": [{"OutputKey": "CollectorClusterArn", "OutputValue": "test"}]}]}
+        ecs.list_tasks.return_value = {"taskArns": []}
+        cf.describe_change_set.side_effect = [{"Status": "CREATE_COMPLETE", "ExecutionStatus": "AVAILABLE", "Changes": []}, ChangeSetNotFoundException({"Error": {"Code": "ChangeSetNotFound", "Message": "FORBIDDEN"}}, "DescribeChangeSet")]
+        result = inspect_change_sets(session, "33884675728")
+        self.assertEqual(result[STACK]["execution_status"], "AVAILABLE")
+        self.assertEqual(result[RECONCILIATION]["lookup"], "ChangeSetNotFound")
+        self.assertNotIn("FORBIDDEN", canonical(result))
+
     def test_change_summary_excludes_physical_ids_and_property_values(self):
         payload = {"Changes": [{"ResourceChange": {"PhysicalResourceId": "FORBIDDEN", "LogicalResourceId": "CollectorService", "Action": "Modify", "Details": [{"CausingEntity": "FORBIDDEN", "Target": {"Name": "DesiredCount", "BeforeValue": "FORBIDDEN", "AfterValue": "FORBIDDEN"}}]}}]}
         summary = canonical(summarize_changes(payload))
