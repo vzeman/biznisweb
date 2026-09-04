@@ -5,6 +5,48 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-04 — Fix cross-project links between separate ROY and VEVO dashboards
+
+Date: 2026-09-04
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-latest-report-fix`
+
+What changed:
+- Project settings now declare each dashboard's verified public origin.
+- Index links and dashboard project switching navigate to the selected project's
+  own authenticated deployment. Old foreign-project report/dashboard bookmarks
+  redirect while retaining the selected period. Foreign API reads return a
+  navigation hint before any artifact access; permissions are not broadened.
+- Removed misleading index labels that marked S3 reports missing based only on
+  local filesystem checks. Local multi-project use keeps relative navigation.
+- Added a read-only Fargate gate for localhost identity/marker, real stored HTML
+  and JSON for four periods, cross-project redirects, auth and server shutdown.
+
+What is verified:
+- Reproduced the exact screenshot error: ROY host `qvfzvh82c3` returns 404 for
+  `/report/vevo?period=full`, while VEVO host `2mhmsmgq3m` serves that HTML with
+  HTTP 200 (4,046,293 bytes). ROY's own report also returns HTTP 200.
+- Pre-change managed identity: instance ID N/A (App Runner), runtime `/app`, port
+  8080, command `python live_dashboard_server.py --host 0.0.0.0 --port 8080`.
+  ROY service `biznisweb-roy-operations-dashboard`, ARN suffix
+  `ff762bb1c93148638741c62e7abb45b2`, digest `8c602cc5632e5da12cc3d07c21b4c312f4b1e49f8118d63af8133b174674fc92`,
+  DNS IPs `3.66.161.94`, `3.68.0.57`, `3.74.6.217`.
+  VEVO service `biznisweb-vevo-production-board`, ARN suffix
+  `2711a253ae014a8aaf1a37929997496d`, digest `04b5039afe84aeebda08b3a46036cb1d1ecbcdc93661757d0b7c77b1ccb47feb`,
+  DNS IPs `3.126.244.1`, `3.74.221.100`, `35.157.121.17`. IPs are dynamic frontends.
+- Both use separate S3 prefixes and instance roles. Stored reports are intact;
+  the previous cleanup's health-only check did not test cross-project navigation.
+- All 17 focused routing/S3/mobile tests pass; no persistent local server started.
+
+Known issues:
+- The routing fix is not yet deployed. Use the verified VEVO public origin above
+  to open VEVO reports until deployment passes its host and browser checks.
+
+Next exact step:
+- Merge via PR, build the exact image, run read-only Fargate localhost gates, then
+  update only the two App Runner image identifiers preserving their configuration.
+  Verify the original browser path and record final image/operation evidence.
+
 ## 2026-09-04 — ROY and VEVO invoiced-order status reconciliation
 
 Date: 2026-09-04

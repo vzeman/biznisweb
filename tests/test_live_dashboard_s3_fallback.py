@@ -5,7 +5,7 @@ import os
 import sys
 import unittest
 from types import SimpleNamespace
-from unittest.mock import call, patch
+from unittest.mock import Mock, call, patch
 
 import live_dashboard_server as server
 
@@ -193,6 +193,81 @@ class LiveDashboardS3FallbackTests(unittest.TestCase):
 
         self.assertIsNone(result)
         s3_read.assert_not_called()
+
+
+class LiveDashboardProjectRoutingTests(unittest.TestCase):
+    vevo_origin = "https://2mhmsmgq3m.eu-central-1.awsapprunner.com"
+    roy_origin = "https://qvfzvh82c3.eu-central-1.awsapprunner.com"
+
+    def handler(self, path):
+        handler = server.LiveDashboardHandler.__new__(server.LiveDashboardHandler)
+        handler.path = path
+        handler.headers = {}
+        handler.wfile = io.BytesIO()
+        handler.send_response = Mock()
+        handler.send_header = Mock()
+        handler.end_headers = Mock()
+        return handler
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "roy"}, clear=True)
+    def test_old_vevo_report_bookmark_redirects_without_reading_roy_artifacts(self):
+        handler = self.handler("/report/vevo?period=full&next=https://untrusted.invalid")
+        with patch.object(server, "read_period_report_bytes") as read:
+            handler.do_GET()
+        handler.send_response.assert_called_once_with(302)
+        self.assertIn(call("Location", self.vevo_origin + "/report/vevo?period=full"), handler.send_header.call_args_list)
+        self.assertEqual(b"", handler.wfile.getvalue())
+        read.assert_not_called()
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "vevo"}, clear=True)
+    def test_reverse_navigation_preserves_selected_period(self):
+        handler = self.handler("/dashboard/roy?period=30d")
+        handler.do_GET()
+        self.assertIn(call("Location", self.roy_origin + "/dashboard/roy?period=30d"), handler.send_header.call_args_list)
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "roy"}, clear=True)
+    def test_own_report_is_served_without_redirect(self):
+        handler = self.handler("/report/roy?period=7d")
+        with patch.object(server, "read_period_report_bytes", return_value=b"<html><head></head></html>") as read:
+            handler.do_GET()
+        handler.send_response.assert_called_once_with(200)
+        read.assert_called_once_with("roy", "7d")
+        self.assertNotIn("Location", [c.args[0] for c in handler.send_header.call_args_list])
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "roy"}, clear=True)
+    def test_foreign_api_returns_navigation_hint_without_reading_data(self):
+        handler = self.handler("/api/vevo/latest?period=full")
+        with patch.object(server, "read_period_dashboard_payload_bytes") as read:
+            handler.do_GET()
+        handler.send_response.assert_called_once_with(409)
+        self.assertEqual(self.vevo_origin + "/dashboard/vevo", json.loads(handler.wfile.getvalue())["dashboard_url"])
+        read.assert_not_called()
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "roy", "LIVE_DASHBOARD_AUTH_USER": "user", "LIVE_DASHBOARD_AUTH_PASSWORD": "test-password"}, clear=True)
+    def test_redirect_does_not_bypass_existing_authentication(self):
+        handler = self.handler("/report/vevo?period=full")
+        handler.do_GET()
+        handler.send_response.assert_called_once_with(401)
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "roy"}, clear=True)
+    def test_index_links_and_project_switcher_use_project_origins(self):
+        index = server.build_index_html(["roy", "vevo"])
+        self.assertIn("href='/report/roy'", index)
+        self.assertIn("href='" + self.vevo_origin + "/report/vevo'", index)
+        self.assertNotIn("HTML report: missing", index)
+        dashboard = server.build_live_dashboard_html(["roy", "vevo"], "roy", "30d")
+        self.assertIn('"project_origins": {"roy": "", "vevo": "' + self.vevo_origin + '"}', dashboard)
+        self.assertIn("window.location.assign(target.href)", dashboard)
+
+    @patch.dict(os.environ, {}, clear=True)
+    def test_local_multi_project_server_keeps_relative_navigation(self):
+        self.assertEqual("/report/vevo", server.dashboard_project_href("vevo", "report"))
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "roy"}, clear=True)
+    def test_untrusted_url_shapes_are_not_used_as_redirect_targets(self):
+        for origin in ["http://example.test", "https://user:pass@example.test", "https://example.test/?next=x", "https://example.test/\r\nLocation: x"]:
+            with self.subTest(origin=origin), patch.object(server, "load_project_settings", return_value={"live_dashboard": {"public_origin": origin}}):
+                self.assertEqual("", server.remote_dashboard_origin("vevo"))
 
 
 if __name__ == "__main__":
