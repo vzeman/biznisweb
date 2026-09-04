@@ -115,6 +115,12 @@
     "eligible_statuses": [
       "Odoslaná"
     ],
+    "existing_invoice_status_reconciliation": {
+      "enabled": true,
+      "target_status_name": "Platba online - zaplatené",
+      "target_status_id": null,
+      "lang_code": "SK"
+    },
     "schedule_name": "vevo-daily-invoice-generation",
     "schedule_expression": "cron(0/15 6-23 * * ? *)",
     "final_sweep_schedule_name": "vevo-same-day-invoice-sweep",

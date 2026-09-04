@@ -14,6 +14,7 @@ from generate_invoices import (
     InvoiceGenerator,
     InvoiceRunSummary,
     _status_matches_invoice_generation,
+    reconcile_existing_invoice_statuses,
     resolve_invoice_date_window,
     resolve_invoice_generation_settings,
 )
@@ -71,6 +72,35 @@ class _FakeInvoiceClient:
                 "invoices": self.invoices,
             }
         }
+
+
+class _FakeStatusReconciliationClient:
+    def __init__(self, orders: list[dict]) -> None:
+        self.orders = {str(order["order_num"]): order for order in orders}
+        self.mutations: list[tuple[str, int]] = []
+
+    def execute(self, _query, variable_values=None):
+        variables = variable_values or {}
+        if "lang_code" in variables:
+            return {
+                "listOrderStatuses": [
+                    {"id": 55, "name": "Platba online - zaplatené"},
+                    {"id": 4, "name": "Odoslaná"},
+                ]
+            }
+        if "order_num" in variables and "status_id" in variables:
+            order_num = str(variables["order_num"])
+            status_id = int(variables["status_id"])
+            self.mutations.append((order_num, status_id))
+            return {
+                "changeOrderStatus": {
+                    "order_num": order_num,
+                    "status": {"id": status_id, "name": "Platba online - zaplatené"},
+                }
+            }
+        if "order_num" in variables:
+            return {"getOrder": self.orders.get(str(variables["order_num"]))}
+        raise AssertionError(f"Unexpected GraphQL variables: {variables}")
 
 
 class InvoiceGenerationTests(unittest.TestCase):
@@ -234,6 +264,118 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertTrue(settings["exclude_zero_total_orders"])
         self.assertTrue(settings["send_invoice_email"])
         self.assertEqual(["Odoslan\u00e1"], settings["eligible_statuses"])
+        self.assertFalse(settings["existing_invoice_status_reconciliation"]["enabled"])
+
+    def test_existing_invoice_reconciliation_defaults_to_paid_status(self) -> None:
+        settings = resolve_invoice_generation_settings(
+            {
+                "invoice_generation": {
+                    "enabled": True,
+                    "existing_invoice_status_reconciliation": {"enabled": True},
+                }
+            }
+        )["existing_invoice_status_reconciliation"]
+
+        self.assertTrue(settings["enabled"])
+        self.assertEqual("Platba online - zaplatené", settings["target_status_name"])
+        self.assertIsNone(settings["target_status_id"])
+        self.assertIn("Stripe - expired", settings["source_statuses"])
+        self.assertNotIn("Odoslaná", settings["source_statuses"])
+
+    def test_existing_invoice_reconciliation_moves_only_unpaid_status_to_paid(self) -> None:
+        settings = resolve_invoice_generation_settings(
+            {
+                "invoice_generation": {
+                    "enabled": True,
+                    "existing_invoice_status_reconciliation": {"enabled": True},
+                }
+            }
+        )["existing_invoice_status_reconciliation"]
+        expired = {
+            "order_num": "R-EXPIRED",
+            "status": {"id": 69, "name": "Stripe - expired"},
+            "invoices": [{"id": "INV-1", "invoice_num": "FV-1"}],
+        }
+        shipped = {
+            "order_num": "R-SHIPPED",
+            "status": {"id": 4, "name": "Odoslaná"},
+            "invoices": [{"id": "INV-2", "invoice_num": "FV-2"}],
+        }
+        expired_without_invoice = {
+            "order_num": "R-UNPAID",
+            "status": {"id": 69, "name": "Stripe - expired"},
+            "invoices": [],
+        }
+        client = _FakeStatusReconciliationClient([expired, shipped, expired_without_invoice])
+
+        result = reconcile_existing_invoice_statuses(
+            client,
+            [expired, shipped, expired_without_invoice],
+            settings,
+            dry_run=False,
+        )
+
+        self.assertEqual(1, result["candidates"])
+        self.assertEqual(1, result["reconciled"])
+        self.assertEqual(0, result["failed"])
+        self.assertEqual("Platba online - zaplatené", result["target_status_name"])
+        self.assertEqual(55, result["target_status_id"])
+        self.assertEqual([("R-EXPIRED", 55)], client.mutations)
+
+    def test_existing_invoice_reconciliation_dry_run_never_mutates(self) -> None:
+        settings = resolve_invoice_generation_settings(
+            {
+                "invoice_generation": {
+                    "enabled": True,
+                    "existing_invoice_status_reconciliation": {"enabled": True},
+                }
+            }
+        )["existing_invoice_status_reconciliation"]
+        expired = {
+            "order_num": "R-EXPIRED",
+            "status": {"id": 69, "name": "Stripe - expired"},
+            "invoices": [{"id": "INV-1", "invoice_num": "FV-1"}],
+        }
+        client = _FakeStatusReconciliationClient([expired])
+
+        result = reconcile_existing_invoice_statuses(client, [expired], settings, dry_run=True)
+
+        self.assertEqual(1, result["candidates"])
+        self.assertEqual(0, result["reconciled"])
+        self.assertEqual([], client.mutations)
+
+    def test_existing_invoice_reconciliation_does_not_downgrade_order_shipped_during_recheck(self) -> None:
+        settings = resolve_invoice_generation_settings(
+            {
+                "invoice_generation": {
+                    "enabled": True,
+                    "existing_invoice_status_reconciliation": {"enabled": True},
+                }
+            }
+        )["existing_invoice_status_reconciliation"]
+        initially_expired = {
+            "order_num": "R-RACE",
+            "status": {"id": 69, "name": "Stripe - expired"},
+            "invoices": [{"id": "INV-1", "invoice_num": "FV-1"}],
+        }
+        already_shipped = {
+            "order_num": "R-RACE",
+            "status": {"id": 4, "name": "Odoslaná"},
+            "invoices": [{"id": "INV-1", "invoice_num": "FV-1"}],
+        }
+        client = _FakeStatusReconciliationClient([already_shipped])
+
+        result = reconcile_existing_invoice_statuses(
+            client,
+            [initially_expired],
+            settings,
+            dry_run=False,
+        )
+
+        self.assertEqual(1, result["candidates"])
+        self.assertEqual(0, result["reconciled"])
+        self.assertEqual(1, result["skipped_after_recheck"])
+        self.assertEqual([], client.mutations)
 
     def test_invoice_generation_settings_can_disable_invoice_email(self) -> None:
         settings = resolve_invoice_generation_settings(
@@ -339,6 +481,16 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertEqual(["Odoslan\u00e1"], roy["invoice_generation"]["eligible_statuses"])
         self.assertTrue(vevo["invoice_generation"]["send_invoice_email"])
         self.assertTrue(roy["invoice_generation"]["send_invoice_email"])
+        for project_settings in (vevo, roy):
+            reconciliation = project_settings["invoice_generation"][
+                "existing_invoice_status_reconciliation"
+            ]
+            self.assertTrue(reconciliation["enabled"])
+            self.assertEqual(
+                "Platba online - zaplaten\u00e9",
+                reconciliation["target_status_name"],
+            )
+            self.assertIsNone(reconciliation["target_status_id"])
 
         self.assertNotEqual(vevo["report_schedule"]["task_family"], vevo["invoice_generation"]["task_family"])
         self.assertNotEqual(roy["report_schedule"]["task_family"], roy["invoice_generation"]["task_family"])
@@ -479,12 +631,19 @@ class InvoiceGenerationTests(unittest.TestCase):
                 "emailed_invoices": 0,
                 "failed_invoice_emails": 0,
                 "missing_invoice_ids": 0,
+                "invoice_status_reconciliation_enabled": False,
+                "invoice_status_reconciliation_candidates": 0,
+                "reconciled_invoice_statuses": 0,
+                "failed_invoice_status_reconciliations": 0,
+                "skipped_invoice_status_reconciliations_after_recheck": 0,
+                "invoice_status_reconciliation_target_name": "",
+                "invoice_status_reconciliation_target_id": None,
                 "skipped_zero_total_orders": 2,
                 "dry_run": True,
             },
             result,
         )
-        self.assertEqual(8, put_metric_mock.call_count)
+        self.assertEqual(11, put_metric_mock.call_count)
 
 
 if __name__ == "__main__":

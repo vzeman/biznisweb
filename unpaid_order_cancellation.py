@@ -7,7 +7,7 @@ import os
 import re
 import unicodedata
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from gql import Client, gql
@@ -20,7 +20,7 @@ from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_
 logger = get_logger("unpaid_order_cancellation")
 
 DEFAULT_TARGET_STATUS_NAME = "Nezaplaten\u00e1 - zru\u0161en\u00e1 objedn\u00e1vka"
-DEFAULT_RECOVERY_TARGET_STATUS_NAME = "Odoslan\u00e1"
+DEFAULT_RECOVERY_TARGET_STATUS_NAME = "Platba online - zaplaten\u00e9"
 DEFAULT_AGE_DAYS = 14
 DEFAULT_SCAN_MAX_PAGES = 200
 DEFAULT_PAGE_LIMIT = 30
@@ -80,13 +80,6 @@ DEFAULT_EXCLUDED_STATUSES = (
     "Dobropis",
 )
 DEFAULT_RECOVERY_SOURCE_STATUSES = ("Stripe - expired",)
-DEFAULT_RECOVERY_PAYMENT_REFERENCE_IDS = ("6",)
-DEFAULT_RECOVERY_PAYMENT_TITLE_PATTERNS = (
-    "bankovym prevodom",
-    "bankovni prevod",
-    "bankovy prevod",
-    "bank transfer",
-)
 
 
 UNPAID_ORDER_QUERY = gql(
@@ -206,8 +199,6 @@ class UnpaidCancellationSettings:
     recovery_target_status_name: str = DEFAULT_RECOVERY_TARGET_STATUS_NAME
     recovery_target_status_id: Optional[int] = None
     recovery_source_statuses: Tuple[str, ...] = DEFAULT_RECOVERY_SOURCE_STATUSES
-    recovery_payment_reference_ids: Tuple[str, ...] = DEFAULT_RECOVERY_PAYMENT_REFERENCE_IDS
-    recovery_payment_title_patterns: Tuple[str, ...] = DEFAULT_RECOVERY_PAYMENT_TITLE_PATTERNS
     lang_code: str = DEFAULT_LANG_CODE
     payment_reference_ids: Tuple[str, ...] = DEFAULT_PAYMENT_REFERENCE_IDS
     payment_title_patterns: Tuple[str, ...] = DEFAULT_PAYMENT_TITLE_PATTERNS
@@ -222,7 +213,6 @@ class UnpaidCancellationSettings:
     normalized_target_status_name: str = field(init=False)
     normalized_recovery_target_status_name: str = field(init=False)
     normalized_recovery_source_statuses: Tuple[str, ...] = field(init=False)
-    normalized_recovery_payment_title_patterns: Tuple[str, ...] = field(init=False)
     normalized_payment_title_patterns: Tuple[str, ...] = field(init=False)
     normalized_candidate_statuses: Tuple[str, ...] = field(init=False)
     normalized_excluded_statuses: Tuple[str, ...] = field(init=False)
@@ -238,15 +228,6 @@ class UnpaidCancellationSettings:
             self,
             "normalized_recovery_source_statuses",
             tuple(normalize_text(value) for value in self.recovery_source_statuses if normalize_text(value)),
-        )
-        object.__setattr__(
-            self,
-            "normalized_recovery_payment_title_patterns",
-            tuple(
-                normalize_text(value)
-                for value in self.recovery_payment_title_patterns
-                if normalize_text(value)
-            ),
         )
         object.__setattr__(
             self,
@@ -353,14 +334,6 @@ def resolve_unpaid_cancellation_settings(project_settings: Dict[str, Any]) -> Un
             raw.get("recovery_source_statuses"),
             DEFAULT_RECOVERY_SOURCE_STATUSES,
         ),
-        recovery_payment_reference_ids=_tuple_from_settings(
-            raw.get("recovery_payment_reference_ids"),
-            DEFAULT_RECOVERY_PAYMENT_REFERENCE_IDS,
-        ),
-        recovery_payment_title_patterns=_tuple_from_settings(
-            raw.get("recovery_payment_title_patterns"),
-            DEFAULT_RECOVERY_PAYMENT_TITLE_PATTERNS,
-        ),
         lang_code=str(raw.get("lang_code") or DEFAULT_LANG_CODE),
         payment_reference_ids=_tuple_from_settings(raw.get("payment_reference_ids"), DEFAULT_PAYMENT_REFERENCE_IDS),
         payment_title_patterns=_tuple_from_settings(raw.get("payment_title_patterns"), DEFAULT_PAYMENT_TITLE_PATTERNS),
@@ -448,47 +421,12 @@ def payment_matches(order: Dict[str, Any], settings: UnpaidCancellationSettings)
     )
 
 
-def recovery_payment_matches(order: Dict[str, Any], settings: UnpaidCancellationSettings) -> bool:
-    return _payment_matches_values(
-        order,
-        settings.recovery_payment_reference_ids,
-        settings.normalized_recovery_payment_title_patterns,
-    )
-
-
 def _final_invoices(order: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [invoice for invoice in (order.get("invoices") or []) if invoice and invoice.get("id")]
 
 
 def has_final_invoice(order: Dict[str, Any]) -> bool:
     return bool(_final_invoices(order))
-
-
-def has_paid_final_invoice(order: Dict[str, Any]) -> bool:
-    return any(invoice.get("paid") is True for invoice in _final_invoices(order))
-
-
-def _parse_api_datetime(value: Any) -> Optional[datetime]:
-    raw = str(value or "").strip()
-    if not raw:
-        return None
-    try:
-        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if parsed.tzinfo is not None:
-        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
-    return parsed
-
-
-def final_invoice_predates_last_change(order: Dict[str, Any]) -> bool:
-    last_change = _parse_api_datetime(order.get("last_change"))
-    if last_change is None:
-        return False
-    return any(
-        (created := _parse_api_datetime(invoice.get("created"))) is not None and created <= last_change
-        for invoice in _final_invoices(order)
-    )
 
 
 def recovery_eligibility_reason(order: Dict[str, Any], settings: UnpaidCancellationSettings) -> str:
@@ -502,10 +440,6 @@ def recovery_eligibility_reason(order: Dict[str, Any], settings: UnpaidCancellat
         return "not_recovery_status"
     if not has_final_invoice(order):
         return "missing_final_invoice"
-    if not final_invoice_predates_last_change(order):
-        return "final_invoice_not_preexisting"
-    if not (has_paid_final_invoice(order) or recovery_payment_matches(order, settings)):
-        return "missing_payment_resolution_evidence"
     return "eligible"
 
 
