@@ -7196,3 +7196,27 @@ Known issues:
 Next exact step:
 
 - At or after the next frozen gate on `2026-09-03 03:45 Europe/Bratislava`, first inspect the repository-owned scheduled checkpoint-index `2` run. Do not duplicate an active run. Use a same-gate manual fallback only if no canonical scheduled artifact exists and the original daily gate remains open; independently verify and record the earliest artifact, resolving only at a cumulative count of at least `1,000`.
+
+## 2026-09-04 — Preview sleep requested; read-only identity preflight
+
+Date: 2026-09-04
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-preview-sleep-preflight`
+
+What changed:
+
+- User requested reversible Preview suspension without deletion. Production A/A and all stored data must remain unchanged; the retained load balancer continues to incur its hourly charge.
+- Added a main-only, explicitly confirmed, read-only GitHub inspection with one canonical sanitized artifact. It resolves the current Preview Fargate task/IP/service/path/image and fingerprints the Preview stacks plus protected Production stacks and schedules. It reads no event data and performs no AWS mutation.
+
+What is verified:
+
+- The existing Preview service template requires `DesiredCount: 1`; stopping a task alone is not a persistent suspension. Current templates have no supported sleep transition.
+- No live identity or infrastructure-mutation gate is claimed before the inspection succeeds. No local AWS credentials are used.
+
+Known issues:
+
+- Preview is not yet suspended. Actual live state must be checked before implementing a lifecycle transition; the existing A/A checkpoint work is unchanged.
+
+Next exact step:
+
+- Validate and merge the read-only preflight through CI, run it once on exact main, independently verify the artifact, then implement only the reviewed no-deletion Preview sleep transition with a fresh runtime/local-host hard gate. Preserve data, ALB, Athena/Glue, reader access, Production resources, and source reporting schedule.
