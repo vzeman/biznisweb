@@ -7220,3 +7220,10 @@ Known issues:
 Next exact step:
 
 - Validate and merge the read-only preflight through CI, run it once on exact main, independently verify the artifact, then implement only the reviewed no-deletion Preview sleep transition with a fresh runtime/local-host hard gate. Preserve data, ALB, Athena/Glue, reader access, Production resources, and source reporting schedule.
+
+## 2026-09-04 — Preview read-only preflight command-default normalization
+
+- PR #498 merged as `1f43db0f715e9de846380139dfe11325abd6e76f` after all required CI passed. Read-only run `33882218782` stopped at `runtime command drift`, with zero artifacts and no mutation.
+- The initial inspector accepted an omitted command but not ECS's equivalent empty/null override. The checked-in Dockerfile supplies the exact collector server CMD. Normalize only these defaults, continue rejecting any other command, and additionally reject any entrypoint override. The artifact explicitly records whether the image default or exact explicit server command is used.
+- Verified: command-default and override regression tests, existing read-only tests, security checks, and diff whitespace checks.
+- Next exact step: merge this narrow inspector correction through CI, rerun read-only inspection on exact main, and stop on any actual runtime override drift. No sleep/deployment gate is open yet.

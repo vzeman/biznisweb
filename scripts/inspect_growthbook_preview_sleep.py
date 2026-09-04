@@ -65,6 +65,15 @@ def schedule_fingerprint(schedule):
                    if key not in {"ResponseMetadata", "CreationDate", "LastModificationDate"}})
 
 
+def validate_command(container):
+    # ECS can serialize an unset image CMD override as an empty list or null.
+    # The digest-pinned collector Dockerfile defines this exact default command.
+    command = container.get("command")
+    require(command in (None, [], ["python", "-m", "growthbook_collector.server"]), "runtime command override drift")
+    require(container.get("entryPoint") in (None, []), "runtime entrypoint override drift")
+    return "image_default" if command in (None, []) else "explicit_server_command"
+
+
 def validate_collector(stack, service, definition, tasks):
     p, out = parameters(stack), outputs(stack)
     require(p.get("Environment") == "preview", "not Preview")
@@ -85,7 +94,7 @@ def validate_collector(stack, service, definition, tasks):
     require(re.fullmatch(r"[0-9]+\.dkr\.ecr\.eu-central-1\.amazonaws\.com/vevo-growthbook-collector@sha256:[a-f0-9]{64}", container["image"]), "unpinned image")
     require(container.get("user") == "10001:10001" and container.get("readonlyRootFilesystem") is True, "container safety drift")
     require(container.get("workingDirectory", "/app") == "/app", "runtime path drift")
-    require(container.get("command", ["python", "-m", "growthbook_collector.server"]) == ["python", "-m", "growthbook_collector.server"], "runtime command drift")
+    command_source = validate_command(container)
     require(len(tasks) == 1, "running task count drift")
     task = tasks[0]
     require(task.get("launchType") == "FARGATE" and task.get("lastStatus") == "RUNNING" and task.get("healthStatus") == "HEALTHY", "task not healthy Fargate")
@@ -97,7 +106,7 @@ def validate_collector(stack, service, definition, tasks):
             "private_ip": ips[0], "service": SERVICE, "runtime_path": "/app",
             "task_definition": out["CollectorTaskDefinitionArn"].split("/")[-1],
             "image_digest": p["CollectorImageUri"].split("@")[-1], "version": p["CollectorVersion"],
-            "desired_count": 1, "running_count": 1,
+            "desired_count": 1, "running_count": 1, "command_source": command_source,
             "public_ip_assignment": service["networkConfiguration"]["awsvpcConfiguration"]["assignPublicIp"]}
 
 

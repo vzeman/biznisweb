@@ -4,12 +4,22 @@ import ast
 import pathlib
 import unittest
 
-from scripts.inspect_growthbook_preview_sleep import canonical, digest, require, schedule_fingerprint
+from scripts.inspect_growthbook_preview_sleep import canonical, digest, require, schedule_fingerprint, validate_command
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class PreviewSleepPreflightTests(unittest.TestCase):
+    def test_image_default_command_serializations(self):
+        for container in ({}, {"command": None}, {"command": []}, {"entryPoint": []}):
+            self.assertEqual(validate_command(container), "image_default")
+        self.assertEqual(validate_command({"command": ["python", "-m", "growthbook_collector.server"]}), "explicit_server_command")
+
+    def test_any_other_command_or_entrypoint_is_rejected(self):
+        for container in ({"command": ["sh"]}, {"command": ""}, {"entryPoint": ["sh"]}):
+            with self.assertRaises(ValueError):
+                validate_command(container)
+
     def test_only_read_only_aws_calls_exist(self):
         tree = ast.parse((ROOT / "scripts/inspect_growthbook_preview_sleep.py").read_text(encoding="utf-8"))
         calls = {n.func.attr for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
