@@ -29,7 +29,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: vevo-growthbook-reconciliation-${{ inputs.environment }}
+  group: ${{ inputs.environment == 'preview' && 'vevo-growthbook-preview-deploy' || format('vevo-growthbook-reconciliation-{0}', inputs.environment) }}
   cancel-in-progress: false
 
 jobs:
@@ -72,6 +72,9 @@ jobs:
           fi
 
       - uses: actions/checkout@v4
+
+      - name: Refuse ordinary Preview deployment during suspension
+        run: python scripts/growthbook_preview_lifecycle_gate.py --environment "${RECONCILIATION_ENVIRONMENT}"
 
       - uses: actions/setup-python@v5
         with:

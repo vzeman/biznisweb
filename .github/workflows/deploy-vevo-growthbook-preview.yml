@@ -36,6 +36,9 @@ jobs:
       - name: Checkout exact commit
         uses: actions/checkout@v6.0.2
 
+      - name: Refuse ordinary deploy while Preview is suspended
+        run: python scripts/growthbook_preview_lifecycle_gate.py --environment preview
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
