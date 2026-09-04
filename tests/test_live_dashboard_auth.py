@@ -156,6 +156,7 @@ class LiveDashboardAuthTests(unittest.TestCase):
             server.server_close()
             thread.join(timeout=5)
 
+    @patch.dict(os.environ, {"REPORT_PROJECT": "roy"}, clear=False)
     def test_maintenance_status_route_requires_authentication_and_returns_status(self) -> None:
         class QuietHandler(LiveDashboardHandler):
             def log_message(self, _format, *_args) -> None:
