@@ -25,15 +25,21 @@ What is verified:
 - Both pre-change tasks used digest `sha256:8c602cc5632e5da12cc3d07c21b4c312f4b1e49f8118d63af8133b174674fc92`, emitted `PRODUCTION_INVOICE_SMOKE_OK`, and performed no writes.
 - The exact ECR build regression suite passes all `300` tests, including the shipped-during-recheck race guard.
 - `python scripts/reporting_qa_smoke.py`, `python scripts/security_ci.py`, Python compilation, Ruff for the touched files (with the repository's existing unrelated exclusions), and `git diff --check` pass.
+- PR `#496` merged the change to `main` as `d32cc3e7eb8b4c4d39e78e5809b0b8266a639271`. ECR build run `33866222789` passed and published exact digest `sha256:de5c1f91cc8e95fb17dbf8a29fe85272df84499976b0541a242f9591b8f0b768`.
+- The automatic ROY unpaid-cancellation deploy run `33866222839` registered the exact image but its smoke was stopped by a transient FLOX HTTP `429`; no order mutation ran. Isolated dry-run retry `33866792248` then passed with instance ID `N/A (scheduled ECS/Fargate task)`, private IP `172.31.29.200`, service `roy-unpaid-order-cancellation`, task definition `roy-unpaid-order-cancellation:37`, runtime `/app`, and localhost marker `http://127.0.0.1:8000/marker.json`.
+- The ROY nightly marker confirmed `recovery_enabled=true`, `0` recovery candidates, `0` failures, and runtime resolution of `Platba online - zaplatené` to ROY status ID `67`; the retry used `execute_now=false`, so it performed no writes.
+- Production invoice smoke run `33866982720` passed on the same image for both shops. VEVO identity: instance ID `N/A (scheduled ECS/Fargate task)`, private IP `172.31.46.64`, service `vevo-daily-invoice-generation`, task definition `vevo-invoice-daily:2`, runtime `/app`, localhost marker `http://127.0.0.1:8000/marker.json`, paid status ID `31`. ROY identity: instance ID `N/A (scheduled ECS/Fargate task)`, private IP `172.31.13.190`, service `roy-daily-invoice-generation`, task definition `roy-invoice-daily:2`, runtime `/app`, same marker path, paid status ID `67`.
+- Both invoice markers used the exact merged digest, reported `0` reconciliation candidates and `0` failures, and ran in dry-run mode with no invoice, email, or status writes.
+- The authenticated ROY UI check after all host markers found order `2678000210` still in `Odoslaná`, preserving the valid 2026-09-04 fulfillment transition.
 - No local application server, worker, watcher, tunnel, or persistent process was started.
 
 Known issues:
 
-- Post-merge production deployment and the new-image ROY/VEVO dry-run markers are still pending.
+- The FLOX API can transiently return HTTP `429` when multiple protected smokes run concurrently. The isolated retry passed after the parallel accounting smoke completed; no functional blocker remains for this change.
 
 Next exact step:
 
-- Commit and push this branch, merge it through a reviewed PR, wait for the exact merged ECR image, then run the protected ROY/VEVO invoice smoke and confirm localhost markers before the browser check.
+- Monitor normal scheduled runs. For an invoice-backed order in an unpaid/failed/expired status, verify the sequence is `Platba online - zaplatené` first and `Odoslaná` only after the fulfillment integration creates the real shipment.
 
 ## 2026-09-03 — ROY live dashboard GraphQL throttling and shared-cache fix
 
