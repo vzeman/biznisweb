@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "desired_state": "suspended",
-  "status": "approved_pending_execution",
+  "status": "suspended_verified",
   "authorization": "User requested agent to suspend Preview without deletion on 2026-09-04",
   "deletion_allowed": false,
   "production_mutation_allowed": false,
@@ -37,5 +37,37 @@
       "public_ip_assignment": "ENABLED"
     }
   },
-  "execution_evidence": null
+  "execution_evidence": {
+    "workflow": ".github/workflows/suspend-vevo-growthbook-preview.yml",
+    "workflow_run_id": "33887188363",
+    "main_commit": "595a39091f990cbe4028c9ea7e83185d08f771fe",
+    "artifact_name": "vevo-preview-suspended",
+    "artifact_id": "9942521868",
+    "zip_sha256": "c2a0a766d630a2cf92b1c6993826341ec2cab6bc3c6275ab3b2d36cda7606c37",
+    "json_sha256": "512146c5178282bf421aa2335a414a108ec886befcc81c548cd56ba2ef6dba8f",
+    "approved_manifest_sha256": "ca2e5dfc2a7f144e5a2be291675ed89016255a503691ad39a25e6c7b90a8448d",
+    "observed_at_utc": "2026-09-04T15:07:52Z",
+    "verification": {
+      "successful_exact_main_run": true,
+      "github_zip_digest_verified": true,
+      "single_canonical_json_verified": true,
+      "approved_manifest_blob_verified": true,
+      "collector_desired_count": 0,
+      "collector_running_count": 0,
+      "preview_schedule_state": "DISABLED",
+      "resource_inventory_unchanged": true,
+      "protected_fingerprints_unchanged": true,
+      "localhost_before_and_after_verified": true,
+      "diagnostic_tasks_stopped": 4,
+      "data_read": false,
+      "data_deleted": false,
+      "load_balancer_retained": true,
+      "ordinary_preview_deploy_blocked": true,
+      "automatic_resume_allowed": false
+    },
+    "final_preview_stack_sha256": {
+      "vevo-growthbook-preview": "805cf159356aa007e7ce40c5afeed50abf5b679f4456eafa1fa9794dfa281ba2",
+      "vevo-growthbook-reconciliation-preview": "f20de40bd274e5e3f9470ba43061bbfcce520239828d416bb46b062480731a6c"
+    }
+  }
 }

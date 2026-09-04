@@ -5,6 +5,35 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-04 — VEVO GrowthBook Preview suspended and independently verified
+
+Date: 2026-09-04
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-preview-suspended-readback`
+
+What changed:
+
+- Completed the user's no-deletion Preview sleep request. Both existing Preview stacks now use `PreviewSuspended=true`: collector desired/running count 0/0, Preview reconciliation schedule DISABLED. Only the two intentional-absence alarms were adjusted; all four CloudFormation changes were Modify without replacement.
+- PR #506 preserved deployed YAML intrinsic spelling and merged as `595a39091f990cbe4028c9ea7e83185d08f771fe`. The strict resource/property allowlist was not widened. The earlier broad unexecuted plan was never executed.
+- Lifecycle status is `suspended_verified`, closing replay of the original suspend transition. Ordinary Preview deploys remain blocked before AWS. Monitoring explicitly recognizes intentional Preview sleep and must not wake it automatically.
+
+What is verified:
+
+- Successful managed workflow run `33887188363` used the exact main commit above and produced only artifact `vevo-preview-suspended` (ID `9942521868`). Independent checks verified run/path/head, one-file ZIP, GitHub ZIP SHA-256 `c2a0a766d630a2cf92b1c6993826341ec2cab6bc3c6275ab3b2d36cda7606c37`, canonical JSON SHA-256 `512146c5178282bf421aa2335a414a108ec886befcc81c548cd56ba2ef6dba8f`, and approved manifest Git blob SHA-256 `ca2e5dfc2a7f144e5a2be291675ed89016255a503691ad39a25e6c7b90a8448d`.
+- Final observation `2026-09-04T15:07:52Z` proves collector 0/0, schedule DISABLED, unchanged resource inventories and all four protected Production/source fingerprints. Production collector remains stable 1/1 with a healthy target; Production reconciliation and `vevo-daily-report-email` are unchanged.
+- Exact Fargate identity and localhost health/marker gates passed before and after for both immutable images, runtime `/app`. Collector tasks: before `ddc1243c54ad401f85296327f208a45c` / `172.31.3.254`, after `76302ff319f54434a03535d499d083c2` / `172.31.18.66`. Reconciler tasks: before `5ee7b60780924d869bc8696d38a7bf8e` / `172.31.29.150`, after `2ef666ac067f4555ba3f4e4374dee183` / `172.31.30.99`. Instance ID is N/A:Fargate; service names and image digests remained the preflight identities. All four diagnostic tasks are STOPPED.
+- No event/outcome query or data deletion occurred. ALB, API route, VPC link, images/task definitions, IAM, S3/retention, Glue/Athena, reader access, logs and DLQ remain. No local application server, worker, watcher, tunnel or persistent process was started.
+- All 24 focused Preview tests, both CloudFormation template lints, security checks and diff checks pass. The six temporary sanitized downloads and their empty task directories were removed and absence verified; source artifacts remain retained in GitHub, with provenance and hashes recorded in the lifecycle manifest.
+
+Known issues:
+
+- Retained ALB, storage and monitoring remain billable; suspension does not eliminate the whole Preview monthly bill. Preview collection and scheduled refresh are intentionally unavailable while asleep.
+- The AWS run reports only a non-blocking action-version deprecation warning; all execution, host, retention and Production-boundary gates passed.
+
+Next exact step:
+
+- Keep Preview asleep. Wake only after a separate user request through the reviewed inverse lifecycle procedure; retain the current images and data. Continue the existing Production A/A plan without changing its frozen checkpoint, quality, stop, paid or CTA gates. No A/A result was inspected as part of this task.
+
 ## 2026-09-04 — Fix cross-project links between separate ROY and VEVO dashboards
 
 Date: 2026-09-04

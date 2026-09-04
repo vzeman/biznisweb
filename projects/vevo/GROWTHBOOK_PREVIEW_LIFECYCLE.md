@@ -5,6 +5,14 @@ Production A/A experiment and from GrowthBook Cloud billing. The durable desired
 state is `growthbook_preview_lifecycle.json`; historical Preview observations in
 `growthbook_workspace.json` remain historical evidence, not permission to wake it.
 
+Verified suspended at `2026-09-04T15:07:52Z`: collector 0/0, Preview schedule
+DISABLED. Successful managed run `33887188363` on exact main
+`595a39091f990cbe4028c9ea7e83185d08f771fe` is hash-bound in the lifecycle manifest.
+Its sole canonical artifact passed independent run/head, ZIP digest, content,
+JSON hash, source-manifest and host-marker verification. All four diagnostic
+tasks stopped; no resource was deleted/replaced and Production stayed unchanged.
+The original suspend transition is now closed and cannot be replayed.
+
 ## Exactly what sleeps
 
 - `vevo-growthbook-preview`: `PreviewSuspended=true` sets the collector service

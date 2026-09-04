@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import copy
+import json
 import pathlib
 import subprocess
 import sys
 import unittest
 
-from scripts.suspend_growthbook_preview import ALLOWED, STACK, RECONCILIATION, TEMPLATES, build_template, build_template_body, template_load, validate_changes, validate_template_delta
+from scripts.suspend_growthbook_preview import ALLOWED, STACK, RECONCILIATION, TEMPLATES, build_template, build_template_body, template_load, validate_changes, validate_manifest, validate_template_delta
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -32,6 +33,33 @@ def active_template(proposed, stack):
 
 
 class PreviewSuspendTests(unittest.TestCase):
+    def test_verified_suspension_closes_replay_and_preserves_safety_boundary(self):
+        state = json.loads((ROOT / "projects/vevo/growthbook_preview_lifecycle.json").read_text(encoding="utf-8"))
+        self.assertEqual(state["status"], "suspended_verified")
+        self.assertEqual(state["desired_state"], "suspended")
+        for field in ("deletion_allowed", "production_mutation_allowed", "ordinary_preview_deploy_allowed"):
+            self.assertIs(state[field], False)
+        with self.assertRaisesRegex(ValueError, "sleep transition not open"):
+            validate_manifest(state)
+        evidence = state["execution_evidence"]
+        self.assertEqual(evidence["workflow"], ".github/workflows/suspend-vevo-growthbook-preview.yml")
+        self.assertEqual(evidence["workflow_run_id"], "33887188363")
+        self.assertEqual(evidence["main_commit"], "595a39091f990cbe4028c9ea7e83185d08f771fe")
+        for field in ("zip_sha256", "json_sha256", "approved_manifest_sha256"):
+            self.assertRegex(evidence[field], r"^[a-f0-9]{64}$")
+        verified = evidence["verification"]
+        for field in ("successful_exact_main_run", "github_zip_digest_verified", "single_canonical_json_verified",
+                      "approved_manifest_blob_verified", "resource_inventory_unchanged", "protected_fingerprints_unchanged",
+                      "localhost_before_and_after_verified", "load_balancer_retained", "ordinary_preview_deploy_blocked"):
+            self.assertIs(verified[field], True)
+        for field in ("data_read", "data_deleted", "automatic_resume_allowed"):
+            self.assertIs(verified[field], False)
+        self.assertEqual(verified["collector_desired_count"], 0)
+        self.assertEqual(verified["collector_running_count"], 0)
+        self.assertEqual(verified["preview_schedule_state"], "DISABLED")
+        self.assertEqual(verified["diagnostic_tasks_stopped"], 4)
+        self.assertEqual(set(evidence["final_preview_stack_sha256"]), {STACK, RECONCILIATION})
+
     def test_only_reviewed_changes_pass(self):
         for stack in ALLOWED:
             validate_changes(changes(stack), stack)
