@@ -175,6 +175,7 @@ def summarize_changes(change_set):
 
 
 def inspect_change_sets(session, run_id):
+    from botocore.exceptions import ClientError
     cf, ecs = (session.client(name, region_name=REGION) for name in ("cloudformation", "ecs"))
     result = {}
     for name in (STACK, RECONCILIATION):
@@ -185,10 +186,10 @@ def inspect_change_sets(session, run_id):
         try:
             change_set = cf.describe_change_set(StackName=name, ChangeSetName="preview-sleep-" + run_id)
         except Exception as exc:
-            require(type(exc).__name__ == "ClientError", "change-set lookup failed")
+            require(isinstance(exc, ClientError), "change-set lookup failed: " + type(exc).__name__)
             code = getattr(exc, "response", {}).get("Error", {}).get("Code", "")
-            require(code == "ValidationError", "change-set lookup denied or unavailable")
-            result[name] = {"lookup": "ValidationError", "diagnostic_tasks_running": 0}
+            require(code in {"ValidationError", "ChangeSetNotFound", "ChangeSetNotFoundException"}, "change-set lookup denied or unavailable")
+            result[name] = {"lookup": code, "diagnostic_tasks_running": 0}
             continue
         result[name] = {"status": change_set.get("Status"), "execution_status": change_set.get("ExecutionStatus"), "changes": summarize_changes(change_set), "diagnostic_tasks_running": 0}
     return result
