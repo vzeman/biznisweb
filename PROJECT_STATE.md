@@ -41,6 +41,10 @@ What is verified:
 Known issues:
 - The routing fix is not yet deployed. Use the verified VEVO public origin above
   to open VEVO reports until deployment passes its host and browser checks.
+- Initial build run 33885896196 stopped at the full test gate because the ROY
+  maintenance HTTP fixture inherited REPORT_PROJECT=vevo from an earlier test.
+  The fixture now explicitly selects ROY, matching the authenticated service it
+  tests. No image was published and no App Runner update was started by that run.
 
 Next exact step:
 - Merge via PR, build the exact image, run read-only Fargate localhost gates, then
