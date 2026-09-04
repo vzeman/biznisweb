@@ -7,6 +7,11 @@ on:
         required: true
         default: false
         type: boolean
+      change_set_run_id:
+        description: Optional failed suspension run ID for metadata-only change-set diagnosis
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -36,7 +41,9 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Read sanitized current runtime and protected-resource fingerprints
-        run: python scripts/inspect_growthbook_preview_sleep.py --output vevo-preview-sleep-preflight.json
+        env:
+          CHANGE_SET_RUN_ID: ${{ inputs.change_set_run_id }}
+        run: python scripts/inspect_growthbook_preview_sleep.py --output vevo-preview-sleep-preflight.json --change-set-run-id "${CHANGE_SET_RUN_ID}"
       - uses: actions/upload-artifact@v4
         with:
           name: vevo-preview-sleep-preflight

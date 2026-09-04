@@ -149,12 +149,42 @@ def inspect(session):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--change-set-run-id", default="")
     args = parser.parse_args()
     require(os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("GITHUB_REF") == "refs/heads/main" and os.environ.get("GITHUB_REPOSITORY") == "vzeman/biznisweb", "managed exact-main GitHub boundary required")
     import boto3
-    evidence = inspect(boto3.Session())
+    session = boto3.Session()
+    evidence = inspect(session)
+    if args.change_set_run_id:
+        require(re.fullmatch(r"[0-9]{8,20}", args.change_set_run_id), "invalid diagnostic run ID")
+        evidence["change_set_diagnostic"] = inspect_change_sets(session, args.change_set_run_id)
     args.output.write_text(canonical(evidence), encoding="utf-8")
     print("PREVIEW_SLEEP_READ_ONLY_PREFLIGHT_OK")
+
+
+def inspect_change_sets(session, run_id):
+    cf, ecs = (session.client(name, region_name=REGION) for name in ("cloudformation", "ecs"))
+    result = {}
+    for name in (STACK, RECONCILIATION):
+        stack = stack_read(cf, name)
+        cluster = outputs(stack)["CollectorClusterArn"] if name == STACK else parameters(stack)["ClusterArn"]
+        running = ecs.list_tasks(cluster=cluster, startedBy="preview-sleep-" + run_id)["taskArns"]
+        require(not running, "diagnostic task still running; inspect exact ownership before cleanup")
+        try:
+            change_set = cf.describe_change_set(StackName=name, ChangeSetName="preview-sleep-" + run_id)
+        except Exception as exc:
+            require(type(exc).__name__ == "ClientError", "change-set lookup failed")
+            code = getattr(exc, "response", {}).get("Error", {}).get("Code", "")
+            require(code == "ValidationError", "change-set lookup denied or unavailable")
+            result[name] = {"lookup": "ValidationError", "diagnostic_tasks_running": 0}
+            continue
+        rows = []
+        for item in change_set.get("Changes", []):
+            change = item.get("ResourceChange", {})
+            rows.append({key: change.get(key) for key in ("LogicalResourceId", "ResourceType", "Action", "Replacement", "Scope")})
+            rows[-1]["Details"] = [{"Target": detail.get("Target", {}), "Evaluation": detail.get("Evaluation"), "ChangeSource": detail.get("ChangeSource")} for detail in change.get("Details", [])]
+        result[name] = {"status": change_set.get("Status"), "execution_status": change_set.get("ExecutionStatus"), "changes": rows, "diagnostic_tasks_running": 0}
+    return result
 
 
 if __name__ == "__main__":
