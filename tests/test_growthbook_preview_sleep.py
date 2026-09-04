@@ -4,12 +4,19 @@ import ast
 import pathlib
 import unittest
 
-from scripts.inspect_growthbook_preview_sleep import canonical, digest, require, schedule_fingerprint, validate_command
+from scripts.inspect_growthbook_preview_sleep import canonical, digest, require, schedule_fingerprint, summarize_changes, validate_command
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 class PreviewSleepPreflightTests(unittest.TestCase):
+    def test_change_summary_excludes_physical_ids_and_property_values(self):
+        payload = {"Changes": [{"ResourceChange": {"PhysicalResourceId": "FORBIDDEN", "LogicalResourceId": "CollectorService", "Action": "Modify", "Details": [{"CausingEntity": "FORBIDDEN", "Target": {"Name": "DesiredCount", "BeforeValue": "FORBIDDEN", "AfterValue": "FORBIDDEN"}}]}}]}
+        summary = canonical(summarize_changes(payload))
+        self.assertNotIn("FORBIDDEN", summary)
+        self.assertNotIn("BeforeValue", summary)
+        self.assertIn("DesiredCount", summary)
+
     def test_image_default_command_serializations(self):
         for container in ({}, {"command": None}, {"command": []}, {"entryPoint": []}):
             self.assertEqual(validate_command(container), "image_default")

@@ -162,6 +162,18 @@ def main():
     print("PREVIEW_SLEEP_READ_ONLY_PREFLIGHT_OK")
 
 
+def summarize_changes(change_set):
+    rows = []
+    for item in change_set.get("Changes", []):
+        change = item.get("ResourceChange", {})
+        rows.append({key: change.get(key) for key in ("LogicalResourceId", "ResourceType", "Action", "Replacement", "Scope")})
+        rows[-1]["Details"] = [{
+            "Target": {key: detail.get("Target", {}).get(key) for key in ("Attribute", "Name", "RequiresRecreation")},
+            "Evaluation": detail.get("Evaluation"), "ChangeSource": detail.get("ChangeSource")
+        } for detail in change.get("Details", [])]
+    return rows
+
+
 def inspect_change_sets(session, run_id):
     cf, ecs = (session.client(name, region_name=REGION) for name in ("cloudformation", "ecs"))
     result = {}
@@ -178,12 +190,7 @@ def inspect_change_sets(session, run_id):
             require(code == "ValidationError", "change-set lookup denied or unavailable")
             result[name] = {"lookup": "ValidationError", "diagnostic_tasks_running": 0}
             continue
-        rows = []
-        for item in change_set.get("Changes", []):
-            change = item.get("ResourceChange", {})
-            rows.append({key: change.get(key) for key in ("LogicalResourceId", "ResourceType", "Action", "Replacement", "Scope")})
-            rows[-1]["Details"] = [{"Target": detail.get("Target", {}), "Evaluation": detail.get("Evaluation"), "ChangeSource": detail.get("ChangeSource")} for detail in change.get("Details", [])]
-        result[name] = {"status": change_set.get("Status"), "execution_status": change_set.get("ExecutionStatus"), "changes": rows, "diagnostic_tasks_running": 0}
+        result[name] = {"status": change_set.get("Status"), "execution_status": change_set.get("ExecutionStatus"), "changes": summarize_changes(change_set), "diagnostic_tasks_running": 0}
     return result
 
 
