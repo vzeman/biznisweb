@@ -1,0 +1,48 @@
+name: Inspect VEVO GrowthBook Preview sleep boundary
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_inspect:
+        description: Read-only infrastructure inspection, no data query or mutation
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: vevo-growthbook-preview-deploy
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_inspect == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AWS_REGION: eu-central-1
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate read-only boundary before credentials
+        run: |
+          python -m pip install boto3==1.42.63
+          python -m unittest tests.test_growthbook_preview_sleep
+          python scripts/security_ci.py
+      - uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Read sanitized current runtime and protected-resource fingerprints
+        run: python scripts/inspect_growthbook_preview_sleep.py --output vevo-preview-sleep-preflight.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vevo-preview-sleep-preflight
+          path: vevo-preview-sleep-preflight.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Clean canonical temporary artifact
+        if: always()
+        run: rm -f -- vevo-preview-sleep-preflight.json
