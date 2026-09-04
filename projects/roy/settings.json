@@ -16,7 +16,8 @@
     "s3_prefix": "daily-reports/roy-sk"
   },
   "live_dashboard": {
-    "auth_user": "roy21"
+    "auth_user": "roy21",
+    "public_origin": "https://qvfzvh82c3.eu-central-1.awsapprunner.com"
   },
   "product_name_aliases_file": "product_name_aliases.json",
   "product_identity": {

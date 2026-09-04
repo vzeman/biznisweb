@@ -57,7 +57,8 @@
     "auto_refresh_seconds": 90
   },
   "live_dashboard": {
-    "auth_user": "marek"
+    "auth_user": "marek",
+    "public_origin": "https://2mhmsmgq3m.eu-central-1.awsapprunner.com"
   },
   "packaging_cost_per_order": 0.3,
   "shipping_net_per_order": 0.2,

@@ -121,6 +121,32 @@ def available_projects() -> List[str]:
     )
 
 
+def remote_dashboard_origin(project: str) -> str:
+    """Route foreign projects to their own authenticated deployment."""
+    deployed_project = os.getenv("REPORT_PROJECT", "").strip().lower()
+    if not deployed_project or project == deployed_project:
+        return ""
+    settings = load_project_settings(project).get("live_dashboard") or {}
+    origin = str(settings.get("public_origin") or "").strip().rstrip("/")
+    parsed = urlparse(origin)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path
+        or parsed.query
+        or parsed.fragment
+        or any(character.isspace() for character in origin)
+    ):
+        return ""
+    return origin
+
+
+def dashboard_project_href(project: str, route: str) -> str:
+    return f"{remote_dashboard_origin(project)}/{route}/{quote(project, safe='')}"
+
+
 def _sorted_file_candidates(paths: Iterable[Path]) -> List[Path]:
     return sorted(
         (path for path in paths if path.is_file()),
@@ -445,8 +471,6 @@ def _replace_placeholders_once(template: str, replacements: Dict[str, str]) -> s
 def build_index_html(projects: List[str]) -> str:
     cards = []
     for project in projects:
-        report_path = resolve_latest_report_path(project)
-        payload_path = resolve_latest_payload_path(project)
         production_enabled = False
         try:
             project_settings = load_project_settings(project)
@@ -455,22 +479,22 @@ def build_index_html(projects: List[str]) -> str:
                 production_enabled = production_enabled or bool(resolve_roy_operations_settings(project_settings)["enabled"])
         except Exception:
             production_enabled = False
-        project_q = quote(project)
+        production_href = escape(dashboard_project_href(project, "production"), quote=True)
+        dashboard_href = escape(dashboard_project_href(project, "dashboard"), quote=True)
+        report_href = escape(dashboard_project_href(project, "report"), quote=True)
+        payload_href = escape(dashboard_project_href(project, "api") + "/latest", quote=True)
         production_link = (
-            f"<p><a href='/production/{project_q}'>Open production board</a></p>"
+            f"<p><a href='{production_href}'>Open production board</a></p>"
             if production_enabled
             else ""
         )
         cards.append(
             "<article class='card'>"
             f"<h2>{escape(project)}</h2>"
-            f"<p>Live dashboard: {'ready' if payload_path else 'missing'}</p>"
-            f"<p>HTML report: {'ready' if report_path else 'missing'}</p>"
-            f"<p>JSON payload: {'ready' if payload_path else 'missing'}</p>"
             f"{production_link}"
-            f"<p><a href='/dashboard/{project_q}'>Open live dashboard</a></p>"
-            f"<p><a href='/report/{project_q}'>Open full HTML report</a></p>"
-            f"<p><a href='/api/{project_q}/latest'>Open latest JSON</a></p>"
+            f"<p><a href='{dashboard_href}'>Open live dashboard</a></p>"
+            f"<p><a href='{report_href}'>Open full HTML report</a></p>"
+            f"<p><a href='{payload_href}'>Open latest JSON</a></p>"
             "</article>"
         )
     cards_html = "".join(cards) or "<p>No reporting projects found.</p>"
@@ -504,6 +528,7 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
             "projects": projects,
             "project": initial_project,
             "period": _normalize_period_key(initial_period),
+            "project_origins": {project: remote_dashboard_origin(project) for project in projects},
         }
     )
     html = """<!doctype html>
@@ -793,6 +818,13 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
         return response.json();
       }
       async function loadSnapshot(project, period, allowFallback = true) {
+        const remoteOrigin = (BOOTSTRAP.project_origins || {})[project];
+        if (remoteOrigin) {
+          const target = new URL(`/dashboard/${encodeURIComponent(project)}`, remoteOrigin);
+          target.searchParams.set('period', period || 'full');
+          window.location.assign(target.href);
+          return;
+        }
         state.project = project;
         state.period = period || 'full';
         el('loading').hidden = false;
@@ -2511,6 +2543,30 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             return
 
         parts = [part for part in path.split("/") if part]
+
+        # Old bookmarks and shared navigation must never read another project's
+        # artifacts using this deployment's S3 prefix or runtime credentials.
+        route_project = ""
+        browser_route = len(parts) == 2 and parts[0] in {"report", "dashboard", "production"}
+        if browser_route or (len(parts) == 3 and parts[0] == "api" and parts[2] == "latest"):
+            route_project = parts[1]
+        elif len(parts) >= 3 and parts[0] == "api" and parts[1] in {"operations", "production"}:
+            route_project = parts[2]
+        remote_origin = remote_dashboard_origin(route_project) if route_project in projects else ""
+        if remote_origin:
+            if browser_route:
+                destination = dashboard_project_href(route_project, parts[0])
+                if parts[0] in {"report", "dashboard"}:
+                    destination += "?period=" + quote(requested_period, safe="")
+                self.send_response(302)
+                self.send_header("Location", destination)
+                self.send_header("Content-Length", "0")
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+            else:
+                self._send_json({"error": "Open this project in its own dashboard.", "project": route_project,
+                                 "dashboard_url": dashboard_project_href(route_project, "dashboard")}, status=409)
+            return
 
         if len(parts) == 4 and parts[0] == "api" and parts[1] == "operations" and parts[3] == "maintenance":
             project = parts[2]
