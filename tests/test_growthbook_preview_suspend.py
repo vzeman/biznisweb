@@ -108,6 +108,7 @@ class PreviewSuspendTests(unittest.TestCase):
         self.assertNotIn("schedule:", source)
         self.assertEqual(source.count("actions/upload-artifact@"), 1)
         self.assertLess(source.index("suspend_growthbook_preview.py --validate"), source.index("aws-actions/configure-aws-credentials"))
+        self.assertIn("PyYAML==6.0.3 cfn-lint==1.55.1", source)
 
     def test_no_data_queries_build_or_direct_service_mutations(self):
         source = (ROOT / "scripts/suspend_growthbook_preview.py").read_text(encoding="utf-8")

@@ -29,7 +29,7 @@ jobs:
           python-version: '3.12'
       - name: Validate exact no-deletion lifecycle before AWS
         run: |
-          python -m pip install boto3==1.42.63 PyYAML==6.0.2 cfn-lint==1.55.1
+          python -m pip install boto3==1.42.63 PyYAML==6.0.3 cfn-lint==1.55.1
           python -m unittest tests.test_growthbook_preview_sleep tests.test_growthbook_preview_suspend
           python scripts/suspend_growthbook_preview.py --validate
           python scripts/security_ci.py
