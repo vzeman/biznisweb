@@ -150,6 +150,24 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
     put_metric("InvoiceStandaloneEmailed", summary.emailed_invoices, project, reporting_defaults)
     put_metric("InvoiceStandaloneEmailFailures", summary.failed_invoice_emails, project, reporting_defaults)
     put_metric("InvoiceStandaloneMissingInvoiceIds", summary.missing_invoice_ids, project, reporting_defaults)
+    put_metric(
+        "InvoiceStandaloneStatusReconciliationCandidates",
+        summary.invoice_status_reconciliation_candidates,
+        project,
+        reporting_defaults,
+    )
+    put_metric(
+        "InvoiceStandaloneStatusesReconciled",
+        summary.reconciled_invoice_statuses,
+        project,
+        reporting_defaults,
+    )
+    put_metric(
+        "InvoiceStandaloneStatusReconciliationFailures",
+        summary.failed_invoice_status_reconciliations,
+        project,
+        reporting_defaults,
+    )
     put_metric("InvoiceStandaloneRunSucceeded", 1, project, reporting_defaults)
 
     print(
@@ -160,15 +178,23 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         f"emailed={summary.emailed_invoices} "
         f"email_failed={summary.failed_invoice_emails} "
         f"missing_invoice_ids={summary.missing_invoice_ids} "
+        f"status_reconciliation_candidates={summary.invoice_status_reconciliation_candidates} "
+        f"statuses_reconciled={summary.reconciled_invoice_statuses} "
+        f"status_reconciliation_failed={summary.failed_invoice_status_reconciliations} "
         f"skipped_zero_total={summary.skipped_zero_total_orders}"
     )
 
-    if not args.dry_run and (summary.failed_invoices or summary.failed_invoice_emails):
+    if not args.dry_run and (
+        summary.failed_invoices
+        or summary.failed_invoice_emails
+        or summary.failed_invoice_status_reconciliations
+    ):
         raise RuntimeError(
             (
                 f"Invoice automation failed for project '{project}': "
                 f"create_failures={summary.failed_invoices}, "
-                f"email_failures={summary.failed_invoice_emails}"
+                f"email_failures={summary.failed_invoice_emails}, "
+                f"status_reconciliation_failures={summary.failed_invoice_status_reconciliations}"
             )
         )
 
@@ -183,6 +209,17 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         "emailed_invoices": summary.emailed_invoices,
         "failed_invoice_emails": summary.failed_invoice_emails,
         "missing_invoice_ids": summary.missing_invoice_ids,
+        "invoice_status_reconciliation_enabled": summary.invoice_status_reconciliation_enabled,
+        "invoice_status_reconciliation_candidates": summary.invoice_status_reconciliation_candidates,
+        "reconciled_invoice_statuses": summary.reconciled_invoice_statuses,
+        "failed_invoice_status_reconciliations": summary.failed_invoice_status_reconciliations,
+        "skipped_invoice_status_reconciliations_after_recheck": (
+            summary.skipped_invoice_status_reconciliations_after_recheck
+        ),
+        "invoice_status_reconciliation_target_name": (
+            summary.invoice_status_reconciliation_target_name
+        ),
+        "invoice_status_reconciliation_target_id": summary.invoice_status_reconciliation_target_id,
         "skipped_zero_total_orders": summary.skipped_zero_total_orders,
         "dry_run": summary.dry_run,
     }

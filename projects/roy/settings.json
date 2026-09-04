@@ -99,6 +99,12 @@
     "eligible_statuses": [
       "Odoslaná"
     ],
+    "existing_invoice_status_reconciliation": {
+      "enabled": true,
+      "target_status_name": "Platba online - zaplatené",
+      "target_status_id": null,
+      "lang_code": "SK"
+    },
     "schedule_name": "roy-daily-invoice-generation",
     "schedule_expression": "cron(5/15 6-23 * * ? *)",
     "final_sweep_schedule_name": "roy-same-day-invoice-sweep",
@@ -228,16 +234,8 @@
     "recovery_source_statuses": [
       "Stripe - expired"
     ],
-    "recovery_target_status_name": "Odoslaná",
-    "recovery_target_status_id": 4,
-    "recovery_payment_reference_ids": [
-      "6"
-    ],
-    "recovery_payment_title_patterns": [
-      "Bankovým prevodom",
-      "Bankovní převod",
-      "Bank transfer"
-    ],
+    "recovery_target_status_name": "Platba online - zaplatené",
+    "recovery_target_status_id": null,
     "lang_code": "SK",
     "payment_reference_ids": [
       "6",

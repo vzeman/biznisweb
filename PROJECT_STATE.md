@@ -1,9 +1,39 @@
 # PROJECT_STATE
 
-Last updated: 2026-09-02
+Last updated: 2026-09-04
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
+
+## 2026-09-04 — ROY and VEVO invoiced-order status reconciliation
+
+Date: 2026-09-04
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-recovery-paid-status`
+
+What changed:
+
+- The shared invoice runner now reconciles recent ROY and VEVO orders that already have a final invoice but remain in an unpaid, failed, or expired payment status to `Platba online - zaplatené`.
+- The paid target status ID is resolved from each shop at runtime and its returned ID/name are verified after every mutation; no ROY-specific status ID is reused for VEVO.
+- Reconciliation re-reads each order immediately before mutation. If fulfillment has already moved it to `Odoslaná`, it is skipped and never downgraded.
+- ROY's 02:10 unpaid-order recovery remains enabled, but its target changed from `Odoslaná` to `Platba online - zaplatené`; invoice existence is the recovery condition. The real fulfillment/Chameleoon path remains responsible for the later `Odoslaná` transition.
+- The production invoice dry-run gate and CloudWatch metrics now expose reconciliation candidates, successes, failures, and resolved target status.
+
+What is verified:
+
+- The pre-change production hard-gate passed in GitHub run `33864877913`. ROY identity: instance ID `N/A (scheduled ECS/Fargate task)`, private IP `172.31.39.74`, service `roy-daily-invoice-generation`, task definition `roy-invoice-daily:2`, runtime `/app`, localhost marker `http://127.0.0.1:8000/marker.json`. VEVO identity: instance ID `N/A (scheduled ECS/Fargate task)`, private IP `172.31.24.23`, service `vevo-daily-invoice-generation`, task definition `vevo-invoice-daily:2`, runtime `/app`, same localhost marker path.
+- Both pre-change tasks used digest `sha256:8c602cc5632e5da12cc3d07c21b4c312f4b1e49f8118d63af8133b174674fc92`, emitted `PRODUCTION_INVOICE_SMOKE_OK`, and performed no writes.
+- The exact ECR build regression suite passes all `300` tests, including the shipped-during-recheck race guard.
+- `python scripts/reporting_qa_smoke.py`, `python scripts/security_ci.py`, Python compilation, Ruff for the touched files (with the repository's existing unrelated exclusions), and `git diff --check` pass.
+- No local application server, worker, watcher, tunnel, or persistent process was started.
+
+Known issues:
+
+- Post-merge production deployment and the new-image ROY/VEVO dry-run markers are still pending.
+
+Next exact step:
+
+- Commit and push this branch, merge it through a reviewed PR, wait for the exact merged ECR image, then run the protected ROY/VEVO invoice smoke and confirm localhost markers before the browser check.
 
 ## 2026-09-03 — ROY live dashboard GraphQL throttling and shared-cache fix
 

@@ -67,6 +67,7 @@ class FakeBizniswebClient:
         self.statuses = statuses or [
             {"id": 74, "name": "Nezaplaten\u00e1 - zru\u0161en\u00e1 objedn\u00e1vka"},
             {"id": 4, "name": "Odoslan\u00e1"},
+            {"id": 55, "name": "Platba online - zaplaten\u00e9"},
             {"id": 1, "name": "\u010cak\u00e1 na vybavenie"},
             {"id": 2, "name": "\u010cak\u00e1 na \u00fahradu"},
             {"id": 68, "name": "Platba online - platnos\u0165 vypr\u0161ala"},
@@ -158,11 +159,9 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
                     "target_status_name": "Nezaplaten\u00e1 - zru\u0161en\u00e1 objedn\u00e1vka",
                     "target_status_id": 74,
                     "recovery_enabled": True,
-                    "recovery_target_status_name": "Odoslan\u00e1",
-                    "recovery_target_status_id": 4,
+                    "recovery_target_status_name": "Platba online - zaplaten\u00e9",
+                    "recovery_target_status_id": 55,
                     "recovery_source_statuses": ["Stripe - expired"],
-                    "recovery_payment_reference_ids": ["6"],
-                    "recovery_payment_title_patterns": ["Bankov\u00fdm prevodom"],
                     "candidate_statuses": [
                         "\u010cak\u00e1 na vybavenie",
                         "\u010cak\u00e1 na \u00fahradu",
@@ -244,7 +243,7 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
             with self.subTest(order=order["order_num"]):
                 self.assertEqual(expected_reason, cancellation_eligibility_reason(order, settings, cutoff))
 
-    def test_recovery_requires_preexisting_invoice_and_payment_resolution_evidence(self) -> None:
+    def test_recovery_requires_only_a_final_invoice_in_a_recovery_status(self) -> None:
         settings = self.make_settings()
         cases = [
             (
@@ -281,7 +280,7 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
                     last_change="2026-05-20 10:00:00",
                     invoices=[make_invoice(created="2026-05-02 10:00:00")],
                 ),
-                "missing_payment_resolution_evidence",
+                "eligible",
             ),
             (
                 make_order(
@@ -293,7 +292,7 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
                     last_change="2026-05-20 10:00:00",
                     invoices=[make_invoice(created="2026-05-21 10:00:00")],
                 ),
-                "final_invoice_not_preexisting",
+                "eligible",
             ),
             (
                 make_order(
@@ -378,17 +377,16 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
         self.assertEqual(["R-1"], summary.updated_order_nums)
         self.assertEqual([("R-1", 74)], client.mutations)
 
-    def test_runner_recovers_resolved_stripe_expired_order_to_shipped(self) -> None:
+    def test_runner_recovers_invoice_backed_stripe_expired_order_to_paid(self) -> None:
         project_settings = {
             "unpaid_order_cancellation": {
                 "enabled": True,
                 "target_status_name": "Nezaplaten\u00e1 - zru\u0161en\u00e1 objedn\u00e1vka",
                 "target_status_id": 74,
                 "recovery_enabled": True,
-                "recovery_target_status_name": "Odoslan\u00e1",
-                "recovery_target_status_id": 4,
+                "recovery_target_status_name": "Platba online - zaplaten\u00e9",
+                "recovery_target_status_id": 55,
                 "recovery_source_statuses": ["Stripe - expired"],
-                "recovery_payment_reference_ids": ["6"],
                 "candidate_statuses": ["Stripe - expired"],
                 "payment_reference_ids": ["6", "18"],
             }
@@ -418,7 +416,7 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
         self.assertEqual(1, summary.recovered_orders)
         self.assertEqual(["R-RECOVER"], summary.recovered_order_nums)
         self.assertEqual(0, summary.updated_orders)
-        self.assertEqual([("R-RECOVER", 4)], client.mutations)
+        self.assertEqual([("R-RECOVER", 55)], client.mutations)
 
     def test_live_recheck_prefers_recovery_over_planned_cancellation(self) -> None:
         project_settings = {
@@ -427,10 +425,9 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
                 "target_status_name": "Nezaplaten\u00e1 - zru\u0161en\u00e1 objedn\u00e1vka",
                 "target_status_id": 74,
                 "recovery_enabled": True,
-                "recovery_target_status_name": "Odoslan\u00e1",
-                "recovery_target_status_id": 4,
+                "recovery_target_status_name": "Platba online - zaplaten\u00e9",
+                "recovery_target_status_id": 55,
                 "recovery_source_statuses": ["Stripe - expired"],
-                "recovery_payment_reference_ids": ["6"],
                 "candidate_statuses": ["\u010cak\u00e1 na vybavenie", "Stripe - expired"],
                 "excluded_statuses": [
                     "Nezaplaten\u00e1 - zru\u0161en\u00e1 objedn\u00e1vka",
@@ -473,7 +470,7 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
         self.assertEqual(0, summary.recovery_candidates)
         self.assertEqual(0, summary.updated_orders)
         self.assertEqual(1, summary.recovered_orders)
-        self.assertEqual([("R-RACE", 4)], client.mutations)
+        self.assertEqual([("R-RACE", 55)], client.mutations)
 
     def test_runner_uses_partial_order_pages_from_biznisweb_errors(self) -> None:
         project_settings = {
@@ -509,10 +506,9 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
         self.assertEqual(14, settings.age_days)
         self.assertEqual(74, settings.target_status_id)
         self.assertTrue(settings.recovery_enabled)
-        self.assertEqual(4, settings.recovery_target_status_id)
-        self.assertEqual("Odoslan\u00e1", settings.recovery_target_status_name)
+        self.assertIsNone(settings.recovery_target_status_id)
+        self.assertEqual("Platba online - zaplaten\u00e9", settings.recovery_target_status_name)
         self.assertIn("Stripe - expired", settings.recovery_source_statuses)
-        self.assertIn("6", settings.recovery_payment_reference_ids)
         self.assertEqual("roy-unpaid-order-cancellation", settings.schedule_name)
         self.assertEqual("cron(10 2 * * ? *)", settings.schedule_expression)
         self.assertIn("6", settings.payment_reference_ids)

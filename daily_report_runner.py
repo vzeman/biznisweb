@@ -217,14 +217,37 @@ def maybe_run_invoice_automation(
     put_metric("InvoiceAutomationEmailed", summary.emailed_invoices, project, reporting_defaults)
     put_metric("InvoiceAutomationEmailFailures", summary.failed_invoice_emails, project, reporting_defaults)
     put_metric("InvoiceAutomationMissingInvoiceIds", summary.missing_invoice_ids, project, reporting_defaults)
+    put_metric(
+        "InvoiceAutomationStatusReconciliationCandidates",
+        summary.invoice_status_reconciliation_candidates,
+        project,
+        reporting_defaults,
+    )
+    put_metric(
+        "InvoiceAutomationStatusesReconciled",
+        summary.reconciled_invoice_statuses,
+        project,
+        reporting_defaults,
+    )
+    put_metric(
+        "InvoiceAutomationStatusReconciliationFailures",
+        summary.failed_invoice_status_reconciliations,
+        project,
+        reporting_defaults,
+    )
     put_metric("InvoiceAutomationRunSucceeded", 1, project, reporting_defaults)
 
-    if not dry_run and (summary.failed_invoices or summary.failed_invoice_emails):
+    if not dry_run and (
+        summary.failed_invoices
+        or summary.failed_invoice_emails
+        or summary.failed_invoice_status_reconciliations
+    ):
         raise RuntimeError(
             (
                 f"Invoice automation failed for project '{project}': "
                 f"create_failures={summary.failed_invoices}, "
-                f"email_failures={summary.failed_invoice_emails}"
+                f"email_failures={summary.failed_invoice_emails}, "
+                f"status_reconciliation_failures={summary.failed_invoice_status_reconciliations}"
             )
         )
 
@@ -237,6 +260,17 @@ def maybe_run_invoice_automation(
         "emailed_invoices": summary.emailed_invoices,
         "failed_invoice_emails": summary.failed_invoice_emails,
         "missing_invoice_ids": summary.missing_invoice_ids,
+        "invoice_status_reconciliation_enabled": summary.invoice_status_reconciliation_enabled,
+        "invoice_status_reconciliation_candidates": summary.invoice_status_reconciliation_candidates,
+        "reconciled_invoice_statuses": summary.reconciled_invoice_statuses,
+        "failed_invoice_status_reconciliations": summary.failed_invoice_status_reconciliations,
+        "skipped_invoice_status_reconciliations_after_recheck": (
+            summary.skipped_invoice_status_reconciliations_after_recheck
+        ),
+        "invoice_status_reconciliation_target_name": (
+            summary.invoice_status_reconciliation_target_name
+        ),
+        "invoice_status_reconciliation_target_id": summary.invoice_status_reconciliation_target_id,
         "skipped_zero_total_orders": summary.skipped_zero_total_orders,
         "dry_run": summary.dry_run,
     }

@@ -36,6 +36,37 @@ logger = get_logger('generate_invoices')
 
 DEFAULT_INVOICE_LOOKBACK_DAYS = 7
 DEFAULT_INVOICE_ELIGIBLE_STATUSES = ("Odoslaná",)
+DEFAULT_EXISTING_INVOICE_TARGET_STATUS_NAME = "Platba online - zaplatené"
+DEFAULT_EXISTING_INVOICE_SOURCE_STATUSES = (
+    "Čaká na vybavenie",
+    "Čaká na úhradu",
+    "Platba online - platnosť vypršala",
+    "Platba online - platba zamietnutá",
+    "GP WebPay - platba selhala",
+    "GoPay - čeká se",
+    "GoPay - platnost vypršela",
+    "GoPay - zrušeno",
+    "GoPay - platba selhala",
+    "GoPay - platba předautorizována",
+    "GoPay - platba vytvořená",
+    "GoPay - platebni metoda potvrzena",
+    "Besteron - platba zlyhala",
+    "Besteron - platba expirovala",
+    "Besteron - vytvorená",
+    "Besteron - čaká na potvrdenie",
+    "Besteron - prebieha",
+    "Besteron - potrebná manuálna pozornosť",
+    "Besteron - neplatný",
+    "Besteron - zrušené",
+    "Besteron - vypršal časový limit",
+    "Besteron - chyba",
+    "24 pay - Nezrealizovaná",
+    "24 pay - Platba nebola potvrdená",
+    "24 pay - Platba autorizovaná",
+    "Stripe - cancelled",
+    "Stripe - expired",
+    "Stripe - unpaid",
+)
 
 # GraphQL query to fetch orders with specific criteria
 ORDER_QUERY = gql("""
@@ -120,9 +151,34 @@ ORDER_INVOICE_QUERY = gql("""
 query GetOrderInvoices($order_num: String!) {
   getOrder(order_num: $order_num) {
     order_num
+    status {
+      id
+      name
+    }
     invoices {
       id
       invoice_num
+    }
+  }
+}
+""")
+
+LIST_ORDER_STATUSES_QUERY = gql("""
+query ListOrderStatuses($lang_code: CountryCodeAlpha2!) {
+  listOrderStatuses(lang_code: $lang_code, only_active: true) {
+    id
+    name
+  }
+}
+""")
+
+CHANGE_ORDER_STATUS_MUTATION = gql("""
+mutation ChangeOrderStatus($order_num: String!, $status_id: Int!) {
+  changeOrderStatus(order_num: $order_num, status_id: $status_id) {
+    order_num
+    status {
+      id
+      name
     }
   }
 }
@@ -143,6 +199,13 @@ class InvoiceRunSummary:
     failed_invoice_emails: int = 0
     missing_invoice_ids: int = 0
     skipped_zero_total_orders: int = 0
+    invoice_status_reconciliation_enabled: bool = False
+    invoice_status_reconciliation_candidates: int = 0
+    reconciled_invoice_statuses: int = 0
+    failed_invoice_status_reconciliations: int = 0
+    skipped_invoice_status_reconciliations_after_recheck: int = 0
+    invoice_status_reconciliation_target_name: str = ""
+    invoice_status_reconciliation_target_id: Optional[int] = None
     total_amount: float = 0.0
 
 
@@ -161,6 +224,7 @@ class InvoiceCreationResult:
 
 def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dict[str, Any]:
     raw_settings = project_settings.get("invoice_generation") or {}
+    raw_reconciliation = raw_settings.get("existing_invoice_status_reconciliation") or {}
     raw_lookback_days = raw_settings.get("lookback_days", DEFAULT_INVOICE_LOOKBACK_DAYS)
     try:
         lookback_days = int(raw_lookback_days)
@@ -178,12 +242,43 @@ def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dic
     if not eligible_statuses:
         eligible_statuses = list(DEFAULT_INVOICE_ELIGIBLE_STATUSES)
 
+    raw_reconciliation_statuses = raw_reconciliation.get(
+        "source_statuses",
+        DEFAULT_EXISTING_INVOICE_SOURCE_STATUSES,
+    )
+    if isinstance(raw_reconciliation_statuses, str):
+        raw_reconciliation_statuses = [raw_reconciliation_statuses]
+    reconciliation_source_statuses = [
+        str(status).strip()
+        for status in raw_reconciliation_statuses
+        if str(status or "").strip()
+    ]
+    if not reconciliation_source_statuses:
+        reconciliation_source_statuses = list(DEFAULT_EXISTING_INVOICE_SOURCE_STATUSES)
+
+    raw_reconciliation_target_id = raw_reconciliation.get("target_status_id")
+    reconciliation_target_id = (
+        None
+        if raw_reconciliation_target_id in (None, "")
+        else int(raw_reconciliation_target_id)
+    )
+
     return {
         "enabled": bool(raw_settings.get("enabled", False)),
         "lookback_days": max(1, lookback_days),
         "exclude_zero_total_orders": bool(raw_settings.get("exclude_zero_total_orders", True)),
         "eligible_statuses": eligible_statuses,
         "send_invoice_email": bool(raw_settings.get("send_invoice_email", True)),
+        "existing_invoice_status_reconciliation": {
+            "enabled": bool(raw_reconciliation.get("enabled", False)),
+            "source_statuses": reconciliation_source_statuses,
+            "target_status_name": str(
+                raw_reconciliation.get("target_status_name")
+                or DEFAULT_EXISTING_INVOICE_TARGET_STATUS_NAME
+            ),
+            "target_status_id": reconciliation_target_id,
+            "lang_code": str(raw_reconciliation.get("lang_code") or "SK"),
+        },
     }
 
 
@@ -244,6 +339,143 @@ def _status_matches_invoice_generation(status_name: str, eligible_statuses: Opti
     normalized = _normalize_status_text(status_name)
     allowed_statuses = _normalized_invoice_statuses(eligible_statuses or DEFAULT_INVOICE_ELIGIBLE_STATUSES)
     return normalized in allowed_statuses
+
+
+def _has_final_invoice(order: Dict[str, Any]) -> bool:
+    return any(invoice and invoice.get("id") for invoice in (order.get("invoices") or []))
+
+
+def _is_existing_invoice_status_reconciliation_candidate(
+    order: Dict[str, Any],
+    reconciliation_settings: Dict[str, Any],
+) -> bool:
+    if not reconciliation_settings.get("enabled") or not _has_final_invoice(order):
+        return False
+    status_name = str((order.get("status") or {}).get("name") or "")
+    source_statuses = _normalized_invoice_statuses(
+        reconciliation_settings.get("source_statuses") or DEFAULT_EXISTING_INVOICE_SOURCE_STATUSES
+    )
+    return _normalize_status_text(status_name) in source_statuses
+
+
+def _resolve_existing_invoice_target_status_id(
+    client: Client,
+    reconciliation_settings: Dict[str, Any],
+) -> int:
+    target_name = str(
+        reconciliation_settings.get("target_status_name")
+        or DEFAULT_EXISTING_INVOICE_TARGET_STATUS_NAME
+    )
+    configured_id = reconciliation_settings.get("target_status_id")
+    result = client.execute(
+        LIST_ORDER_STATUSES_QUERY,
+        variable_values={"lang_code": str(reconciliation_settings.get("lang_code") or "SK")},
+    )
+    target_normalized = _normalize_status_text(target_name)
+    for row in (result.get("listOrderStatuses") or []):
+        if not row:
+            continue
+        row_id = int(row.get("id") or 0)
+        row_name = str(row.get("name") or "")
+        row_name_normalized = _normalize_status_text(row_name)
+        if configured_id and row_id == int(configured_id):
+            if row_name_normalized != target_normalized:
+                raise RuntimeError(
+                    f"Configured invoice reconciliation status_id={configured_id} resolves to "
+                    f"'{row_name}', expected '{target_name}'."
+                )
+            return row_id
+        if configured_id is None and row_name_normalized == target_normalized:
+            return row_id
+    raise RuntimeError(f"Invoice reconciliation target status '{target_name}' not found in BiznisWeb.")
+
+
+def reconcile_existing_invoice_statuses(
+    client: Client,
+    orders: List[Dict[str, Any]],
+    reconciliation_settings: Dict[str, Any],
+    *,
+    dry_run: bool,
+) -> Dict[str, Any]:
+    enabled = bool(reconciliation_settings.get("enabled"))
+    result = {
+        "enabled": enabled,
+        "candidates": 0,
+        "reconciled": 0,
+        "failed": 0,
+        "skipped_after_recheck": 0,
+        "target_status_name": "",
+        "target_status_id": None,
+    }
+    if not enabled:
+        return result
+
+    target_name = str(
+        reconciliation_settings.get("target_status_name")
+        or DEFAULT_EXISTING_INVOICE_TARGET_STATUS_NAME
+    )
+    target_status_id = _resolve_existing_invoice_target_status_id(client, reconciliation_settings)
+    result["target_status_name"] = target_name
+    result["target_status_id"] = target_status_id
+
+    candidates = [
+        order
+        for order in orders
+        if _is_existing_invoice_status_reconciliation_candidate(order, reconciliation_settings)
+    ]
+    result["candidates"] = len(candidates)
+    if dry_run:
+        return result
+
+    for order in candidates:
+        order_num = str(order.get("order_num") or "").strip()
+        if not order_num:
+            result["failed"] += 1
+            logger.error("Existing-invoice reconciliation candidate is missing order_num")
+            continue
+        try:
+            refreshed = client.execute(
+                ORDER_INVOICE_QUERY,
+                variable_values={"order_num": order_num},
+            ).get("getOrder") or {}
+        except Exception as exc:
+            result["failed"] += 1
+            logger.error("Failed to re-read invoice reconciliation candidate %s: %s", order_num, exc)
+            continue
+
+        if not _is_existing_invoice_status_reconciliation_candidate(refreshed, reconciliation_settings):
+            result["skipped_after_recheck"] += 1
+            logger.info("Skipped invoice status reconciliation for order %s after live recheck", order_num)
+            continue
+
+        try:
+            mutation = client.execute(
+                CHANGE_ORDER_STATUS_MUTATION,
+                variable_values={"order_num": order_num, "status_id": target_status_id},
+            ).get("changeOrderStatus") or {}
+            changed_status = mutation.get("status") or {}
+            changed_status_id = int(changed_status.get("id") or 0)
+            changed_status_name = str(changed_status.get("name") or "")
+            if (
+                changed_status_id != target_status_id
+                or _normalize_status_text(changed_status_name) != _normalize_status_text(target_name)
+            ):
+                raise RuntimeError(
+                    f"BizniWeb returned status id={changed_status_id} name='{changed_status_name}' "
+                    f"after targeting id={target_status_id} name='{target_name}'."
+                )
+            result["reconciled"] += 1
+            logger.info(
+                "Reconciled order %s with a final invoice to status '%s' (id=%s)",
+                order_num,
+                target_name,
+                target_status_id,
+            )
+        except Exception as exc:
+            result["failed"] += 1
+            logger.error("Failed invoice status reconciliation for order %s: %s", order_num, exc)
+
+    return result
 
 
 def _order_purchase_date(order: Dict[str, Any]) -> str:
@@ -1295,6 +1527,37 @@ def run_invoice_generation(
     summary.total_orders_fetched = len(orders)
     logger.info("Total orders fetched: %s", summary.total_orders_fetched)
 
+    reconciliation = reconcile_existing_invoice_statuses(
+        generator.client,
+        orders,
+        invoice_settings["existing_invoice_status_reconciliation"],
+        dry_run=dry_run,
+    )
+    summary.invoice_status_reconciliation_enabled = bool(reconciliation["enabled"])
+    summary.invoice_status_reconciliation_candidates = int(reconciliation["candidates"])
+    summary.reconciled_invoice_statuses = int(reconciliation["reconciled"])
+    summary.failed_invoice_status_reconciliations = int(reconciliation["failed"])
+    summary.skipped_invoice_status_reconciliations_after_recheck = int(
+        reconciliation["skipped_after_recheck"]
+    )
+    summary.invoice_status_reconciliation_target_name = str(
+        reconciliation["target_status_name"]
+    )
+    summary.invoice_status_reconciliation_target_id = reconciliation["target_status_id"]
+    logger.info(
+        (
+            "Existing-invoice status reconciliation - enabled=%s candidates=%s "
+            "reconciled=%s failed=%s skipped_after_recheck=%s target=%s target_id=%s"
+        ),
+        summary.invoice_status_reconciliation_enabled,
+        summary.invoice_status_reconciliation_candidates,
+        summary.reconciled_invoice_statuses,
+        summary.failed_invoice_status_reconciliations,
+        summary.skipped_invoice_status_reconciliations_after_recheck,
+        summary.invoice_status_reconciliation_target_name,
+        summary.invoice_status_reconciliation_target_id,
+    )
+
     orders_for_invoice, filter_stats = generator.filter_orders_for_invoice(orders)
     summary.matched_orders = len(orders_for_invoice)
     summary.skipped_zero_total_orders = filter_stats.get("skipped_zero_total_orders", 0)
@@ -1328,7 +1591,9 @@ def run_invoice_generation(
     logger.info(
         (
             "Invoice run summary - project=%s matched=%s created=%s failed=%s "
-            "emailed=%s email_failed=%s missing_invoice_ids=%s skipped_zero_total=%s total_amount=%.2f"
+            "emailed=%s email_failed=%s missing_invoice_ids=%s skipped_zero_total=%s "
+            "status_reconciliation_candidates=%s status_reconciled=%s "
+            "status_reconciliation_failed=%s total_amount=%.2f"
         ),
         summary.project,
         summary.matched_orders,
@@ -1338,6 +1603,9 @@ def run_invoice_generation(
         summary.failed_invoice_emails,
         summary.missing_invoice_ids,
         summary.skipped_zero_total_orders,
+        summary.invoice_status_reconciliation_candidates,
+        summary.reconciled_invoice_statuses,
+        summary.failed_invoice_status_reconciliations,
         summary.total_amount,
     )
     return summary

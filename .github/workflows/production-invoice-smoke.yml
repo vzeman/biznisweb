@@ -225,6 +225,10 @@ jobs:
           assert int(summary["failed_invoices"]) == 0
           assert int(summary["failed_invoice_emails"]) == 0
           assert int(summary["missing_invoice_ids"]) == 0
+          assert summary["invoice_status_reconciliation_enabled"] is True
+          assert summary["invoice_status_reconciliation_target_name"] == "Platba online - zaplatené"
+          assert int(summary["invoice_status_reconciliation_target_id"]) > 0
+          assert int(summary["failed_invoice_status_reconciliations"]) == 0
           marker_dir = Path("/tmp/invoice-marker")
           marker_dir.mkdir(parents=True, exist_ok=True)
           marker = {
@@ -238,6 +242,11 @@ jobs:
               "emailed_invoices": summary["emailed_invoices"],
               "failed_invoice_emails": summary["failed_invoice_emails"],
               "missing_invoice_ids": summary["missing_invoice_ids"],
+              "invoice_status_reconciliation_candidates": summary["invoice_status_reconciliation_candidates"],
+              "reconciled_invoice_statuses": summary["reconciled_invoice_statuses"],
+              "failed_invoice_status_reconciliations": summary["failed_invoice_status_reconciliations"],
+              "invoice_status_reconciliation_target_name": summary["invoice_status_reconciliation_target_name"],
+              "invoice_status_reconciliation_target_id": summary["invoice_status_reconciliation_target_id"],
               "skipped_zero_total_orders": summary["skipped_zero_total_orders"],
               "send_invoice_email": summary["send_invoice_email"],
               "dry_run": summary["dry_run"],
