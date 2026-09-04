@@ -7227,3 +7227,29 @@ Next exact step:
 - The initial inspector accepted an omitted command but not ECS's equivalent empty/null override. The checked-in Dockerfile supplies the exact collector server CMD. Normalize only these defaults, continue rejecting any other command, and additionally reject any entrypoint override. The artifact explicitly records whether the image default or exact explicit server command is used.
 - Verified: command-default and override regression tests, existing read-only tests, security checks, and diff whitespace checks.
 - Next exact step: merge this narrow inspector correction through CI, rerun read-only inspection on exact main, and stop on any actual runtime override drift. No sleep/deployment gate is open yet.
+
+## 2026-09-04 — Preview live identity verified; no-deletion suspension prepared
+
+Date: 2026-09-04
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-preview-suspend-runtime`
+
+What changed:
+
+- PR #499 merged as `fa977001c8a4310e1feee175768df8453bc6a763`. Read-only run `33882657735` succeeded; its one-file artifact independently matched GitHub ZIP SHA-256 `8d5315027aa61ae65c1629e0b85821a59a5677ad42b881dbaeb7211484dfb12f` and JSON SHA-256 `74e09975724963b23867621c45ca6f6c3f027df321833c5d0f8790871f1d2021`.
+- Live identity: `instance-id=N/A:Fargate`, task `16333910505e474d8be1ad7fb9ebf143`, private IP `172.31.23.149`, service `vevo-growthbook-collector-preview`, path `/app`, task definition `vevo-growthbook-collector-preview:2`, immutable digest `sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1`. The command is the image default, not a runtime override. Preview remains 1/1 with public-IP assignment enabled.
+- Added a separate lifecycle manifest and protected suspend-only workflow. It introduces Preview-only suspension parameters while preserving every resource, image, endpoint, data/retention rule, and Production boundary. Ordinary Preview deploys are blocked before AWS while the desired state is suspended.
+- The transition requires fresh live identity plus before/after immutable localhost gates, exact template-delta equivalence, two allowlisted non-replacement change sets, service 0/0, Preview schedule disabled, unchanged inventories, and protected-resource fingerprints.
+
+What is verified:
+
+- The preflight read no events or outcomes, made no AWS mutation, and identified independent Production/source-schedule fingerprints. The A/A checkpoint and all experiment/billing gates remain unchanged.
+- All 56 focused lifecycle/reconciliation/change-set tests, both CloudFormation template lints, security assertions, and diff checks pass. The controller preserves the exact deployed legacy Preview template and applies only the reviewed sleep fragments; it does not migrate unrelated historical template differences.
+
+Known issues:
+
+- Suspension is prepared, not executed. The retained load balancer and storage/monitoring remain billable. Resume requires a separately requested reviewed inverse lifecycle transition; ordinary deploy is not a resume mechanism.
+
+Next exact step:
+
+- Run focused tests, template lint and security checks, merge this PR after required CI, and dispatch the suspend-only workflow once on exact main within the six-hour preflight validity window. Independently verify the canonical success artifact and commit the resulting suspended-state handoff. Stop on any unreviewed drift or partial execution; never delete resources or touch Production to complete this task.

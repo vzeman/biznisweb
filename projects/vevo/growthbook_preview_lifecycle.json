@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "desired_state": "suspended",
+  "status": "approved_pending_execution",
+  "authorization": "User requested agent to suspend Preview without deletion on 2026-09-04",
+  "deletion_allowed": false,
+  "production_mutation_allowed": false,
+  "ordinary_preview_deploy_allowed": false,
+  "preflight": {
+    "workflow_run_id": "33882657735",
+    "main_commit": "fa977001c8a4310e1feee175768df8453bc6a763",
+    "artifact_id": "9940505500",
+    "zip_sha256": "8d5315027aa61ae65c1629e0b85821a59a5677ad42b881dbaeb7211484dfb12f",
+    "json_sha256": "74e09975724963b23867621c45ca6f6c3f027df321833c5d0f8790871f1d2021",
+    "observed_at_utc": "2026-09-04T14:15:36Z",
+    "preview_stack_sha256": "b0735d3b00b0d1ca8ebe14da2b7ff53a017c9699a3252f7313f5fe4c7c16e6c1",
+    "reconciliation_stack_sha256": "af60fb303de0489c698b6ea659ddd8d589472b74af08352174b022da9125b79b",
+    "preview_schedule_sha256": "adef89c3b572983c3329d0c302b6c5ad5697f0750bd5721cb8010569af523fcd",
+    "protected_sha256": {
+      "vevo-daily-report-email": "04f0c7de12f593762f7aa6157f1ae480b7dbdae8a718ea4a0c2da97d039c7b3e",
+      "vevo-growthbook-production": "7a025e6668f708926186ffbbb851097ee58b52591c2c0efa7f54a220acc1f102",
+      "vevo-growthbook-reconcile-production": "89ba81386d65c6afc2526638e32d99b768bb584655db4c972624b55b223cb364",
+      "vevo-growthbook-reconciliation-production": "ce41d058cacf8518c57df764d742c6186640a9359af62c565a6ff85fc453c233"
+    },
+    "runtime": {
+      "instance_id": "N/A:Fargate",
+      "task_id": "16333910505e474d8be1ad7fb9ebf143",
+      "private_ip": "172.31.23.149",
+      "service": "vevo-growthbook-collector-preview",
+      "runtime_path": "/app",
+      "task_definition": "vevo-growthbook-collector-preview:2",
+      "image_digest": "sha256:9478acd98a8caf06374b018c563ee51fa896b9cc92148238579f04aa28a134e1",
+      "version": "git-92a315adbbfc4ed0f7bd175c9f3d3782f3146c4d",
+      "command_source": "image_default",
+      "desired_count": 1,
+      "running_count": 1,
+      "public_ip_assignment": "ENABLED"
+    }
+  },
+  "execution_evidence": null
+}

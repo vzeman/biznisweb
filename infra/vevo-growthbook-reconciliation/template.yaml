@@ -5,6 +5,11 @@ Description: >-
   reporting task definition and never changes the reporting schedule.
 
 Parameters:
+  PreviewSuspended:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['false', 'true']
+    Description: Reversible Preview-only suspension; preserves every resource and all data.
   Environment:
     Type: String
     Default: preview
@@ -63,7 +68,17 @@ Parameters:
     AllowedValues:
       - Europe/Bratislava
 
+Rules:
+  PreviewOnlySuspension:
+    RuleCondition: !Equals [!Ref PreviewSuspended, 'true']
+    Assertions:
+      - Assert: !Equals [!Ref Environment, preview]
+        AssertDescription: Production must never be suspended by the Preview lifecycle.
+
 Conditions:
+  IsPreviewSuspended: !And
+    - !Equals [!Ref Environment, preview]
+    - !Equals [!Ref PreviewSuspended, 'true']
   IsProduction: !Equals [!Ref Environment, production]
 
 Resources:
@@ -134,7 +149,7 @@ Resources:
         - >-
           Daily bounded reconciliation of complete UTC Preview event partitions;
           Production GrowthBook allocation remains zero.
-      State: !Ref ScheduleState
+      State: !If [IsPreviewSuspended, DISABLED, !Ref ScheduleState]
       ScheduleExpression: !Ref ScheduleExpression
       ScheduleExpressionTimezone: !Ref ScheduleTimezone
       FlexibleTimeWindow:
@@ -230,9 +245,9 @@ Resources:
       Period: 86400
       EvaluationPeriods: 2
       DatapointsToAlarm: 2
-      Threshold: 1
+      Threshold: !If [IsPreviewSuspended, 0, 1]
       ComparisonOperator: LessThanThreshold
-      TreatMissingData: breaching
+      TreatMissingData: !If [IsPreviewSuspended, notBreaching, breaching]
 
   ReconciliationDeadLetterAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -265,6 +280,6 @@ Outputs:
   DeadLetterQueueArn:
     Value: !GetAtt ReconciliationDeadLetterQueue.Arn
   ScheduleState:
-    Value: !Ref ScheduleState
+    Value: !If [IsPreviewSuspended, DISABLED, !Ref ScheduleState]
   TargetTaskDefinitionArn:
     Value: !Ref TaskDefinitionArn

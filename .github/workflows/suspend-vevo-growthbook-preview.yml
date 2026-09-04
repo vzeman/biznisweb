@@ -1,0 +1,63 @@
+name: Suspend VEVO GrowthBook Preview without deletion
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_suspend:
+        description: Suspend only Preview; retain all resources/data and ALB charges
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: vevo-growthbook-preview-deploy
+  cancel-in-progress: false
+jobs:
+  suspend:
+    if: ${{ github.ref == 'refs/heads/main' && inputs.confirm_suspend == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      AWS_REGION: eu-central-1
+      CONFIRM_SUSPEND: ${{ inputs.confirm_suspend }}
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate exact no-deletion lifecycle before AWS
+        run: |
+          python -m pip install boto3==1.42.63 PyYAML==6.0.2 cfn-lint==1.55.1
+          python -m unittest tests.test_growthbook_preview_sleep tests.test_growthbook_preview_suspend
+          python scripts/suspend_growthbook_preview.py --validate
+          python scripts/security_ci.py
+          cfn-lint infra/vevo-growthbook/template.yaml infra/vevo-growthbook-reconciliation/template.yaml
+      - name: Refuse another active Preview deploy or reconciliation deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for workflow in deploy-vevo-growthbook-preview.yml deploy-vevo-growthbook-reconciliation.yml; do
+            for status in queued in_progress waiting; do
+              count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?status=${status}&per_page=100" --jq '.total_count')"
+              test "${count}" = 0 || { echo "Another deployment is active; no AWS operation allowed"; exit 1; }
+            done
+          done
+      - uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Exact live hosts, allowlisted change sets, suspension, and post-host verification
+        run: python scripts/suspend_growthbook_preview.py --output vevo-preview-suspended.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vevo-preview-suspended
+          path: vevo-preview-suspended.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Remove temporary canonical artifact
+        if: always()
+        run: rm -f -- vevo-preview-suspended.json
