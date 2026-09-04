@@ -107,6 +107,71 @@ def build_template(old, source, stack):
     return new
 
 
+def build_template_body(body, source, stack):
+    """Keep existing YAML text/intrinsic spelling, not merely equivalent values.
+
+    Re-encoding !GetAtt X.Arn as JSON Fn::GetAtt [X, Arn] makes CloudFormation
+    propose unrelated replacements. Only edit the exact value spans and add the
+    three new lifecycle sections; never re-serialize the existing YAML tree.
+    """
+    old = template_load(body)
+    expected = build_template(old, source, stack)
+    if not isinstance(body, str) or body.lstrip().startswith("{"):
+        # An original JSON tree retains its original intrinsic representations.
+        return canonical(expected)
+    root = yaml.compose(body, Loader=CloudFormationLoader)
+
+    def node_at(path):
+        node = root
+        for key in path:
+            require(isinstance(node, yaml.MappingNode), "template path is not a mapping")
+            matches = [value for name, value in node.value if name.value == key]
+            require(len(matches) == 1, "template path is missing or duplicated")
+            node = matches[0]
+        return node
+
+    edits = []
+
+    def insert_entry(path, entry):
+        node = node_at(path)
+        require(isinstance(node, yaml.MappingNode) and not node.flow_style, "unsupported flow mapping")
+        indent = node.start_mark.column
+        position = node.start_mark.index - indent
+        require(body[position:node.start_mark.index] == " " * indent, "mapping insertion boundary drift")
+        text = yaml.safe_dump(entry, sort_keys=False)
+        text = "".join(" " * indent + line + "\n" for line in text.splitlines())
+        edits.append((position, position, text))
+
+    insert_entry(["Parameters"], {"PreviewSuspended": expected["Parameters"]["PreviewSuspended"]})
+    added_root = {"Rules": expected["Rules"]}
+    if "Conditions" in old:
+        insert_entry(["Conditions"], {"IsPreviewSuspended": expected["Conditions"]["IsPreviewSuspended"]})
+    else:
+        added_root["Conditions"] = expected["Conditions"]
+    edits.append((len(body), len(body), "\n" + yaml.safe_dump(added_root, sort_keys=False)))
+    for logical, (_, fields) in ALLOWED[stack].items():
+        for field in fields:
+            path = ["Resources", logical, "Properties", field]
+            node = node_at(path)
+            require(isinstance(node, yaml.ScalarNode), "sleep target is not an inline scalar")
+            raw = body[node.start_mark.index:node.end_mark.index]
+            asleep = "DISABLED" if field == "State" else "notBreaching" if field == "TreatMissingData" else "0"
+            edits.append((node.start_mark.index, node.end_mark.index, f"!If [IsPreviewSuspended, {asleep}, {raw}]"))
+    if stack == RECONCILIATION:
+        node = node_at(["Outputs", "ScheduleState", "Value"])
+        require(isinstance(node, yaml.ScalarNode), "schedule output is not an inline scalar")
+        raw = body[node.start_mark.index:node.end_mark.index]
+        edits.append((node.start_mark.index, node.end_mark.index, f"!If [IsPreviewSuspended, DISABLED, {raw}]"))
+    end_boundary = len(body)
+    for start, end, replacement in sorted(edits, reverse=True):
+        require(0 <= start <= end <= end_boundary, "overlapping template edits")
+        body = body[:start] + replacement + body[end:]
+        end_boundary = start
+    require(template_load(body) == expected, "text-preserving template differs from reviewed delta")
+    validate_template_delta(old, template_load(body), stack)
+    return body
+
+
 def validate_changes(payload, stack):
     require(payload.get("Status") == "CREATE_COMPLETE" and payload.get("ExecutionStatus") == "AVAILABLE", "change set not executable")
     rows = [row.get("ResourceChange", {}) for row in payload.get("Changes", [])]
@@ -239,13 +304,13 @@ def suspend(session, state):
     print("PREVIEW_SLEEP_LIVE_IDENTITY_AND_LOCALHOST_GATES_OK")
     plans = {}
     for name, path in TEMPLATES.items():
-        original = template_load(cf.get_template(StackName=name, TemplateStage="Original")["TemplateBody"])
-        proposed = build_template(original, template_load(path.read_text(encoding="utf-8")), name)
+        original_body = cf.get_template(StackName=name, TemplateStage="Original")["TemplateBody"]
+        proposed_body = build_template_body(original_body, template_load(path.read_text(encoding="utf-8")), name)
         values = [{"ParameterKey": row["ParameterKey"], "UsePreviousValue": True} for row in stacks[name]["Parameters"]]
         require("PreviewSuspended" not in parameters(stacks[name]), "sleep parameter already exists; new lifecycle review required")
         values.append({"ParameterKey": "PreviewSuspended", "ParameterValue": "true"})
         change = cf.create_change_set(StackName=name, ChangeSetName="preview-sleep-" + os.environ["GITHUB_RUN_ID"], ChangeSetType="UPDATE",
-            TemplateBody=canonical(proposed), Parameters=values, Capabilities=["CAPABILITY_NAMED_IAM"],
+            TemplateBody=proposed_body, Parameters=values, Capabilities=["CAPABILITY_NAMED_IAM"],
             Description="Reviewed Preview sleep only; no deletion or replacement")
         plans[name] = change["Id"]
         cf.get_waiter("change_set_create_complete").wait(ChangeSetName=change["Id"], WaiterConfig={"Delay": 5, "MaxAttempts": 60})

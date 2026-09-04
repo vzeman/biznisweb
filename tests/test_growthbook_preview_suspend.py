@@ -6,7 +6,7 @@ import subprocess
 import sys
 import unittest
 
-from scripts.suspend_growthbook_preview import ALLOWED, STACK, RECONCILIATION, TEMPLATES, build_template, template_load, validate_changes, validate_template_delta
+from scripts.suspend_growthbook_preview import ALLOWED, STACK, RECONCILIATION, TEMPLATES, build_template, build_template_body, template_load, validate_changes, validate_template_delta
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -73,6 +73,57 @@ class PreviewSuspendTests(unittest.TestCase):
         validate_template_delta(old, new, RECONCILIATION)
         self.assertEqual(new["Description"], old["Description"])
         self.assertEqual(new["Resources"]["ReconciliationFailureAlarm"], old["Resources"]["ReconciliationFailureAlarm"])
+
+    def test_yaml_getatt_and_all_unrelated_text_are_preserved(self):
+        source = template_load((ROOT / TEMPLATES[STACK]).read_text(encoding="utf-8"))
+        old = """Parameters:
+  Environment:
+    Type: String
+Conditions:
+  Existing: !Equals [!Ref Environment, preview]
+Resources:
+  CollectorService:
+    Type: AWS::ECS::Service
+    Properties:
+      DesiredCount: 1
+      TaskDefinition: !GetAtt ExactOriginal.Arn
+  CollectorHealthyHostAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      Threshold: 1
+      TreatMissingData: breaching
+      Untouched: !GetAtt [OriginalList, Arn]
+"""
+        result = build_template_body(old, source, STACK)
+        self.assertIn("      TaskDefinition: !GetAtt ExactOriginal.Arn\n", result)
+        self.assertIn("      Untouched: !GetAtt [OriginalList, Arn]\n", result)
+        self.assertEqual(result.count("!GetAtt"), old.count("!GetAtt"))
+        validate_template_delta(template_load(old), template_load(result), STACK)
+
+    def test_missing_conditions_and_tagged_schedule_value_preserved(self):
+        source = template_load((ROOT / TEMPLATES[RECONCILIATION]).read_text(encoding="utf-8"))
+        old = """Parameters:
+  Environment:
+    Type: String
+Resources:
+  ReconciliationSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      State: !Ref ScheduleState
+      Arn: !GetAtt Original.Arn
+  ReconciliationMissingSuccessAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      Threshold: 1
+      TreatMissingData: breaching
+Outputs:
+  ScheduleState:
+    Value: !Ref ScheduleState
+"""
+        result = build_template_body(old, source, RECONCILIATION)
+        self.assertIn("      Arn: !GetAtt Original.Arn\n", result)
+        self.assertIn("State: !If [IsPreviewSuspended, DISABLED, !Ref ScheduleState]", result)
+        validate_template_delta(template_load(old), template_load(result), RECONCILIATION)
 
     def test_already_migrated_template_is_not_overwritten(self):
         source = template_load((ROOT / TEMPLATES[STACK]).read_text(encoding="utf-8"))
