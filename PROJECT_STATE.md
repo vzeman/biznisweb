@@ -7253,3 +7253,9 @@ Known issues:
 Next exact step:
 
 - Run focused tests, template lint and security checks, merge this PR after required CI, and dispatch the suspend-only workflow once on exact main within the six-hour preflight validity window. Independently verify the canonical success artifact and commit the resulting suspended-state handoff. Stop on any unreviewed drift or partial execution; never delete resources or touch Production to complete this task.
+
+## 2026-09-04 — Suspension stopped before AWS on validator dependency conflict
+
+- PR #500 merged as `b42dcdeeb3d9b674e1c68e26db99aa4bc162c013` after all four required checks passed. Confirmed run `33884268088` stopped during package installation before configuring AWS credentials; no diagnostic task, change set, resource mutation, or artifact was created.
+- The dedicated workflow pinned PyYAML 6.0.2 while its pinned cfn-lint 1.55.1 requires PyYAML >=6.0.3. Corrected only that workflow pin to 6.0.3 and added a regression assertion. Local validation had used the already installed compatible 6.0.3.
+- Next exact step: validate dependency resolution and focused tests, merge through required CI, then dispatch one fresh suspension run on exact main while the verified preflight is still within six hours and no active deployment exists. Preview remains active until a verified successful runtime artifact exists.
