@@ -66,19 +66,38 @@ What is verified:
 - Both use separate S3 prefixes and instance roles. Stored reports are intact;
   the previous cleanup's health-only check did not test cross-project navigation.
 - All 17 focused routing/S3/mobile tests pass; no persistent local server started.
+- Application changes merged through PRs #503 and #505. Build 33886411276 passed
+  all 308 required tests and published the image for commit
+  `449f1ca156572c7d5d2857dbdff81a5396f40556`:
+  `sha256:19ab8ab8b1313dbf627808eafff42dffe557d12891fb401149fd0cd27aa2f3fd`.
+- This exact image passed real localhost HTML/JSON checks for 7d, 30d, 90d and
+  full, authenticated foreign-project redirects and unauthenticated rejection.
+  ROY task `7fb2905caff048bb972fe066c2c10c6b`, private IP `172.31.34.216`;
+  VEVO task `83786c73f18b4292a2edc91bb5ee00ff`, private IP `172.31.10.178`.
+  Both ran in `/app`, emitted `DASHBOARD_ROUTING_HOST_OK` and
+  `DASHBOARD_ROUTING_LOCAL_SERVER_CLOSED`, exited 0, and are STOPPED.
+  No temporary routing-check definition remains ACTIVE.
+- Both App Runner image-only operations succeeded: ROY
+  `9a97557f0a094ed0a502ecc0a2f35ba1`, VEVO
+  `32f565d0e923418aa3d638c4038dbcbf`. Both run the exact verified image above;
+  existing source configuration, instance settings and business schedules are
+  unchanged apart from the image identifier.
+- Public authenticated checks passed for all eight HTML reports and both foreign
+  report redirects. In Chrome, the original ROY-host VEVO full-report bookmark
+  now redirects to VEVO and renders the report. The ROY index's VEVO report link
+  also opens correctly. The ROY dashboard's VEVO switch preserves `period=30d`
+  and loads `VEVO live dashboard` on the VEVO host.
 
 Known issues:
-- The routing fix is not yet deployed. Use the verified VEVO public origin above
-  to open VEVO reports until deployment passes its host and browser checks.
+- No remaining blocker for this navigation incident. Report data was preserved.
 - Initial build run 33885896196 stopped at the full test gate because the ROY
   maintenance HTTP fixture inherited REPORT_PROJECT=vevo from an earlier test.
   The fixture now explicitly selects ROY, matching the authenticated service it
   tests. No image was published and no App Runner update was started by that run.
 
 Next exact step:
-- Merge via PR, build the exact image, run read-only Fargate localhost gates, then
-  update only the two App Runner image identifiers preserving their configuration.
-  Verify the original browser path and record final image/operation evidence.
+- Routing incident is resolved. Keep each project's public origin in its own
+  settings and include real HTML/navigation checks in future infrastructure gates.
 
 ## 2026-09-04 — ROY and VEVO invoiced-order status reconciliation
 
