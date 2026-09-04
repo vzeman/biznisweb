@@ -11,6 +11,13 @@ The current phase is the invisible Production A/A experiment
 `vevo-sk-aa-001`. The future CTA experiment must remain unstarted until every
 preceding checked-in gate is satisfied through a reviewed pull request.
 
+Preview is intentionally suspended without deletion under
+`projects/vevo/growthbook_preview_lifecycle.json`. Do not treat its zero collector
+count or disabled Preview schedule as a Production incident, or wake it during
+monitoring. Retained Preview datasets remain available; live Preview browser QA
+requires the separately requested reviewed wake transition documented in
+`GROWTHBOOK_PREVIEW_LIFECYCLE.md`. Production A/A gates and schedules are unchanged.
+
 ## Schedule And Repository Boundary
 
 - The repository-owned GitHub monitor runs daily at `04:15
