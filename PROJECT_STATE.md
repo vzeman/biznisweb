@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Reviewed diagnostic source acquisition in progress
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-diagnostic-source-run`
+
+What changed:
+
+- Diagnostics-only PR #522 merged as `2e04784765a74e71ba5b7a21ab075cebd91102e4` after all four exact-head CI checks and independently confirmed execution of 231 tests. No input, window, query, timeout, acceptance or artifact contract changed.
+- Reconfirmed that prior source run `33961911689` is terminal failure with zero retained artifacts and no other source run exists. After fresh same-main health verification, dispatched one diagnostic acquisition `33964597883` on exact main `2e04784765a74e71ba5b7a21ab075cebd91102e4`. Its pre-AWS gate passed and source acquisition is now in progress. Do not rerun or duplicate it.
+
+What is verified:
+
+- Fresh health run `33964475551` succeeded on the same main. Independently verified its sole artifact `9968979212`, GitHub ZIP SHA-256 `6bf55d057b1083433c9a25ae60218fca981b070d0544aea3a7408a6aa2af75a3`, original canonical JSON SHA-256 `cce8d22813aa7ca9f14372e8c03fd9f68e2a62ad675d5e8f4183148596ee17cb`, observation `2026-09-05T11:52:42Z`, run/artifact ownership, exact ZIP content, offline health validator and latest 03:45 reconciliation. Verification used local memory only; no artifact file, raw AWS payload or credential was stored.
+- The managed source remains read-only and only its fixed operation markers may be inspected for progress. Frozen checkpoint history and live manifests remain unchanged. No A/A stop, Preview wake, shop/GTM/Meta/commerce mutation or local application process occurred.
+
+Known issues:
+
+- The original source failure still has no proven root cause. This new run has not completed or produced verified source evidence; no A/A PASS or downstream producer/snapshot permission follows from its dispatch or pre-AWS success.
+
+Next exact step:
+
+- Observe run `33964597883` (job `101302371923`) until terminal. Never duplicate it. Consume a successful sole canonical artifact only after independent source/health ZIP and original-main-input verification, then record through the offline source recorder on a new branch/PR. If it fails, inspect only the allowlisted phase/code and artifact metadata; recover any retained artifact instead of recapturing. A proven source/quality/coverage violation requires a safe stop, not alternative data, changed thresholds/window or a retry until PASS.
+
 ## 2026-09-05 — First source failed without artifact; safe phase diagnostics prepared
 
 Date: 2026-09-05
