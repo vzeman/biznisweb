@@ -5,6 +5,34 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Authorized A/A backfill resolves the window at checkpoint 3
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-backfill-checkpoint-3`
+
+What changed:
+
+- Completed the explicitly authorized historical backfill in consecutive order. Checkpoint 2 was independently recorded and merged through PR #510 as `890004459ace47a902d61d3e44a6226ecaa534aa` before dispatching checkpoint 3 on that exact clean main.
+- The cumulative eligible counts are checkpoint 1: `769`, checkpoint 2: `920`, checkpoint 3: `1058`. The earliest qualifying checkpoint is index 3, due `2026-09-04T03:45:00+02:00`, covering nine full local days from `2026-08-25T22:00:00Z` through `2026-09-03T22:00:00Z`. No later checkpoint was dispatched or read after this qualifying boundary.
+- Only `record_growthbook_aa_window_checkpoint.py` changed the snapshot manifest. It resolved the preregistered window and copied the exact through-boundary into both still-disabled evidence components. All source/producer, snapshot, stop, paid and CTA gates remain closed.
+- Corrected two test-only fixtures that inherited the live resolved lifecycle while pretending to start with empty checkpoint history. Recorder scenarios now reconstruct their own pre-checkpoint state; workflow gate scenarios explicitly select pending or resolved state. No production validator, workflow, threshold or stopping rule changed.
+
+What is verified:
+
+- Successful run `33952215185`, exact main `890004459ace47a902d61d3e44a6226ecaa534aa`, sole artifact `9965191073`. Independently verified GitHub ZIP SHA-256 `b0791bf1ebb44b8c41a6fda752fd6e79ad3e57eee4040c42123a5ae2357d94bb`, the single canonical JSON, and JSON SHA-256 `0420b4776d59c0404c663cda2611875b33b2d752e08b8675edb76f9342f86bdf`.
+- Observation `2026-09-05T07:19:43Z` is explicitly `manual_historical_backfill`, not a capture made on September 4. The protected workflow verified the original scheduled reconciliation identity and success marker, publish parity, alarms/DLQ and unchanged source schedule. The offline recorder verified exact provenance, canonical bytes/hash, frozen cutoff and consecutive history.
+- All 55 focused measurement-window, checkpoint-recorder, checkpoint-workflow and workspace tests pass, including pre-due/wrong-DST/resolved pre-AWS skip scenarios. Measurement-window/workspace validators, security checks and diff checks pass.
+- Only cumulative eligible-device counts were read during backfill, never arms or outcomes. No local AWS credentials, raw payloads or event/customer/order/device identities were retained. No A/A stop, Preview wake, infrastructure deployment, GrowthBook, GTM, Meta Ads, BiznisWeb or commerce mutation occurred. No local application process was started.
+
+Known issues:
+
+- Window resolution is not A/A quality `PASS`, an experiment stop or a winner decision. Automated quality evidence and reviewed manual browser QA are still unrecorded; neither component producer nor the snapshot build is allowed yet. Production A/A activation remains recorded as running, and Preview remains intentionally asleep.
+
+Next exact step:
+
+- After this record passes CI and merges, do not collect further A/A sample checkpoints. Follow the monitoring runbook's post-resolution sequence: independently obtain and bind the exact resolved reporting-quality object and reviewed canonical manual browser-QA observation through `record_growthbook_aa_evidence_gates.py`, using separate reviewed transitions. Then independently collect/record both protected components, build the hash-bound A/A snapshot, require `PASS`, and only then open the reviewed manual stop/readback gate. Keep Preview asleep and all paid/CTA/commerce gates closed.
+
 ## 2026-09-05 — Authorized historical A/A checkpoint 2 reconstructed
 
 Date: 2026-09-05
