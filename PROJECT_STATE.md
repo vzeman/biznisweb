@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Fresh health readback blocked before any new source capture
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-health-readback-blocker`
+
+What changed:
+
+- PR #532 merged as `81a1fa21b60284946fc6a2042c8c00fbb47e2836` at `2026-09-05T15:17:52Z` after all four exact-head checks. CI `33974202527` and observability `33974202552` independently match reviewed head `4e00d170d030e81798e544c9bcfd0c027757afb7`; security job `101327918081` actually ran all 252 source/lifecycle/receipt tests successfully. Clean exact main and workspace/window/activation validators were rechecked. All four prior source runs were rechecked terminal without artifacts; the receipt cause remains unclassified in live evidence.
+- Fresh same-main health run `33974425550` / job `101328515277`, created `2026-09-05T15:19:03Z`, completed `failure` at `15:19:32Z`. Pre-AWS, stack/schedule/alarm/DLQ and selected-task steps passed. Marker/parity verification emitted the fixed marker-lines=0 / summary-lines=0 failure, not reporting/experimental counts. Artifact build/upload and explicit raw cleanup were skipped. Independent metadata confirms zero artifacts. No fifth source run was dispatched and old/different-main health was not reused.
+
+What is verified:
+
+- The failed marker step performs one get-log-events invocation with no explicit forward-token completion or bounded full-stream read. Official AWS documentation permits empty/partial pages before the next-forward token stabilizes. The local SDK paginator model was inspected without constructing a client and does not model GetLogEvents pagination; this is not proof about the runner's CLI implementation. The missing explicit completeness proof is a code gap, not proof of the failed page's content, an empty stream, runtime drift or a failed natural reconciliation. See `GROWTHBOOK_AA_QUALITY_SOURCE_AUDIT.md` for the source and scope.
+- The raw-response cleanup's success-only condition is also a verified failure-path gap: it was actually skipped. No claim is made that explicit cleanup occurred later. No raw AWS/log file, credential or source data was copied to this PC. No runtime/infra, GrowthBook, GTM, Meta or commerce control was changed. A/A was not stopped and Preview remains asleep.
+- This handoff changes documentation only and passes the 252-test suite, workspace/window/activation/security validators and `git diff --check`. All finite local test/inspection processes completed; no application service or persistent worker was started or left running.
+
+Known issues:
+
+- `FRESH_INFRA_HEALTH_MARKER_SUMMARY_UNVERIFIED` blocks any further source acquisition. The last source's `SOURCE_CAPTURE_RECEIPT_PARITY_UNCLASSIFIED_FAILURE` remains unresolved until complete health permits a separately gated diagnostic run. There is no live source or health wait and no artifact to record from the failed health run.
+- `GTM_LIVE_VERSION_DRIFT` and `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK` remain separate closed manual-QA paths. Snapshot PASS, stop, paid Pro and CTA remain unavailable. Do not convert incomplete readback into healthy evidence or use a prior artifact to bypass the failed exact-main gate.
+
+Next exact step:
+
+- Prepare/review a bounded read-only monitor correction: retain the already-selected exact stream, use bounded time/page/event/byte limits and forward-token completion (including empty pages), reject malformed/cyclic/overflow pagination, and only then require the original exact single marker/summary and generated/published parity. Add always-on failure cleanup with exact validated runner-temp/run-ID scope and no broad unresolved deletion; retain canonical-only upload after validation/cleanup. Add deterministic regression tests and pass full CI before PR merge. Do not alter runtime selection/identity, AWS resources, source schedule, acceptance, health schema or A/A window. Only after that reviewed correction may fresh managed health be checked, independently verified, and used for one diagnostic source run. Do not rerun the failed workflow blindly or start a data query while health is unproven.
+
 ## 2026-09-05 — Raw-read improvement verified; receipt failure localized without raw logs
 
 Date: 2026-09-05
