@@ -5,6 +5,7 @@ import copy
 import hashlib
 import io
 import json
+from contextlib import redirect_stderr, redirect_stdout
 import traceback
 import unittest
 from datetime import UTC, datetime, timedelta
@@ -13,6 +14,7 @@ from unittest.mock import Mock, patch
 
 from reporting_core.experiment_quality_source_io import (
     QualityInputError,
+    RAW_SOURCE_PHASES,
     RECEIPTED_ORDER_QUERY,
     read_receipted_order_source,
     read_stable_retained_raw_source,
@@ -87,6 +89,60 @@ def source_order(number="test-order"):
 
 
 class RawCoverageTests(unittest.TestCase):
+    def test_fixed_substeps_preserve_io_rows_proof_and_default_silence(self):
+        for rows in ([], [event(received_at=START + timedelta(minutes=i)) for i in range(3)]):
+            baseline, observed = MemoryS3(rows, page_size=1), MemoryS3(rows, page_size=1)
+            stdout, stderr, phases = io.StringIO(), io.StringIO(), []
+            with redirect_stdout(stdout), redirect_stderr(stderr):
+                original = read_raw(baseline)
+                result = read_raw(observed, progress=phases.append)
+            self.assertEqual(list(RAW_SOURCE_PHASES), phases)
+            self.assertEqual(original, result)
+            self.assertEqual(baseline.list_calls, observed.list_calls)
+            self.assertEqual(baseline.get_calls, observed.get_calls)
+            self.assertTrue(all(body.closed for body in baseline.bodies + observed.bodies))
+            self.assertEqual('', stdout.getvalue() + stderr.getvalue())
+
+    def test_substeps_identify_real_read_and_validation_failures_safely(self):
+        for target in RAW_SOURCE_PHASES:
+            with self.subTest(target=target):
+                s3, phases = MemoryS3([event(received_at=START)]), []
+                original_validate = order_completion_receipts
+
+                def fail_if_current(value):
+                    if phases[-1] == target:
+                        if isinstance(value, dict) and 'Body' in value:
+                            value['Body'].close()
+                        raise RuntimeError('SENSITIVE source or SDK value')
+                    return value
+
+                s3.list_hook = fail_if_current
+                s3.get_hook = fail_if_current
+
+                def validate(rows):
+                    fail_if_current(None)
+                    return original_validate(rows)
+
+                with patch('reporting_core.experiment_quality_source_io.order_completion_receipts',
+                           side_effect=validate):
+                    with self.assertRaises(QualityInputError) as caught:
+                        read_raw(s3, progress=phases.append)
+                self.assertEqual(list(RAW_SOURCE_PHASES[:RAW_SOURCE_PHASES.index(target) + 1]), phases)
+                self.assertNotIn('SENSITIVE', ''.join(traceback.format_exception(caught.exception)))
+                self.assertIsNone(caught.exception.__cause__)
+                self.assertTrue(all(body.closed for body in s3.bodies))
+
+    def test_invalid_bounds_emit_no_substep_and_callback_failure_stays_sanitized(self):
+        phases, s3 = [], MemoryS3()
+        with self.assertRaises(QualityInputError):
+            read_raw(s3, context_from_utc=START, progress=phases.append)
+        self.assertEqual([], phases)
+        self.assertEqual([], s3.list_calls)
+        with self.assertRaises(QualityInputError) as caught:
+            read_raw(s3, progress=Mock(side_effect=RuntimeError('SENSITIVE diagnostic injection')))
+        self.assertEqual([], s3.list_calls)
+        self.assertNotIn('SENSITIVE', ''.join(traceback.format_exception(caught.exception)))
+
     def test_reads_all_pages_and_empty_days_twice_with_conditional_gets(self):
         rows = [event(received_at=START + timedelta(minutes=i)) for i in range(3)]
         s3 = MemoryS3(rows, page_size=1)

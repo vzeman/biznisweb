@@ -191,6 +191,44 @@ class ManagedSourceTests(unittest.TestCase):
         clock.start()
         self.addCleanup(clock.stop)
 
+    def test_cli_preserves_actual_adapter_substep_without_exposing_sdk_errors(self):
+        current = plan()
+        output, errors, sdk = io.StringIO(), io.StringIO(), MagicMock()
+        s3 = MemoryS3([event(received_at=current.window.from_utc)])
+
+        def fail_get(response):
+            response['Body'].close()
+            print('private-device-or-token')
+            print('private-sdk-payload', file=sys.stderr)
+            raise RuntimeError('private-sdk-payload')
+
+        s3.get_hook = fail_get
+
+        def fail_capture(*args, progress, **kwargs):
+            progress('retained-raw-source')
+            read_stable_retained_raw_source(s3, bucket='vevo-test',
+                context_from_utc=current.window.context_from_utc,
+                through_utc=current.window.through_utc, progress=progress)
+
+        with patch.object(sys, 'argv', ['source']), patch.object(sys, 'stdout', output), \
+             patch.object(sys, 'stderr', errors), patch.dict(sys.modules, {'boto3': sdk}), \
+             patch.dict(os.environ, {'GITHUB_WORKSPACE': str(ROOT)}), \
+             patch.object(source, 'load_inputs', return_value=(current, {}, {})), \
+             patch.object(source, 'verify_checkout'), patch.object(source, 'reject_previous_capture'), \
+             patch.object(source, 'download_health'), patch.object(source.logging, 'disable'), \
+             patch.object(source, 'collect', side_effect=fail_capture), patch.object(Path, 'mkdir') as mkdir:
+            self.assertEqual(2, source.main())
+            mkdir.assert_not_called()
+        sdk.Session.return_value.client.assert_not_called()
+        self.assertEqual('', output.getvalue())
+        self.assertEqual([
+            'VEVO_AA_QUALITY_SOURCE_PROGRESS:phase=retained-raw-source:raw=false',
+            'VEVO_AA_QUALITY_SOURCE_PROGRESS:phase=raw-inventory-before:raw=false',
+            'VEVO_AA_QUALITY_SOURCE_PROGRESS:phase=raw-conditional-reads:raw=false',
+            'VEVO_AA_QUALITY_SOURCE_STOPPED:stage=source-capture:phase=raw-conditional-reads:code=raw-coverage-unverified:raw=false',
+        ], errors.getvalue().splitlines())
+        self.assertTrue(all(body.closed for body in s3.bodies))
+
     def test_context_is_derived_from_the_verified_empty_foundation_not_window_start(self):
         args = inputs()
         current = source.make_plan(*args)
