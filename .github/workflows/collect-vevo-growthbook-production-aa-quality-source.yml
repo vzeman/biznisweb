@@ -1,0 +1,99 @@
+name: Collect VEVO GrowthBook Production A/A Quality Source
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_source:
+        description: Confirm one read-only source capture for the already resolved A/A window
+        type: choice
+        options: ['false', 'true']
+        default: 'false'
+        required: true
+      health_run_id:
+        description: Independently verified successful infra-health run on this exact main
+        type: string
+        required: true
+      health_json_sha256:
+        description: Independently verified canonical infra-health JSON SHA-256
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: vevo-growthbook-production-aa-quality-source
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  CONFIRM_SOURCE: ${{ inputs.confirm_source }}
+  HEALTH_RUN_ID: ${{ inputs.health_run_id }}
+  HEALTH_JSON_SHA256: ${{ inputs.health_json_sha256 }}
+  GH_TOKEN: ${{ github.token }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  collect-frozen-quality-source:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Require explicit source confirmation
+        run: test "$CONFIRM_SOURCE" = 'true'
+      - name: Checkout exact main
+        uses: actions/checkout@v6.0.2
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install existing reporting dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Validate resolved source and independent GitHub health before AWS
+        run: |
+          set -euo pipefail
+          python -m unittest tests.test_growthbook_managed_quality_source tests.test_growthbook_aa_quality_source tests.test_growthbook_quality_source_io
+          python scripts/validate_growthbook_workspace.py
+          python scripts/validate_growthbook_production_aa_activation.py
+          python scripts/validate_growthbook_aa_measurement_window.py
+          python scripts/security_ci.py
+          python scripts/collect_growthbook_aa_quality_source.py --gate-only
+      - name: Configure managed AWS credentials for read-only source
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Collect one canonical aggregate source without publishing facts
+        run: python scripts/collect_growthbook_aa_quality_source.py
+      - name: Upload only the canonical source capture
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: vevo-growthbook-aa-quality-source
+          path: ${{ runner.temp }}/vevo-aa-quality-${{ github.run_id }}/vevo-growthbook-aa-quality-source.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Remove the temporary sanitized capture
+        if: always()
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          run_id = os.environ['GITHUB_RUN_ID']
+          if re.fullmatch(r'[1-9][0-9]{5,19}', run_id) is None:
+              raise SystemExit('cleanup identity invalid')
+          root = Path(os.environ['RUNNER_TEMP']).resolve()
+          directory = root / ('vevo-aa-quality-' + run_id)
+          if directory.is_symlink() or directory.resolve().parent != root:
+              raise SystemExit('cleanup scope drift')
+          target = directory / 'vevo-growthbook-aa-quality-source.json'
+          if target.is_symlink():
+              raise SystemExit('cleanup file identity drift')
+          target.unlink(missing_ok=True)
+          if directory.exists():
+              directory.rmdir()
+          if directory.exists():
+              raise SystemExit('cleanup failed')
+          PY

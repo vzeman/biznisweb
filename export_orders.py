@@ -763,15 +763,18 @@ class BizniWebExporter:
         output_tag: str = "",
         artifact_subdir: str = "",
         enable_period_bundle: bool = True,
+        order_facts_only: bool = False,
     ):
         """Initialize the exporter with API credentials"""
+        if type(order_facts_only) is not bool:
+            raise ValueError("order_facts_only must be boolean")
         self.api_url = api_url
         self.api_token = api_token
         self.project_name = project_name
         self.output_tag = sanitize_output_tag(output_tag)
         normalized_subdir = str(artifact_subdir or "").strip().strip("/\\")
         self.artifact_subdir = normalized_subdir
-        self.enable_period_bundle = enable_period_bundle
+        self.enable_period_bundle = enable_period_bundle and not order_facts_only
         self.project_settings = load_project_settings(project_name)
         self.zero_revenue_gift_product_skus = self._resolve_exact_product_sku_setting(
             "zero_revenue_gift_product_skus"
@@ -780,14 +783,16 @@ class BizniWebExporter:
         self.realized_revenue_settings = self._resolve_realized_revenue_settings()
         self.project_root_dir = Path("data") / project_name
         self.data_dir = self.project_root_dir / normalized_subdir if normalized_subdir else self.project_root_dir
-        self.data_dir.mkdir(parents=True, exist_ok=True)
+        if not order_facts_only:
+            self.data_dir.mkdir(parents=True, exist_ok=True)
 
         # Share project data directory with optional ad clients for cache isolation.
-        os.environ["REPORT_PROJECT"] = project_name
-        os.environ["REPORT_DATA_DIR"] = str(self.project_root_dir.resolve())
-        os.environ["REPORT_OUTPUT_TAG"] = self.output_tag
+        if not order_facts_only:
+            os.environ["REPORT_PROJECT"] = project_name
+            os.environ["REPORT_DATA_DIR"] = str(self.project_root_dir.resolve())
+            os.environ["REPORT_OUTPUT_TAG"] = self.output_tag
 
-        transport = RequestsHTTPTransport(
+        transport = None if order_facts_only else RequestsHTTPTransport(
             url=api_url,
             headers={'BW-API-Key': f'Token {api_token}'},
             verify=True,
@@ -805,7 +810,7 @@ class BizniWebExporter:
             ),
             timeout=GRAPHQL_TIMEOUT_SEC,
         )
-        self.client = Client(transport=transport, fetch_schema_from_transport=False)
+        self.client = None if order_facts_only else Client(transport=transport, fetch_schema_from_transport=False)
         self.api_min_request_interval_sec = env_float(
             "BIZNISWEB_API_MIN_REQUEST_INTERVAL_SEC",
             BIZNISWEB_API_MIN_REQUEST_INTERVAL_SEC,
@@ -833,16 +838,18 @@ class BizniWebExporter:
         )
         self._api_request_count = 0
         self._api_last_request_completed_at: Optional[float] = None
-        self.fb_client = FacebookAdsClient()
-        self.google_ads_client = GoogleAdsClient()
+        self.fb_client = None if order_facts_only else FacebookAdsClient()
+        self.google_ads_client = None if order_facts_only else GoogleAdsClient()
         self.cache_dir = self.project_root_dir / 'cache'
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        if not order_facts_only:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._product_inventory_snapshot_cache: Dict[str, pd.DataFrame] = {}
         self.weather_settings = copy.deepcopy(WEATHER_SETTINGS)
         self.weather_cache_dir = self.project_root_dir / 'weather_cache'
-        self.weather_cache_dir.mkdir(parents=True, exist_ok=True)
+        if not order_facts_only:
+            self.weather_cache_dir.mkdir(parents=True, exist_ok=True)
         self.weather_client = None
-        if self.weather_settings.get("enabled") and self.weather_settings.get("locations"):
+        if not order_facts_only and self.weather_settings.get("enabled") and self.weather_settings.get("locations"):
             self.weather_client = WeatherClient(
                 cache_dir=self.weather_cache_dir,
                 timezone=self.weather_settings.get("timezone", "Europe/Bratislava"),

@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Managed exact-window quality capture prepared; live gate still closed
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-managed-quality-source`
+
+What changed:
+
+- Added the manual, exact-main-only `collect-vevo-growthbook-production-aa-quality-source.yml` and its bounded runner-memory source collector. It verifies independent current-main infra-health run/ZIP/JSON provenance before AWS, derives the context floor from the verified empty Production foundation, checks current activated collector/reconciler identity and retention, verifies retained-write/receipt parity, and reads only exact receipted VEVO orders through the inherited managed token reference. Stable source inputs feed the existing financial and exact-window quality calculators; no ordinary facts are published.
+- Added the strict offline canonical capture validator, binding source/run/main/pre-transition snapshot/checkpoint/foundation/health hashes and acquisition proofs. Only one aggregate JSON may be retained. Prior successful captures or failed runs with artifacts require consumption/recovery, not recapture. Raw payloads, identities and credentials stay in runner memory with diagnostics suppressed.
+- Added an explicit calculator-only exporter constructor mode with no clients, directories or reporting environment mutation; the default constructor remains unchanged. The prepared workflow is deliberately blocked before credentials by `EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED = False` until both the recorder and automated consumer have been migrated and reviewed. No snapshot manifest or runtime gate was opened.
+
+What is verified:
+
+- All 182 combined source/reporting/A/A lifecycle tests pass locally, including 20 new managed-source tests now required by security-baseline CI. A full synthetic capture uses the real raw/order adapters and financial calculator with mocked transports. Tests cover independent GitHub provenance, source reuse refusal, runtime/retention drift, receipt parity, managed token scope, redirects, malformed/duplicate/nonfinite/oversized API responses, canonical evidence and privacy. Default exporter behavior and financial/lifecycle parity with the PII-free order projection are checked.
+- Workspace, activation, measurement-window and security validators and diff checks pass. Frozen A/A window/count/checkpoint history, all evidence/stop/paid/CTA gates and ordinary runtime settings remain unchanged. No live AWS/source/API read, credential retrieval, workflow dispatch, deploy, Preview wake, commerce mutation or local application process occurred.
+
+Known issues:
+
+- `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED` remains until recorder/automated consumer migration and independent live source evidence. Current storage policy plus stable reads and receipt parity are not a forensic proof that no historical manual deletion/substitution occurred; two order passes are not an atomic historical BiznisWeb snapshot. The capture validator explicitly rejects those overclaims.
+- Actual managed token access, current endpoint/no-redirect behavior, and live source coverage have not been exercised. A failure must remain closed; do not loosen checks or collect again based on quality results. No live quality artifact or A/A PASS exists.
+
+Next exact step:
+
+- After CI and merge, migrate the offline source recorder, measurement-window schema/validator and automated evidence workflow to the independently verified canonical source capture. Reconstruct expected snapshot/foundation inputs from the source run's original exact main commit, not the later opened manifest; bind successful source run, GitHub ZIP digest and JSON hash independently. Replace the automated workflow's obsolete foundation collector revision/image comparison with the reviewed activated collector identity. Only then review opening the consumer-support gate and obtain fresh exact-main infra health before the one source capture. Keep the resolved window/count fixed; do not issue another checkpoint, stop A/A, wake Preview or open paid/CTA/commerce gates.
+
 ## 2026-09-05 — Exact-window source input coverage adapters implemented
 
 Date: 2026-09-05

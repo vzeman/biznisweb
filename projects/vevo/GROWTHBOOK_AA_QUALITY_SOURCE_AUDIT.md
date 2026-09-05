@@ -3,6 +3,82 @@
 Status: `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED`. This is a source-contract
 finding, not a measured A/A failure or permission to restart the experiment.
 
+## Managed acquisition prepared — consumer migration must precede live capture
+
+The manual source workflow is now implemented at
+`.github/workflows/collect-vevo-growthbook-production-aa-quality-source.yml`.
+Its CLI and offline capture validator are
+`scripts/collect_growthbook_aa_quality_source.py` and
+`scripts/validate_growthbook_aa_quality_capture.py`. The stages below describe
+the earlier calculation/adapter work; this section is the current handoff.
+
+**The workflow cannot yet acquire AWS credentials or read source data.**
+`EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED` in the existing evidence recorder is
+deliberately false. Both the recorder and automated consumer must require the
+new capture before a separate reviewed migration can enable this pre-AWS gate.
+Do not flip the constant merely to test the producer or discover live input.
+
+Prepared acquisition boundaries:
+
+- Exact clean main, GitHub-hosted manual run, explicit confirmation and first
+  run attempt. Independently verify a successful current-main infra-health run,
+  sole artifact, GitHub ZIP digest and canonical JSON hash; require the latest
+  local 03:45 reconciliation and an observation no older than six hours.
+- Refuse another active/successful source capture and any failed prior run with
+  an artifact. Consume or recover retained evidence; never select a source by
+  recapturing until quality passes.
+- Derive context from the UTC day of the reviewed empty, route-disabled
+  Production foundation. Bind full source-commit snapshot bytes and the final
+  qualifying checkpoint. Validate the current activated collector revision,
+  Fargate task/private network, service and `/app` identity, immutable reconciler
+  task/image and prior localhost gate, unchanged source schedule and exact
+  raw/curated/query/multipart retention policy before source/token reads.
+- Use the tested complete retained S3 partitions and verify accepted-write
+  parity with fully paginated collector receipts whose log retention covers the
+  context. Recheck source/runtime control identity at the end of capture.
+- Resolve only the existing VEVO API token inherited by the immutable
+  reconciler and original reporting task definitions from the same AWS account
+  and region. The transport pins the existing checked-in VEVO endpoint, disables
+  environment proxy/netrc inheritance, rejects redirects and HTTP/GraphQL or
+  malformed/duplicate/nonfinite/oversized responses, and paces two exact-ID
+  passes. It does not query customer/contact/address fields or call mutations.
+- The optional `order_facts_only` constructor skips reporting/ad/weather clients,
+  cache/export directories and reporting environment mutation, while keeping
+  the shared financial and lifecycle calculations. It is a construction mode,
+  not a general capability sandbox; the source uses only the fact conversion.
+- Retain only `vevo-growthbook-aa-quality-source.json` in the single artifact
+  `vevo-growthbook-aa-quality-source`, for 90 days. Raw events, API responses,
+  AWS metadata and secrets stay in runner memory; diagnostics are suppressed.
+  No ordinary publisher, deployment, Preview wake or experiment mutation runs.
+
+The official [API best practices](https://www.biznisweb.sk/a/1382/best-practices)
+recommend the public domain to avoid redirects. This prepared transport keeps
+the repository's existing `https://vevo.flox.sk/api/graphql` identity and refuses
+redirects rather than forwarding a token to an unreviewed destination. Live
+endpoint behavior and inherited credential access are not yet verified; any
+necessary endpoint/access change needs its own reviewed exact scope.
+
+The capture validator binds all independently expected provenance and coverage
+proofs, but explicitly preserves the adapters' false claims for forensic
+historical retention and atomic historical order snapshots. Retention policy,
+stable inventory and count parity must not be described as proof against every
+possible historical manual deletion/substitution.
+
+Verification: 20 new synthetic managed-source tests plus the prior 162 tests
+pass. The full capture test uses real calculation/adapters with injected AWS
+and API transports, verifies no ordinary publication or output directory, and
+checks serialized privacy. Default exporter construction and financial/lifecycle
+parity with the PII-free order projection are covered. The suite is included in
+required security-baseline CI. No live source/API/AWS read or dispatch occurred.
+
+Next migrate the offline recorder, snapshot schema/validator and automated
+consumer to this exact canonical capture and independent successful run/main/
+ZIP/JSON provenance. Retrieve the pre-transition snapshot/foundation at the
+source run's commit. Fix the automated workflow's old foundation collector
+revision/image assumption using the reviewed activated collector. Review that
+migration before allowing the source gate; no fixed window/count, later
+checkpoint or lifecycle gate may be changed to accommodate source data.
+
 ## Repair progress — exact-window calculation implemented, runtime still closed
 
 The first implementation stage adds optional `ExperimentReceiptWindow` handling
@@ -30,10 +106,10 @@ Input digests retain duplicates and are order-independent; no event, device or
 order identity appears in the output. The new generation uses whole-second UTC
 schema timestamps, without rewriting any legacy S3 object.
 
-**This is not yet a live quality-source capture or a completed repair.** There
-is no new source workflow, runtime deployment, source artifact, consumer gate
-opening or producer dispatch. The reserved workflow path in the new envelope
-is a contract for the next implementation, not evidence that a run exists.
+**This is not yet a live quality-source capture or a completed repair.** At
+the calculator stage the workflow path was reserved only; the prepared, still
+closed workflow is described above. There is no runtime deployment, source
+artifact, consumer gate opening or producer dispatch, nor evidence of a run.
 The current source recorder and automated workflow still use the legacy
 quality-object interface and remain blocked by this audit.
 
@@ -65,7 +141,7 @@ production and must exactly equal the already resolved checkpoint, or stop.
 `reporting_core/experiment_quality_source_io.py` now provides two separately
 testable read-only input adapters with injected clients. It does not construct
 an AWS/API client, acquire credentials, log inputs, write files or publish
-facts. No caller in a Production workflow has been added yet.
+facts. The prepared caller described above remains blocked before credentials.
 
 - Raw input: enumerate every page of each exact UTC receipt partition, including
   empty days; validate bounded object identities/sizes/ETags/timestamps; bind
