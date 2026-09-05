@@ -1,9 +1,31 @@
 # A/A quality-source audit — 2026-09-05
 
-Status: `EXACT_WINDOW_SOURCE_SUPPORT_REVIEWED_AWAITING_LIVE_CAPTURE`. The
-source-contract repair and its implementation gate are reviewed; live source
-coverage and A/A PASS remain unproven. This is not permission to restart an
-experiment or alter the fixed measurement window.
+Status: `FIRST_CAPTURE_FAILED_AWAITING_SAFE_DIAGNOSTICS_REVIEW`. The
+source-contract repair and its implementation gate are reviewed, but the first
+managed source failed without an artifact. Source coverage and A/A PASS remain
+unproven. This is not permission to restart an experiment or alter its window.
+
+### First actual source failure
+
+Run `33961911689` on exact main `1deb4d9ae9997a03bf21370695e2d47a7378b9a4`
+passed local/provenance gates and failed in `source-capture` with exit 2 after
+42m32s, before the 45-minute job timeout. Upload was skipped, cleanup passed,
+and independent GitHub metadata confirms zero artifacts. The failure message
+does not identify the source operation or root cause; do not infer one from
+duration or claim that A/A quality itself failed.
+
+The diagnostic correction adds only fixed operation markers and allowlisted
+failure codes, never exception text, SDK payloads, inputs, counts or identities.
+It preserves SDK-output suppression, source contracts, timeout, query/pacing,
+acceptance rules and canonical output. Synthetic tests exercise the actual CLI
+failure path and all acquisition phases. No replacement source has been run.
+
+After review/CI/merge, inspect the original run and all source history again.
+Any retained artifact must be recovered, not recaptured. With none retained,
+a diagnostic acquisition requires fresh independently verified health on its
+own exact main and all unchanged managed gates. Do not rerun an old attempt,
+change the source/window or retry based on quality/outcomes. Its purpose is to
+identify the failure safely, not to keep collecting until a report passes.
 
 ### Live health format compatibility
 

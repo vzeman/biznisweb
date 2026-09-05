@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — First source failed without artifact; safe phase diagnostics prepared
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-source-safe-diagnostics`
+
+What changed:
+
+- Source run `33961911689` on main `1deb4d9ae9997a03bf21370695e2d47a7378b9a4` is terminal `failure`, not still running. Job `101295145485` finished at `2026-09-05T11:37:35Z` after 42m32s, before its 45-minute timeout. Its sole sanitized failure line reports `stage=source-capture`; exit code is 2, upload was skipped, cleanup passed, and independent artifact metadata reports zero artifacts. No retry has been dispatched.
+- The previous broad failure stage cannot identify which read or contract failed. Added fixed, allowlisted source-operation progress and fixed safe failure codes for a few exact local contract messages. SDK/source output remains suppressed. Unknown exception messages, SDK payloads, counts, identities, tokens, hashes and values are never emitted by diagnostics. No source calculation, API query/pacing, acceptance threshold, timeout or canonical artifact format changes.
+
+What is verified:
+
+- All 231 focused source/reporting/A/A tests pass, together with workspace/window/activation/security validators. Three new synthetic regressions cover exact phase allowlisting, rejection of injected/private diagnostic text, refusal to format arbitrary exceptions or SDK payloads, and the actual CLI's safe failure output while raw stdout/stderr remain suppressed. The existing full synthetic acquisition exercises all operation phases in order using real input adapters, without network calls or publishing.
+- Pinned source/health provenance remains in the previous entry. Frozen checkpoint history and all live manifests remain unchanged; no artifact exists to record or recover. The finite local `gh run watch` session exited with the terminal failure; no local application service was started. A/A was not stopped, Preview was not woken and no commerce configuration was changed.
+
+Known issues:
+
+- Actual source-failure cause remains unknown: the old run exposed neither the failing substep nor a safe error category. Its elapsed time does not prove a timeout or a specific input defect. Source quality/coverage and A/A PASS remain unverified; all evidence-recording, producer, snapshot, stop, paid and CTA transitions remain closed.
+
+Next exact step:
+
+- Review/test/CI/merge diagnostics only. On clean synchronized main, inspect all existing source runs/artifacts again. A retained artifact requires recovery; never recapture one. With zero artifacts and this reviewed diagnostics correction, a separately observed managed acquisition can identify the failing operation, but must use new independently verified same-main infra health and unchanged source/window/acceptance contracts. Do not rerun the old attempt, extend timeouts, optimize on assumed causes or retry based on quality/outcomes. If the next safe failure identifies an unprovable source or data-quality contract, stop and report it rather than relaxing it.
+
 ## 2026-09-05 — First managed frozen source dispatched; consume this run only
 
 Date: 2026-09-05

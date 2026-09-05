@@ -30,7 +30,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from reporting_core.experiment_quality_source_io import (
-    RECEIPTED_ORDER_QUERY, read_receipted_order_source, read_stable_retained_raw_source,
+    QualityInputError, RECEIPTED_ORDER_QUERY, read_receipted_order_source, read_stable_retained_raw_source,
 )
 from reporting_core.experiments import (
     ExperimentReceiptWindow, load_experiment_build_config, order_completion_receipts,
@@ -66,6 +66,49 @@ class SourceCollectionError(ValueError):
 def require(condition, message):
     if not condition:
         raise SourceCollectionError(message)
+
+
+CAPTURE_PHASES = (
+    "runtime-preflight", "retained-raw-source", "receipt-parity",
+    "reporting-runtime", "managed-token", "receipted-orders",
+    "authoritative-facts", "quality-build", "runtime-readback",
+)
+SAFE_FAILURE_CODES = {
+    "retained raw source coverage could not be verified": "raw-coverage-unverified",
+    "receipted order coverage could not be verified": "order-coverage-unverified",
+    "retained write/receipt parity failed": "receipt-parity-failed",
+    "source runtime/control changed during capture": "control-changed",
+    "VEVO API URL drift": "api-configuration-drift",
+    "unexpected runner API environment": "api-environment-drift",
+    "managed token format unsupported": "managed-token-format",
+}
+
+
+class CaptureProgress:
+    """Emit only fixed operation names, never inputs, counts or exceptions."""
+
+    def __init__(self, stream=None):
+        self.stream = stream
+        self.phase = "not-started"
+
+    def __call__(self, phase):
+        require(type(phase) is str and phase in CAPTURE_PHASES, "diagnostic phase invalid")
+        self.phase = phase
+        if self.stream is not None:
+            print(f"VEVO_AA_QUALITY_SOURCE_PROGRESS:phase={phase}:raw=false",
+                  file=self.stream, flush=True)
+
+
+def safe_failure_code(error):
+    # Never format an exception or inspect SDK payloads/causes. Only exact local
+    # exception types and exact constant messages select a fixed output code.
+    if type(error) in {SourceCollectionError, QualityInputError}:
+        if len(error.args) == 1 and type(error.args[0]) is str:
+            known = SAFE_FAILURE_CODES.get(error.args[0])
+            if known is not None:
+                return known
+        return "local-contract-check" if type(error) is SourceCollectionError else "input-read-or-validation"
+    return "unclassified-error"
 
 
 def stamp(value):
@@ -425,13 +468,18 @@ def receipt_parity(logs, log_group, plan, raw_rows):
     return {"context_receipt_summary_sha256": digest(summary), "accepted_write_count_parity_verified": True}
 
 
-def collect(plan, client, activation, reconciliation, health_binding):
+def collect(plan, client, activation, reconciliation, health_binding, *, progress=None):
+    progress = progress if progress is not None else CaptureProgress()
     started = now_utc().replace(microsecond=0)
+    progress("runtime-preflight")
     before = runtime_preflight(client, plan, activation, reconciliation)
+    progress("retained-raw-source")
     raw = read_stable_retained_raw_source(client("s3"), bucket=before["bucket"],
                                          context_from_utc=plan.window.context_from_utc, through_utc=plan.window.through_utc)
+    progress("receipt-parity")
     parity = receipt_parity(client("logs"), before["log_group"], plan, raw.rows)
     receipts = order_completion_receipts(row for row in raw.rows if utc(row["received_at"]) < plan.window.through_utc)
+    progress("reporting-runtime")
     # Importing the legacy reporter can load .env, so the CLI verifies the clean
     # runner checkout has none before this point. Its calculator mode constructs
     # no API/ad/weather client and creates no output/cache directory.
@@ -451,6 +499,7 @@ def collect(plan, client, activation, reconciliation, health_binding):
     require(runtime.api_url == API_URL and not runtime.api_token, "unexpected runner API environment")
     apply_project_runtime(runtime, reporting.__dict__)
     exporter = reporting.BizniWebExporter(API_URL, "", project_name="vevo", order_facts_only=True)
+    progress("managed-token")
     token = read_managed_token(client, before["token_reference"])
     request_count = 0
 
@@ -462,19 +511,23 @@ def collect(plan, client, activation, reconciliation, health_binding):
         time.sleep(delay)
         request_count += 1
 
+    progress("receipted-orders")
     with requests.Session() as session:
         session.trust_env = False
         orders = read_receipted_order_source(fixed_order_transport(session, token, pace), completion_receipts=receipts)
     token = None
+    progress("authoritative-facts")
     config = load_experiment_build_config(ROOT / "projects/vevo/growthbook_reporting.json")
     config = replace(config, expected_variation_weights={"vevo-sk-aa-001": config.expected_variation_weights["vevo-sk-aa-001"]})
     generated = now_utc().replace(microsecond=0)
     facts = build_biznisweb_authoritative_orders(exporter, orders.orders, completion_receipts=receipts,
         generated_at=generated, maturity_checkpoint_days=config.maturity_checkpoint_days,
         packaging_cost_eur=reporting.PACKAGING_COST_PER_ORDER, shipping_net_cost_eur=reporting.SHIPPING_NET_PER_ORDER)
+    progress("quality-build")
     source = build_quality_source(raw.rows, facts, config=config, window=plan.window, generated_at=generated,
         expected_eligible_devices=plan.eligible, snapshot_manifest_sha256=plan.snapshot_sha256,
         checkpoint_evidence_sha256=plan.checkpoint_sha256, workflow_run_id=plan.run_id, main_commit=plan.main_commit)
+    progress("runtime-readback")
     after = runtime_preflight(client, plan, activation, reconciliation)
     require(before == after, "source runtime/control changed during capture")
     return {
@@ -529,6 +582,9 @@ def main():
     parser.add_argument("--gate-only", action="store_true")
     args = parser.parse_args()
     stage = "local-gate"
+    # Preserve only the designated diagnostic stream outside SDK suppression.
+    # The callback accepts constant operation names and no source-derived text.
+    progress = CaptureProgress(sys.stderr)
     try:
         plan, activation, reconciliation = load_inputs()
         verify_checkout(plan.main_commit)
@@ -555,7 +611,8 @@ def main():
                 return clients[name]
 
             capture = collect(plan, client, activation, reconciliation,
-                              {"workflow_run_id": health_id, "main_commit": plan.main_commit, "sha256": health_sha})
+                              {"workflow_run_id": health_id, "main_commit": plan.main_commit, "sha256": health_sha},
+                              progress=progress)
         stage = "artifact-validation"
         # Full capture validator is shared with the future offline recorder.
         from scripts.validate_growthbook_aa_quality_capture import validate_capture
@@ -567,8 +624,9 @@ def main():
         (output_dir / FILENAME).write_bytes(canonical_source_bytes(capture))
         print("VEVO_AA_QUALITY_SOURCE_CAPTURED:canonical=true:raw=false:mutation=none")
         return 0
-    except Exception:
-        print(f"VEVO_AA_QUALITY_SOURCE_STOPPED:stage={stage}:raw=false", file=sys.stderr)
+    except Exception as error:
+        print(f"VEVO_AA_QUALITY_SOURCE_STOPPED:stage={stage}:phase={progress.phase}:"
+              f"code={safe_failure_code(error)}:raw=false", file=sys.stderr)
         return 2
 
 
