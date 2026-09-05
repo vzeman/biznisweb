@@ -1,0 +1,52 @@
+{
+  "started_at": "2026-07-14T06:30:06+02:00",
+  "mode": "hidden-create-readback-delete",
+  "block_id": "765",
+  "title": "Codex VEVO MCP smoke 20260714063006",
+  "slug": "codex-vevo-content-mcp-smoke-20260714063006",
+  "post_id": "2323",
+  "deleted": true,
+  "all_ok": true,
+  "public_before": {
+    "url": "https://www.vevo.sk/n/codex-vevo-content-mcp-smoke-20260714063006",
+    "status_code": 404,
+    "location": null,
+    "body_length": 124093
+  },
+  "create": {
+    "post_id": "2323",
+    "title": "Codex VEVO MCP smoke 20260714063006",
+    "link": "codex-vevo-content-mcp-smoke-20260714063006",
+    "active": "0",
+    "short_length": 93,
+    "long_length": 592,
+    "public_status": {
+      "checked": true,
+      "url": "https://www.vevo.sk/n/codex-vevo-content-mcp-smoke-20260714063006",
+      "status_code": 404,
+      "location": null
+    }
+  },
+  "readback": {
+    "title": "Codex VEVO MCP smoke 20260714063006",
+    "link": "codex-vevo-content-mcp-smoke-20260714063006",
+    "active": "0",
+    "short_length": 93,
+    "long_length": 592,
+    "marker_found": true
+  },
+  "public_hidden": {
+    "url": "https://www.vevo.sk/n/codex-vevo-content-mcp-smoke-20260714063006",
+    "status_code": 404,
+    "location": null,
+    "body_length": 124093
+  },
+  "admin_match_count_after_delete": 0,
+  "public_after_delete": {
+    "url": "https://www.vevo.sk/n/codex-vevo-content-mcp-smoke-20260714063006",
+    "status_code": 404,
+    "location": null,
+    "body_length": 124093
+  },
+  "completed_at": "2026-07-14T06:30:32+02:00"
+}

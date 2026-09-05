@@ -1,0 +1,266 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-16T15:01:45.395986+00:00",
+  "wave_file": "content\\VEVO_CONTENT\\exports\\retrofit-wave-07-odor-five-2026-06-16.json",
+  "article_count": 5,
+  "link_count": 21,
+  "all_ok": true,
+  "articles": [
+    {
+      "post_id": "2215",
+      "slug": "ako-odstranit-zapach-z-cestovneho-vankusa-po-lietadle",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-cestovneho-vankusa-po-lietadle",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-cestovneho-vankusa-po-lietadle",
+      "title_present": true,
+      "required_fragments": [
+        "Praktick"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1621/vevo-essence-sample-set"
+      ],
+      "category_hrefs": [
+        "/c/vzorky/parfum-do-prania-vzorky"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2139",
+      "slug": "ako-odstranit-mlieko-a-jogurt-z-textilu-bez-kysleho-zapachu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-mlieko-a-jogurt-z-textilu-bez-kysleho-zapachu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-mlieko-a-jogurt-z-textilu-bez-kysleho-zapachu",
+      "title_present": true,
+      "required_fragments": [
+        "Praktick"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2138",
+      "slug": "ako-vyprat-kakao-z-pyzama-a-postelnej-bielizne-bez-mliecneho-zapachu",
+      "url": "https://www.vevo.sk/n/ako-vyprat-kakao-z-pyzama-a-postelnej-bielizne-bez-mliecneho-zapachu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-kakao-z-pyzama-a-postelnej-bielizne-bez-mliecneho-zapachu",
+      "title_present": true,
+      "required_fragments": [
+        "Praktick"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2131",
+      "slug": "ako-odstranit-zapach-z-ponoziek-a-sportovej-obuvi-po-treningu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-ponoziek-a-sportovej-obuvi-po-treningu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-ponoziek-a-sportovej-obuvi-po-treningu",
+      "title_present": true,
+      "required_fragments": [
+        "Praktick"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-fragrance/parfum-do-prania",
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2128",
+      "slug": "ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "title_present": true,
+      "required_fragments": [
+        "Praktick"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-fragrance/parfum-do-prania",
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    }
+  ],
+  "links": [
+    {
+      "href": "/c/vevo-fragrance/parfum-do-prania",
+      "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "ok": true
+    },
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "href": "/c/vzorky/parfum-do-prania-vzorky",
+      "url": "https://www.vevo.sk/c/vzorky/parfum-do-prania-vzorky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vzorky/parfum-do-prania-vzorky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-zapach-potu-z-polyesteroveho-tricka",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-potu-z-polyesteroveho-tricka",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-potu-z-polyesteroveho-tricka",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-zapach-z-tasky-na-sport-a-posilnovnu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-tasky-na-sport-a-posilnovnu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-tasky-na-sport-a-posilnovnu",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-pouzivat-parfum-do-prania-pri-sportovom-obleceni",
+      "url": "https://www.vevo.sk/n/ako-pouzivat-parfum-do-prania-pri-sportovom-obleceni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-pouzivat-parfum-do-prania-pri-sportovom-obleceni",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-biele-tenisky-snurky-a-textilne-vlozky-bez-zozltnutia",
+      "url": "https://www.vevo.sk/n/ako-prat-biele-tenisky-snurky-a-textilne-vlozky-bez-zozltnutia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-biele-tenisky-snurky-a-textilne-vlozky-bez-zozltnutia",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-bielizen-po-chorobe-obliecky-uteraky-a-pyzama",
+      "url": "https://www.vevo.sk/n/ako-prat-bielizen-po-chorobe-obliecky-uteraky-a-pyzama",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-bielizen-po-chorobe-obliecky-uteraky-a-pyzama",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-detsku-postelnu-bielizen-bez-drazdenia-pokozky",
+      "url": "https://www.vevo.sk/n/ako-prat-detsku-postelnu-bielizen-bez-drazdenia-pokozky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-detsku-postelnu-bielizen-bez-drazdenia-pokozky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "url": "https://www.vevo.sk/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-vankuse-zo-syntetickej-vyplne",
+      "url": "https://www.vevo.sk/n/ako-prat-vankuse-zo-syntetickej-vyplne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-vankuse-zo-syntetickej-vyplne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-testovat-vzorky-parfumov-do-prania-doma-prakticky-postup-bez-slepeho-nakupu",
+      "url": "https://www.vevo.sk/n/ako-testovat-vzorky-parfumov-do-prania-doma-prakticky-postup-bez-slepeho-nakupu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-testovat-vzorky-parfumov-do-prania-doma-prakticky-postup-bez-slepeho-nakupu",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-cokoladu-z-detskeho-oblecenia-a-obrusov",
+      "url": "https://www.vevo.sk/n/ako-vyprat-cokoladu-z-detskeho-oblecenia-a-obrusov",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-cokoladu-z-detskeho-oblecenia-a-obrusov",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-detsku-vyzivu-a-mrkvove-prikrmy-z-podbradnikov",
+      "url": "https://www.vevo.sk/n/ako-vyprat-detsku-vyzivu-a-mrkvove-prikrmy-z-podbradnikov",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-detsku-vyzivu-a-mrkvove-prikrmy-z-podbradnikov",
+      "ok": true
+    },
+    {
+      "href": "/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "href": "/p-1621/vevo-essence-sample-set",
+      "url": "https://www.vevo.sk/p-1621/vevo-essence-sample-set",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1621/vevo-essence-sample-set",
+      "ok": true
+    }
+  ]
+}

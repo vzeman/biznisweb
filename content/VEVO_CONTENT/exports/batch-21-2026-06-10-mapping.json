@@ -1,0 +1,60 @@
+{
+  "batch": "21",
+  "project": "VEVO_CONTENT",
+  "news_block_id": "765",
+  "status": "published",
+  "published_on": "2026-06-10",
+  "publish_method": "BiznisWeb admin manual create from prepared JSON after login was restored",
+  "notes": [
+    "XLS upload remained unavailable through the browser automation surface, so the prepared rich HTML was inserted through the admin HTML source editor.",
+    "Clean URL identifiers, date_posted, time_posted, SEO title, and SEO description were set in the admin before saving each post.",
+    "All articles were published with dates before 2025-10-12 and without fixed prices in article cards."
+  ],
+  "articles": [
+    {
+      "id": "2230",
+      "title": "Recyklovaný polyester: čo znamená, aké má výhody a ako sa oň starať",
+      "slug": "recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+      "url": "https://www.vevo.sk/n/recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+      "date_posted": "2025-10-01",
+      "time_posted": "08:00:00",
+      "date_published_meta": "2025-10-01T08:00:00"
+    },
+    {
+      "id": "2231",
+      "title": "Čo je polyamid alebo nylon: vlastnosti, odolnosť a pranie",
+      "slug": "co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "date_posted": "2025-10-01",
+      "time_posted": "08:12:00",
+      "date_published_meta": "2025-10-01T08:12:00"
+    },
+    {
+      "id": "2232",
+      "title": "Polyamid vs polyester: ktorý materiál lepšie znáša pot, šport a časté pranie",
+      "slug": "polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "url": "https://www.vevo.sk/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "date_posted": "2025-10-01",
+      "time_posted": "08:24:00",
+      "date_published_meta": "2025-10-01T08:24:00"
+    },
+    {
+      "id": "2233",
+      "title": "Modal v oblečení: čo znamená, prečo je mäkký a ako ho prať",
+      "slug": "modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "url": "https://www.vevo.sk/n/modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "date_posted": "2025-10-01",
+      "time_posted": "08:36:00",
+      "date_published_meta": "2025-10-01T08:36:00"
+    },
+    {
+      "id": "2234",
+      "title": "Čo je lyocell alebo Tencel: priedušnosť, jemnosť a starostlivosť",
+      "slug": "co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "date_posted": "2025-10-01",
+      "time_posted": "08:48:00",
+      "date_published_meta": "2025-10-01T08:48:00"
+    }
+  ]
+}

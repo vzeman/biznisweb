@@ -1,0 +1,211 @@
+{
+  "batch": 33,
+  "article_count": 3,
+  "checked_links": 29,
+  "failed_links": [],
+  "records": [
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "url": "https://www.vevo.sk/p-1583/cistic-podlah-do-robotickeho-mopu",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/p-1583/cistic-podlah-do-robotickeho-mopu"
+    },
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/vona-na-umyvanie-podlah",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/vona-na-umyvanie-podlah"
+    },
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/cistic-do-robotickeho-vysavaca",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/cistic-do-robotickeho-vysavaca"
+    },
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "url": "https://www.vevo.sk/n/ako-vycistit-roboticky-vysavac",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-roboticky-vysavac"
+    },
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "url": "https://www.cdc.gov/hygiene/cleaning-disinfecting/index.html",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.cdc.gov/hygiene/cleaning-disinfecting/index.html"
+    },
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/introduction-indoor-air-quality",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.epa.gov/indoor-air-quality-iaq/introduction-indoor-air-quality"
+    },
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "url": "https://www.epa.gov/saferchoice",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.epa.gov/saferchoice"
+    },
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "url": "https://www.vevo.sk/p-1553/parfum-na-podlahy-vevo-no-01-cotton-paradise",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/p-1553/parfum-na-podlahy-vevo-no-01-cotton-paradise"
+    },
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "url": "https://www.vevo.sk/n/ako-vybrat-roboticky-vysavac-s-mopom",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-roboticky-vysavac-s-mopom"
+    },
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "url": "https://www.vevo.sk/n/ako-vycistit-rohozku-a-textilie-v-predsieni-od-posypovej-soli",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-rohozku-a-textilie-v-predsieni-od-posypovej-soli"
+    },
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo"
+    },
+    {
+      "title": "Ako vyčistiť kuchynskú linku od mastnoty, prachu a šmúh bez poškodenia povrchu",
+      "url": "https://www.vevo.sk/p-1562/strong-pink-cistiaca-pasta-500g",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/p-1562/strong-pink-cistiaca-pasta-500g"
+    },
+    {
+      "title": "Ako vyčistiť kuchynskú linku od mastnoty, prachu a šmúh bez poškodenia povrchu",
+      "url": "https://www.cdc.gov/food-safety/index.html",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.cdc.gov/food-safety/index.html"
+    },
+    {
+      "title": "Ako vyčistiť kuchynskú linku od mastnoty, prachu a šmúh bez poškodenia povrchu",
+      "url": "https://www.cdc.gov/hygiene/cleaning-disinfecting/index.html",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.cdc.gov/hygiene/cleaning-disinfecting/index.html"
+    },
+    {
+      "title": "Ako vyčistiť kuchynskú linku od mastnoty, prachu a šmúh bez poškodenia povrchu",
+      "url": "https://www.epa.gov/saferchoice",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.epa.gov/saferchoice"
+    },
+    {
+      "title": "Ako vyčistiť kuchynskú linku od mastnoty, prachu a šmúh bez poškodenia povrchu",
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/cistiaca-pasta",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/cistiaca-pasta"
+    },
+    {
+      "title": "Ako vyčistiť kuchynskú linku od mastnoty, prachu a šmúh bez poškodenia povrchu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vajicko-z-oblecenia-obrusu-a-kuchynskej-utierky",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-vajicko-z-oblecenia-obrusu-a-kuchynskej-utierky"
+    },
+    {
+      "title": "Ako vyčistiť kuchynskú linku od mastnoty, prachu a šmúh bez poškodenia povrchu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-cervenu-papriku-z-tricka-a-kuchynskej-utierky",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-cervenu-papriku-z-tricka-a-kuchynskej-utierky"
+    },
+    {
+      "title": "Ako vyčistiť kuchynskú linku od mastnoty, prachu a šmúh bez poškodenia povrchu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-majonezu-a-dressing-z-obrusu-bez-mastneho-flaku",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-majonezu-a-dressing-z-obrusu-bez-mastneho-flaku"
+    },
+    {
+      "title": "Ako vyčistiť kuchynskú linku od mastnoty, prachu a šmúh bez poškodenia povrchu",
+      "url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo"
+    },
+    {
+      "title": "Ako vyčistiť drez a batériu: vodný kameň, mastnota, zápach a bezpečné čistenie",
+      "url": "https://www.vevo.sk/p-1561/biely-ocot-v-spreji-500-ml",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/p-1561/biely-ocot-v-spreji-500-ml"
+    },
+    {
+      "title": "Ako vyčistiť drez a batériu: vodný kameň, mastnota, zápach a bezpečné čistenie",
+      "url": "https://www.cdc.gov/food-safety/index.html",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.cdc.gov/food-safety/index.html"
+    },
+    {
+      "title": "Ako vyčistiť drez a batériu: vodný kameň, mastnota, zápach a bezpečné čistenie",
+      "url": "https://www.cdc.gov/hygiene/cleaning-disinfecting/index.html",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.cdc.gov/hygiene/cleaning-disinfecting/index.html"
+    },
+    {
+      "title": "Ako vyčistiť drez a batériu: vodný kameň, mastnota, zápach a bezpečné čistenie",
+      "url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home"
+    },
+    {
+      "title": "Ako vyčistiť drez a batériu: vodný kameň, mastnota, zápach a bezpečné čistenie",
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/biely-ocot",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/biely-ocot"
+    },
+    {
+      "title": "Ako vyčistiť drez a batériu: vodný kameň, mastnota, zápach a bezpečné čistenie",
+      "url": "https://www.vevo.sk/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze"
+    },
+    {
+      "title": "Ako vyčistiť drez a batériu: vodný kameň, mastnota, zápach a bezpečné čistenie",
+      "url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly"
+    },
+    {
+      "title": "Ako vyčistiť drez a batériu: vodný kameň, mastnota, zápach a bezpečné čistenie",
+      "url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo"
+    },
+    {
+      "title": "Ako vyčistiť drez a batériu: vodný kameň, mastnota, zápach a bezpečné čistenie",
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "ok": true,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia"
+    }
+  ]
+}
