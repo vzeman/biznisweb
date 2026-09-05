@@ -52,7 +52,8 @@ collection; do not overwrite ordinary curated facts or wake Preview.
 
 Verification: 133 focused tests cover the new source/boundaries plus existing
 reporting, scheduled reconciliation, checkpoint, evidence, assembly and
-workspace behavior. Window/workspace validators, security and diff checks pass.
+workspace behavior. The entire suite is now included in the existing required
+`security-baseline` PR job. Window/workspace validators, security and diff checks pass.
 An additional 100 synthetic differential cases matched all three ordinary
 outputs against the pre-change committed core byte-for-byte after canonical
 JSON serialization, including duplicates, contamination, orphans and ambiguity.

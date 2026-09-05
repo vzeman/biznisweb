@@ -16,6 +16,7 @@ What changed:
 - Implemented `ExperimentReceiptWindow` as an explicit optional audit mode in the shared fact builder. Prior assignment context prevents pre-window visitors re-entering the cohort; exact half-open receipt bounds exclude later events while preserving cross-cohort order ambiguity and existing metric semantics. Ordinary reporting callers are unchanged.
 - Added a hard rejection before ordinary curated publication of any windowed bundle. No partial audit can overwrite the production device/performance facts through the existing publisher.
 - Added the pure `build_growthbook_aa_quality_source.py` builder/validator: canonical aggregate-only envelope, explicit receipt/cohort/context window, independently expected checkpoint/snapshot/run/main bindings, deterministic whole-input hashes, exact sample parity, and strict schema/safety checks. It has no network, credentials, filesystem writes or deployment path.
+- Added the full 133-test source/reporting/A/A lifecycle suite to the existing required `security-baseline` CI job, so these regressions are exercised on every PR instead of only locally or at a later producer dispatch. This changes CI coverage only, not a Production/AWS workflow gate.
 
 What is verified:
 
