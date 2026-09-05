@@ -60,6 +60,66 @@ JSON serialization, including duplicates, contamination, orphans and ambiguity.
 Only synthetic input was used; real cohort eligibility still requires source
 production and must exactly equal the already resolved checkpoint, or stop.
 
+## Input-adapter repair stage — retained coverage, no live collection
+
+`reporting_core/experiment_quality_source_io.py` now provides two separately
+testable read-only input adapters with injected clients. It does not construct
+an AWS/API client, acquire credentials, log inputs, write files or publish
+facts. No caller in a Production workflow has been added yet.
+
+- Raw input: enumerate every page of each exact UTC receipt partition, including
+  empty days; validate bounded object identities/sizes/ETags/timestamps; bind
+  each GET with `IfMatch`; verify the full body and receipt/date parity; run the
+  existing strict event validation; and re-enumerate the complete inventory.
+  Any addition/deletion/replacement, repeated object, invalid pagination, schema
+  error or size/row overflow fails closed. Retained input includes the later
+  edge of the last UTC partition for validation; the existing windowed builder
+  excludes it from the cohort and quality calculation.
+- Orders: query only the exact supplied validated completion-receipt IDs using
+  one fixed `getOrder` operation, selecting existing reporting money, item,
+  status and payment-metadata fields, not customer/contact/address data. Every
+  ID must have an explicit order or explicit null answer. Errors, missing fields
+  and wrong IDs are not converted into not-found answers. A second identical
+  pass detects observed source drift; there is no retry-until-quality-passes.
+  The shared authoritative-order conversion remains the intended downstream
+  calculator; no substitute lifecycle or financial values are generated.
+
+The API operation follows the existing checked-in Order schema and official
+[BiznisWeb API calling documentation](https://www.biznisweb.sk/a/1268/volanie-api).
+The future managed transport must independently verify the VEVO endpoint/token,
+apply the existing request pacing, and reject all HTTP/GraphQL error responses.
+It must not use the broad cached order-list/export workflow to prove coverage.
+
+Only whole-input/inventory/query hashes and explicit coverage assertions are
+exportable proof; internal rows are excluded from result `repr` and may never
+be logged, downloaded to the PC or uploaded as artifacts. SDK/API errors are
+replaced by fixed messages without chained sensitive exceptions. The input
+byte limits are separate from row limits, and source bodies are closed on
+successful and failed reads.
+
+**These adapters do not prove complete historical source retention, a correct
+context floor, an atomic historical BiznisWeb snapshot, runtime identity or
+successful-main provenance.** The proof explicitly leaves these claims false
+or outside its scope. Equality of two inventories only establishes a stable
+read of the retained objects, not that earlier deletion never occurred. The
+protected producer must derive the context floor and prove the approved
+storage/retention boundary independently, select only pre-through completion
+receipts, bind the actual capture interval and input proofs to the source
+envelope, and run under the managed credential boundary. Do not treat an
+adapter's returned proof as permission to open a producer.
+
+Verification: 28 new synthetic tests plus the previous 133 regressions pass,
+and the new suite is included in the required `security-baseline` CI job. Tests
+cover complete and cyclic pagination, conditional reads, input changes,
+partition edges, malformed/PII input, explicit missing orders, mutation of
+reused client response objects, bounds and sanitized errors/proofs. No live
+source, workflow dispatch, infrastructure action or shop request occurred.
+
+Next integrate these adapters into the separately reviewed main-only source
+workflow and migrate the offline recorder/automated consumer to the canonical
+source envelope. The existing `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED` state,
+frozen resolved window and all closed gates remain unchanged.
+
 ## Verified boundary
 
 The reviewed snapshot resolves the existing window to

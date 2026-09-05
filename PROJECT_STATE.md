@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Exact-window source input coverage adapters implemented
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-source-input-coverage`
+
+What changed:
+
+- Added injected-client, read-only source adapters for stable retained raw receipt partitions and exact receipted BiznisWeb orders. Raw reads require full pagination, bounded bodies, conditional ETags, receipt/partition parity and an identical second inventory. Order reads use a fixed targeted operation, no customer/contact/address fields, explicit not-found answers and a second drift-check pass. No client/credential construction, ordinary publisher, cache/export, source workflow or live caller was added.
+- Source rows remain runner-memory-only, are excluded from result representations and cannot appear in the exportable whole-input proof. SDK/API errors are replaced with fixed unchained messages. Proofs explicitly do not claim historical retention, context-floor validity or an atomic historical order snapshot.
+- Added 28 synthetic input coverage regressions to the required security-baseline CI suite. Detailed remaining acquisition boundaries are recorded in the quality-source audit.
+
+What is verified:
+
+- All 161 combined source/reporting/A/A lifecycle tests pass locally. Coverage includes incomplete/cyclic pagination, object/response drift, exact row/byte limits, invalid metadata, duplicate JSON fields, post-through partition edges, explicit missing orders, caller response reuse and privacy/error sanitization.
+- Frozen snapshot/checkpoint history and all source/producer/snapshot/stop/paid/CTA gates are unchanged. No AWS credentials or calls, source download, BiznisWeb request, infrastructure deployment, Preview wake, commerce mutation or local application process occurred.
+
+Known issues:
+
+- `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED` remains. Stable retained-input reads are necessary but not proof that the full historical input was retained or the context floor is correct. No live quality artifact or A/A PASS exists. The initial source workflow and recorder/consumer migration are still pending.
+
+Next exact step:
+
+- After CI and merge, integrate the tested adapters into the narrow managed main-only source producer. Independently derive/prove the complete context floor and retention/runtime boundary, bind the input coverage and actual capture interval to the exact source envelope, verify the VEVO endpoint and managed token reference, and apply request pacing. Migrate the offline recorder and automated consumer to independently verified source run/main/hash provenance, using the pre-transition snapshot at the source commit. Review these gates before any live source collection. Do not change the fixed A/A window/count, issue another checkpoint, stop A/A, wake Preview, publish ordinary facts or open paid/CTA gates.
+
 ## 2026-09-05 — Exact-window A/A quality calculator and source contract implemented
 
 Date: 2026-09-05
