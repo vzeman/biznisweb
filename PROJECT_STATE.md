@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — A/A checkpoint pre-AWS regression isolated and repaired
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-checkpoint-history-test-fix`
+
+What changed:
+
+- The 2026-09-03 and 2026-09-04 scheduled A/A checkpoint runs failed before AWS credentials because two unit tests still asserted the original empty checkpoint history after checkpoint 1 had been validly recorded.
+- Updated only those stale assertions: immutable pre-registration fields are still compared with the independently recomputed window, while the already validator-checked mutable checkpoint history is required to be non-empty and consecutively indexed.
+
+What is verified:
+
+- The production A/A experiment remains running; the failure occurred in local tests before credentials, AWS, Athena, artifacts, or any external mutation.
+- Existing validator code already cryptographically verifies every recorded checkpoint, the exact sequential index and the immutable stopping rule. No validator, workflow gate, threshold, traffic allocation, experiment outcome, or infrastructure behavior changed.
+
+Known issues:
+
+- No checkpoint artifacts exist for 2026-09-03 or 2026-09-04 because their scheduled workflows stopped at the stale tests. Historical recovery requires its existing explicit protected confirmation and is not authorized by this monitoring run.
+
+Next exact step:
+
+- Merge this test-only repair after CI. Let the repository-owned schedule capture future eligible checkpoints; do not dispatch historical backfill, read arms/outcomes, stop A/A, or alter GrowthBook/Meta/GTM/BiznisWeb without the separately required gate.
+
 ## 2026-09-04 — VEVO GrowthBook Preview suspended and independently verified
 
 Date: 2026-09-04

@@ -6,6 +6,7 @@ import pathlib
 import unittest
 
 from scripts.validate_growthbook_aa_measurement_window import (
+    MUTABLE_WINDOW_KEYS,
     MeasurementWindowError,
     expected_measurement_window,
     validate_measurement_window,
@@ -58,18 +59,12 @@ class GrowthBookAaMeasurementWindowTests(unittest.TestCase):
         )
         self.assertTrue(window["whole_local_day_extensions_only"])
         self.assertTrue(window["outcome_blind_resolution_required"])
+        history = window["checkpoint_history"]
+        self.assertGreaterEqual(len(history), 1)
         self.assertEqual(
-            "pending_minimum_window_and_sample", window["resolution_status"]
+            list(range(1, len(history) + 1)),
+            [row["evidence"]["window"]["checkpoint_index"] for row in history],
         )
-        for field in (
-            "resolved_last_full_local_date",
-            "resolved_through_utc",
-            "resolved_full_calendar_days",
-            "resolved_eligible_devices",
-            "resolved_at_utc",
-        ):
-            self.assertIsNone(window[field])
-        self.assertEqual([], window["checkpoint_history"])
         self.assertFalse(window["post_hoc_window_change_allowed"])
         self.assertEqual(7, window["minimum_full_calendar_days"])
         self.assertEqual(1000, window["minimum_eligible_devices"])
@@ -78,7 +73,13 @@ class GrowthBookAaMeasurementWindowTests(unittest.TestCase):
         expected = expected_measurement_window(
             self.activation, self.acceptance, self.reconciliation
         )
-        self.assertEqual(self.manifest["measurement_window"], expected)
+        actual = self.manifest["measurement_window"]
+        for key in set(expected) - MUTABLE_WINDOW_KEYS:
+            self.assertEqual(actual[key], expected[key])
+
+        # A recorded checkpoint is valid mutable lifecycle evidence; it must not
+        # be mistaken for drift in the original pre-registered window contract.
+        self.assertGreaterEqual(len(actual["checkpoint_history"]), 1)
 
         altered = copy.deepcopy(self.manifest)
         altered["measurement_window"]["from_utc"] = "2026-08-26T22:00:00Z"
