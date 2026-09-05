@@ -1,9 +1,37 @@
 # A/A quality-source audit — 2026-09-05
 
-Status: `DIAGNOSTIC_SOURCE_CAPTURE_IN_PROGRESS`. The
+Status: `SOURCE_CAPTURE_TIMEOUT_RETAINED_RAW`. The
 source-contract repair and its implementation gate are reviewed, but the first
-managed source failed without an artifact. Source coverage and A/A PASS remain
+managed source failed without an artifact and its diagnostic acquisition timed
+out without an artifact. Source coverage and A/A PASS remain
 unproven. This is not permission to restart an experiment or alter its window.
+
+### Diagnostic acquisition is terminal, not a live wait
+
+Run `33964597883` on main `2e04784765a74e71ba5b7a21ab075cebd91102e4`
+ended `cancelled`; job `101302371923` completed at `2026-09-05T12:40:21Z`
+after starting at `11:55:06Z`. GitHub check annotations independently confirm
+the job exceeded its maximum execution time. Only that sanitized boolean was
+emitted, not raw annotations. The source's fixed markers show runtime preflight
+at `11:55:49Z`, then `retained-raw-source` at `11:55:53Z`, with no later source
+phase before cancellation. Artifact upload was skipped, cleanup succeeded and
+independent artifact metadata confirms zero artifacts. No additional acquisition
+was dispatched and there is no successful capture to record.
+
+The retained-source phase includes initial inventory, conditional object reads,
+strict receipt validation and final inventory. Current markers do not identify
+which substep was active at timeout. Static sequential GETs are an implementation
+fact, not proof of the live root cause. Do not infer a source-quality failure,
+weaken coverage, raise runtime/input limits or repeat acquisition without a
+reviewed, evidence-supported diagnostic/correction. The source did not reach
+receipt parity, managed token/order API acquisition or the quality calculation.
+The earlier source failure below remains a separate unresolved failure, not
+proof that both attempts have the same cause.
+
+Keep the frozen window, source binding and every downstream producer gate
+unchanged. Review the exact retained-source/transport path offline before any
+next managed acquisition; recovery checks and fresh independently verified
+same-main health remain mandatory for a future reviewed run.
 
 ### First actual source failure
 
@@ -19,17 +47,18 @@ failure codes, never exception text, SDK payloads, inputs, counts or identities.
 It preserves SDK-output suppression, source contracts, timeout, query/pacing,
 acceptance rules and canonical output. Synthetic tests exercise the actual CLI
 failure path and all acquisition phases. PR #522 merged after all four CI checks
-and 231 tests passed. The one diagnostic acquisition `33964597883` is now in
-progress on main `2e04784765a74e71ba5b7a21ab075cebd91102e4`, after independently
-verified same-main health `33964475551`. Its pre-AWS gate passed, but no source
-quality or A/A PASS is established. Observe this run; do not duplicate it.
+and 231 tests passed. The diagnostic acquisition `33964597883` used main
+`2e04784765a74e71ba5b7a21ab075cebd91102e4`, after independently verified
+same-main health `33964475551`. Its pre-AWS gate passed, but it subsequently
+timed out as recorded above. No source quality or A/A PASS is established.
 
-After review/CI/merge, inspect the original run and all source history again.
-Any retained artifact must be recovered, not recaptured. With none retained,
-a diagnostic acquisition requires fresh independently verified health on its
-own exact main and all unchanged managed gates. Do not rerun an old attempt,
-change the source/window or retry based on quality/outcomes. Its purpose is to
-identify the failure safely, not to keep collecting until a report passes.
+For a future evidence-supported correction, inspect all source history again
+after review/CI/merge. Any retained artifact must be recovered, not recaptured.
+A future acquisition would require fresh independently verified health on its
+own exact main and all unchanged managed gates; this failure record does not
+authorize one. Do not rerun an old attempt, change the source/window or retry
+based on quality/outcomes. Diagnosis must identify the failure safely, not keep
+collecting until a report passes.
 
 ### Live health format compatibility
 
