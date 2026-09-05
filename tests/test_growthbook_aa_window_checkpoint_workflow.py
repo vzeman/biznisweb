@@ -67,8 +67,12 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            if resolution_status is not None:
-                snapshot["measurement_window"]["resolution_status"] = resolution_status
+            # Exercise the requested scenario, not the live manifest's lifecycle.
+            snapshot["measurement_window"]["resolution_status"] = (
+                "pending_minimum_window_and_sample"
+                if resolution_status is None
+                else resolution_status
+            )
             snapshot["measurement_window"]["checkpoint_history"] = (
                 checkpoint_history if checkpoint_history is not None else []
             )
