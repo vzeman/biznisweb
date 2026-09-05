@@ -5,6 +5,29 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Reviewed exact-window source support gate opened
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-source-support-open`
+
+What changed:
+
+- Opened only the source/consumer implementation support constant after reviewing the completed recorder/consumer migration in PRs #515–517 and the per-request metadata correction in PR #518. No source/automated/manual/snapshot manifest was altered. A source run still requires exact hosted main, manual confirmation, the resolved fixed window, independently verified fresh same-main health and no previous active/successful capture or retained failed-run artifact. The automated producer remains closed until the one source is independently recorded through a subsequent PR.
+
+What is verified:
+
+- PR #518 merged as `af5be96de2832a9d9f4da0470be4c8385adef80a`; all four exact-head CI checks passed, and the full 227-test execution was independently confirmed. The same 227 source/reporting/A/A tests and workspace/window/activation/security checks pass with the support constant open. Explicit negative tests continue to exercise closed support and every managed/provenance boundary rather than inherit this live constant.
+- The entire `projects/vevo/*.json` manifest set is unchanged by this support transition. No AWS credentials, source capture, API/order read, checkpoint, Preview wake, A/A stop, paid/CTA/commerce mutation or local application process was used to open this code-only gate.
+
+Known issues:
+
+- This support opening is not source coverage evidence or A/A PASS. Retained coverage, managed token access and fixed endpoint behavior remain unverified. Any acquisition failure must stay closed, without alternative counts/windows or result-driven retries.
+
+Next exact step:
+
+- Review/CI/merge this gate-only PR. Synchronize clean exact main; inspect existing infra-health/source runs and never duplicate an active run. Obtain fresh same-main infra health through the managed monitor, independently verify its sole ZIP/GitHub digest/canonical JSON hash and offline validator, then dispatch the single managed quality source with that health run/hash. Require successful exact-main source and independently verify/download its source and health components; record only with the versioned offline source recorder on a new branch. Continue genuine QA and A/A evidence afterward; all stop/paid/CTA/commerce gates stay closed.
+
 ## 2026-09-05 — Source readiness: exclude ephemeral SDK response metadata
 
 Date: 2026-09-05

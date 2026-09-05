@@ -87,10 +87,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution
 
 
 from scripts.growthbook_aa_source_binding import SourceBindingError
-# Remains false until this recorder AND the automated consumer require the
-# managed exact-window capture. The prepared source workflow checks this before
-# configuring AWS credentials; deploying its code alone cannot authorize reads.
-EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED = False
+# Reviewed source/recorder/consumer migration: PRs 515–518. This implementation
+# gate permits only the manual managed capture after its own exact-main,
+# resolved-window, fresh-health and no-prior-capture checks. It does not open
+# any live manifest, evidence producer, snapshot, stop, paid or CTA gate.
+EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED = True
 RUN_ID_RE = re.compile(r"^[1-9][0-9]{5,19}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
