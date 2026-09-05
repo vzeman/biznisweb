@@ -5,6 +5,29 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Source readiness: exclude ephemeral SDK response metadata
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-source-control-readiness`
+
+What changed:
+
+- Final source-gate review found the before/after control digest included both Scheduler responses' top-level Botocore `ResponseMetadata`. Per-request IDs/headers differ even when configuration does not; this would falsely stop the first real source capture. The digest now excludes only that transport envelope, retaining every actual schedule/target/role/input field and all existing runtime checks. Input responses are not mutated.
+
+What is verified:
+
+- New synthetic runtime regression proves distinct request metadata yields the same control digest while actual source-target or reconciliation configuration changes still change it. The expanded source/reporting/A/A suite passes 227 tests, with workspace/window/activation/security checks. PR #517's consumer migration is on clean main at `7b39848cf696d26ebc387d650bc6758f82003325`; all four CI checks and the 226-test execution were independently verified.
+- GitHub lists no previous source captures. Current official BiznisWeb API calling/best-practice pages were reviewed using the BiznisWeb skill; the fixed read-only getOrder projection, pinned existing VEVO endpoint and redirect rejection are retained. No AWS/source/order reads, credential retrieval, runtime changes, Preview wake or local application processes occurred. The source-support flag and live manifests remain closed and unchanged.
+
+Known issues:
+
+- No live source artifact or A/A PASS exists. Source-support gate opening still requires its own reviewed PR after this correction; live coverage/token/endpoint behavior remain unverified.
+
+Next exact step:
+
+- Review/CI/merge this narrow correction, then open only `EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED` via a separate reviewed PR with all frozen/live manifests unchanged. On the resulting clean exact main obtain and independently verify fresh infra health, acquire the single managed source and record its provenance offline. Keep all later producer/stop/paid/CTA/commerce transitions closed until their own evidence gates pass.
+
 ## 2026-09-05 — Automated consumer migrated to frozen source and Meta cohort
 
 Date: 2026-09-05

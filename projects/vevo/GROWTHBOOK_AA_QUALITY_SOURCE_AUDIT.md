@@ -3,6 +3,17 @@
 Status: `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED`. This is a source-contract
 finding, not a measured A/A failure or permission to restart the experiment.
 
+### Pre-capture SDK metadata correction
+
+Final readiness review found per-request Botocore `ResponseMetadata` in the
+two Scheduler responses included in the source control digest. Exclude only
+that top-level transport envelope: actual schedule, target, role and input
+settings remain hash-bound, as do task/definition/bucket/retention identities.
+A new regression proves changing request IDs/headers does not cause false
+control drift, while genuine configuration changes still do. The focused suite
+now contains 227 tests. No live source was acquired, and the shared source-support
+flag remains false pending its separately reviewed opening.
+
 ## Automated acquisition migrated — support-gate review is next
 
 The protected automated workflow now consumes the recorded source through
