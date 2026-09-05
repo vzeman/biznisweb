@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — A/A checkpoint pre-AWS regression isolated and repaired
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-checkpoint-history-test-fix`
+
+What changed:
+
+- The 2026-09-03 and 2026-09-04 scheduled A/A checkpoint runs failed before AWS credentials because two unit tests still asserted the original empty checkpoint history after checkpoint 1 had been validly recorded.
+- Updated only those stale assertions: immutable pre-registration fields are still compared with the independently recomputed window, while the already validator-checked mutable checkpoint history is required to be non-empty and consecutively indexed.
+
+What is verified:
+
+- The production A/A experiment remains running; the failure occurred in local tests before credentials, AWS, Athena, artifacts, or any external mutation.
+- Existing validator code already cryptographically verifies every recorded checkpoint, the exact sequential index and the immutable stopping rule. No validator, workflow gate, threshold, traffic allocation, experiment outcome, or infrastructure behavior changed.
+- Today's repository-owned infrastructure monitor run `33951120123` succeeded on exact main `c79db0bc0037d498153c7ce845db599770e839bb`. Its sole canonical artifact (ID `9964852958`) independently matched GitHub ZIP SHA-256 `db148e62d2000abb0abd41c2acc9b6db69a01e14a5d4c127368a16b970f17fb0`, JSON SHA-256 `868530d41fcbca713359110efe4f93911e7ad68ef4b42a648da27e04f1cb245c`, and the offline validator. Production reconciliation succeeded, generated/published parity held, the DLQ was empty, all three alarms were clear, and the source reporting schedule was unchanged. No population, arms, outcomes, Meta dimensions, performance values, identities, or raw payloads were read or retained; temporary downloads were removed.
+
+Known issues:
+
+- No checkpoint artifacts exist for 2026-09-03 or 2026-09-04 because their scheduled workflows stopped at the stale tests. Historical recovery requires its existing explicit protected confirmation and is not authorized by this monitoring run.
+
+Next exact step:
+
+- Merge this test-only repair after CI. Let the repository-owned schedule capture future eligible checkpoints; do not dispatch historical backfill, read arms/outcomes, stop A/A, or alter GrowthBook/Meta/GTM/BiznisWeb without the separately required gate.
+
 ## 2026-09-04 — VEVO GrowthBook Preview suspended and independently verified
 
 Date: 2026-09-04
