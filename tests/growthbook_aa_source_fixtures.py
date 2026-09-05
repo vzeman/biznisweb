@@ -11,6 +11,7 @@ def source_bundle():
     # Lazy imports avoid lifecycle test-fixture import cycles.
     from scripts import collect_growthbook_aa_quality_source as source
     from scripts.build_growthbook_aa_quality_source import canonical_source_bytes
+    from scripts.record_growthbook_natural_evidence import canonical_evidence_bytes as canonical_health_bytes
     from tests.test_growthbook_managed_quality_source import inputs, capture_fixture, ENV
     from tests.test_growthbook_aa_evidence_gate_recorder import quality_report
     from tests.test_growthbook_aa_infra_health_evidence import health_evidence
@@ -28,7 +29,7 @@ def source_bundle():
     health["observed_at_utc"] = "2026-09-05T07:58:00Z"
     health["phase"]["checked_due_local"] = "2026-09-05T03:45:00+02:00"
     health["provenance"].update(workflow_run_id=ENV["HEALTH_RUN_ID"], main_commit=ENV["GITHUB_SHA"])
-    health_raw = canonical_source_bytes(health)
+    health_raw = canonical_health_bytes(health)
     health_sha = hashlib.sha256(health_raw).hexdigest()
     capture["acquisition"]["health"]["sha256"] = health_sha
     raw = canonical_source_bytes(capture)

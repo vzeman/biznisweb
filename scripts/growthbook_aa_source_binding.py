@@ -24,6 +24,7 @@ from reporting_core.experiments import ExperimentReceiptWindow
 from scripts.build_growthbook_aa_quality_source import WORKFLOW, canonical_source_bytes
 from scripts.validate_growthbook_aa_quality_capture import validate_capture_bytes
 from scripts.validate_growthbook_aa_infra_health_evidence import validate_health_evidence
+from scripts.record_growthbook_natural_evidence import canonical_evidence_bytes as canonical_health_bytes
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "vzeman/biznisweb"
@@ -141,7 +142,10 @@ def verified_archive(blob, run, listing, *, run_id, main_commit, workflow, artif
                     and 0 < rows[0].file_size <= 1024 * 1024, "source ZIP contents invalid")
             raw = archive.read(rows[0])
         payload = json.loads(raw)
-        require(raw == canonical_source_bytes(payload) and hashlib.sha256(raw).hexdigest() == json_sha256,
+        # Each producer owns its exact byte format. Never reserialize a live
+        # artifact or change its independently observed digest to make it fit.
+        canonical = canonical_health_bytes if workflow == HEALTH_WORKFLOW else canonical_source_bytes
+        require(raw == canonical(payload) and hashlib.sha256(raw).hexdigest() == json_sha256,
                 "source canonical JSON digest mismatch")
     except (zipfile.BadZipFile, UnicodeDecodeError, json.JSONDecodeError, TypeError) as exc:
         raise SourceBindingError("source archive is invalid") from exc
