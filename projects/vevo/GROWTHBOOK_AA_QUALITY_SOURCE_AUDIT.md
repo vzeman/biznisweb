@@ -1,12 +1,51 @@
 # A/A quality-source audit — 2026-09-05
 
-Status: `SOURCE_CAPTURE_TIMEOUT_AFTER_RAW_READS`. The source-contract repair
-and fixed substep diagnostics are reviewed. All three acquisitions are terminal
-without artifacts; the latest run localized the dominant elapsed phase as
-recorded below. Complete source coverage and A/A PASS remain unproven. This is
+Status: `SOURCE_CAPTURE_IN_PROGRESS`. The bounded conditional-read correction
+is reviewed and one new managed acquisition is live, as recorded below. The
+three earlier acquisitions are terminal without artifacts. Complete source
+coverage and A/A PASS remain unproven. This is
 not permission to restart an experiment or alter its window. Separately, browser
 QA is fail-closed on `GTM_LIVE_VERSION_DRIFT` and the newly verified static
 `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK`; see the browser precheck.
+
+### One bounded-read acquisition live after exact-head review and fresh health
+
+PR #530 merged at `2026-09-05T14:44:20Z` as
+`b467f416ddfbc36bcd9fe18cdf55b2377814c110`. Its reviewed head
+`2698fca84f6c89631ba674bd278b27d1c45507f8` passed all four checks;
+independent run metadata for CI `33972563940` and observability `33972563959`
+matches that head. Security job `101323551794` actually executed the full
+source/lifecycle step from `14:42:26Z` to `14:42:29Z`; the filtered log confirms
+240 tests OK. Exact clean main was then synchronized and the workspace/window/
+activation validators passed again. All three prior source runs were separately
+rechecked as terminal without artifacts; no active or successful source existed.
+
+Fresh same-main managed health run `33972739143` succeeded. Its sole artifact
+`9971410127` has independently matched GitHub ZIP SHA-256
+`9c9a4f33e0bb6255c4df5047edc119f525216ecd2a93563980898e37b32bcc3b`
+and original canonical JSON SHA-256
+`c3b230c075d1cb0e0d039e4b9d02e9b9537abce58ca640323e4df8656468f1d8`.
+Run/repository/original-main ownership, single JSON, canonical bytes and hashes
+were verified in memory, then an independent second download passed the offline
+health/deployment/freshness/latest-reconciliation checks. Observation
+`2026-09-05T14:45:47Z` proves `natural_reconciliation_verified` for September 5
+03:45 Bratislava. No local file or raw AWS payload was retained.
+
+After another exact-main and prior-artifact recovery check, dispatched exactly
+one source run `33972852946`, attempt 1, created `2026-09-05T14:47:29Z` on that
+original main. Job `101324325818` started `14:47:35Z`; the independent GitHub
+readback shows `in_progress`, with all pre-AWS/credential steps passed and
+canonical acquisition running. Upload and cleanup are not complete at this
+observation. Do not duplicate or rerun it, infer speedup from startup, or treat
+the running job as a complete source. A later documentation merge does not
+replace the acquisition's original main or health identities.
+
+Next wait for this exact run's terminal result. On success independently verify
+its sole original source and health archives, GitHub ZIP digests, canonical JSON
+hashes and the five named inputs from its original Git commit before any offline
+recorder transition. On failure inspect only fixed sanitized phase/code and
+artifact metadata, preserve any artifact for recovery and keep all existing
+boundaries closed. No downstream gate or live experiment control was changed.
 
 ### Bounded conditional-read correction prepared for review
 
