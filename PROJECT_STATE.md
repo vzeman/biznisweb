@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Automated consumer migrated to frozen source and Meta cohort
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-frozen-consumer`
+
+What changed:
+
+- Replaced the protected automated workflow's rolling S3 quality fetch with independent source/health GitHub archive verification against original source-commit Git blobs, before AWS credentials. Full checkout history is available; exact hosted/manual/main/first-attempt, recorded schema-3 binding and unchanged checkpoint history are required. Existing successful/active collections or retained failed-run artifacts prohibit a second collection.
+- Added a bounded runner-memory read of the same retained raw input, requiring its whole-input digest to equal the captured source. The shared exact-window calculator rebuilds only assignment/Meta facts, preserving prior context, first-exposure dimensions and contamination while excluding post-through events. Captured authoritative quality/outcomes are never replaced or recomputed with missing orders. No rolling curated Meta query, order/API/token read or ordinary publisher remains in this consumer.
+- Updated activated collector revision/image checks and stable stack states; runtime details are no longer printed. Existing raw Athena/privacy/consent and CloudWatch audits remain, with exact raw/unique parity against the captured source. Observation schema 2 now emits the recorded source hash. Fixed the evidence builder invocation to use module execution, which works without a machine-specific PYTHONPATH. AWS CLI diagnostics are suppressed; temporary runner payloads are still removed before the sole canonical artifact upload.
+
+What is verified:
+
+- The expanded focused suite passes 226 tests, including 12 new executable consumer regressions in required security-baseline CI. Tests exercise both actual pre-AWS CLI success/failure with independent synthetic provenance and the actual inline observation builder, input substitution despite equal totals, previous/later exposure boundaries, captured-order preservation, stable conditional S3 reads, activated runtime drift, closed/hosted/main gates and duplicate-run rejection. They do not establish live coverage or A/A PASS.
+- Frozen snapshot/activation files and all source/producer/stop/paid/CTA gates remain unchanged. `EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED` remains false pending the separately reviewed support-gate opening. No AWS call, live source collection, new checkpoint, Preview wake, A/A stop, external mutation or local application process occurred.
+
+Known issues:
+
+- Live source acquisition is still closed; no actual source artifact or A/A PASS exists. The previously documented historical-retention and non-atomic order-read limitations remain explicit. Actual managed token access, pinned endpoint behavior and retained-source/sample parity must fail closed if unprovable, never be relaxed based on results.
+
+Next exact step:
+
+- Complete review/CI and merge this consumer migration. On clean exact main, review opening only `EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED` through a separate PR, with source/consumer tests and unchanged live manifests. Then independently verify fresh exact-main infra health, acquire the single managed exact-window source and bind it offline through the versioned recorder. Continue genuine browser QA, independently recorded components and protected snapshot PASS. Do not issue more checkpoints, change the fixed sample/window, stop A/A, wake Preview or open paid/CTA/commerce gates.
+
 ## 2026-09-05 — Exact-window source recorder and downstream hash binding migrated
 
 Date: 2026-09-05

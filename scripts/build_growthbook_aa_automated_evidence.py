@@ -2,7 +2,8 @@
 """Build canonical automated A/A evidence from sanitized Production reads.
 
 The observation is assembled only by the protected Production evidence
-workflow after its bounded CloudWatch, Athena, curated-reporting, schema, and
+workflow after its independently verified exact-window quality capture and
+bounded CloudWatch, raw Athena, frozen assignment/Meta, schema, and
 runtime checks pass.  This offline builder validates the exact aggregate
 schema and injects the successful workflow run/main commit provenance.  It has
 no AWS, GrowthBook, GTM, Meta, BiznisWeb, browser, or network client.

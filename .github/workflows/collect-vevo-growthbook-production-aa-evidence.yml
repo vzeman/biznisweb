@@ -14,12 +14,14 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: vevo-growthbook-production-aa-automated-evidence
   cancel-in-progress: false
 
 env:
+  CONFIRM_COLLECTION: ${{ inputs.confirm_collection }}
   AWS_REGION: eu-central-1
   EXPECTED_ACCOUNT_ID: '919341186960'
   STACK_NAME: vevo-growthbook-production
@@ -48,11 +50,16 @@ jobs:
 
       - name: Checkout exact main commit
         uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Install checked-in evidence dependencies
+        run: python -m pip install -r requirements.txt
 
       - name: Validate frozen evidence gate before AWS credentials
         run: |
@@ -60,11 +67,13 @@ jobs:
           python -m unittest \
             tests.test_growthbook_aa_automated_evidence \
             tests.test_growthbook_aa_automated_workflow \
+            tests.test_growthbook_aa_frozen_consumer \
             tests.test_growthbook_aa_snapshot_assembler \
             tests.test_growthbook_workspace
           python scripts/security_ci.py
           python scripts/validate_growthbook_workspace.py
           python scripts/validate_growthbook_aa_measurement_window.py
+          python scripts/validate_growthbook_production_aa_activation.py
           python - <<'PY'
           import json
           import os
@@ -96,8 +105,8 @@ jobs:
               or automated.get('through_utc') != window.get('resolved_through_utc')
           ):
               raise SystemExit('pre-registered A/A stopping rule is not resolved')
-          if automated.get('quality_report_status') != 'verified_canonical_reporting_quality':
-              raise SystemExit('canonical Production reporting quality is not recorded')
+          if manifest.get('schema_version') != 3 or not automated.get('quality_source'):
+              raise SystemExit('canonical exact-window source binding is not recorded')
           if automated.get('status') != 'not_recorded' or any(
               automated.get(field) is not None for field in ('run_id', 'main_commit', 'sha256')
           ):
@@ -113,14 +122,7 @@ jobs:
           if through <= start or through > datetime.now(timezone.utc):
               raise SystemExit('frozen Production A/A UTC window is invalid or incomplete')
 
-          quality_key = str(automated.get('quality_report_key') or '')
-          if re.fullmatch(
-              r'experiment-events/curated/quality/experiment_id=vevo-sk-aa-001/'
-              r'facts_generated_at=20[2-9][0-9]{5}T[0-9]{6}Z[.]json',
-              quality_key,
-          ) is None:
-              raise SystemExit('canonical Production quality report key is missing')
-          quality_sha = str(automated.get('quality_report_sha256') or '')
+          quality_sha = str(automated['quality_source'].get('json_sha256') or '')
           if re.fullmatch(r'[0-9a-f]{64}', quality_sha) is None:
               raise SystemExit('canonical Production quality report SHA-256 is missing')
 
@@ -160,11 +162,15 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as handle:
               handle.write(f'AA_FROM_UTC={start_text}\n')
               handle.write(f'AA_THROUGH_UTC={through_text}\n')
-              handle.write(f'QUALITY_REPORT_KEY={quality_key}\n')
-              handle.write(f'QUALITY_REPORT_SHA256={quality_sha}\n')
+              handle.write(f'QUALITY_SOURCE_SHA256={quality_sha}\n')
               handle.write(f'TEMP_EVIDENCE_DIR={temporary}\n')
           print('PRODUCTION_AA_AUTOMATED_LOCAL_GATE_OK:allocation=100:cta=unstarted:source=read-only')
           PY
+
+      - name: Independently verify source and health archives before AWS
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/consume_growthbook_aa_quality_source.py verify-source
 
       - name: Configure AWS credentials for bounded read-only evidence
         uses: aws-actions/configure-aws-credentials@v6.1.0
@@ -176,6 +182,8 @@ jobs:
       - name: Read and verify exact Production runtime identity
         run: |
           set -euo pipefail
+          aws() { command aws "$@" 2>/dev/null; }
+          trap 'echo "Production runtime readback failed; raw diagnostics suppressed" >&2' ERR
           ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
           [[ "${ACCOUNT_ID}" == "${EXPECTED_ACCOUNT_ID}" ]]
           aws cloudformation describe-stacks \
@@ -186,8 +194,8 @@ jobs:
           import os
 
           stack = json.load(open(f"{os.environ['TEMP_EVIDENCE_DIR']}/stack.json", encoding='utf-8'))['Stacks'][0]
-          if stack.get('StackStatus') != 'CREATE_COMPLETE':
-              raise SystemExit('Production stack is not CREATE_COMPLETE')
+          if stack.get('StackStatus') not in {'CREATE_COMPLETE', 'UPDATE_COMPLETE'}:
+              raise SystemExit('Production stack is not stable')
           outputs = {row['OutputKey']: row['OutputValue'] for row in stack.get('Outputs') or []}
           required = {
               'CollectorClusterArn', 'CollectorServiceName', 'CollectorTaskDefinitionArn',
@@ -245,73 +253,30 @@ jobs:
             --task-definition "${PRODUCTION_TASK_DEFINITION_ARN}" \
             --region "${AWS_REGION}" > "${TEMP_EVIDENCE_DIR}/task-definition.json"
           python - <<'PY'
-          import ipaddress
           import json
           import os
           from pathlib import Path
+          from scripts.consume_growthbook_aa_quality_source import validate_activated_runtime
 
           root = Path(os.environ['TEMP_EVIDENCE_DIR'])
-          workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
-          foundation = workspace['athena']['production']['successful_foundation_deployment']
+          activation = json.load(open('projects/vevo/growthbook_production_aa_activation.json', encoding='utf-8'))
           service = json.load(open(root / 'service.json', encoding='utf-8'))['services'][0]
           task = json.load(open(root / 'task.json', encoding='utf-8'))['tasks'][0]
           definition = json.load(open(root / 'task-definition.json', encoding='utf-8'))['taskDefinition']
-          if service.get('status') != 'ACTIVE' or service.get('desiredCount') != 1 or service.get('runningCount') != 1:
-              raise SystemExit('Production collector service is not exactly healthy 1/1')
-          if service.get('taskDefinition') != os.environ['PRODUCTION_TASK_DEFINITION_ARN']:
-              raise SystemExit('Production service task definition drift')
-          if service.get('enableExecuteCommand') is not False:
-              raise SystemExit('Production execute-command boundary drift')
-          containers = task.get('containers') or []
-          if task.get('taskDefinitionArn') != os.environ['PRODUCTION_TASK_DEFINITION_ARN'] or len(containers) != 1:
-              raise SystemExit('Production service task identity drift')
-          container = containers[0]
-          definition_containers = definition.get('containerDefinitions') or []
-          if len(definition_containers) != 1 or definition_containers[0].get('name') != 'collector':
-              raise SystemExit('Production task container definition drift')
-          if definition_containers[0].get('readonlyRootFilesystem') is not True or definition_containers[0].get('user') != '10001:10001':
-              raise SystemExit('Production container hardening drift')
-          image_digest = str(container.get('imageDigest') or '')
-          recorded = foundation['service_runtime']
-          if image_digest != recorded.get('image_digest'):
-              raise SystemExit('Production service image digest differs from localhost-gated foundation')
-          current_task_definition = str(definition.get('taskDefinitionArn') or '').rsplit('/', 1)[-1]
-          if current_task_definition != recorded.get('task_definition'):
-              raise SystemExit('Production task definition differs from localhost-gated foundation')
-          details = [
-              row for attachment in task.get('attachments') or []
-              for row in attachment.get('details') or []
-          ]
-          private_ip = next((row.get('value') for row in details if row.get('name') == 'privateIPv4Address'), '')
-          parsed_ip = ipaddress.ip_address(private_ip)
-          if parsed_ip.version != 4 or not parsed_ip.is_private or not str(parsed_ip).startswith('172.31.'):
-              raise SystemExit('Production task IP is outside the VEVO private VPC')
-          task_id = task['taskArn'].rsplit('/', 1)[-1]
-          runtime = {
-              'instance_id': 'N/A:Fargate',
-              'private_ip': private_ip,
-              'service': os.environ['EXPECTED_SERVICE'],
-              'path': os.environ['EXPECTED_RUNTIME_PATH'],
-              'task_id': task_id,
-              'image_digest': image_digest,
-              'stack_name': os.environ['STACK_NAME'],
-              'database': os.environ['EXPECTED_DATABASE'],
-          }
+          runtime = validate_activated_runtime(service, task, definition, activation,
+              task_definition_arn=os.environ['PRODUCTION_TASK_DEFINITION_ARN'])
           (root / 'runtime.json').write_text(
               json.dumps(runtime, separators=(',', ':'), sort_keys=True) + '\n',
               encoding='utf-8',
           )
-          print(
-              'PRODUCTION_AA_RUNTIME_HARD_GATE_OK:'
-              f"instance-id=N/A:Fargate:private-ip={private_ip}:"
-              f"service={runtime['service']}:path={runtime['path']}:"
-              f"task={task_id}:image={image_digest}"
-          )
+          print('PRODUCTION_AA_RUNTIME_HARD_GATE_OK:activated-identity=verified:raw=false')
           PY
 
       - name: Verify exact Production Glue schemas
         run: |
           set -euo pipefail
+          aws() { command aws "$@" 2>/dev/null; }
+          trap 'echo "Production schema readback failed; raw diagnostics suppressed" >&2' ERR
           for table in experiment_events_raw experiment_device_facts experiment_performance_facts; do
             aws glue get-table \
               --database-name "${PRODUCTION_DATABASE}" \
@@ -366,6 +331,8 @@ jobs:
       - name: Reduce the bounded CloudWatch receipt window offline
         run: |
           set -euo pipefail
+          aws() { command aws "$@" 2>/dev/null; }
+          trap 'echo "Production receipt readback failed; raw diagnostics suppressed" >&2' ERR
           readarray -t WINDOW_MS < <(python - <<'PY'
           import os
           from datetime import datetime
@@ -387,41 +354,16 @@ jobs:
             --output "${TEMP_EVIDENCE_DIR}/receipt-counts.json" \
             --require-nonempty
 
-      - name: Read exact hash-bound reporting quality component
+      - name: Audit Meta dimensions from the same frozen raw source
         run: |
           set -euo pipefail
-          aws s3api get-object \
-            --bucket "${PRODUCTION_EVENT_BUCKET}" \
-            --key "${QUALITY_REPORT_KEY}" \
-            --region "${AWS_REGION}" \
-            "${TEMP_EVIDENCE_DIR}/reporting-quality.json" > "${TEMP_EVIDENCE_DIR}/quality-object-metadata.json"
-          ACTUAL_SHA256="$(sha256sum "${TEMP_EVIDENCE_DIR}/reporting-quality.json" | cut -d' ' -f1)"
-          [[ "${ACTUAL_SHA256}" == "${QUALITY_REPORT_SHA256}" ]]
-          python - <<'PY'
-          import json
-          import os
-          from datetime import datetime
-
-          path = f"{os.environ['TEMP_EVIDENCE_DIR']}/reporting-quality.json"
-          quality = json.load(open(path, encoding='utf-8'))
-          if quality.get('metric_contract_version') != 'vevo_cm1_v1_2026-08-20':
-              raise SystemExit('Production reporting metric contract drift')
-          if quality.get('experiment_id') != os.environ['EXPERIMENT_ID']:
-              raise SystemExit('Production reporting experiment drift')
-          generated = datetime.fromisoformat(str(quality.get('facts_generated_at') or '').replace('Z', '+00:00'))
-          through = datetime.fromisoformat(os.environ['AA_THROUGH_UTC'].replace('Z', '+00:00'))
-          if generated < through:
-              raise SystemExit('Production reporting quality predates the frozen through boundary')
-          if set((quality.get('variation_health') or {})) != {'control', 'variant'}:
-              raise SystemExit('Production reporting variation health drift')
-          if quality.get('raw_event_count') != quality.get('unique_event_count', 0) + quality.get('duplicate_event_count', 0):
-              raise SystemExit('Production reporting raw/unique/duplicate identity drift')
-          print('PRODUCTION_AA_REPORTING_QUALITY_OK:hash=verified:window=complete:raw=false')
-          PY
+          python scripts/consume_growthbook_aa_quality_source.py frozen-meta
 
       - name: Run one aggregate-only Athena audit over the frozen window
         run: |
           set -euo pipefail
+          aws() { command aws "$@" 2>/dev/null; }
+          trap 'echo "Production aggregate audit failed; raw diagnostics suppressed" >&2' ERR
           python - <<'PY'
           import os
           from datetime import datetime, timedelta
@@ -438,16 +380,6 @@ jobs:
               AND experiment_id = 'vevo-sk-aa-001'
               AND from_iso8601_timestamp(received_at) >= from_iso8601_timestamp('{os.environ['AA_FROM_UTC']}')
               AND from_iso8601_timestamp(received_at) < from_iso8601_timestamp('{os.environ['AA_THROUGH_UTC']}')
-          ),
-          eligible_facts AS (
-            SELECT *
-            FROM experiment_device_facts
-            WHERE experiment_id = 'vevo-sk-aa-001'
-              AND metric_contract_version = 'vevo_cm1_v1_2026-08-20'
-              AND eligible = 1
-              AND contaminated = 0
-              AND from_iso8601_timestamp(first_exposure_at) >= from_iso8601_timestamp('{os.environ['AA_FROM_UTC']}')
-              AND from_iso8601_timestamp(first_exposure_at) < from_iso8601_timestamp('{os.environ['AA_THROUGH_UTC']}')
           )
           SELECT
             (SELECT COUNT(DISTINCT event_id) FROM raw_window) AS athena_unique_event_count,
@@ -459,18 +391,6 @@ jobs:
             ) FROM raw_window) AS pii_finding_count,
             (SELECT COUNT_IF(regexp_like(coalesce(page_path, ''), '(?i)^(?:https?://)|[?#]')) FROM raw_window) AS full_url_stored_count,
             (SELECT COUNT_IF(regexp_like(lower(concat_ws('|', coalesce(page_path, ''), coalesce(utm_source, ''), coalesce(utm_medium, ''))), 'fbclid|_fbp|_fbc')) FROM raw_window) AS click_identifier_stored_count,
-            (SELECT COUNT_IF(meta_campaign_id IS NOT NULL OR meta_adset_id IS NOT NULL OR meta_ad_id IS NOT NULL OR meta_placement IS NOT NULL) FROM eligible_facts) AS meta_exposure_count,
-            (SELECT COUNT_IF(meta_campaign_id IS NOT NULL AND meta_adset_id IS NOT NULL AND meta_ad_id IS NOT NULL AND meta_placement IS NOT NULL) FROM eligible_facts) AS complete_stable_dimension_exposure_count,
-            (SELECT COUNT_IF(
-              (meta_campaign_id IS NOT NULL AND NOT regexp_like(meta_campaign_id, '^[0-9]{{1,30}}$'))
-              OR (meta_adset_id IS NOT NULL AND NOT regexp_like(meta_adset_id, '^[0-9]{{1,30}}$'))
-              OR (meta_ad_id IS NOT NULL AND NOT regexp_like(meta_ad_id, '^[0-9]{{1,30}}$'))
-              OR (meta_placement IS NOT NULL AND meta_placement NOT IN (
-                'audience_network', 'facebook_feed', 'facebook_marketplace', 'facebook_reels',
-                'facebook_stories', 'facebook_video_feeds', 'instagram_explore', 'instagram_feed',
-                'instagram_profile_feed', 'instagram_reels', 'instagram_stories', 'messenger_inbox',
-                'threads_feed'))
-            ) FROM eligible_facts) AS invalid_dimension_row_count,
             (SELECT COUNT_IF(regexp_like(lower(concat_ws('|', coalesce(page_path, ''), coalesce(utm_source, ''), coalesce(utm_medium, ''))), 'fbclid|_fbp|_fbc')) FROM raw_window) AS forbidden_click_identifier_count,
             (SELECT COUNT_IF(event_name = 'experiment_exposure' AND consent_state <> 'analytics_granted') FROM raw_window) AS non_analytical_consent_exposure_count
           """.strip()
@@ -508,6 +428,8 @@ jobs:
       - name: Count conservative consent-boundary rejects without retaining requests
         run: |
           set -euo pipefail
+          aws() { command aws "$@" 2>/dev/null; }
+          trap 'echo "Production consent audit failed; raw diagnostics suppressed" >&2' ERR
           ACCESS_LOG_GROUP="/aws/apigateway/vevo-growthbook-collector-production"
           readarray -t WINDOW_MS < <(python - <<'PY'
           import os
@@ -556,16 +478,26 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
+          import hashlib
           import json
           import os
           from pathlib import Path
 
           root = Path(os.environ['TEMP_EVIDENCE_DIR'])
-          receipt = json.load(open(root / 'receipt-counts.json', encoding='utf-8'))
-          quality = json.load(open(root / 'reporting-quality.json', encoding='utf-8'))
-          runtime = json.load(open(root / 'runtime.json', encoding='utf-8'))
-          rejects = json.load(open(root / 'access-reject-count.json', encoding='utf-8'))
-          athena = json.load(open(root / 'athena-aggregate-results.json', encoding='utf-8'))
+          receipt = json.loads((root / 'receipt-counts.json').read_bytes())
+          quality = json.loads((root / 'reporting-quality.json').read_bytes())
+          source_raw = (root / 'verified-source.json').read_bytes()
+          manifest = json.loads(Path(os.environ['SNAPSHOT_MANIFEST']).read_bytes())
+          source_sha = manifest['automated_evidence']['quality_source']['json_sha256']
+          if hashlib.sha256(source_raw).hexdigest() != source_sha:
+              raise SystemExit('prepared exact-window source hash drift')
+          capture = json.loads(source_raw)
+          if quality != capture['source']['quality']:
+              raise SystemExit('quality must remain identical to captured authoritative quality')
+          meta = json.loads((root / 'frozen-meta.json').read_bytes())
+          runtime = json.loads((root / 'runtime.json').read_bytes())
+          rejects = json.loads((root / 'access-reject-count.json').read_bytes())
+          athena = json.loads((root / 'athena-aggregate-results.json').read_bytes())
           rows = (athena.get('ResultSet') or {}).get('Rows') or []
           if len(rows) != 2:
               raise SystemExit('aggregate-only Athena result row count drift')
@@ -574,13 +506,18 @@ jobs:
           expected_columns = {
               'athena_unique_event_count', 'total_stored_row_count', 'audited_row_count',
               'pii_finding_count', 'full_url_stored_count', 'click_identifier_stored_count',
-              'meta_exposure_count', 'complete_stable_dimension_exposure_count',
-              'invalid_dimension_row_count', 'forbidden_click_identifier_count',
+              'forbidden_click_identifier_count',
               'non_analytical_consent_exposure_count',
           }
-          if len(header) != len(values) or set(header) != expected_columns:
+          if len(header) != len(values) or len(header) != len(expected_columns) or set(header) != expected_columns or athena.get('NextToken'):
               raise SystemExit('aggregate-only Athena result column drift')
           aggregate = {key: int(value) for key, value in zip(header, values, strict=True)}
+          if any(value < 0 for value in aggregate.values()):
+              raise SystemExit('negative aggregate audit value')
+          if (aggregate['total_stored_row_count'] != quality['raw_event_count']
+              or aggregate['audited_row_count'] != quality['raw_event_count']
+              or aggregate['athena_unique_event_count'] != quality['unique_event_count']):
+              raise SystemExit('Athena raw audit differs from the frozen source input')
 
           quality_health = quality['variation_health']
           health = {}
@@ -596,12 +533,13 @@ jobs:
               }
           rejected = int(rejects['conservative_rejected_request_count'])
           observation = {
-              'schema_version': 1,
+              'schema_version': 2,
               'observation_type': 'vevo_growthbook_aa_automated_observation',
               'evidence_type': 'pending_workflow_provenance',
               'experiment_id': os.environ['EXPERIMENT_ID'],
               'from_utc': os.environ['AA_FROM_UTC'],
               'through_utc': os.environ['AA_THROUGH_UTC'],
+              'quality_source_sha256': source_sha,
               'production_runtime': runtime,
               'pipeline_counts': {
                   'collector_received_event_count': int(receipt['collector_received_event_count']),
@@ -625,9 +563,9 @@ jobs:
                   'variation_health': health,
               },
               'meta_dimension_audit': {
-                  'meta_exposure_count': aggregate['meta_exposure_count'],
-                  'complete_stable_dimension_exposure_count': aggregate['complete_stable_dimension_exposure_count'],
-                  'invalid_dimension_row_count': aggregate['invalid_dimension_row_count'],
+                  'meta_exposure_count': meta['meta_exposure_count'],
+                  'complete_stable_dimension_exposure_count': meta['complete_stable_dimension_exposure_count'],
+                  'invalid_dimension_row_count': meta['invalid_dimension_row_count'],
                   'forbidden_click_identifier_count': aggregate['forbidden_click_identifier_count'],
               },
               'privacy_audit': {
@@ -656,7 +594,7 @@ jobs:
           (root / 'automated-observation.json').write_bytes(raw)
           PY
           OBSERVATION_SHA256="$(sha256sum "${TEMP_EVIDENCE_DIR}/automated-observation.json" | cut -d' ' -f1)"
-          python scripts/build_growthbook_aa_automated_evidence.py \
+          python -m scripts.build_growthbook_aa_automated_evidence \
             --observation "${TEMP_EVIDENCE_DIR}/automated-observation.json" \
             --observation-sha256 "${OBSERVATION_SHA256}" \
             --workflow-run-id "${GITHUB_RUN_ID}" \
