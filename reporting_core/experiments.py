@@ -154,10 +154,50 @@ class ExperimentBuildConfig:
 
 
 @dataclass(frozen=True)
+class ExperimentReceiptWindow:
+    """Exact half-open receipt/cohort interval with prior assignment context.
+
+    Context may establish an earlier first exposure or an ambiguous order join,
+    but it is not part of the window's event counts or exposed-device cohort.
+    The caller must independently prove complete input coverage/provenance.
+    """
+
+    context_from_utc: datetime
+    from_utc: datetime
+    through_utc: datetime
+
+    def __post_init__(self) -> None:
+        for value in (self.context_from_utc, self.from_utc, self.through_utc):
+            if (
+                not isinstance(value, datetime)
+                or value.tzinfo is None
+                or value.utcoffset() != timedelta(0)
+                or value.microsecond
+            ):
+                raise ExperimentDataError("receipt window requires whole-second UTC bounds")
+        if not self.context_from_utc <= self.from_utc < self.through_utc:
+            raise ExperimentDataError("receipt window boundaries are invalid")
+
+    def contains(self, received_at: datetime) -> bool:
+        return self.from_utc <= received_at < self.through_utc
+
+    def as_dict(self) -> Dict[str, str]:
+        return {
+            "context_from_utc": _iso_utc(self.context_from_utc).replace(".000Z", "Z"),
+            "from_utc": _iso_utc(self.from_utc).replace(".000Z", "Z"),
+            "through_utc": _iso_utc(self.through_utc).replace(".000Z", "Z"),
+            "receipt_clock": "received_at",
+            "cohort_clock": "first_valid_exposure_received_at",
+            "bounds": "inclusive_from_exclusive_through",
+        }
+
+
+@dataclass(frozen=True)
 class ExperimentFactBundle:
     device_facts: Tuple[Dict[str, Any], ...]
     performance_facts: Tuple[Dict[str, Any], ...]
     quality_reports: Tuple[Dict[str, Any], ...]
+    measurement_window: Optional[ExperimentReceiptWindow] = None
 
 
 def load_experiment_build_config(path: Path | str) -> ExperimentBuildConfig:
@@ -425,12 +465,29 @@ def build_experiment_facts(
     *,
     config: ExperimentBuildConfig,
     generated_at: datetime,
+    measurement_window: Optional[ExperimentReceiptWindow] = None,
 ) -> ExperimentFactBundle:
     if generated_at.tzinfo is None or generated_at.utcoffset() is None:
         raise ExperimentDataError("generated_at must be timezone-aware")
     generated_at = generated_at.astimezone(timezone.utc)
     generated_at_text = _iso_utc(generated_at)
+    if measurement_window is not None:
+        if not isinstance(measurement_window, ExperimentReceiptWindow):
+            raise ExperimentDataError("measurement window has an invalid type")
+        if generated_at < measurement_window.through_utc:
+            raise ExperimentDataError("measurement window is not complete")
+        raw_events = list(raw_events)
     events, duplicate_counts = _deduplicate_events(raw_events)
+    if measurement_window is not None:
+        if any(event["_received_at"] < measurement_window.context_from_utc for event in events):
+            raise ExperimentDataError("receipt predates the declared assignment context")
+        # Validate all loaded rows first, including partition-edge rows. Metrics
+        # then ignore receipts at/after the exact through boundary.
+        events = [event for event in events if event["_received_at"] < measurement_window.through_utc]
+        _, duplicate_counts = _deduplicate_events(
+            row for row in raw_events
+            if measurement_window.contains(_utc_datetime(row.get("received_at"), "received_at"))
+        )
     orders = _deduplicate_orders(authoritative_orders)
 
     for event in events:
@@ -445,14 +502,18 @@ def build_experiment_facts(
     for event in events:
         key = (event["experiment_id"], event["device_id"])
         events_by_subject[key].append(event)
-        events_by_experiment[event["experiment_id"]].append(event)
+        if measurement_window is None or measurement_window.contains(event["_received_at"]):
+            events_by_experiment[event["experiment_id"]].append(event)
 
     subjects: Dict[Tuple[str, str], Dict[str, Any]] = {}
     orphan_counts: Counter[str] = Counter()
     for key, subject_events in events_by_subject.items():
         exposures = [event for event in subject_events if event["event_name"] == "experiment_exposure"]
         if not exposures:
-            orphan_counts[key[0]] += len(subject_events)
+            orphan_counts[key[0]] += sum(
+                measurement_window is None or measurement_window.contains(event["_received_at"])
+                for event in subject_events
+            )
             continue
         first = min(exposures, key=lambda event: (event["_received_at"], event["event_id"]))
         exposure_variations = {event["variation_id"] for event in exposures}
@@ -474,6 +535,11 @@ def build_experiment_facts(
             "contaminated": variation_contamination or variation_mismatch,
             "exclusion_reason": "|".join(reasons),
         }
+
+    cohort_subjects = {
+        key for key, subject in subjects.items()
+        if measurement_window is None or measurement_window.contains(subject["first"]["_received_at"])
+    }
 
     transaction_subjects: MutableMapping[Tuple[str, str], set[str]] = defaultdict(set)
     subject_transactions: MutableMapping[Tuple[str, str], Dict[str, Dict[str, Any]]] = defaultdict(dict)
@@ -506,7 +572,7 @@ def build_experiment_facts(
     ambiguous_transactions_by_experiment: MutableMapping[str, set[str]] = defaultdict(set)
     attributed_transactions_by_experiment: MutableMapping[str, set[str]] = defaultdict(set)
 
-    for key in sorted(subjects):
+    for key in sorted(cohort_subjects):
         experiment_id, device_id = key
         subject = subjects[key]
         first = subject["first"]
@@ -700,8 +766,9 @@ def build_experiment_facts(
 
         unique_transactions = {
             transaction_id
-            for (candidate_experiment, transaction_id), _devices in transaction_subjects.items()
+            for (candidate_experiment, transaction_id), devices in transaction_subjects.items()
             if candidate_experiment == experiment_id
+            and any((candidate_experiment, device) in cohort_subjects for device in devices)
         }
         joined_transactions = joined_transactions_by_experiment[experiment_id]
         quality_reports.append(
@@ -752,6 +819,7 @@ def build_experiment_facts(
         device_facts=tuple(device_facts),
         performance_facts=tuple(performance_facts),
         quality_reports=tuple(quality_reports),
+        measurement_window=measurement_window,
     )
 
 
@@ -782,6 +850,8 @@ def publish_experiment_facts(
     bundle: ExperimentFactBundle,
     prefix: str = "experiment-events/curated",
 ) -> Dict[str, int]:
+    if bundle.measurement_window is not None:
+        raise ExperimentDataError("windowed evidence cannot overwrite ordinary curated facts")
     normalized_prefix = prefix.strip(" /")
     if not normalized_prefix or ".." in normalized_prefix:
         raise ExperimentDataError("invalid curated prefix")

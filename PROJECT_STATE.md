@@ -5,6 +5,34 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Exact-window A/A quality calculator and source contract implemented
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-exact-window-quality-core`
+
+What changed:
+
+- Implemented `ExperimentReceiptWindow` as an explicit optional audit mode in the shared fact builder. Prior assignment context prevents pre-window visitors re-entering the cohort; exact half-open receipt bounds exclude later events while preserving cross-cohort order ambiguity and existing metric semantics. Ordinary reporting callers are unchanged.
+- Added a hard rejection before ordinary curated publication of any windowed bundle. No partial audit can overwrite the production device/performance facts through the existing publisher.
+- Added the pure `build_growthbook_aa_quality_source.py` builder/validator: canonical aggregate-only envelope, explicit receipt/cohort/context window, independently expected checkpoint/snapshot/run/main bindings, deterministic whole-input hashes, exact sample parity, and strict schema/safety checks. It has no network, credentials, filesystem writes or deployment path.
+- Added the full 133-test source/reporting/A/A lifecycle suite to the existing required `security-baseline` CI job, so these regressions are exercised on every PR instead of only locally or at a later producer dispatch. This changes CI coverage only, not a Production/AWS workflow gate.
+
+What is verified:
+
+- 133 focused tests pass across new source/boundary cases, existing reporting and scheduled reconciliation, checkpoints, source/component recorders, automated/manual evidence, snapshot assembly and workspace. Coverage includes local-day UTC boundaries, pre-window repeat exposures, post-through contamination/outcomes/performance, duplicate/orphan counts, cross-cohort transaction ambiguity, exact order joins, unsafe inputs, digest/provenance drift, and refusal to publish a windowed bundle.
+- Measurement-window/workspace validators, security and diff checks pass. All tests use synthetic data; no live arm/outcome/performance values or raw identities were read.
+- An additional 100 synthetic differential cases compared all device facts, performance facts and quality reports with the original core at `57585d4864da82ebd7c2906fb04d95b0cbec9969`; ordinary unwindowed outputs were identical, including duplicates, contamination, orphans and ambiguous joins.
+- Frozen snapshot/checkpoint history, all evidence/stop/paid/CTA gates, ordinary schedule parameters and runtime remain unchanged. No AWS/browser calls, infrastructure deployment, Preview wake, commerce mutation, temporary source download or local application process occurred.
+
+Known issues:
+
+- `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED` remains until a protected producer proves complete live source coverage and the offline recorder/automated consumer require the new envelope. The reserved source workflow path is not yet implemented and no live quality artifact or A/A PASS exists. Pure calculation tests do not establish input completeness or runtime health.
+
+Next exact step:
+
+- After this implementation passes CI and merges, implement the narrow managed GitHub source-producer workflow and consumer/recorder migration described in `GROWTHBOOK_AA_QUALITY_SOURCE_AUDIT.md`. Derive and prove the context floor from approved activation/runtime history; bind the pre-transition snapshot at the exact source main commit, not the later opened manifest. Review any required one-shot runtime or access gate before collection. Do not shift the fixed A/A window/count, issue further sample checkpoints, publish ordinary facts, stop A/A, wake Preview or open paid/CTA gates.
+
 ## 2026-09-05 — Post-resolution quality-source audit; evaluation held closed
 
 Date: 2026-09-05

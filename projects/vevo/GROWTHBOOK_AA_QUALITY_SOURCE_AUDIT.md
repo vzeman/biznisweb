@@ -3,6 +3,63 @@
 Status: `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED`. This is a source-contract
 finding, not a measured A/A failure or permission to restart the experiment.
 
+## Repair progress — exact-window calculation implemented, runtime still closed
+
+The first implementation stage adds optional `ExperimentReceiptWindow` handling
+to the existing deterministic fact builder and the pure
+`scripts/build_growthbook_aa_quality_source.py` module. Ordinary callers omit
+the option and keep their existing reporting behavior. A windowed bundle is
+explicitly rejected by the ordinary curated publisher before its first write.
+
+The new calculation keeps prior receipts as assignment/ambiguity context, uses
+`received_at` with inclusive-from/exclusive-through bounds, and includes only
+devices whose first valid contextual exposure falls in the resolved interval.
+Event/duplicate/orphan counts cover the receipt interval; context-only devices
+cannot re-enter the cohort. Cross-cohort transaction ambiguity remains visible.
+Receipts at/after through cannot change assignment eligibility, outcomes or
+performance. This is the bounded A/A audit calculation, not a change to the
+ordinary 7-day purchase or 24-hour health/cart metric definitions or the future
+CTA follow-up policy.
+
+The pure source builder emits only an aggregate envelope binding exact receipt,
+cohort and context bounds; independent snapshot/checkpoint hashes; main-run
+provenance; generation time; and whole-extract input digests. Its validator
+rejects missing/mismatched windows despite equal counts, unrelated provenance,
+noncanonical bytes, altered SHA-256, population mismatch, and unsafe fields.
+Input digests retain duplicates and are order-independent; no event, device or
+order identity appears in the output. The new generation uses whole-second UTC
+schema timestamps, without rewriting any legacy S3 object.
+
+**This is not yet a live quality-source capture or a completed repair.** There
+is no new source workflow, runtime deployment, source artifact, consumer gate
+opening or producer dispatch. The reserved workflow path in the new envelope
+is a contract for the next implementation, not evidence that a run exists.
+The current source recorder and automated workflow still use the legacy
+quality-object interface and remain blocked by this audit.
+
+Next implement the managed, main-only source producer and migrate the source
+recorder/automated consumer to this exact envelope. The producer's pre-AWS gate
+must independently validate the resolved snapshot and checkpoint, derive the
+complete context floor from approved activation/runtime history, freeze the
+source generation and input coverage, and supply the expected hashes/run/main
+metadata. Never trust those expected values only because the artifact says so.
+Do not infer source completeness from input digests or the pure calculation;
+the protected source adapter must separately prove complete coverage. A full
+snapshot-file hash must be bound to the source run's pre-transition commit,
+not recomputed against the later source-opened manifest. Prepare any required
+one-shot runtime/credential access as a separately reviewed gate before live
+collection; do not overwrite ordinary curated facts or wake Preview.
+
+Verification: 133 focused tests cover the new source/boundaries plus existing
+reporting, scheduled reconciliation, checkpoint, evidence, assembly and
+workspace behavior. The entire suite is now included in the existing required
+`security-baseline` PR job. Window/workspace validators, security and diff checks pass.
+An additional 100 synthetic differential cases matched all three ordinary
+outputs against the pre-change committed core byte-for-byte after canonical
+JSON serialization, including duplicates, contamination, orphans and ambiguity.
+Only synthetic input was used; real cohort eligibility still requires source
+production and must exactly equal the already resolved checkpoint, or stop.
+
 ## Verified boundary
 
 The reviewed snapshot resolves the existing window to

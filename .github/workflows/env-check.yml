@@ -112,6 +112,24 @@ jobs:
             tests.test_growthbook_natural_reconciliation_workflow \
             tests.test_growthbook_production_foundation_workflow
 
+      - name: VEVO GrowthBook A/A source and lifecycle regressions
+        run: |
+          python3 -m unittest \
+            tests.test_growthbook_aa_quality_source \
+            tests.test_growthbook_reporting \
+            tests.test_growthbook_pipeline \
+            tests.test_growthbook_aa_measurement_window \
+            tests.test_growthbook_aa_window_checkpoint_recorder \
+            tests.test_growthbook_aa_window_checkpoint_workflow \
+            tests.test_growthbook_aa_evidence_gate_recorder \
+            tests.test_growthbook_aa_automated_evidence \
+            tests.test_growthbook_aa_automated_workflow \
+            tests.test_growthbook_aa_manual_qa_evidence \
+            tests.test_growthbook_aa_manual_qa_workflow \
+            tests.test_growthbook_aa_snapshot_assembler \
+            tests.test_growthbook_workspace \
+            tests.test_scheduled_growthbook_reconciliation
+
       - name: VEVO GrowthBook reconciliation host gate
         run: |
           docker build -t vevo-reporting-growthbook:ci .
