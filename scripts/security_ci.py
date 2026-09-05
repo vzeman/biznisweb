@@ -2580,7 +2580,7 @@ def main() -> int:
             "validate_growthbook_aa_measurement_window.py",
             "frozen Production A/A evidence window is not recorded",
             "pre-registered A/A stopping rule is not resolved",
-            "canonical Production reporting quality is not recorded",
+            "canonical exact-window source binding is not recorded",
             "Production localhost and marker hard gate is missing",
             "Production GrowthBook clone must be complete and re-closed",
             "row.get('tracking_key'): row",
@@ -2588,10 +2588,13 @@ def main() -> int:
             "PRODUCTION_AA_RUNTIME_HARD_GATE_OK:",
             "PRODUCTION_AA_GLUE_SCHEMA_OK:",
             "scripts/summarize_growthbook_receipts.py",
-            "aws s3api get-object",
+            "consume_growthbook_aa_quality_source.py verify-source",
+            "consume_growthbook_aa_quality_source.py frozen-meta",
+            "quality_source_sha256': source_sha",
+            "Athena raw audit differs from the frozen source input",
             "aws athena start-query-execution",
             "aws athena get-query-results",
-            "scripts/build_growthbook_aa_automated_evidence.py",
+            "-m scripts.build_growthbook_aa_automated_evidence",
             '--workflow-run-id "${GITHUB_RUN_ID}"',
             '--main-commit "${GITHUB_SHA}"',
             "Remove all temporary AWS responses and aggregate query files",
@@ -2605,6 +2608,20 @@ def main() -> int:
                 "GrowthBook A/A automated evidence workflow lost safety marker: "
                 f"{required_automated_workflow_marker}",
             )
+        source_step = growthbook_aa_automated_workflow.index("consume_growthbook_aa_quality_source.py verify-source")
+        credential_step = growthbook_aa_automated_workflow.index("uses: aws-actions/configure-aws-credentials@v6.1.0")
+        if source_step >= credential_step:
+            raise AssertionError("A/A source verification must precede AWS credentials")
+        for rolling_marker in ("QUALITY_REPORT_KEY", "FROM eligible_facts", "FROM experiment_device_facts", "aws s3api get-object"):
+            forbid(growthbook_aa_automated_workflow, rolling_marker, "A/A consumer must not use rolling quality/Meta facts")
+        frozen_consumer = read("scripts/consume_growthbook_aa_quality_source.py")
+        for marker in ("validate_consumer_gate", "verify_source_bundle", "read_git_source_inputs",
+                       "verified.binding == binding", "reject_previous_collection", "_input_digest(rows)",
+                       "measurement_window=window", 'source["quality"][key]', "validate_activated_runtime"):
+            require(frozen_consumer, marker, f"A/A frozen consumer lost boundary: {marker}")
+        for forbidden in ("read_receipted_order_source", "read_managed_token", "import requests", "import export_orders",
+                          "put_object(", "publish_experiment_facts(", "get_secret_value(", "get_parameter("):
+            forbid(frozen_consumer, forbidden, f"A/A frozen consumer gained non-source-bound access: {forbidden}")
         for forbidden_measurement_window_validator_marker in (
             "import boto3",
             "import requests",

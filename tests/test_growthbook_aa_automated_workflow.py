@@ -55,7 +55,7 @@ class GrowthBookAaAutomatedWorkflowTests(unittest.TestCase):
             "validate_growthbook_aa_measurement_window.py",
             "frozen Production A/A evidence window is not recorded",
             "pre-registered A/A stopping rule is not resolved",
-            "canonical Production reporting quality is not recorded",
+            "canonical exact-window source binding is not recorded",
             "Production localhost and marker hard gate is missing",
             "Production reader evidence is missing",
             "Production GrowthBook clone must be complete and re-closed",
@@ -71,6 +71,12 @@ class GrowthBookAaAutomatedWorkflowTests(unittest.TestCase):
         first_aws = WORKFLOW.index("aws sts get-caller-identity")
         self.assertLess(gate, credentials)
         self.assertLess(credentials, first_aws)
+        source = WORKFLOW.index('consume_growthbook_aa_quality_source.py verify-source')
+        self.assertLess(gate, source)
+        self.assertLess(source, credentials)
+        self.assertIn('fetch-depth: 0', WORKFLOW)
+        self.assertIn('actions: read', WORKFLOW)
+        self.assertIn('CONFIRM_COLLECTION: ${{ inputs.confirm_collection }}', WORKFLOW)
 
     def test_reads_bounded_authoritative_sources_and_strips_temporary_payloads(self) -> None:
         for marker in (
@@ -78,13 +84,15 @@ class GrowthBookAaAutomatedWorkflowTests(unittest.TestCase):
             "aws ecs describe-services",
             "aws ecs describe-tasks",
             "PRODUCTION_AA_RUNTIME_HARD_GATE_OK:",
-            "current_task_definition = str(definition.get('taskDefinitionArn') or '').rsplit('/', 1)[-1]",
+            "runtime = validate_activated_runtime(service, task, definition, activation,",
             "aws glue get-table",
             "PRODUCTION_AA_GLUE_SCHEMA_OK:",
             "aws logs filter-log-events",
             "scripts/summarize_growthbook_receipts.py",
-            '"${QUALITY_REPORT_SHA256}"',
-            "aws s3api get-object",
+            "consume_growthbook_aa_quality_source.py frozen-meta",
+            "quality_source_sha256': source_sha",
+            "quality must remain identical to captured authoritative quality",
+            "Athena raw audit differs from the frozen source input",
             "aws athena start-query-execution",
             "aws athena get-query-results",
             "COUNT(DISTINCT event_id)",
@@ -94,11 +102,16 @@ class GrowthBookAaAutomatedWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(marker, WORKFLOW)
         self.assertNotIn("privacy_sample AS", WORKFLOW)
+        self.assertNotIn("FROM eligible_facts", WORKFLOW)
+        self.assertNotIn("FROM experiment_device_facts", WORKFLOW)
+        self.assertNotIn("QUALITY_REPORT_KEY", WORKFLOW)
+        self.assertNotIn("aws s3api get-object", WORKFLOW)
+        self.assertEqual(5, WORKFLOW.count('aws() { command aws "$@" 2>/dev/null; }'))
         self.assertNotIn("LIMIT 100", WORKFLOW)
         self.assertEqual(8, WORKFLOW.count("FROM raw_window"))
         self.assertLess(
             WORKFLOW.index("scripts/summarize_growthbook_receipts.py"),
-            WORKFLOW.index("scripts/build_growthbook_aa_automated_evidence.py"),
+            WORKFLOW.index("-m scripts.build_growthbook_aa_automated_evidence"),
         )
         self.assertLess(
             WORKFLOW.index("Remove all temporary AWS responses and aggregate query files"),

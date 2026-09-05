@@ -201,6 +201,16 @@ or the snapshot gate until the reviewed exact-window source/provenance repair
 is implemented and independently verified. Do not alter the stopping boundary,
 use local AWS credentials, or choose a quality report by observed results.
 
+The automated consumer migration now independently verifies the original
+source/health GitHub artifacts before credentials, audits Meta assignment from
+the same hash-bound retained input rather than rolling curated facts, and emits
+the source hash in automated schema 2. Its shared source-support constant remains
+false until a separate reviewed PR opens that implementation gate. No live
+source or A/A PASS follows merely from the offline tests. Once that PR is merged,
+obtain fresh exact-main infra health before the single source acquisition, then
+record the source through the offline recorder; never use a local AWS key or
+open the manifest merely to discover a quality object.
+
 After the resolved checkpoint is merged, follow the exact checked-in gates in
 this order:
 

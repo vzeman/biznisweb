@@ -3,6 +3,48 @@
 Status: `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED`. This is a source-contract
 finding, not a measured A/A failure or permission to restart the experiment.
 
+## Automated acquisition migrated — support-gate review is next
+
+The protected automated workflow now consumes the recorded source through
+`scripts/consume_growthbook_aa_quality_source.py`. Before AWS credentials, it
+independently downloads both source and health run/artifact metadata and ZIPs,
+loads the original source-commit Git inputs, verifies all provenance again and
+requires the result to equal the reviewed schema-3 binding and fixed checkpoint
+history. Hosted exact-main/manual/first-attempt checks and prior-run/artifact
+history prevent local execution, duplicate collection and result-driven retries.
+
+After the activated collector identity and Glue checks, a bounded conditional
+S3 read must reproduce the source's entire raw-input digest. Only assignment
+and Meta dimensions are rebuilt using the shared exact-window calculator:
+prior context excludes returning pre-window devices, first-exposure dimensions
+remain fixed, in-window contamination remains visible, and post-through events
+cannot alter the cohort. This step reads no orders/API/token and cannot replace
+captured authoritative quality or outcomes with its order-free calculation.
+
+The Athena audit no longer reads rolling curated device facts. It audits all
+raw rows in the fixed receipt window and must match captured raw/unique counts;
+privacy, consent and receipt checks remain. The actual observation assembler
+requires the unchanged captured quality and emits schema 2 with its recorded
+`quality_source_sha256`. The activated revision/image replaces the obsolete
+foundation comparison, accepting only stable CREATE/UPDATE-complete stacks.
+Raw AWS CLI errors and runtime identifiers are not printed; runner payloads
+are deleted before uploading the single canonical automated component.
+
+Verification: 12 new executable regressions and the expanded 226-test focused
+suite pass. Coverage includes the actual pre-AWS CLI and actual inline
+observation assembly, independently verified archives/original Git inputs,
+substitution with equal totals, frozen context/contamination, preserved order
+quality, conditional retained reads, runtime drift and duplicate-run refusal.
+All tests use synthetic sources and are required in security-baseline CI.
+
+**Live acquisition is still closed.** This migration does not flip
+`EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED` or open any checked-in live manifest.
+After review/CI/merge, review that support constant alone in a separate PR;
+then require fresh exact-main infra health and acquire/record the one source.
+Retained coverage, inherited token access and pinned endpoint behavior must be
+proved live or remain blocked. No extra checkpoint, sample/window change,
+Preview wake, A/A stop or paid/CTA/commerce transition is permitted here.
+
 ## Offline source binding migrated — automated acquisition remains closed
 
 `open-automated` now rejects the legacy rolling-quality interface. The new

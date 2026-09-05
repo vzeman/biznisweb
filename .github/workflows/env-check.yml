@@ -119,6 +119,7 @@ jobs:
             tests.test_growthbook_quality_source_io \
             tests.test_growthbook_managed_quality_source \
             tests.test_growthbook_aa_source_binding \
+            tests.test_growthbook_aa_frozen_consumer \
             tests.test_growthbook_reporting \
             tests.test_growthbook_pipeline \
             tests.test_growthbook_aa_measurement_window \
