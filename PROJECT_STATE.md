@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — First managed frozen source dispatched; consume this run only
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-first-source-capture`
+
+What changed:
+
+- Reader-only PR #520 merged as `1deb4d9ae9997a03bf21370695e2d47a7378b9a4` after all four exact-head CI checks and independently confirmed 228-test execution. Clean exact main passed the workspace, measurement-window and activation validators.
+- After confirming no existing source capture, dispatched the first managed source run `33961911689` on that exact main, bound to independently verified health run `33961779752`. Its pre-AWS local/provenance gate passed; the read-only source step is in progress. Do not dispatch a duplicate or interpret an unfinished run as source-quality evidence.
+
+What is verified:
+
+- Health run `33961779752` succeeded on exact main `1deb4d9ae9997a03bf21370695e2d47a7378b9a4`; its sole artifact is `9968178374`, GitHub ZIP SHA-256 `7c6fbd4657c70bb2cdb4aa5649f07fb9fd69579d84da460302fef27e48c408d1`, original JSON SHA-256 `b8b5c09c343c5ed26adae98a839ca31b2153fcdc0ccb47b02a0fd82b0aab23c5`, observation `2026-09-05T10:53:35Z`. Independent downloads verified run/artifact ownership, ZIP content/digest, exact producer JSON bytes/hash, offline health validation and the latest 03:45 reconciliation. No local artifact file or raw AWS payload was created.
+- Resolved checkpoint history and all live manifests remain unchanged. This session did not stop A/A, wake Preview, change commerce or start local application processes. Browser inventory is available through the connected Chrome extension; no GrowthBook/GTM page or shop admin data was inspected for QA yet.
+
+Known issues:
+
+- The source run is not yet complete; source coverage/quality, both evidence components and A/A PASS remain unverified. No source artifact has been recorded, and automated/manual/snapshot/stop/paid/CTA gates remain closed.
+
+Next exact step:
+
+- Inspect/wait for run `33961911689`, never duplicate it. If successful, independently verify its single canonical source artifact and the separately downloaded health artifact against the original main's Git inputs and exact ZIP/JSON digests, then record only through `record_growthbook_aa_evidence_gates.py open-automated` on a new branch with tests/state/PR. If it fails, inspect only sanitized fixed failure-stage messages and artifact metadata; retained artifacts require recovery, not recapture. Never change the frozen sample/window or weaken acceptance based on results. Continue genuine QA and protected evidence only after their own recorded gates.
+
 ## 2026-09-05 — Live infra health verified; preserve each producer's canonical format
 
 Date: 2026-09-05
