@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Raw-read improvement verified; receipt failure localized without raw logs
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-receipt-failure-diagnostics`
+
+What changed:
+
+- PR #531 merged as `3e137257c4590aa3f56028bd7f9f27f9fecceed4` after all four exact-head checks and actual 240-test CI execution. Clean exact main was synchronized before this investigation. Source run `33972852946` / job `101324325818` is now terminal `failure`, completed `2026-09-05T14:58:41Z` on original main `b467f416ddfbc36bcd9fe18cdf55b2377814c110`. Its source step exited 2; upload was skipped, cleanup succeeded and an independent artifact listing proves zero artifacts. There is no live source wait and no new acquisition was dispatched.
+- Fixed sanitized markers prove conditional reads now completed in 6m32.366s (`14:48:27.6553165Z` to `14:55:00.0216782Z`), versus the previous 43m02.684s observation. Strict raw validation and stable final inventory returned. Receipt parity began at `14:55:08.0574219Z` and failed at `14:58:38.0464885Z` with the fixed `unclassified-error` code. This is not a timeout, receipt mismatch, missing-event proof, complete source or A/A FAIL/PASS.
+- Prepared receipt-only diagnostics: four fixed substeps for retention/read/validation/comparison; sanitized SDK operation failure categories; allowlisted local receipt reason codes without message/index/payload output. Exact concatenated canonical markers may be diagnosed as a framing shape but remain rejected, not recovered or counted. The shared validator's acceptance, errors' detailed local text, calculations and canonical output are unchanged. CI and the pre-AWS source gate now include its receipt-summary tests. No source/acceptance/window/manifest, raw-read concurrency, timeout, retry or order pacing changed.
+
+What is verified:
+
+- The 252-test source/lifecycle/receipt suite and workspace/window/activation/security validators plus `git diff --check` pass locally. Seven new synthetic cases prove identity-free fixed codes, forged-code/hostile-exception handling, real substep failure attribution, unchanged silent/progress I/O/proof, CLI raw-output suppression and strict rejection of concatenated markers. Tests are offline; no local AWS client or raw source/log file was created and all finite test processes completed.
+- The earlier unclassified category could have been a local `ReceiptSummaryError` or an SDK/Python error; existing live evidence cannot distinguish them. No actual receipt content was inspected or inferred. Raw-read success does not authorize partial-source reuse or downstream quality claims.
+
+Known issues:
+
+- `SOURCE_CAPTURE_RECEIPT_PARITY_UNCLASSIFIED_FAILURE`: all four attempts are terminal and artifact-free; the missing fixed receipt diagnosis prevents a source transition. Do not rerun or bypass the failed check. This diagnostic patch is not proof the cause is repaired.
+- `GTM_LIVE_VERSION_DRIFT` and `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK` remain separately closed manual-QA paths. A/A was not stopped, Preview remains asleep and no GTM/GrowthBook/Meta/BiznisWeb/commerce control changed. Snapshot PASS, stop, paid Pro and CTA remain closed.
+
+Next exact step:
+
+- Review this diagnostic-only change, require all exact-head CI checks and actual execution of all 252 tests, then merge through PR and synchronize clean main. Recover-check every existing source run/artifact, obtain independently verified fresh same-main managed health, and only then consider one new source acquisition with the fixed receipt diagnostics. On failure use only its fixed phase/code and artifact metadata to determine the next correction; do not change the frozen window, accept malformed/missing receipts or repeatedly capture until PASS. On success independently verify the original source/health archives and original Git inputs before the offline recorder. No local application service was started or left running.
+
 ## 2026-09-05 — Reviewed bounded-read acquisition live on exact main
 
 Date: 2026-09-05

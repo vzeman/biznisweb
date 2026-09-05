@@ -28,15 +28,33 @@ except ModuleNotFoundError:  # Direct execution from the scripts directory.
 
 UTC_RE = re.compile(r"^20[2-9][0-9]-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 EXPECTED_RECEIPT_KEYS = {"accepted", "duplicate", "marker", "schema_version"}
+RECEIPT_FAILURE_CODES = frozenset({
+    "receipt-summary-invalid", "receipt-export-invalid", "receipt-export-incomplete",
+    "receipt-event-invalid", "receipt-log-id-missing", "receipt-log-id-duplicate",
+    "receipt-timestamp-invalid", "receipt-outside-window", "receipt-message-invalid",
+    "receipt-json-invalid", "receipt-json-concatenated-markers",
+    "receipt-object-invalid", "receipt-fields-drift",
+    "receipt-schema-drift", "receipt-marker-drift", "receipt-accepted-drift",
+    "receipt-duplicate-drift",
+})
 
 
 class ReceiptSummaryError(ValueError):
     """Raised when the CloudWatch receipt export cannot be trusted."""
 
+    def __init__(self, message: str, *, safe_code: str = "receipt-summary-invalid") -> None:
+        super().__init__(message)
+        # The managed source may emit this fixed category, never the detailed
+        # local exception message (which can contain an event position).
+        self.safe_code = (
+            safe_code if type(safe_code) is str and safe_code in RECEIPT_FAILURE_CODES
+            else "receipt-summary-invalid"
+        )
 
-def _require(condition: bool, message: str) -> None:
+
+def _require(condition: bool, message: str, *, safe_code: str = "receipt-summary-invalid") -> None:
     if not condition:
-        raise ReceiptSummaryError(message)
+        raise ReceiptSummaryError(message, safe_code=safe_code)
 
 
 def _parse_utc(value: str, field: str) -> datetime:
@@ -52,6 +70,31 @@ def _canonical_json(payload: Mapping[str, Any]) -> bytes:
         json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
         + "\n"
     ).encode("utf-8")
+
+
+def _invalid_json_code(message: str) -> str:
+    """Recognize only a bounded exact marker-framing shape; still reject it.
+
+    No recovery, splitting into accepted events, message export or count output.
+    Each candidate is the collector's exact canonical four-field serialization.
+    Any other prefix/suffix/field/format or an exceeded diagnostic bound stays
+    generic. This cannot prove why multiple markers share one log event.
+    """
+    if len(message) > 8192:
+        return "receipt-json-invalid"
+    candidates = tuple(_canonical_json({
+        "accepted": True, "duplicate": duplicate, "marker": RECEIPT_MARKER, "schema_version": 1,
+    }).decode().strip() for duplicate in (False, True))
+    remaining, matched = message.strip(), 0
+    while remaining and matched < 64:
+        for candidate in candidates:
+            if remaining.startswith(candidate):
+                remaining = remaining[len(candidate):].lstrip()
+                matched += 1
+                break
+        else:
+            return "receipt-json-invalid"
+    return "receipt-json-concatenated-markers" if not remaining and matched >= 2 else "receipt-json-invalid"
 
 
 def _write_atomic(path: Path, payload: Mapping[str, Any]) -> None:
@@ -81,42 +124,44 @@ def summarize_receipts(
     _require(through > start, "receipt window must be non-empty")
     start_ms = int(start.timestamp() * 1000)
     through_ms = int(through.timestamp() * 1000)
-    _require(isinstance(payload, dict), "CloudWatch export must be an object")
-    _require(not payload.get("nextToken"), "CloudWatch export is incomplete")
+    _require(isinstance(payload, dict), "CloudWatch export must be an object", safe_code="receipt-export-invalid")
+    _require(not payload.get("nextToken"), "CloudWatch export is incomplete", safe_code="receipt-export-incomplete")
     events = payload.get("events")
-    _require(isinstance(events, list), "CloudWatch export events must be a list")
+    _require(isinstance(events, list), "CloudWatch export events must be a list", safe_code="receipt-export-invalid")
 
     event_ids: set[str] = set()
     duplicates = 0
     for index, event in enumerate(events):
-        _require(isinstance(event, dict), f"CloudWatch event {index} must be an object")
+        _require(isinstance(event, dict), f"CloudWatch event {index} must be an object", safe_code="receipt-event-invalid")
         event_id = event.get("eventId")
         timestamp = event.get("timestamp")
         message = event.get("message")
-        _require(isinstance(event_id, str) and event_id, f"CloudWatch event {index} ID missing")
-        _require(event_id not in event_ids, "CloudWatch receipt event ID is duplicated")
+        _require(isinstance(event_id, str) and event_id, f"CloudWatch event {index} ID missing", safe_code="receipt-log-id-missing")
+        _require(event_id not in event_ids, "CloudWatch receipt event ID is duplicated", safe_code="receipt-log-id-duplicate")
         event_ids.add(event_id)
-        _require(type(timestamp) is int, f"CloudWatch event {index} timestamp is invalid")
+        _require(type(timestamp) is int, f"CloudWatch event {index} timestamp is invalid", safe_code="receipt-timestamp-invalid")
         _require(
             start_ms <= timestamp < through_ms,
             f"CloudWatch event {index} is outside the requested window",
+            safe_code="receipt-outside-window",
         )
-        _require(isinstance(message, str), f"CloudWatch event {index} message is invalid")
+        _require(isinstance(message, str), f"CloudWatch event {index} message is invalid", safe_code="receipt-message-invalid")
         try:
             receipt = json.loads(message.strip())
         except json.JSONDecodeError as exc:
             raise ReceiptSummaryError(
-                f"CloudWatch event {index} receipt is not valid JSON"
+                f"CloudWatch event {index} receipt is not valid JSON", safe_code=_invalid_json_code(message)
             ) from exc
-        _require(isinstance(receipt, dict), f"CloudWatch event {index} receipt must be an object")
+        _require(isinstance(receipt, dict), f"CloudWatch event {index} receipt must be an object", safe_code="receipt-object-invalid")
         _require(
             set(receipt) == EXPECTED_RECEIPT_KEYS,
             f"CloudWatch event {index} receipt field set drift",
+            safe_code="receipt-fields-drift",
         )
-        _require(receipt["schema_version"] == 1, "receipt schema drift")
-        _require(receipt["marker"] == RECEIPT_MARKER, "receipt marker drift")
-        _require(receipt["accepted"] is True, "receipt accepted state drift")
-        _require(type(receipt["duplicate"]) is bool, "receipt duplicate state drift")
+        _require(receipt["schema_version"] == 1, "receipt schema drift", safe_code="receipt-schema-drift")
+        _require(receipt["marker"] == RECEIPT_MARKER, "receipt marker drift", safe_code="receipt-marker-drift")
+        _require(receipt["accepted"] is True, "receipt accepted state drift", safe_code="receipt-accepted-drift")
+        _require(type(receipt["duplicate"]) is bool, "receipt duplicate state drift", safe_code="receipt-duplicate-drift")
         duplicates += int(receipt["duplicate"])
 
     received = len(events)

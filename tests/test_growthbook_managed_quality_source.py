@@ -160,6 +160,108 @@ class ManagedSourceTests(unittest.TestCase):
         ):
             self.assertEqual(expected, source.safe_failure_code(error))
 
+    def test_receipt_failure_codes_ignore_message_and_reject_forged_codes(self):
+        class UnsafeMessage:
+            def __str__(self):
+                raise AssertionError('detailed message must not be formatted')
+
+        for code in source.RECEIPT_FAILURE_CODES:
+            error = source.ReceiptSummaryError(UnsafeMessage(), safe_code=code)
+            self.assertEqual(code, source.safe_failure_code(error))
+        for invalid in ('SENSITIVE', 'receipt-json-invalid\nSENSITIVE', None, {}, 1):
+            error = source.ReceiptSummaryError('SENSITIVE')
+            error.safe_code = invalid
+            self.assertEqual('receipt-summary-invalid', source.safe_failure_code(error))
+        del error.safe_code
+        self.assertEqual('receipt-summary-invalid', source.safe_failure_code(error))
+
+        class UntrustedSubclass(source.ReceiptSummaryError):
+            @property
+            def safe_code(self):
+                raise AssertionError('untrusted exception metadata must not be inspected')
+
+        error = UntrustedSubclass.__new__(UntrustedSubclass)
+        self.assertEqual('unclassified-error', source.safe_failure_code(error))
+
+    def test_receipt_substeps_preserve_pagination_proof_and_default_silence(self):
+        current = plan()
+        row = event(received_at=current.window.from_utc)
+        marker = json.dumps({'schema_version': 1, 'marker': 'VEVO_GROWTHBOOK_COLLECTOR_RECEIPT',
+                             'accepted': True, 'duplicate': False})
+        payload = {'eventId': 'synthetic-log', 'timestamp': int(current.window.from_utc.timestamp() * 1000),
+                   'message': marker}
+        plain, observed = Mock(), Mock()
+        for logs in (plain, observed):
+            logs.describe_log_groups.return_value = {'logGroups': [{'logGroupName': 'test', 'retentionInDays': 180}]}
+            logs.filter_log_events.side_effect = [{'events': [payload], 'nextToken': 'synthetic-page'}, {'events': []}]
+        phases, output, errors = [], io.StringIO(), io.StringIO()
+        from contextlib import redirect_stdout, redirect_stderr
+        with redirect_stdout(output), redirect_stderr(errors):
+            expected = source.receipt_parity(plain, 'test', current, [row])
+            actual = source.receipt_parity(observed, 'test', current, [row], progress=phases.append)
+        self.assertEqual(expected, actual)
+        self.assertEqual(list(source.RECEIPT_SOURCE_PHASES), phases)
+        self.assertEqual(plain.mock_calls, observed.mock_calls)
+        self.assertEqual('', output.getvalue() + errors.getvalue())
+
+    def test_receipt_substeps_keep_sdk_validation_and_parity_failures_distinct(self):
+        current = plan()
+        for failure, expected_phase, code in (
+            ('retention-sdk', 'receipt-retention', 'receipt-retention-read-failed'),
+            ('page-sdk', 'receipt-log-read', 'receipt-page-read-failed'),
+            ('json', 'receipt-validation', 'receipt-json-invalid'),
+            ('parity', 'receipt-comparison', 'receipt-parity-failed'),
+        ):
+            phases, logs = [], Mock()
+            logs.describe_log_groups.return_value = {'logGroups': [{'logGroupName': 'test', 'retentionInDays': 180}]}
+            logs.filter_log_events.return_value = {'events': []}
+            if failure == 'retention-sdk':
+                logs.describe_log_groups.side_effect = RuntimeError('SENSITIVE SDK payload')
+            elif failure == 'page-sdk':
+                logs.filter_log_events.side_effect = RuntimeError('SENSITIVE SDK payload')
+            elif failure == 'json':
+                logs.filter_log_events.return_value = {'events': [{
+                    'eventId': 'private-id', 'timestamp': int(current.window.from_utc.timestamp() * 1000),
+                    'message': 'SENSITIVE not JSON'}]}
+            with self.subTest(failure=failure), self.assertRaises(ValueError) as caught:
+                source.receipt_parity(logs, 'test', current, [event(received_at=current.window.from_utc)],
+                                      progress=phases.append)
+            self.assertEqual(code, source.safe_failure_code(caught.exception))
+            self.assertEqual(list(source.RECEIPT_SOURCE_PHASES[:source.RECEIPT_SOURCE_PHASES.index(expected_phase) + 1]), phases)
+            if failure.endswith('sdk'):
+                self.assertIsNone(caught.exception.__cause__)
+                self.assertTrue(caught.exception.__suppress_context__)
+
+    def test_cli_real_receipt_validation_reports_only_fixed_code_without_event_position(self):
+        current = plan()
+        output, errors, sdk = io.StringIO(), io.StringIO(), MagicMock()
+        logs = Mock()
+        logs.describe_log_groups.return_value = {'logGroups': [{'logGroupName': 'test', 'retentionInDays': 180}]}
+        logs.filter_log_events.return_value = {'events': [{
+            'eventId': 'private-event-id', 'timestamp': int(current.window.from_utc.timestamp() * 1000),
+            'message': 'private-message-not-JSON'}]}
+
+        def fail_capture(*args, progress, **kwargs):
+            progress('receipt-parity')
+            print('private-sdk-output')
+            source.receipt_parity(logs, 'test', current, [], progress=progress)
+
+        with patch.object(sys, 'argv', ['source']), patch.object(sys, 'stdout', output), \
+             patch.object(sys, 'stderr', errors), patch.dict(sys.modules, {'boto3': sdk}), \
+             patch.dict(os.environ, {'GITHUB_WORKSPACE': str(ROOT)}), \
+             patch.object(source, 'load_inputs', return_value=(current, {}, {})), \
+             patch.object(source, 'verify_checkout'), patch.object(source, 'reject_previous_capture'), \
+             patch.object(source, 'download_health'), patch.object(source.logging, 'disable'), \
+             patch.object(source, 'collect', side_effect=fail_capture), patch.object(Path, 'mkdir') as mkdir:
+            self.assertEqual(2, source.main())
+            mkdir.assert_not_called()
+        self.assertEqual('', output.getvalue())
+        self.assertEqual([
+            *[f'VEVO_AA_QUALITY_SOURCE_PROGRESS:phase={phase}:raw=false' for phase in
+              ('receipt-parity', 'receipt-retention', 'receipt-log-read', 'receipt-validation')],
+            'VEVO_AA_QUALITY_SOURCE_STOPPED:stage=source-capture:phase=receipt-validation:code=receipt-json-invalid:raw=false',
+        ], errors.getvalue().splitlines())
+
     def test_cli_reports_safe_failure_phase_while_suppressing_raw_output(self):
         current = plan()
         output, errors = io.StringIO(), io.StringIO()
