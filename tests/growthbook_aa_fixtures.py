@@ -20,6 +20,8 @@ def load(name: str) -> dict[str, object]:
 
 def initial_snapshot() -> dict[str, object]:
     snapshot = load("growthbook_aa_snapshot.json")
+    snapshot["schema_version"] = 2
+    snapshot["automated_evidence"].pop("quality_source", None)
     activation = load("growthbook_production_aa_activation.json")
     acceptance = load("growthbook_aa_acceptance.json")
     reconciliation = load("growthbook_production_reconciliation_deploy_evidence.json")

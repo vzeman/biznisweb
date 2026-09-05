@@ -204,8 +204,11 @@ use local AWS credentials, or choose a quality report by observed results.
 After the resolved checkpoint is merged, follow the exact checked-in gates in
 this order:
 
-1. Bind the resolved reporting-quality object and reviewed manual observation
-   with `record_growthbook_aa_evidence_gates.py`.
+1. After the exact-window consumer migration is reviewed, independently verify
+   the managed source and health artifacts and their original source-commit Git
+   inputs, then bind the source through `record_growthbook_aa_evidence_gates.py`
+   (snapshot schema 3). Legacy rolling reporting-quality objects cannot open
+   this gate. Bind the reviewed manual observation as a separate transition.
 2. Run and independently record both protected A/A evidence producers.
 3. Build the protected A/A snapshot and require the offline evaluator decision
    `PASS`.

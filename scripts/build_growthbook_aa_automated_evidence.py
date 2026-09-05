@@ -74,7 +74,7 @@ def build_automated_evidence(
         observation = _exact(observation, OBSERVATION_KEYS, "automated observation")
     except SnapshotAssemblyError as exc:
         raise AutomatedEvidenceError(str(exc)) from exc
-    _require(observation["schema_version"] == 1, "automated observation schema drift")
+    _require(type(observation["schema_version"]) is int and observation["schema_version"] == 2, "automated observation schema drift")
     _require(
         observation["observation_type"]
         == "vevo_growthbook_aa_automated_observation",

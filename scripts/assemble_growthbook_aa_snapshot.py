@@ -38,6 +38,7 @@ AUTOMATED_KEYS = {
     "through_utc",
     "source_run_id",
     "source_main_commit",
+    "quality_source_sha256",
     "production_runtime",
     "pipeline_counts",
     "reporting_quality",
@@ -233,6 +234,9 @@ def _validate_window(payload: Mapping[str, Any], field: str) -> None:
 
 
 def _validate_nested_automated(payload: Mapping[str, Any]) -> None:
+    _require(isinstance(payload["quality_source_sha256"], str)
+             and SHA256_RE.fullmatch(payload["quality_source_sha256"]) is not None,
+             "automated exact-window quality source digest invalid")
     runtime = _exact(payload["production_runtime"], AUTOMATED_RUNTIME_KEYS, "production_runtime")
     _require(runtime["instance_id"] == "N/A:Fargate", "Production runtime instance ID drift")
     try:
@@ -326,7 +330,7 @@ def assemble_snapshot(
 
     automated = _exact(automated, AUTOMATED_KEYS, "automated evidence")
     manual = _exact(manual, MANUAL_KEYS, "manual evidence")
-    _require(automated["schema_version"] == 1, "automated evidence schema drift")
+    _require(type(automated["schema_version"]) is int and automated["schema_version"] == 2, "automated evidence schema drift")
     _require(manual["schema_version"] == 1, "manual evidence schema drift")
     _require(
         automated["evidence_type"] == "vevo_growthbook_aa_automated_evidence",

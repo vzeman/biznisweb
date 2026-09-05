@@ -3,6 +3,80 @@
 Status: `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED`. This is a source-contract
 finding, not a measured A/A failure or permission to restart the experiment.
 
+## Offline source binding migrated — automated acquisition remains closed
+
+`open-automated` now rejects the legacy rolling-quality interface. The new
+`scripts/growthbook_aa_source_binding.py` verifies independently downloaded
+source **and** health ZIPs against their successful exact-main GitHub runs and
+sole-artifact metadata, including ownership, ZIP digests and reviewer-supplied
+canonical JSON hashes. It verifies the source is a first-attempt manual run,
+health completed before capture, the latest local reconciliation at capture
+time, and freshness then (not at a later offline recording time).
+
+Expected inputs are the five named source-commit Git blobs: snapshot, workspace,
+activation, acceptance and reconciliation deployment evidence. The read-only
+Git loader requires the exact full commit to be an ancestor of the current
+checkout, disables replacement objects, and does not fetch, switch branches or
+fall back to the working tree. The source's snapshot hash therefore refers to
+the original pre-transition bytes. Neither the capture's own claims nor the
+later source-opened manifest can supply the independent expected values.
+
+The offline recorder verifies both archives before making any write. The first
+transition requires current snapshot content to equal the source-commit
+snapshot, then records a strict source provenance binding and upgrades only
+the snapshot schema to 3. It preserves the fixed interval, qualifying count,
+checkpoint history and manual component. Replaying the same open transition
+is idempotent; a different source or an unrelated changed snapshot is rejected.
+Legacy schema 2 can remain closed but cannot open a producer using a rolling
+report. No checked-in live manifest has been migrated or opened yet.
+
+Automated evidence schema 2 now requires `quality_source_sha256`. The component
+recorder compares it with the recorded source JSON hash, and the offline
+builder/assembler reject a missing hash or old automated schema. The protected
+snapshot workflow requires source-bound manifest schema 3. The final aggregate
+snapshot schema and statistical acceptance criteria remain unchanged.
+
+The revised offline command takes the following independently prepared inputs
+(all example paths are temporary sanitized inputs, not a new source artifact):
+
+```text
+python scripts/record_growthbook_aa_evidence_gates.py open-automated
+  --source-zip <source.zip> --source-run <source-run.json>
+  --source-artifacts <source-artifacts.json>
+  --health-zip <health.zip> --health-run <health-run.json>
+  --health-artifacts <health-artifacts.json>
+  --expected-workflow-run-id <source-run-id>
+  --expected-main-commit <source-main-sha>
+  --expected-evidence-sha256 <source-json-sha256>
+  --expected-health-run-id <health-run-id>
+  --expected-health-sha256 <health-json-sha256>
+```
+
+Do not execute this command or acquire a source yet: the managed acquisition
+and automated consumer support gate remains false. Once the consumer migration
+is reviewed, independently obtain these six inputs through the GitHub boundary,
+use the recorder on a new branch, inspect the diff, test, commit/push/PR, and
+delete only the exact temporary inputs after verification. Do not substitute
+JSON/run/hash metadata fabricated from the capture itself.
+
+Verification: 15 new source-binding regressions and the expanded 214-test
+source/reporting/A/A lifecycle suite pass. Coverage includes both independent
+archives, Git object selection, source-commit byte binding, temporal provenance,
+invalid ZIP entries, immutable window/state, source substitution, schema
+transitions and CLI idempotence. Required security-baseline CI includes these
+tests plus the completion-recorder and snapshot-workflow regressions. Only
+metadata of an existing GitHub infra-health run was inspected to confirm API
+ownership fields; no live source or AWS/BiznisWeb call occurred.
+
+Next replace the automated workflow's rolling S3 quality read with independent
+source/health archive verification and original-commit Git input loading, emit
+the verified source hash in its schema 2 observation, and correct its current
+activated collector identity. Also correct the Meta cohort audit: its existing
+`eligible_facts` CTE reads rolling curated facts, which are not proof of the
+frozen cohort/context. Keep source/automated AWS access closed until these
+remaining consumer paths and tests are reviewed. Do not change the window,
+thresholds or count, or allow later outcome-driven source selection.
+
 ## Managed acquisition prepared — consumer migration must precede live capture
 
 The manual source workflow is now implemented at

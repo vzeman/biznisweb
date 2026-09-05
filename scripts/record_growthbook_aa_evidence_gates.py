@@ -3,8 +3,8 @@
 
 The three supported transitions are deliberately separate:
 
-* ``open-automated`` binds the exact canonical reporting-quality object after
-  the pre-registered A/A window resolves.
+* ``open-automated`` independently verifies source and health archives against
+  API metadata and the source-commit Git blobs, then binds the exact capture.
 * ``open-manual`` binds the exact reviewed browser-QA observation for that
   same window.
 * ``record-component`` binds one independently downloaded successful workflow
@@ -24,10 +24,15 @@ import hashlib
 import json
 import os
 import re
+import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:  # direct script execution
+    sys.path.insert(0, str(ROOT))
 
 try:
     from scripts.assemble_growthbook_aa_snapshot import (
@@ -81,7 +86,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution
     )
 
 
-ROOT = Path(__file__).resolve().parents[1]
+from scripts.growthbook_aa_source_binding import SourceBindingError
 # Remains false until this recorder AND the automated consumer require the
 # managed exact-window capture. The prepared source workflow checks this before
 # configuring AWS credentials; deploying its code alone cannot authorize reads.
@@ -153,6 +158,13 @@ def _integer(value: Any, field: str) -> int:
         type(value) is int and value >= 0, f"{field} must be a non-negative integer"
     )
     return value
+
+
+def _read_source_archive(path: Path) -> bytes:
+    with path.open("rb") as handle:
+        raw = handle.read(2 * 1024 * 1024 + 1)
+    _require(0 < len(raw) <= 2 * 1024 * 1024, "source archive size invalid")
+    return raw
 
 
 def _number(
@@ -230,6 +242,7 @@ def validate_quality_report(
     resolved_through_utc: str,
     resolved_eligible_devices: int,
 ) -> None:
+    """Validate statistics only; never use this as source acquisition proof."""
     _require(set(quality) == QUALITY_KEYS, "quality report field set drift")
     _require(
         quality["metric_contract_version"] == "vevo_cm1_v1_2026-08-20",
@@ -370,44 +383,29 @@ def validate_quality_report(
 
 def open_automated_producer(
     snapshot: Mapping[str, Any],
-    quality: Mapping[str, Any],
     *,
-    quality_report_key: str,
-    quality_report_sha256: str,
+    source_inputs: Mapping[str, bytes],
+    **source_bundle: Any,
 ) -> dict[str, Any]:
-    """Open only the automated producer after exact quality-source review."""
+    """Bind verified exact-window source; legacy rolling reports are rejected."""
 
     from_utc, through_utc = _require_resolved_window(snapshot)
     component = snapshot["automated_evidence"]
-    expected_digest = str(quality_report_sha256 or "").strip()
-    _require(
-        SHA256_RE.fullmatch(expected_digest) is not None,
-        "quality report SHA-256 is invalid",
-    )
-    _require(
-        hashlib.sha256(canonical_evidence_bytes(quality)).hexdigest()
-        == expected_digest,
-        "quality report SHA-256 mismatch",
-    )
-    validate_quality_report(
-        quality,
-        quality_report_key=quality_report_key,
-        resolved_through_utc=through_utc,
-        resolved_eligible_devices=snapshot["measurement_window"][
-            "resolved_eligible_devices"
-        ],
-    )
+    from scripts.growthbook_aa_source_binding import verify_source_bundle
+    try:
+        verified = verify_source_bundle(source_inputs=source_inputs, **source_bundle)
+    except (ValueError, TypeError, KeyError, OverflowError) as exc:
+        raise EvidenceGateRecordingError("independent exact-window source verification failed") from exc
     expected_open_state = {
         "producer_allowed": True,
         "window_status": "verified_complete_reconciled_production_aa",
         "from_utc": from_utc,
         "through_utc": through_utc,
-        "quality_report_status": "verified_canonical_reporting_quality",
-        "quality_report_key": quality_report_key,
-        "quality_report_sha256": expected_digest,
+        "quality_source": verified.binding,
     }
     if all(component.get(key) == value for key, value in expected_open_state.items()):
         return copy.deepcopy(snapshot)
+    _require(snapshot == verified.snapshot, "current snapshot differs from the source-commit snapshot")
     _require(
         component.get("producer_allowed") is False, "automated producer is already open"
     )
@@ -430,6 +428,9 @@ def open_automated_producer(
         "automated artifact was already recorded",
     )
     recorded = copy.deepcopy(snapshot)
+    recorded["schema_version"] = 3
+    for field in ("quality_report_status", "quality_report_key", "quality_report_sha256"):
+        del recorded["automated_evidence"][field]
     recorded["automated_evidence"].update(expected_open_state)
     _validate_source_manifest(recorded)
     _require(recorded["snapshot_build_allowed"] is False, "snapshot gate opened early")
@@ -526,7 +527,8 @@ def _validate_component(
             _validate_manual(evidence)
     except SnapshotAssemblyError as exc:
         raise EvidenceGateRecordingError(str(exc)) from exc
-    _require(evidence["schema_version"] == 1, f"{component_name} evidence schema drift")
+    _require(type(evidence["schema_version"]) is int and evidence["schema_version"] == (2 if component_name == "automated" else 1),
+             f"{component_name} evidence schema drift")
     _require(
         evidence["experiment_id"] == "vevo-sk-aa-001",
         f"{component_name} experiment drift",
@@ -620,6 +622,9 @@ def record_component(
         "automated_evidence" if component_name == "automated" else "manual_qa_evidence"
     )
     component = snapshot[manifest_key]
+    if component_name == "automated":
+        _require(evidence["quality_source_sha256"] == component["quality_source"]["json_sha256"],
+                 "automated component differs from the bound exact-window quality source")
     exact_record = {
         "status": "verified",
         "run_id": run_id,
@@ -675,9 +680,15 @@ def _parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="action", required=True)
 
     automated = subparsers.add_parser("open-automated")
-    automated.add_argument("--quality-report", required=True, type=Path)
-    automated.add_argument("--quality-report-key", required=True)
-    automated.add_argument("--expected-quality-report-sha256", required=True)
+    for prefix in ("source", "health"):
+        automated.add_argument(f"--{prefix}-zip", required=True, type=Path)
+        automated.add_argument(f"--{prefix}-run", required=True, type=Path)
+        automated.add_argument(f"--{prefix}-artifacts", required=True, type=Path)
+    automated.add_argument("--expected-evidence-sha256", required=True)
+    automated.add_argument("--expected-workflow-run-id", required=True)
+    automated.add_argument("--expected-main-commit", required=True)
+    automated.add_argument("--expected-health-run-id", required=True)
+    automated.add_argument("--expected-health-sha256", required=True)
 
     manual = subparsers.add_parser("open-manual")
     manual.add_argument("--observation", required=True, type=Path)
@@ -699,16 +710,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         snapshot = _load(args.snapshot)
         if args.action == "open-automated":
-            quality = _load_canonical_mapping(
-                args.quality_report,
-                args.expected_quality_report_sha256,
-                "quality report",
-            )
+            from scripts.growthbook_aa_source_binding import read_git_source_inputs
+            source_inputs = read_git_source_inputs(args.expected_main_commit)
             recorded = open_automated_producer(
-                snapshot,
-                quality,
-                quality_report_key=args.quality_report_key,
-                quality_report_sha256=args.expected_quality_report_sha256,
+                snapshot, source_inputs=source_inputs,
+                source_zip=_read_source_archive(args.source_zip), source_run=_load(args.source_run),
+                source_artifacts=_load(args.source_artifacts),
+                health_zip=_read_source_archive(args.health_zip), health_run=_load(args.health_run),
+                health_artifacts=_load(args.health_artifacts),
+                expected_workflow_run_id=args.expected_workflow_run_id,
+                expected_main_commit=args.expected_main_commit,
+                expected_evidence_sha256=args.expected_evidence_sha256,
+                expected_health_run_id=args.expected_health_run_id,
+                expected_health_sha256=args.expected_health_sha256,
             )
         elif args.action == "open-manual":
             expected_path = ROOT / snapshot["manual_qa_evidence"]["observation_file"]
@@ -745,6 +759,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ManualQaEvidenceError,
         MeasurementWindowError,
         SnapshotAssemblyError,
+        SourceBindingError,
     ) as exc:
         print(f"record_growthbook_aa_evidence_gates.py: FAIL: {exc}")
         return 1

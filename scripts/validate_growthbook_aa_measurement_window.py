@@ -128,11 +128,6 @@ MUTABLE_WINDOW_KEYS = {
     "checkpoint_history",
 }
 
-QUALITY_KEY_RE = re.compile(
-    r"^experiment-events/curated/quality/experiment_id=vevo-sk-aa-001/"
-    r"facts_generated_at=20[2-9][0-9]{5}T[0-9]{6}Z[.]json$"
-)
-
 
 def _load(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -519,7 +514,7 @@ def validate_measurement_window(
     acceptance: Mapping[str, Any],
     reconciliation: Mapping[str, Any],
 ) -> None:
-    if manifest.get("schema_version") != 2:
+    if type(manifest.get("schema_version")) is not int or manifest["schema_version"] not in {2, 3}:
         raise MeasurementWindowError("A/A snapshot manifest schema drift")
     if manifest.get("experiment_id") != "vevo-sk-aa-001":
         raise MeasurementWindowError("A/A snapshot experiment drift")
@@ -573,6 +568,17 @@ def validate_measurement_window(
     automated = manifest.get("automated_evidence") or {}
     manual = manifest.get("manual_qa_evidence") or {}
     components = (automated, manual)
+    if manifest["schema_version"] == 2:
+        if "quality_source" in automated or automated.get("quality_report_status") != "not_recorded":
+            raise MeasurementWindowError("legacy quality cannot open the automated producer")
+    else:
+        if any(key in automated for key in ("quality_report_status", "quality_report_key", "quality_report_sha256")):
+            raise MeasurementWindowError("legacy quality fields are forbidden in source-bound schema")
+        from scripts.growthbook_aa_source_binding import SourceBindingError, validate_binding
+        try:
+            validate_binding(automated.get("quality_source"), actual)
+        except (SourceBindingError, KeyError, TypeError, ValueError) as exc:
+            raise MeasurementWindowError("exact-window source binding is invalid") from exc
     for component_name, component in zip(
         ("automated_evidence", "manual_qa_evidence"), components, strict=True
     ):
@@ -633,17 +639,11 @@ def validate_measurement_window(
                 )
         return
 
-    automated_opened = automated.get("quality_report_status") == (
-        "verified_canonical_reporting_quality"
-    )
+    automated_opened = manifest["schema_version"] == 3
     if automated_opened:
         if (
             automated.get("window_status")
             != "verified_complete_reconciled_production_aa"
-            or QUALITY_KEY_RE.fullmatch(str(automated.get("quality_report_key") or ""))
-            is None
-            or SHA256_RE.fullmatch(str(automated.get("quality_report_sha256") or ""))
-            is None
         ):
             raise MeasurementWindowError("automated evidence producer gate drift")
     elif (

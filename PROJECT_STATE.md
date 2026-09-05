@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Exact-window source recorder and downstream hash binding migrated
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-source-provenance-recorder`
+
+What changed:
+
+- Replaced the offline `open-automated` rolling-quality interface with independent verification of source and infra-health ZIPs, successful exact-main GitHub run metadata, sole artifact ownership/ZIP digests and reviewer-supplied JSON hashes. Expected window/foundation inputs are read from five named Git blobs at the original source commit, with ancestor verification and Git replacement objects disabled; there is no working-tree or network fallback.
+- The recorder now transitions snapshot schema 2 to schema 3 only after complete source verification, recording an aggregate-free source provenance binding. Schema 2 cannot open a producer using legacy quality. Both the original fixed window/checkpoint history and unrelated manual state remain unchanged. The live checked-in snapshot remains byte-unchanged at schema 2; no real transition was performed.
+- Automated component schema 2 carries `quality_source_sha256`; the offline component recorder rejects a different hash, and the builder/assembler require the new field/schema. The final snapshot workflow requires source-bound manifest schema 3. Both source acquisition and automated collection remain explicitly closed before AWS while the automated acquisition workflow is migrated.
+
+What is verified:
+
+- All 214 focused source/reporting/A/A lifecycle tests pass, including 15 new source-binding tests, existing completion-recorder tests and snapshot-workflow tests, all now in required security-baseline CI. Tests cover independent run/repository/branch/attempt ownership, both ZIP/JSON digests, extra/path-traversal/symlink/oversized files, original snapshot byte identity, foundation and health provenance, freshness at acquisition rather than later recording, immutable stopping records, source substitution rejection, idempotence and offline CLI behavior.
+- Workspace/activation/measurement-window/security validators and diff checks pass. Read-only GitHub metadata for an existing infra-health run confirms the required run/artifact ownership fields; no new health/source capture or AWS/API/commerce read or mutation occurred. No credentials, raw payloads, local application processes, Preview wake, A/A stop or paid/CTA gate opening occurred.
+
+Known issues:
+
+- `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED` remains for live collection: the automated acquisition workflow still needs its old S3 quality fetch replaced by independent managed-source artifact verification, its observation schema/hash emission updated, and its obsolete foundation collector revision/image check corrected. Source and automated pre-AWS support gates remain false. No live source artifact or A/A PASS exists.
+- During the consumer migration also verify that the Meta-dimension audit cannot use later rolling curated facts as if they were the frozen cohort; the current `eligible_facts` query reads ordinary rolling facts. Preserve a genuinely frozen cohort/context audit rather than merely swapping a quality file. No thresholds or resolved counts may be changed to make results pass.
+
+Next exact step:
+
+- After CI and merge, finish the protected automated consumer: independently re-download/verify the recorded source and health artifacts against original source-commit Git blobs, consume the exact capture, emit its bound hash in automated evidence schema 2, correct activated collector identity and frozen Meta-cohort provenance, and test these paths before any AWS credential step. Update the versioned runbooks and only then review the source-support gate opening. After that reviewed migration, obtain fresh exact-main infra health and capture/bind the single source; continue genuine browser QA, both components and snapshot PASS. Do not add checkpoints, alter the frozen interval, stop A/A, wake Preview or open paid/CTA/commerce gates.
+
 ## 2026-09-05 — Managed exact-window quality capture prepared; live gate still closed
 
 Date: 2026-09-05
