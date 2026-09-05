@@ -112,6 +112,86 @@
           "workflow": ".github/workflows/check-vevo-growthbook-production-aa-window.yml",
           "workflow_run_id": "33604314796"
         }
+      },
+      {
+        "evidence_sha256": "c2a7f20d28707960ec0bfb38c90304d0142b5e765ee692381a9b4d6e5a5ad850",
+        "evidence": {
+          "collection_mode": "manual_historical_backfill",
+          "control_plane": {
+            "alarms_clear": true,
+            "dlq_empty": true,
+            "generated_published_counts_match": true,
+            "publish_summary_sha256": "3a7415ea31a6712b9ecfc88e6cdd7a3b11bb3e3e393e0212b17fa91079fd98c2",
+            "runtime_state_retained": false,
+            "schedule_due_local": "2026-09-03T03:45:00+02:00",
+            "schedule_name": "vevo-growthbook-reconcile-production",
+            "schedule_succeeded": true,
+            "scheduler_run_task_verified": true,
+            "source_schedule_name": "vevo-daily-report-email",
+            "source_schedule_unchanged": true,
+            "success_marker_sha256": "b3483ddd2b85f5f10598dc399b18096dc6b1009e9a15039f4e1cba20542b7710"
+          },
+          "decision": "extend_one_full_local_day",
+          "evidence_type": "vevo_growthbook_aa_window_checkpoint",
+          "experiment_id": "vevo-sk-aa-001",
+          "main_commit": "14d673c1990ef4d1306697766ae77ac44d9df6e9",
+          "observed_at_utc": "2026-09-05T07:14:29Z",
+          "population": {
+            "aggregate_query_sha256": "42e1235ac411b902f086c7488dace72ca1d58f22824ed63bdb47800a6ceb3737",
+            "aggregate_result_sha256": "e528c6b92d246adecff8ed66e1e2854cbe1b540182a3386fe8ee68908d08bac4",
+            "arm_counts_read": false,
+            "arm_outcomes_read": false,
+            "contains_customer_or_order_data": false,
+            "contains_event_or_device_ids": false,
+            "database": "vevo_growthbook_production",
+            "eligible_devices": 920,
+            "metric": "cumulative_eligible_devices_without_arm_outcome_readback",
+            "only_aggregate_count_retained": true,
+            "outcome_metrics_read": false,
+            "source_table": "experiment_device_facts",
+            "workgroup": "vevo-growthbook-reporting-production"
+          },
+          "repository": "vzeman/biznisweb",
+          "runtime": {
+            "host_gate_evidence_sha256": "21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb",
+            "identity_source": "cloudtrail_run_task_retention_recovery",
+            "image_digest": "sha256:51d70f4976083f86a0d7c5e542c21d93e5bbeff3d75d2af31f620b42df1a1b92",
+            "instance_id": "N/A:Fargate",
+            "localhost_health_marker_inherited_from_deploy_evidence": true,
+            "localhost_runtime_marker_inherited_from_deploy_evidence": true,
+            "private_ip": null,
+            "runtime_path": "/app",
+            "service": "vevo-growthbook-reconcile-production",
+            "task_definition": "vevo-growthbook-reconcile-production:3",
+            "task_id": "67333bc3623a4f19989ff7a07b4fa46a"
+          },
+          "safety": {
+            "aws_mutations": false,
+            "biznisweb_mutations": false,
+            "commerce_mutations": false,
+            "contains_cloudwatch_messages": false,
+            "contains_credentials": false,
+            "contains_raw_aws_payloads": false,
+            "cta_activation": false,
+            "growthbook_mutations": false,
+            "gtm_mutations": false,
+            "meta_ads_mutations": false,
+            "winner_calls": false
+          },
+          "schema_version": 3,
+          "status": "passed",
+          "window": {
+            "candidate_last_full_local_date": "2026-09-02",
+            "candidate_through_utc": "2026-09-02T22:00:00Z",
+            "checkpoint_index": 2,
+            "from_utc": "2026-08-25T22:00:00Z",
+            "full_calendar_days": 8,
+            "resolution_due_local": "2026-09-03T03:45:00+02:00",
+            "timezone": "Europe/Bratislava"
+          },
+          "workflow": ".github/workflows/check-vevo-growthbook-production-aa-window.yml",
+          "workflow_run_id": "33951971437"
+        }
       }
     ],
     "post_hoc_window_change_allowed": false

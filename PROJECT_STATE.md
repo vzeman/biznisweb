@@ -1,9 +1,34 @@
 # PROJECT_STATE
 
-Last updated: 2026-09-04
+Last updated: 2026-09-05
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
+
+## 2026-09-05 — Authorized historical A/A checkpoint 2 reconstructed
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-backfill-checkpoint-2`
+
+What changed:
+
+- The user explicitly authorized historical backfill of missing A/A checkpoints. After confirming no active or successful missing capture existed, dispatched the existing protected workflow with both confirmations true on exact clean main.
+- Offline recorder appended checkpoint 2 for `2026-09-03T03:45:00+02:00`, from the frozen start through `2026-09-02T22:00:00Z` (eight full local days). The reconstructed cumulative eligible count is `920`; the stopping rule therefore extends by exactly one full local day.
+
+What is verified:
+
+- Successful run `33951971437`, exact main `14d673c1990ef4d1306697766ae77ac44d9df6e9`, sole artifact `9965116358`. Independently verified GitHub ZIP digest `89f1d6715cd462680210879adad23dc81731e1fd41ff302e86fbcf77ccfdf2da`, one canonical JSON and JSON SHA-256 `c2a7f20d28707960ec0bfb38c90304d0142b5e765ee692381a9b4d6e5a5ad850`.
+- Observation at `2026-09-05T07:14:29Z` is explicitly `manual_historical_backfill`, not a contemporaneous capture. The protected workflow verified the original checkpoint's exact scheduled reconciliation identity and success marker, publish parity, alarms/DLQ and source schedule. The recorder independently validated provenance, canonical bytes, hashes and consecutive history.
+- Only the aggregate cumulative eligible-device count was queried. No arms/outcomes, paid gate, A/A stop, CTA activation, Preview wake or external configuration mutation occurred.
+
+Known issues:
+
+- The next missing checkpoint is index 3, due `2026-09-04T03:45:00+02:00`. Reconstruct it only after this checkpoint is merged, retaining the original frozen time boundaries.
+
+Next exact step:
+
+- Validate and merge this record after CI, then use the same authorized protected historical fallback for checkpoint 3. Resolve at the first qualifying checkpoint and ignore later captures. Keep all result and experiment mutation gates closed during backfill.
 
 ## 2026-09-05 — A/A checkpoint pre-AWS regression isolated and repaired
 
