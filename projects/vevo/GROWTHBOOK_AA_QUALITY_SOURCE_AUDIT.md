@@ -8,6 +8,52 @@ not permission to restart an experiment or alter its window. Separately, browser
 QA is fail-closed on `GTM_LIVE_VERSION_DRIFT` and the newly verified static
 `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK`; see the browser precheck.
 
+### Bounded conditional-read correction prepared for review
+
+The managed source opts into eight conditional-read workers; the shared adapter
+defaults to its existing serial behavior. The limit is an exact integer in
+`1..8`, checked before any progress callback or I/O. A rolling queue holds at
+most that many submitted, not-yet-reduced futures, rather than eagerly queuing
+every retained object. Only the coordinator submits work and appends rows in
+sorted inventory-key order; no worker mutates the inventory or result list.
+Every original IfMatch, metadata, bounded-body, JSON and receipt-partition check
+remains in the one-object reader. On failure the coordinator cancels queued
+futures and drains started workers before the existing sanitized exception can
+return. Every successfully acquired valid body closes in its `finally` block.
+Strict all-row validation and the second sequential inventory occur only after
+the executor has shut down. Empty input and the default serial path create no
+pool. The source schema, canonical proof, byte/object limits, calculations,
+transport retries/timeouts, order API pacing, workflow timeout, window, manifests
+and all acceptance/producer gates are unchanged.
+
+The managed S3 client is created/cached on the coordinator from its explicit
+`boto3.Session` before worker submission. Workers receive that existing client,
+not the Session/factory, and perform only read-only GETs without mutating client
+metadata or installing Botocore event hooks. This follows the documented
+[Boto3 client thread-safety conditions](https://docs.aws.amazon.com/boto3/latest/guide/clients.html).
+The implementation deliberately avoids Python 3.11's eager `Executor.map` and
+uses explicit pending-future cancellation plus the context manager's waiting
+shutdown, as specified by the [Python 3.11 executor contract](https://docs.python.org/3.11/library/concurrent.futures.html).
+There is no local AWS client construction or networked source test.
+
+Five new deterministic tests cover real overlapping reads with forced
+out-of-order completion and exact serial rows/proof equivalence; bounded future
+submission; queued cancellation and draining an already-started body; submission
+failure cleanup; pre-I/O worker limits; and unchanged metadata/JSON/partition/PII/
+inventory rejection at every admitted concurrent limit. Existing managed tests
+now exercise the real CLI client cache/worker path under raw-output suppression
+and the real full synthetic capture's exact eight-worker opt-in. Tests verify
+body closure and worker termination before downstream validation/return.
+The three synchronization-sensitive cases also passed 25 repetitions each.
+
+These are offline correctness checks, not a measured live speedup or proof that
+the remaining acquisition will finish. After exact-head review, the full
+240-test suite/validators and CI must pass before merge. Only then may the
+coordinator recover-check every source run/artifact, verify fresh same-new-main
+managed health independently, and dispatch one new attempt through the existing
+source workflow. Do not rerun an old attempt or relax coverage if a later phase
+fails. No source was captured and no downstream gate was opened by this change.
+
 ### Third acquisition terminal; raw-read elapsed time independently localized
 
 Run `33968053395`, job `101311556789`, on original main

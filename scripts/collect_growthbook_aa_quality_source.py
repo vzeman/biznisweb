@@ -58,6 +58,7 @@ HEALTH_ARTIFACT = "vevo-growthbook-production-aa-infra-health"
 SHA = re.compile(r"^[a-f0-9]{64}$")
 COMMIT = re.compile(r"^[a-f0-9]{40}$")
 RUN = re.compile(r"^[1-9][0-9]{5,19}$")
+RAW_READ_WORKERS = 8
 
 
 class SourceCollectionError(ValueError):
@@ -475,9 +476,13 @@ def collect(plan, client, activation, reconciliation, health_binding, *, progres
     progress("runtime-preflight")
     before = runtime_preflight(client, plan, activation, reconciliation)
     progress("retained-raw-source")
+    # Resolve/cache the explicit-session S3 client on this coordinator thread.
+    # Workers share only that existing client's read-only operations, never the
+    # Session/factory, mutable client metadata or custom Botocore event hooks.
     raw = read_stable_retained_raw_source(client("s3"), bucket=before["bucket"],
                                          context_from_utc=plan.window.context_from_utc,
-                                         through_utc=plan.window.through_utc, progress=progress)
+                                         through_utc=plan.window.through_utc, progress=progress,
+                                         max_read_workers=RAW_READ_WORKERS)
     progress("receipt-parity")
     parity = receipt_parity(client("logs"), before["log_group"], plan, raw.rows)
     receipts = order_completion_receipts(row for row in raw.rows if utc(row["received_at"]) < plan.window.through_utc)
