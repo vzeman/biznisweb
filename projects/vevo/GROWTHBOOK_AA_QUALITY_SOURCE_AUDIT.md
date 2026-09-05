@@ -1,12 +1,66 @@
 # A/A quality-source audit — 2026-09-05
 
-Status: `SOURCE_CAPTURE_RECEIPT_PARITY_UNCLASSIFIED_FAILURE`. The bounded-read
-acquisition is now terminal without an artifact. All four attempts are terminal;
-there is no active source wait. Complete source coverage and A/A PASS remain
-unproven. This is
+Status: `FRESH_INFRA_HEALTH_MARKER_SUMMARY_UNVERIFIED`. Receipt diagnostics are
+reviewed, but the fresh same-main infrastructure monitor failed before producing
+health evidence. No fifth source acquisition was dispatched. The prior
+`SOURCE_CAPTURE_RECEIPT_PARITY_UNCLASSIFIED_FAILURE` remains unresolved; all four
+source attempts are terminal without artifacts. Complete source coverage and
+A/A PASS remain unproven. This is
 not permission to restart an experiment or alter its window. Separately, browser
 QA is fail-closed on `GTM_LIVE_VERSION_DRIFT` and the newly verified static
 `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK`; see the browser precheck.
+
+### Fresh health readback failed; do not dispatch source or reuse old health
+
+PR #532 merged at `2026-09-05T15:17:52Z` as
+`81a1fa21b60284946fc6a2042c8c00fbb47e2836`. All four exact-head checks passed
+for reviewed head `4e00d170d030e81798e544c9bcfd0c027757afb7`, independently
+bound to CI `33974202527` and observability `33974202552`. Security job
+`101327918081` actually ran the full source/lifecycle/receipt step from
+`15:15:34Z` to `15:15:37Z`; its filtered log confirms 252 tests OK. Clean exact
+main and workspace/window/activation validators were rechecked before health.
+All four source runs were independently rechecked terminal and artifact-free.
+
+Fresh health run `33974425550`, job `101328515277`, was dispatched on that exact
+main at `2026-09-05T15:19:03Z` and completed `failure` at `15:19:32Z`. Local and
+credential gates, stack/schedule/alarm/DLQ checks and natural-task selection
+returned successfully. The failed marker/parity step emitted only:
+`scheduled reconciliation marker/summary drift:marker-lines=0:summary-lines=0:raw-messages-emitted=false`.
+These are marker/summary-line counts, not reporting rows or experimental
+population/outcomes. They do **not** prove the entire stream was empty, that
+the scheduled run failed, or that the runtime changed. Artifact build, upload
+and explicit raw-response cleanup were skipped; independent metadata confirms
+zero artifacts. No raw response file was downloaded locally, no old health
+artifact was substituted, and no fifth source run was started.
+
+Static review identifies a completeness gap: the marker step calls
+`aws logs get-log-events --start-from-head` once and never verifies a terminal
+`nextForwardToken`. The [official GetLogEvents contract](https://docs.aws.amazon.com/AmazonCloudWatchLogs/latest/APIReference/API_GetLogEvents.html)
+permits partial or empty pages before the forward token stabilizes, and warns
+that unbounded forward reads can fail to terminate. The local SDK's read-only
+paginator model contains no GetLogEvents paginator; this model inspection
+created no client and is not a claim about the runner's particular CLI build.
+The workflow currently has no explicit bounded token-completion proof regardless
+of CLI behavior. That is a verified code gap, **not proof of the failed run's
+raw page contents or root cause**; those payloads were not inspected.
+
+The cleanup step also lacks `always()` and was independently observed skipped
+after the failure. Runner disposal must not be represented as verified explicit
+cleanup. A source attempt cannot proceed until a reviewed correction establishes
+fresh complete health; do not simply retry the failed monitor or bypass marker
+validation with the earlier successful artifact from a different main.
+
+Next prepare a narrowly scoped, offline-tested monitor correction: read only
+the already-selected exact reconciliation stream, bound the time/page/event/byte
+range, follow forward tokens through empty pages until a validated terminal
+token, reject token cycles/malformed/overflow responses, then retain the same
+exact single marker/summary and generated/published parity checks. Add failure-
+path cleanup with independently validated exact runner-temp/run-ID targets; no
+unresolved broad deletion and no raw-data upload. Keep runtime selection,
+identity, localhost/deploy binding, schedules, alarm/DLQ/source controls, health
+schema, source gates and A/A window unchanged. Review/test/CI/PR the correction
+before any new managed health check. This is read-only monitoring repair, not
+authority for an infrastructure deployment, data query or live UI change.
 
 ### Bounded reads completed; receipt-phase failure requires sanitized diagnosis
 
