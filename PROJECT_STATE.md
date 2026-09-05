@@ -5,6 +5,29 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Partial read-only browser precheck while source remains active
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-readonly-visual-precheck`
+
+What changed:
+
+- Recorded actual partial browser observations in `projects/vevo/GROWTHBOOK_BROWSER_QA_PRECHECK.md`: public homepage navigation and Ylang Absolute product detail rendered on desktop and at a temporary 390 x 844 responsive viewport, with visible price/volume and the expected orange-gradient add-to-cart label/button. These are supporting observations only, not canonical manual QA, physical-device testing or A/A PASS.
+
+What is verified:
+
+- Only public-page navigation, scrolling and temporary viewport sizing occurred. No consent, add-to-cart, quantity, variant, checkout/order or administrative control was changed; the existing user cart was preserved. The viewport override was reset and the agent-created QA tab closed. No local application process or screenshot file was created.
+- Source run `33964597883` remains authoritatively `in_progress` at this observation; no new source/health/checkpoint was dispatched. All actual source/window/producer/stop/paid/CTA manifests remain unchanged.
+
+Known issues:
+
+- Full manual QA remains unverified, including Tag Assistant, consent event behavior, console/runtime, purchase-duplicate, commerce-behavior and rollback checks. Do not fill canonical QA booleans from a visual precheck. The diagnostic source has not yet completed or established quality/PASS.
+
+Next exact step:
+
+- Continue observing the exact existing source run `33964597883` (job `101302371923`). On success independently verify source/health artifacts and original-main inputs before the offline source-recording PR. On failure inspect only safe phase/code and artifact metadata; no duplicate, result-driven retry or changed source/window/acceptance. Complete the actual manual-QA contract separately before any snapshot/stop/paid/CTA transition.
+
 ## 2026-09-05 — Reviewed diagnostic source acquisition in progress
 
 Date: 2026-09-05
