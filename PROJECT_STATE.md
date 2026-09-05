@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Reviewed bounded-read acquisition live on exact main
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-bounded-source-acquisition`
+
+What changed:
+
+- PR #530 merged as `b467f416ddfbc36bcd9fe18cdf55b2377814c110` at `2026-09-05T14:44:20Z`. All four exact-head checks passed; independent metadata binds CI `33972563940` and observability `33972563959` to reviewed head `2698fca84f6c89631ba674bd278b27d1c45507f8`. Security job `101323551794` actually executed the full source/lifecycle step and its filtered log confirms 240 tests OK. Clean exact main and workspace/window/activation gates were reverified before any dispatch.
+- Fresh same-main managed health run `33972739143` succeeded. Independently verified sole artifact `9971410127`, GitHub ZIP digest `9c9a4f33e0bb6255c4df5047edc119f525216ecd2a93563980898e37b32bcc3b`, single canonical JSON and original JSON hash `c3b230c075d1cb0e0d039e4b9d02e9b9537abce58ca640323e4df8656468f1d8`. A second independent download passed offline health/deployment/freshness/latest-reconciliation validation. Observation `2026-09-05T14:45:47Z` proves the September 5 03:45 Bratislava reconciliation healthy. No local download or raw AWS payload was retained.
+- After recovering/checking all three prior terminal source runs as artifact-free and rechecking exact main, dispatched one source run `33972852946` on the original main above with that health run/hash. Created `2026-09-05T14:47:29Z`, attempt 1; job `101324325818` started `14:47:35Z`. Independent metadata now shows `in_progress`, successful pre-AWS and credential steps, and the canonical acquisition running. No duplicate or rerun was dispatched.
+
+What is verified:
+
+- This handoff changes documentation only. The source optimization's 240 local and CI regressions validate correctness, not live throughput or complete source quality. The new capture is an active wait, not a missing/failed result or permission to recapture. All downstream producer/snapshot gates remain closed, and this documentation branch must not replace the source's original main binding.
+- No GrowthBook/GTM/Meta/BiznisWeb/commerce control, A/A window, acceptance rule or live manifest changed. A/A was not stopped and Preview remains asleep. No local application service or source/AWS process was started; finite test and GitHub-inspection processes completed.
+
+Known issues:
+
+- `SOURCE_CAPTURE_IN_PROGRESS`: run `33972852946` must reach a terminal state before any source decision. Upload/cleanup were not complete at the observed active step. The earlier raw-read timeout remains historical evidence, not proof this correction finishes the whole source.
+- `GTM_LIVE_VERSION_DRIFT` and `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK` still prevent genuine full manual-QA clearance. A/A PASS, stop, paid Pro and CTA remain unavailable until their separate versioned gates pass.
+
+Next exact step:
+
+- Wait on source run `33972852946` only; never start a duplicate. On success independently verify the one original canonical source artifact and its health component, ZIP digests, JSON hashes, original run/main and five original Git inputs; only then use the offline source recorder through a tested PR. On failure inspect only fixed sanitized phase/code plus artifact metadata, preserve any artifact and do not change the frozen window or retry until PASS. Keep current GTM privacy/compatibility remediation separately scoped and reviewed; no live mutation is authorized by this source run.
+
 ## 2026-09-05 — Bounded raw-read correction; no source or live control changed
 
 Date: 2026-09-05
