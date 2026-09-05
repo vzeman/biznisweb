@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import io
 import json
 import pathlib
@@ -9,6 +10,7 @@ import unittest
 
 from growthbook_collector.handler import RECEIPT_MARKER
 from scripts.summarize_growthbook_receipts import (
+    RECEIPT_FAILURE_CODES,
     ReceiptSummaryError,
     main,
     summarize_receipts,
@@ -60,6 +62,68 @@ def cloudwatch_payload() -> dict[str, object]:
 
 
 class GrowthBookReceiptSummaryTests(unittest.TestCase):
+    def test_each_receipt_failure_has_a_fixed_identity_free_code(self):
+        cases = [(None, 'receipt-export-invalid'), ({'events': None}, 'receipt-export-invalid'),
+                 ({'events': [], 'nextToken': 'private-token'}, 'receipt-export-incomplete'),
+                 ({'events': [None]}, 'receipt-event-invalid')]
+        for field, value, code in (
+            ('eventId', '', 'receipt-log-id-missing'),
+            ('timestamp', True, 'receipt-timestamp-invalid'),
+            ('timestamp', FROM_MS - 1, 'receipt-outside-window'),
+            ('message', None, 'receipt-message-invalid'),
+            ('message', 'SENSITIVE not JSON', 'receipt-json-invalid'),
+            ('message', '[]', 'receipt-object-invalid'),
+        ):
+            payload = cloudwatch_payload()
+            payload['events'][0][field] = value
+            cases.append((payload, code))
+        duplicated = cloudwatch_payload()
+        duplicated['events'][1]['eventId'] = duplicated['events'][0]['eventId']
+        cases.append((duplicated, 'receipt-log-id-duplicate'))
+        for field, value, code in (
+            ('unexpected', 'SENSITIVE', 'receipt-fields-drift'),
+            ('schema_version', 2, 'receipt-schema-drift'),
+            ('marker', 'SENSITIVE', 'receipt-marker-drift'),
+            ('accepted', False, 'receipt-accepted-drift'),
+            ('duplicate', 0, 'receipt-duplicate-drift'),
+        ):
+            payload = cloudwatch_payload()
+            marker = json.loads(payload['events'][0]['message'])
+            marker[field] = value
+            payload['events'][0]['message'] = json.dumps(marker)
+            cases.append((payload, code))
+        for payload, code in cases:
+            saved = copy.deepcopy(payload)
+            with self.subTest(code=code), self.assertRaises(ReceiptSummaryError) as caught:
+                summarize_receipts(payload, from_utc=FROM_UTC, through_utc=THROUGH_UTC)
+            self.assertEqual(code, caught.exception.safe_code)
+            self.assertIn(code, RECEIPT_FAILURE_CODES)
+            self.assertEqual(saved, payload)
+
+    def test_arbitrary_diagnostic_code_never_becomes_an_output_category(self):
+        for invalid in ('SENSITIVE', 'receipt-json-invalid\nSENSITIVE', None, 1, {}, True):
+            error = ReceiptSummaryError('SENSITIVE detailed message', safe_code=invalid)
+            self.assertEqual('receipt-summary-invalid', error.safe_code)
+
+    def test_exact_concatenated_markers_are_diagnosed_but_never_recovered_or_accepted(self):
+        multiple = receipt(False) + receipt(True)
+        for message, code in (
+            (multiple, 'receipt-json-concatenated-markers'),
+            (receipt(False) + '\n ' + receipt(True), 'receipt-json-concatenated-markers'),
+            ('SENSITIVE' + multiple, 'receipt-json-invalid'),
+            (multiple + 'SENSITIVE', 'receipt-json-invalid'),
+            (multiple + '{', 'receipt-json-invalid'),
+            (multiple.replace('"accepted":true', '"accepted":false'), 'receipt-json-invalid'),
+            (receipt(False) * 65, 'receipt-json-invalid'),
+            (multiple + ' ' * 8192, 'receipt-json-invalid'),
+        ):
+            payload = cloudwatch_payload()
+            payload['events'][0]['message'] = message
+            with self.subTest(code=code), self.assertRaises(ReceiptSummaryError) as caught:
+                summarize_receipts(payload, from_utc=FROM_UTC, through_utc=THROUGH_UTC)
+            self.assertEqual(code, caught.exception.safe_code)
+            self.assertIn('not valid JSON', str(caught.exception))
+
     def test_reduces_raw_cloudwatch_events_to_sanitized_counts_only(self) -> None:
         summary = summarize_receipts(
             cloudwatch_payload(), from_utc=FROM_UTC, through_utc=THROUGH_UTC

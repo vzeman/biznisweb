@@ -53,7 +53,7 @@ jobs:
       - name: Validate resolved source and independent GitHub health before AWS
         run: |
           set -euo pipefail
-          python -m unittest tests.test_growthbook_managed_quality_source tests.test_growthbook_aa_quality_source tests.test_growthbook_quality_source_io
+          python -m unittest tests.test_growthbook_managed_quality_source tests.test_growthbook_aa_quality_source tests.test_growthbook_quality_source_io tests.test_growthbook_receipt_summary
           python scripts/validate_growthbook_workspace.py
           python scripts/validate_growthbook_production_aa_activation.py
           python scripts/validate_growthbook_aa_measurement_window.py

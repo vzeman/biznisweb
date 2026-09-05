@@ -42,7 +42,7 @@ from scripts.build_growthbook_aa_quality_source import (
 from scripts.validate_growthbook_aa_measurement_window import validate_measurement_window
 from scripts.validate_growthbook_aa_infra_health_evidence import validate_health_evidence
 from scripts.record_growthbook_natural_evidence import canonical_evidence_bytes as canonical_health_bytes
-from scripts.summarize_growthbook_receipts import summarize_receipts
+from scripts.summarize_growthbook_receipts import RECEIPT_FAILURE_CODES, ReceiptSummaryError, summarize_receipts
 
 REPO = "vzeman/biznisweb"
 ACCOUNT = "919341186960"
@@ -70,8 +70,12 @@ def require(condition, message):
         raise SourceCollectionError(message)
 
 
+RECEIPT_SOURCE_PHASES = (
+    "receipt-retention", "receipt-log-read", "receipt-validation", "receipt-comparison",
+)
 CAPTURE_PHASES = (
     "runtime-preflight", "retained-raw-source", *RAW_SOURCE_PHASES, "receipt-parity",
+    *RECEIPT_SOURCE_PHASES,
     "reporting-runtime", "managed-token", "receipted-orders",
     "authoritative-facts", "quality-build", "runtime-readback",
 )
@@ -79,6 +83,8 @@ SAFE_FAILURE_CODES = {
     "retained raw source coverage could not be verified": "raw-coverage-unverified",
     "receipted order coverage could not be verified": "order-coverage-unverified",
     "retained write/receipt parity failed": "receipt-parity-failed",
+    "receipt log group read failed": "receipt-retention-read-failed",
+    "receipt log page read failed": "receipt-page-read-failed",
     "source runtime/control changed during capture": "control-changed",
     "VEVO API URL drift": "api-configuration-drift",
     "unexpected runner API environment": "api-environment-drift",
@@ -103,7 +109,10 @@ class CaptureProgress:
 
 def safe_failure_code(error):
     # Never format an exception or inspect SDK payloads/causes. Only exact local
-    # exception types and exact constant messages select a fixed output code.
+    # exception types and allowlisted local codes/messages select fixed output.
+    if type(error) is ReceiptSummaryError:
+        code = getattr(error, "safe_code", None)
+        return code if type(code) is str and code in RECEIPT_FAILURE_CODES else "receipt-summary-invalid"
     if type(error) in {SourceCollectionError, QualityInputError}:
         if len(error.args) == 1 and type(error.args[0]) is str:
             known = SAFE_FAILURE_CODES.get(error.args[0])
@@ -441,21 +450,33 @@ def fixed_order_transport(session, token, pace):
     return execute
 
 
-def receipt_parity(logs, log_group, plan, raw_rows):
-    response = logs.describe_log_groups(logGroupNamePrefix=log_group)
+def receipt_parity(logs, log_group, plan, raw_rows, *, progress=None):
+    def mark(phase):
+        if progress is not None:
+            progress(phase)
+
+    mark(RECEIPT_SOURCE_PHASES[0])
+    try:
+        response = logs.describe_log_groups(logGroupNamePrefix=log_group)
+    except Exception:
+        raise SourceCollectionError("receipt log group read failed") from None
     group = only(response["logGroups"], "collector log group identity drift")
     require(group["logGroupName"] == log_group and not response.get("nextToken"), "collector log group drift")
     retention = group.get("retentionInDays")
     require(type(retention) is int and now_utc() - plan.window.context_from_utc < timedelta(days=retention),
             "receipt logs do not cover the source context")
     events, tokens, token = [], set(), None
+    mark(RECEIPT_SOURCE_PHASES[1])
     while True:
         request = {"logGroupName": log_group, "filterPattern": '"VEVO_GROWTHBOOK_COLLECTOR_RECEIPT"',
                    "startTime": int(plan.window.context_from_utc.timestamp() * 1000),
                    "endTime": int(plan.window.through_utc.timestamp() * 1000), "limit": 10000}
         if token:
             request["nextToken"] = token
-        page = logs.filter_log_events(**request)
+        try:
+            page = logs.filter_log_events(**request)
+        except Exception:
+            raise SourceCollectionError("receipt log page read failed") from None
         events.extend(page["events"])
         require(len(events) <= 100000, "receipt coverage exceeds source bound")
         token = page.get("nextToken")
@@ -463,8 +484,10 @@ def receipt_parity(logs, log_group, plan, raw_rows):
             break
         require(token not in tokens and len(tokens) < 1000, "receipt pagination drift")
         tokens.add(token)
+    mark(RECEIPT_SOURCE_PHASES[2])
     summary = summarize_receipts({"events": events}, from_utc=stamp(plan.window.context_from_utc),
                                  through_utc=stamp(plan.window.through_utc))
+    mark(RECEIPT_SOURCE_PHASES[3])
     in_context = [row for row in raw_rows if utc(row["received_at"]) < plan.window.through_utc]
     require(summary["collector_unique_accepted_event_count"] == len(in_context), "retained write/receipt parity failed")
     return {"context_receipt_summary_sha256": digest(summary), "accepted_write_count_parity_verified": True}
@@ -484,7 +507,7 @@ def collect(plan, client, activation, reconciliation, health_binding, *, progres
                                          through_utc=plan.window.through_utc, progress=progress,
                                          max_read_workers=RAW_READ_WORKERS)
     progress("receipt-parity")
-    parity = receipt_parity(client("logs"), before["log_group"], plan, raw.rows)
+    parity = receipt_parity(client("logs"), before["log_group"], plan, raw.rows, progress=progress)
     receipts = order_completion_receipts(row for row in raw.rows if utc(row["received_at"]) < plan.window.through_utc)
     progress("reporting-runtime")
     # Importing the legacy reporter can load .env, so the CLI verifies the clean

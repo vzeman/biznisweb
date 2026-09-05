@@ -1,14 +1,69 @@
 # A/A quality-source audit — 2026-09-05
 
-Status: `SOURCE_CAPTURE_IN_PROGRESS`. The bounded conditional-read correction
-is reviewed and one new managed acquisition is live, as recorded below. The
-three earlier acquisitions are terminal without artifacts. Complete source
-coverage and A/A PASS remain unproven. This is
+Status: `SOURCE_CAPTURE_RECEIPT_PARITY_UNCLASSIFIED_FAILURE`. The bounded-read
+acquisition is now terminal without an artifact. All four attempts are terminal;
+there is no active source wait. Complete source coverage and A/A PASS remain
+unproven. This is
 not permission to restart an experiment or alter its window. Separately, browser
 QA is fail-closed on `GTM_LIVE_VERSION_DRIFT` and the newly verified static
 `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK`; see the browser precheck.
 
-### One bounded-read acquisition live after exact-head review and fresh health
+### Bounded reads completed; receipt-phase failure requires sanitized diagnosis
+
+Run `33972852946`, job `101324325818`, on original main
+`b467f416ddfbc36bcd9fe18cdf55b2377814c110` completed `failure` at
+`2026-09-05T14:58:41Z` (run metadata updated `14:58:42Z`). The acquisition
+exited 2 at `14:58:38Z`, not at the 45-minute timeout. Upload was skipped,
+cleanup succeeded and an independent artifact listing confirms zero artifacts.
+
+The fixed sanitized phase log proves conditional reads ran from
+`14:48:27.6553165Z` to `14:55:00.0216782Z` (6m32.366s, compared with the prior
+43m02.684s observation). Strict raw-event validation then returned; the final
+inventory began at `14:55:00.3388080Z` and returned before receipt parity began
+at `14:55:08.0574219Z`. Receipt parity stopped at `14:58:38.0464885Z` with
+`stage=source-capture:phase=receipt-parity:code=unclassified-error:raw=false`.
+No reporting import, token/order API read, complete source, parity success or
+quality evaluation follows from those markers. This establishes the observed
+read-time improvement, not a controlled performance benchmark or the cause of
+the receipt failure. It does not prove a mismatch, missing events, invalid JSON,
+an AWS access error or the cause of earlier acquisitions.
+
+Offline review found a diagnostic gap: receipt parity wraps log-group retention,
+paginated log reads, strict receipt validation and count comparison. A local
+`ReceiptSummaryError` was not classified by the managed safe-error handler and
+therefore looked the same as an unknown SDK/Python error. This is a possible
+explanation of the category, **not proof that this exception occurred live**.
+
+The prepared diagnostic change adds four fixed substeps, silent by default and
+emitted once per phase, never per page/event. SDK operation exceptions become
+fixed retention-read or page-read categories with their context suppressed.
+Local receipt validation attaches an allowlisted fixed reason without changing
+its original conditions, detailed local messages, calculations or canonical
+output. The managed handler accepts only the exact local exception type and an
+allowlisted string code; it never formats the exception, event position or SDK
+payload. Malformed JSON can additionally be classified as a bounded sequence of
+two or more **exact canonical** collector markers in one message, but it still
+fails: there is no splitting, repair or acceptance of that framing. That shape
+category cannot establish a producer or transport root cause. Prefixes, suffixes,
+other formats/fields and exceeded diagnostic bounds remain generic failures.
+
+Seven new synthetic tests cover every local category, forged/non-string codes,
+hostile exception formatting/subclasses, actual SDK/validation/comparison
+substeps, identical silent/progress pagination/proof, the real CLI's suppressed
+receipt error path, and exact concatenated-marker diagnosis without recovery.
+The receipt-summary tests are now included in CI and the existing pre-AWS source
+test gate. The complete suite is 252 tests. All source schemas, counts, request
+bounds/filter/pagination, raw workers, workflow timeouts, API pacing, window,
+retention, acceptance and live manifests remain unchanged.
+
+Require exact-head review, full tests/validators and CI before merge. Only after
+fresh same-new-main managed health and independent run/artifact recovery checks
+may one diagnostic acquisition be dispatched through the existing source gate.
+Do not rerun an old attempt, infer a receipt cause from duration, relax a receipt
+check, rebuild from an unverified partial capture or retry until PASS. No new
+acquisition was dispatched during this offline diagnostic implementation.
+
+### Historical start of the now-terminal bounded-read acquisition
 
 PR #530 merged at `2026-09-05T14:44:20Z` as
 `b467f416ddfbc36bcd9fe18cdf55b2377814c110`. Its reviewed head
