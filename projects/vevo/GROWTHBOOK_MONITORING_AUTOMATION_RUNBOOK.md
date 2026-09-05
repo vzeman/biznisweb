@@ -194,20 +194,21 @@ or permits reading arms or outcomes.
 
 ## Post-Resolution Sequence
 
-Current source-quality blocker: see `GROWTHBOOK_AA_QUALITY_SOURCE_AUDIT.md`.
-The rolling quality report's generation date and matching eligible total do
-not prove the exact resolved input window. Do not open either source producer
-or the snapshot gate until the reviewed exact-window source/provenance repair
-is implemented and independently verified. Do not alter the stopping boundary,
-use local AWS credentials, or choose a quality report by observed results.
+Current source-quality status: see `GROWTHBOOK_AA_QUALITY_SOURCE_AUDIT.md`.
+The exact-window source/recorder/consumer migration and support gate are now
+reviewed; live source coverage remains unproven. A rolling report's generation
+date and matching eligible total never prove the resolved input window. Do not
+alter the stopping boundary, use local AWS credentials, or choose a quality
+report by observed results. The automated/manual producers and snapshot remain
+closed until independently verified source/manual observations are recorded.
 
 The automated consumer migration now independently verifies the original
 source/health GitHub artifacts before credentials, audits Meta assignment from
 the same hash-bound retained input rather than rolling curated facts, and emits
 the source hash in automated schema 2. Its shared source-support constant remains
-false until a separate reviewed PR opens that implementation gate. No live
-source or A/A PASS follows merely from the offline tests. Once that PR is merged,
-obtain fresh exact-main infra health before the single source acquisition, then
+true after its separately reviewed implementation-gate opening. No live source
+or A/A PASS follows merely from that flag or the offline tests. On exact main,
+obtain fresh same-main infra health before the single source acquisition, then
 record the source through the offline recorder; never use a local AWS key or
 open the manifest merely to discover a quality object.
 

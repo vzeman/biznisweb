@@ -1,7 +1,27 @@
 # A/A quality-source audit — 2026-09-05
 
-Status: `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED`. This is a source-contract
-finding, not a measured A/A failure or permission to restart the experiment.
+Status: `EXACT_WINDOW_SOURCE_SUPPORT_REVIEWED_AWAITING_LIVE_CAPTURE`. The
+source-contract repair and its implementation gate are reviewed; live source
+coverage and A/A PASS remain unproven. This is not permission to restart an
+experiment or alter the fixed measurement window.
+
+## Current operational gate
+
+`EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED` is now true after PRs #515–518 and
+the separately reviewed support-gate change. Earlier sections below retain the
+repair history; their closed-support statements are historical. The live
+snapshot is still schema 2 with source and both evidence components unrecorded,
+and all automated/manual producer, snapshot, stop, paid and CTA gates closed.
+
+On clean exact main, first verify no source capture already exists. Verify fresh
+same-main infra health through the managed monitor, including its successful
+run, sole ZIP/GitHub digest, canonical JSON hash and offline validation. Only
+then manually dispatch the one managed quality source with that independent
+health run/hash. This read-only capture does not modify ordinary facts or shop
+data. Source coverage/token/endpoint failures remain closed, not invitations to
+choose a different generation or change the sample boundary. A successful
+capture must be independently recorded with both source and health provenance
+through a new PR before automated collection or an A/A PASS can follow.
 
 ### Pre-capture SDK metadata correction
 
