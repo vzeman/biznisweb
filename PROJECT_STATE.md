@@ -5,6 +5,35 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — One source acquisition live; GTM readback exposes version drift
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-live-source-gtm-drift`
+
+What changed:
+
+- PR #527 merged as `afea00d095c0a06e46433991f9ae8b0593a01bfa` after all four exact-head checks and 235 source/lifecycle regressions passed. Clean main was independently synchronized; both prior source runs were rechecked as terminal with zero artifacts. There was no active or successful source to duplicate or recover.
+- Fresh same-main managed health run `33967911035` succeeded. Its sole artifact `9970017379`, GitHub ZIP digest `ac6021d06d99e031b8fa4ab29048d804ecac50a9a2152b3965fdb370d9a76a44`, single canonical JSON and JSON SHA-256 `a72582eb192e15bb3924d7826f59e0f1a1ed4c20f0a3ebd743b55a7da1e43610` were independently verified. A second independent download passed the offline health, deployment-binding, freshness and latest-reconciliation checks. Observation `2026-09-05T13:06:24Z` proves `natural_reconciliation_verified` for the September 5 03:45 Bratislava reconciliation. No local artifact file or raw AWS payload was retained.
+- Dispatched exactly one reviewed diagnostic source run `33968053395`, job `101311556789`, on that original main with the independently verified health run/hash. Created `2026-09-05T13:08:58Z`; source acquisition started `13:09:45Z` after successful pre-AWS and credential steps. It remains `in_progress` at the latest metadata check before `13:19:06Z`. This is a live cloud job, not a failed/missing capture or permission for another dispatch.
+
+What is verified:
+
+- Owner authentication works in GrowthBook and GTM. Read-only GTM navigation selected the exact VEVO account/container `6254499282` / `198135331` (`GTM-5ZB5LFGB`). The fully loaded Versions page identifies **version 19 as published**, with version 19 and versions 16–18 published on September 4. The activation manifest and current stop/readback runbook still require version 15. See `projects/vevo/GROWTHBOOK_BROWSER_QA_PRECHECK.md` for the scoped observations and limitations.
+- Version 19 lists all four Production GrowthBook tags and two additional VEVO UX checkout/Clarity diagnostic tags. Tag names, triggers and displayed modification dates do not prove byte-identical GrowthBook code, sequencing, consent metadata or correct event delivery. No tag editor, code export, preview session, publish, rollback, commerce, consent or experiment-results control was used.
+- The latest listed GTM publications postdate the frozen through-boundary `2026-09-03T22:00:00Z`. This timing neither invalidates the earlier window automatically nor proves current QA or absence of an effect. No window, checkpoint, count, live manifest or acceptance rule was changed.
+- This documentation-only handoff passes all 235 focused regressions, workspace/window/activation/security validators and `git diff --check`. No executable file or JSON manifest differs from the source run's original main. The finite test process completed successfully; it did not start an application service.
+
+Known issues:
+
+- `GTM_LIVE_VERSION_DRIFT`: current GTM version 19 cannot be represented as the recorded version 15. Full canonical manual QA, snapshot PASS, stop, paid Pro and CTA transitions remain closed. Do not overwrite historical activation evidence, roll back unrelated work or relabel the current version merely to satisfy a gate.
+- Source quality remains unproven while run `33968053395` is live. The first failure and second timeout remain distinct historical observations; the new substep diagnostic has no terminal result yet. Production A/A was not stopped; Preview remains asleep.
+
+Next exact step:
+
+- Inspect the same source run `33968053395` until terminal; never duplicate it. On success independently verify the sole original source and health ZIPs, GitHub digests, canonical JSON hashes and original source-main Git inputs before any offline recorder PR. On failure inspect only fixed sanitized phase/code and artifact metadata; preserve any artifact and do not retry or infer a root cause from elapsed time.
+- Keep the browser-QA/stop/paid/CTA path fail-closed on the GTM mismatch. Reconcile the September 4 version changes with their owning work and perform a read-only, scoped version 15 versus 19 code/consent/trigger/sequencing review before proposing any separate reviewed compatibility transition. Do not publish, restore version 15/14, edit the shop or rewrite existing activation proof. No local application process was started; no process cleanup was needed.
+
 ## 2026-09-05 — Retained-source substep diagnostics prepared without an assumed optimization
 
 Date: 2026-09-05
