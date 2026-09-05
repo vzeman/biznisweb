@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Source acquisition timed out; authenticated flag readback verified
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-source-timeout-readback`
+
+What changed:
+
+- The owner signed in to the existing GrowthBook account. Read-only browser navigation independently verified the Vevo / VEVO SK Web workspace, A/A feature `vevo-sk-aa-assignment` live revision `3`, and the Production-only rule for `exp_19g6mmt5wugpk`: running, allocation `100%`, configured weights `50/50`, attribute `id`, values `control` / `variant`, tracking key `vevo-sk-aa-001`. Filtering staging showed only the separate Preview experiment `exp_19g6mmt1qsqm9`.
+- CTA feature `vevo-sk-product-cta-color` live revision `1` has Production disabled and zero rules. Revision `2` remains a draft with its staging-only draft experiment. No setting, experiment, draft, billing, consent or commerce control was changed. The authenticated tab is retained for unfinished QA. These configuration observations are not exposure delivery, canonical manual QA or A/A PASS. The UI's `No data` attention label was observed, but no experiment analysis/results page or query was opened and that label is not evidence of absent retained events.
+- Diagnostic source run `33964597883` on main `2e04784765a74e71ba5b7a21ab075cebd91102e4` is now terminal `cancelled`. Job `101302371923` ran from `11:55:06Z` to `12:40:21Z`; GitHub's independently inspected check annotation confirms the maximum execution-time limit was exceeded. The last fixed source marker is `retained-raw-source` at `11:55:53Z`; no later operation marker was emitted. Upload was skipped, cleanup succeeded, and independent artifact metadata confirms zero artifacts. It is no longer a live wait.
+
+What is verified:
+
+- Only allowlisted source phase/cancellation markers and a boolean derived from GitHub's timeout annotation were emitted; no raw annotation, source, AWS, CloudWatch, event, device or order payload was exposed or saved. The source never reached the marked receipt-parity, managed-token, order API or quality-build phases. Both actual source attempts have no artifact to record; no further acquisition was dispatched.
+- The five original source-commit Git input blobs remain available and byte-identical to current manifests. Frozen checkpoint history/window and all source/evidence/snapshot/stop/paid/CTA gates remain unchanged. No production deploy, Preview wake, A/A stop or local application process occurred.
+
+Known issues:
+
+- Source acquisition cannot yet complete within its protected runtime limit. The phase marker localizes this run to retained-raw-source acquisition, but does not distinguish its inventory, conditional reads, validation or final inventory substep. Static inspection shows sequential conditional object reads; that alone does not prove the root cause of the live timeout. The original run's earlier source-capture failure also remains unexplained. This is not an A/A quality FAIL and does not justify changing the sample/window/thresholds or simply extending the timeout.
+- Authentication is no longer the browser blocker. Full consent, Tag Assistant delivery, runtime/console, commerce, rollback and canonical QA remain unverified. No A/A PASS is established.
+
+Next exact step:
+
+- Stop source dispatches and preserve this terminal evidence. Review the retained-source adapter and managed transport offline to establish a concrete, privacy-safe diagnostic/correction before any separately reviewed next acquisition; do not optimize on an assumed failing substep, raise limits, weaken coverage checks or repeat captures until PASS. Any future acquisition still requires exact clean main, existing-run/artifact recovery checks and independently verified fresh same-main managed health. Continue only separately authorized read-only browser configuration/QA; no experiment results, stop, billing, CTA, GTM or commerce transition is opened by this readback.
+
 ## 2026-09-05 — Browser QA access checked; authentication requires the owner
 
 Date: 2026-09-05
