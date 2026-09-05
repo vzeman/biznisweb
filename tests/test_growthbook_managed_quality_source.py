@@ -245,6 +245,24 @@ class ManagedSourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             execute("mutation {}", variable_values={"order_num": "123"})
 
+    def test_control_digest_ignores_only_top_level_sdk_response_metadata(self):
+        current, activation, reconciliation, clients, objects = fake_runtime()
+        check = lambda: source.runtime_preflight(clients.__getitem__, current, activation, reconciliation)
+        original = check()
+        for value in ('first-request', 'second-request'):
+            for name in ('schedule', 'source_schedule'):
+                objects[name]['ResponseMetadata'] = {'RequestId': value, 'HTTPHeaders': {'date': value}, 'RetryAttempts': 1}
+            saved = copy.deepcopy(objects)
+            self.assertEqual(original, check())
+            self.assertEqual(saved, objects)
+        # Changing a real source configuration field is still detected even
+        # when it is not part of the minimal individual invariant checks.
+        objects['source_schedule']['Target']['Input'] = 'synthetic-changed-input'
+        self.assertNotEqual(original['control_sha256'], check()['control_sha256'])
+        del objects['source_schedule']['Target']['Input']
+        objects['schedule']['Description'] = 'synthetic-configuration-change'
+        self.assertNotEqual(original['control_sha256'], check()['control_sha256'])
+
     def test_existing_success_or_active_source_is_not_recaptured(self):
         for status, conclusion in (("in_progress", None), ("queued", None), ("completed", "success")):
             with patch.object(source, "gh_json", return_value={"workflow_runs": [{"id": 555555555, "status": status, "conclusion": conclusion}]}):

@@ -322,7 +322,13 @@ def runtime_preflight(client, plan, activation, reconciliation):
 
     reference = token_ref(reconciler_container)
     require(reference == token_ref(source_container), "managed token inheritance drift")
-    control = {"source_schedule": source_schedule, "schedule": schedule, "definition": definition,
+    # Botocore adds per-request IDs, headers and retry metadata to these two
+    # top-level responses. They are not Scheduler configuration and necessarily
+    # differ across otherwise identical reads. Preserve every actual field,
+    # including nested target/role/input settings; do not mutate the responses.
+    schedule_config = {key: value for key, value in schedule.items() if key != "ResponseMetadata"}
+    source_config = {key: value for key, value in source_schedule.items() if key != "ResponseMetadata"}
+    control = {"source_schedule": source_config, "schedule": schedule_config, "definition": definition,
                "bucket": bucket, "rules": rules, "task": task_arn,
                "private_ip": str(address), "collector_definition": definition_arn}
     return {"bucket": bucket, "log_group": outputs["CollectorContainerLogGroup"],
