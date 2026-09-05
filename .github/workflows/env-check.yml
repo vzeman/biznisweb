@@ -118,6 +118,7 @@ jobs:
             tests.test_growthbook_aa_quality_source \
             tests.test_growthbook_quality_source_io \
             tests.test_growthbook_managed_quality_source \
+            tests.test_growthbook_aa_source_binding \
             tests.test_growthbook_reporting \
             tests.test_growthbook_pipeline \
             tests.test_growthbook_aa_measurement_window \
@@ -129,6 +130,8 @@ jobs:
             tests.test_growthbook_aa_manual_qa_evidence \
             tests.test_growthbook_aa_manual_qa_workflow \
             tests.test_growthbook_aa_snapshot_assembler \
+            tests.test_growthbook_aa_snapshot_workflow \
+            tests.test_growthbook_aa_completion_recorder \
             tests.test_growthbook_workspace \
             tests.test_scheduled_growthbook_reconciliation
 

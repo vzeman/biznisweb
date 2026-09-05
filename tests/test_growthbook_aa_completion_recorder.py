@@ -27,6 +27,7 @@ from scripts.record_growthbook_aa_evidence_gates import (
 )
 from scripts.validate_growthbook_aa_measurement_window import canonical_evidence_bytes
 from tests.test_growthbook_aa_evaluator import snapshot as evaluator_snapshot
+from tests.growthbook_aa_source_fixtures import source_bundle
 from tests.test_growthbook_aa_evidence_gate_recorder import (
     AUTOMATED_COMMIT,
     AUTOMATED_RUN_ID,
@@ -34,8 +35,6 @@ from tests.test_growthbook_aa_evidence_gate_recorder import (
     MANUAL_RUN_ID,
     component_evidence,
     observation as manual_observation,
-    quality_key,
-    quality_report,
     resolved_snapshot,
 )
 
@@ -51,15 +50,7 @@ def load(name: str) -> dict[str, object]:
 
 def build_snapshot_manifest() -> dict[str, object]:
     manifest = resolved_snapshot()
-    quality = quality_report()
-    manifest = open_automated_producer(
-        manifest,
-        quality,
-        quality_report_key=quality_key(),
-        quality_report_sha256=hashlib.sha256(
-            canonical_evidence_bytes(quality)
-        ).hexdigest(),
-    )
+    manifest = open_automated_producer(manifest, **source_bundle())
     reviewed = manual_observation()
     manifest = open_manual_producer(
         manifest,

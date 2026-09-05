@@ -29,13 +29,14 @@ THROUGH_UTC = "2026-08-29T22:00:00Z"
 def automated_evidence() -> dict[str, object]:
     counts = {"control": 510, "variant": 490}
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "evidence_type": "vevo_growthbook_aa_automated_evidence",
         "experiment_id": "vevo-sk-aa-001",
         "from_utc": FROM_UTC,
         "through_utc": THROUGH_UTC,
         "source_run_id": AUTOMATED_RUN_ID,
         "source_main_commit": AUTOMATED_COMMIT,
+        "quality_source_sha256": "d" * 64,
         "production_runtime": {
             "instance_id": "N/A:Fargate",
             "private_ip": "172.31.20.10",

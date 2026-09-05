@@ -5,6 +5,8 @@ import json
 import pathlib
 import tempfile
 import unittest
+from unittest.mock import patch
+from tests.growthbook_aa_source_fixtures import source_bundle
 
 from scripts.record_growthbook_aa_evidence_gates import (
     EvidenceGateRecordingError,
@@ -127,6 +129,7 @@ def component_evidence(component: str) -> dict[str, object]:
         value = automated_evidence()
         value["source_run_id"] = AUTOMATED_RUN_ID
         value["source_main_commit"] = AUTOMATED_COMMIT
+        value["quality_source_sha256"] = source_bundle()["expected_evidence_sha256"]
     else:
         value = manual_evidence()
         value["source_run_id"] = MANUAL_RUN_ID
@@ -151,14 +154,7 @@ class GrowthBookAaEvidenceGateRecorderTests(unittest.TestCase):
         )
 
     def open_automated(self) -> dict[str, object]:
-        quality = quality_report()
-        digest = hashlib.sha256(canonical_evidence_bytes(quality)).hexdigest()
-        return open_automated_producer(
-            self.snapshot,
-            quality,
-            quality_report_key=quality_key(),
-            quality_report_sha256=digest,
-        )
+        return open_automated_producer(self.snapshot, **source_bundle())
 
     def open_manual(
         self, snapshot: dict[str, object] | None = None
@@ -176,44 +172,28 @@ class GrowthBookAaEvidenceGateRecorderTests(unittest.TestCase):
         automated = recorded["automated_evidence"]
         self.assertTrue(automated["producer_allowed"])
         self.assertEqual(
-            "verified_canonical_reporting_quality",
-            automated["quality_report_status"],
+            3,
+            recorded["schema_version"],
         )
-        self.assertEqual(quality_key(), automated["quality_report_key"])
+        self.assertEqual(source_bundle()["expected_evidence_sha256"], automated["quality_source"]["json_sha256"])
+        self.assertNotIn("quality_report_key", automated)
         self.assertFalse(recorded["snapshot_build_allowed"])
         self.validate(recorded)
         self.assertEqual(
             recorded,
             open_automated_producer(
                 recorded,
-                quality_report(),
-                quality_report_key=quality_key(),
-                quality_report_sha256=automated["quality_report_sha256"],
+                **source_bundle(),
             ),
         )
 
-        wrong_population = quality_report()
-        wrong_population["eligible_device_count"] = 999
-        with self.assertRaisesRegex(EvidenceGateRecordingError, "identity drift"):
-            open_automated_producer(
-                self.snapshot,
-                wrong_population,
-                quality_report_key=quality_key(),
-                quality_report_sha256=hashlib.sha256(
-                    canonical_evidence_bytes(wrong_population)
-                ).hexdigest(),
-            )
-
-        timestamp_drift = quality_report()
-        with self.assertRaisesRegex(EvidenceGateRecordingError, "timestamp drift"):
-            open_automated_producer(
-                self.snapshot,
-                timestamp_drift,
-                quality_report_key=quality_key().replace("015000", "015001"),
-                quality_report_sha256=hashlib.sha256(
-                    canonical_evidence_bytes(timestamp_drift)
-                ).hexdigest(),
-            )
+        mismatched = source_bundle()
+        mismatched["expected_evidence_sha256"] = "f" * 64
+        with self.assertRaisesRegex(EvidenceGateRecordingError, "source verification failed"):
+            open_automated_producer(self.snapshot, **mismatched)
+        with self.assertRaises(TypeError):
+            open_automated_producer(self.snapshot, quality_report(),
+                quality_report_key=quality_key(), quality_report_sha256="f" * 64)
 
     def test_opens_manual_only_for_exact_reviewed_window(self) -> None:
         recorded = self.open_manual()
@@ -312,36 +292,28 @@ class GrowthBookAaEvidenceGateRecorderTests(unittest.TestCase):
                 _load_canonical_mapping(path, raw_digest, "quality report")
 
     def test_cli_writes_only_the_reviewed_automated_transition(self) -> None:
-        quality = quality_report()
-        quality_raw = canonical_evidence_bytes(quality)
-        quality_digest = hashlib.sha256(quality_raw).hexdigest()
+        bundle = source_bundle()
         with tempfile.TemporaryDirectory() as temporary_directory:
             temporary = pathlib.Path(temporary_directory)
             snapshot_path = temporary / "snapshot.json"
-            quality_path = temporary / "quality.json"
             output_path = temporary / "output.json"
             snapshot_path.write_text(
                 json.dumps(self.snapshot, indent=2) + "\n", encoding="utf-8"
             )
-            quality_path.write_bytes(quality_raw)
-            self.assertEqual(
-                0,
-                main(
-                    [
-                        "--snapshot",
-                        str(snapshot_path),
-                        "--output",
-                        str(output_path),
-                        "open-automated",
-                        "--quality-report",
-                        str(quality_path),
-                        "--quality-report-key",
-                        quality_key(),
-                        "--expected-quality-report-sha256",
-                        quality_digest,
-                    ]
-                ),
-            )
+            argv = ["--snapshot", str(snapshot_path), "--output", str(output_path), "open-automated"]
+            for field, value in bundle.items():
+                if field == "source_inputs":
+                    continue
+                option = "--" + field.replace("_", "-")
+                if field.startswith("expected_"):
+                    argv.extend([option, value])
+                else:
+                    path = temporary / field
+                    path.write_bytes(value if isinstance(value, bytes) else json.dumps(value).encode())
+                    argv.extend([option, str(path)])
+            with patch("scripts.growthbook_aa_source_binding.read_git_source_inputs", return_value=bundle["source_inputs"]) as reader:
+                self.assertEqual(0, main(argv))
+                reader.assert_called_once_with(bundle["expected_main_commit"])
             recorded = json.loads(output_path.read_text(encoding="utf-8"))
             self.assertTrue(recorded["automated_evidence"]["producer_allowed"])
             self.assertFalse(recorded["manual_qa_evidence"]["producer_allowed"])

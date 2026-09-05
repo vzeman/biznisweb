@@ -71,6 +71,10 @@ jobs:
           import pathlib
           import re
           from datetime import datetime, timezone
+          from scripts.record_growthbook_aa_evidence_gates import EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED
+
+          if EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED is not True:
+              raise SystemExit('exact-window automated consumer migration is not reviewed')
 
           manifest = json.load(open(os.environ['SNAPSHOT_MANIFEST'], encoding='utf-8'))
           workspace = json.load(open('projects/vevo/growthbook_workspace.json', encoding='utf-8'))
