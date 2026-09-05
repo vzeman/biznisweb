@@ -24,6 +24,31 @@ from tests.test_growthbook_aa_evidence_gate_recorder import (
 
 
 class SourceBindingTests(unittest.TestCase):
+    def test_each_artifact_requires_its_actual_producer_canonical_format(self):
+        bundle = source_bundle()
+        for prefix, workflow, artifact, expected_id, expected_hash, wrong_encoder in (
+            ('source', binding.WORKFLOW, binding.ARTIFACT, bundle['expected_workflow_run_id'],
+             bundle['expected_evidence_sha256'], binding.canonical_health_bytes),
+            ('health', binding.HEALTH_WORKFLOW, binding.HEALTH_ARTIFACT, bundle['expected_health_run_id'],
+             bundle['expected_health_sha256'], canonical_source_bytes),
+        ):
+            with self.subTest(prefix=prefix):
+                original = bundle[prefix + '_zip']
+                raw, _, _ = binding.verified_archive(original, bundle[prefix + '_run'], bundle[prefix + '_artifacts'],
+                    run_id=expected_id, main_commit=bundle['expected_main_commit'], workflow=workflow,
+                    artifact_name=artifact, json_sha256=expected_hash)
+                wrong = wrong_encoder(json.loads(raw))
+                self.assertNotEqual(raw, wrong)
+                buffer = io.BytesIO()
+                with zipfile.ZipFile(buffer, 'w') as zipped:
+                    zipped.writestr(artifact + '.json', wrong)
+                metadata = copy.deepcopy(bundle[prefix + '_artifacts'])
+                metadata['artifacts'][0]['digest'] = 'sha256:' + hashlib.sha256(buffer.getvalue()).hexdigest()
+                with self.assertRaisesRegex(ValueError, 'canonical JSON digest'):
+                    binding.verified_archive(buffer.getvalue(), bundle[prefix + '_run'], metadata,
+                        run_id=expected_id, main_commit=bundle['expected_main_commit'], workflow=workflow,
+                        artifact_name=artifact, json_sha256=hashlib.sha256(wrong).hexdigest())
+
     def test_both_independent_archives_and_original_snapshot_bytes_are_bound(self):
         bundle = source_bundle()
         verified = binding.verify_source_bundle(**bundle)

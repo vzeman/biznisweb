@@ -5,6 +5,24 @@ source-contract repair and its implementation gate are reviewed; live source
 coverage and A/A PASS remain unproven. This is not permission to restart an
 experiment or alter the fixed measurement window.
 
+### Live health format compatibility
+
+The first fresh exact-main managed health run `33961275554` succeeded. Its
+independent source-reader verification stopped before source dispatch because
+the existing health producer uses its indented `canonical_evidence_bytes`, not
+the compact `canonical_source_bytes` used by quality captures. The readers now
+select the exact serializer by producer, preserving original artifact bytes and
+independent ZIP/JSON hashes. Reformatting a downloaded artifact is forbidden.
+Synthetic health fixtures use the real producer serializer, and a new regression
+rejects the wrong format even with updated valid hashes (228 focused tests).
+
+The candidate readers verified the actual original health ZIP/JSON, complete
+run/artifact ownership, offline health evidence and latest reconciliation; no
+local download file or raw payload was retained. This proves the serializer
+correction, not source quality. After the correction merges, obtain fresh health
+on that new exact main before the first source dispatch; the previous main's
+health must not be relabelled. No source capture has been dispatched yet.
+
 ## Current operational gate
 
 `EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED` is now true after PRs #515–518 and

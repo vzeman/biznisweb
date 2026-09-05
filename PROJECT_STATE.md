@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Live infra health verified; preserve each producer's canonical format
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-health-canonical-format`
+
+What changed:
+
+- PR #519 opened the reviewed source-support constant and merged as `afa0357285245576b04c23bff369ec8a5a3ef29e` after all four CI checks and independently confirmed 227-test execution. The first fresh managed infra-health run succeeded, but independent source-reader verification correctly stopped before any source dispatch: the reader expected compact source JSON for the existing indented health producer format.
+- Both health readers now use the exact canonical serializer owned by the health producer/validator; source captures still require their distinct compact format. No artifact bytes, hashes, producer output or acceptance thresholds are rewritten or loosened. Synthetic health fixtures now use the actual producer serializer; a regression rejects using the other format even when both ZIP/JSON hashes are independently updated.
+
+What is verified:
+
+- Managed health run `33961275554` succeeded on exact main `afa0357285245576b04c23bff369ec8a5a3ef29e`, artifact `9968012691`, ZIP SHA-256 `44a33b60577bc608fc87346fe4a7dc619e93b9d05ee7b2016bf8512f64c2feab`, original JSON SHA-256 `1a1ff25e51f885b1519526a30ebf889baa3a6d85c982b14a24b2f23f23b68d3a`. The candidate readers independently verified run/artifact ownership, sole ZIP content and both digests, the offline health validator and the latest 03:45 reconciliation at observation `2026-09-05T10:40:32Z`. Verification used runner-produced sanitized GitHub artifacts in local memory; no temporary files or raw AWS payloads were downloaded.
+- The expanded focused suite passes 228 tests, with workspace/window/activation/security validation. No source capture was dispatched and no orders/API/token or A/A outcomes were read. Live manifests and frozen history are unchanged; A/A was not stopped, Preview was not woken and no local application process ran.
+
+Known issues:
+
+- Source quality/coverage and A/A PASS remain unproven. The verified health above belongs to the pre-fix main; after this PR merges the source contract requires a new successful health artifact on the resulting exact main, not a substituted commit or changed digest.
+
+Next exact step:
+
+- Review/CI/merge this reader-only correction; on synchronized clean main inspect and obtain fresh same-main managed infra health, independently verify the original canonical ZIP/JSON and offline validator, then dispatch the single managed quality source with its exact run/hash. Consume or wait for existing runs instead of duplicating them. Keep all source-recording/producer/snapshot/stop/paid/CTA/commerce gates under the existing versioned sequence.
+
 ## 2026-09-05 — Reviewed exact-window source support gate opened
 
 Date: 2026-09-05

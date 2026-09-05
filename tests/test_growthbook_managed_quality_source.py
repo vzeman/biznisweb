@@ -405,7 +405,7 @@ class ManagedSourceTests(unittest.TestCase):
         value["observed_at_utc"] = source.stamp(source.now_utc())
         value["phase"]["checked_due_local"] = "2026-09-05T03:45:00+02:00"
         value["provenance"].update(workflow_run_id=ENV["HEALTH_RUN_ID"], main_commit=ENV["GITHUB_SHA"])
-        raw = canonical_source_bytes(value)
+        raw = source.canonical_health_bytes(value)
         sha = hashlib.sha256(raw).hexdigest()
         archive = io.BytesIO()
         with zipfile.ZipFile(archive, "w") as zipped:

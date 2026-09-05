@@ -40,6 +40,7 @@ from scripts.build_growthbook_aa_quality_source import (
 )
 from scripts.validate_growthbook_aa_measurement_window import validate_measurement_window
 from scripts.validate_growthbook_aa_infra_health_evidence import validate_health_evidence
+from scripts.record_growthbook_natural_evidence import canonical_evidence_bytes as canonical_health_bytes
 from scripts.summarize_growthbook_receipts import summarize_receipts
 
 REPO = "vzeman/biznisweb"
@@ -126,7 +127,7 @@ def download_health(run_id, main_commit, expected_json_sha256):
                 "health ZIP content mismatch")
         raw = archive.read(entries[0])
     evidence = json.loads(raw)
-    require(raw == canonical_source_bytes(evidence)
+    require(raw == canonical_health_bytes(evidence)
             and hashlib.sha256(raw).hexdigest() == expected_json_sha256, "health JSON mismatch")
     deploy_raw = (ROOT / "projects/vevo/growthbook_production_reconciliation_deploy_evidence.json").read_bytes()
     validate_health_evidence(evidence, json.loads(deploy_raw), deploy_evidence_bytes=deploy_raw)
