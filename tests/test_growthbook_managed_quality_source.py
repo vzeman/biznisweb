@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import sys
 import unittest
 import zipfile
 from dataclasses import replace
@@ -123,6 +124,68 @@ def capture_fixture():
 
 
 class ManagedSourceTests(unittest.TestCase):
+    def test_progress_accepts_only_fixed_names_and_defaults_to_silent(self):
+        stream = io.StringIO()
+        progress = source.CaptureProgress(stream)
+        self.assertEqual("not-started", progress.phase)
+        for phase in source.CAPTURE_PHASES:
+            progress(phase)
+        self.assertEqual(
+            [f"VEVO_AA_QUALITY_SOURCE_PROGRESS:phase={phase}:raw=false" for phase in source.CAPTURE_PHASES],
+            stream.getvalue().splitlines(),
+        )
+        before = stream.getvalue()
+        for invalid in ("private-device-or-token", "retained-raw-source\nprivate", None, 42):
+            with self.assertRaises(source.SourceCollectionError):
+                progress(invalid)
+            self.assertEqual(before, stream.getvalue())
+            self.assertEqual(source.CAPTURE_PHASES[-1], progress.phase)
+        with patch.object(source, "print", create=True) as printer:
+            source.CaptureProgress()("runtime-preflight")
+            printer.assert_not_called()
+
+    def test_failure_codes_never_format_exception_messages_or_sdk_payloads(self):
+        class UnsafeError(RuntimeError):
+            def __str__(self):
+                raise AssertionError("exception formatting is forbidden")
+
+        for message, code in source.SAFE_FAILURE_CODES.items():
+            self.assertEqual(code, source.safe_failure_code(source.SourceCollectionError(message)))
+        for error, expected in (
+            (UnsafeError("private-device-or-token"), "unclassified-error"),
+            (RuntimeError({"Error": {"Message": "private-device-or-token"}}), "unclassified-error"),
+            (source.SourceCollectionError("private-device-or-token"), "local-contract-check"),
+            (source.QualityInputError("private-device-or-token"), "input-read-or-validation"),
+        ):
+            self.assertEqual(expected, source.safe_failure_code(error))
+
+    def test_cli_reports_safe_failure_phase_while_suppressing_raw_output(self):
+        current = plan()
+        output, errors = io.StringIO(), io.StringIO()
+        sdk = MagicMock()
+
+        def fail_capture(*args, progress, **kwargs):
+            print("private-device-or-token")
+            print("private-sdk-payload", file=sys.stderr)
+            progress("reporting-runtime")
+            raise source.SourceCollectionError("unexpected runner API environment")
+
+        with patch.object(sys, "argv", ["source"]), patch.object(sys, "stdout", output), \
+             patch.object(sys, "stderr", errors), patch.dict(sys.modules, {"boto3": sdk}), \
+             patch.dict(os.environ, {"GITHUB_WORKSPACE": str(ROOT)}), \
+             patch.object(source, "load_inputs", return_value=(current, {}, {})), \
+             patch.object(source, "verify_checkout"), patch.object(source, "reject_previous_capture"), \
+             patch.object(source, "download_health"), patch.object(source.logging, "disable"), \
+             patch.object(source, "collect", side_effect=fail_capture), patch.object(Path, "mkdir") as mkdir:
+            self.assertEqual(2, source.main())
+            mkdir.assert_not_called()
+        sdk.Session.return_value.client.assert_not_called()
+        self.assertEqual("", output.getvalue())
+        self.assertEqual([
+            "VEVO_AA_QUALITY_SOURCE_PROGRESS:phase=reporting-runtime:raw=false",
+            "VEVO_AA_QUALITY_SOURCE_STOPPED:stage=source-capture:phase=reporting-runtime:code=api-environment-drift:raw=false",
+        ], errors.getvalue().splitlines())
+
     def setUp(self):
         clock = patch.object(source, "now_utc", return_value=datetime(2026, 9, 5, 8, tzinfo=UTC))
         clock.start()
@@ -455,12 +518,15 @@ class ManagedSourceTests(unittest.TestCase):
         response.status_code, response.url = 200, source.API_URL
         response.headers = {"Content-Type": "application/json"}
         response.iter_content.return_value = [json.dumps({"data": {"getOrder": source_order("123")}}).encode()]
+        phases = []
         with patch("dotenv.load_dotenv", return_value=False), patch("requests.Session", return_value=session), \
              patch.object(source.time, "sleep"), patch.object(Path, "mkdir") as mkdir, \
              patch.dict(os.environ, {"REPORT_PROJECT": "vevo", "BIZNISWEB_API_TOKEN": "", "VEVO_BIZNISWEB_API_TOKEN": ""}):
             result = source.collect(current, clients.__getitem__, activation, reconciliation,
-                                    {"workflow_run_id": current.health_run_id, "main_commit": current.main_commit, "sha256": current.health_sha256})
+                                    {"workflow_run_id": current.health_run_id, "main_commit": current.main_commit, "sha256": current.health_sha256},
+                                    progress=phases.append)
             mkdir.assert_not_called()
+        self.assertEqual(list(source.CAPTURE_PHASES), phases)
         validate_capture(result, current)
         self.assertEqual(1, result["source"]["quality"]["eligible_device_count"])
         self.assertEqual(1, result["source"]["quality"]["exact_joined_transaction_count"])
