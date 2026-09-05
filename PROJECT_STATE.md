@@ -5,6 +5,36 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Source timeout localized; GTM code equality and separate privacy risk verified
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-source-timing-gtm-review`
+
+What changed:
+
+- PR #528 merged as `038a1119f25fb6d77b8b0924ef9396dd28cc541d` after all four exact-head checks and 235 CI regressions passed. Clean exact main was synchronized before this read-only investigation. No new source, health, checkpoint or component was dispatched.
+- Source run `33968053395`, job `101311556789`, is now terminal `cancelled`, completed `2026-09-05T13:54:18Z` on original main `afea00d095c0a06e46433991f9ae8b0593a01bfa`. GitHub annotations independently confirm the maximum execution time was exceeded. Artifact upload was skipped, cleanup succeeded, and independent artifact metadata proves zero artifacts. It is no longer a live wait.
+- Fixed sanitized markers now identify the dominant elapsed phase: `raw-conditional-reads` ran from `13:09:59.5133737Z` to `13:53:02.1974561Z`, about 43m03s. Strict raw-event validation and the final inventory completed; `receipt-parity` began at `13:53:10.5479016Z`, then the runner cancelled at `13:54:15.2247884Z`. This proves the sequential raw-read path consumed most of the job budget and that raw validation/stable-inventory checks returned. It does not establish receipt parity, a complete source, quality PASS, data loss, a particular slow object or the cause of the first two failures.
+
+What is verified:
+
+- Read-only GTM comparison of versions 15 and 19 collected every displayed code line of the Production loader (1,089 lines) and each of the three bridges (6 lines each), checking contiguous coverage, overlap consistency and the bottom of each editor. Every corresponding line and LF-joined rendered-text SHA-256 is equal. Displayed consent settings, trigger names and loader-before-bridge sequence also match. These are rendered-source observations, not original export-byte hashes, complete container fingerprints, hidden flag verification or runtime QA.
+- The separate task `Analyzuj Clarity pre vevo.sk` records ownership of versions 16–19, with a checkout-checkbox workaround reportedly removed before version 19. Current read-only inspection of the two extra tags corroborates passive diagnostic code with no direct assignment to form values/checkboxes, no form submission and no direct GrowthBook call. The ownership record is context, not permission to edit that work or proof of its claims.
+- A separate static privacy weakness is now independently established in `VEVO UX - Clarity checkout funnel + JS diagnostics`: arbitrary runtime/promise error text and resource source paths flow into Clarity custom tags. Its sanitizer replaces email-like strings and digit sequences of length at least seven, and removes URL query/fragment only. Exact-rule synthetic probes show other text, short order-like numbers and identifiers in paths survive. This is a potential disclosure path, **not evidence that actual customer data leaked**. The tag also contains three concatenated script blocks sharing one initialization guard; no duplicate-event claim follows merely from that duplication. See `GROWTHBOOK_BROWSER_QA_PRECHECK.md` for hashes, scope and the reproducible synthetic probe.
+- This three-document handoff passes all 235 focused source/lifecycle regressions, workspace/window/activation/security validators and `git diff --check`. No executable file or live JSON manifest changed. The finite test process completed successfully.
+
+Known issues:
+
+- `SOURCE_CAPTURE_TIMEOUT_AFTER_RAW_READS`: no canonical source or downstream evidence exists. Investigate a bounded, deterministic read-only acquisition improvement; do not raise limits, change the window, weaken coverage, reuse an unverified partial result or repeat captures until quality passes.
+- `GTM_LIVE_VERSION_DRIFT` remains unresolved as a versioned compatibility contract; four-tag source equality does not turn live version 19 into version 15. `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK` additionally prevents a full privacy/QA clearance. Full manual QA, snapshot PASS, stop, paid Pro and CTA transitions remain closed. Do not publish a rollback over the separate UX work or manually rewrite any historical activation proof.
+- Production A/A was not stopped, Preview was not woken, and no GTM, GrowthBook, Meta or commerce control was changed. No local application process, raw-source artifact, screenshot file or exported GTM source file was created. Temporary browser code copies were cleared and the browser JS session reset; authenticated unfinished-work tabs were retained.
+
+Next exact step:
+
+- Prepare and review a narrowly bounded conditional-read optimization supported by the observed 43-minute phase, preserving exact IfMatch/metadata/body/receipt checks, object/byte bounds, deterministic sorted reduction, both inventories, cancellation/body cleanup and sanitized failure handling. Verify concurrency suitability of the managed client, add focused deterministic regression coverage and pass the full source suite/CI before considering another separately gated acquisition. Recheck all terminal run/artifact history and fresh same-main managed health first; do not rerun an old attempt or infer a successful source from raw-read completion.
+- Separately reconcile the live GTM compatibility and the owning UX diagnostic's free-text privacy path through a reviewed, specifically scoped change contract. Prefer fixed diagnostic categories without arbitrary text/paths; current consent behavior and performance also remain unverified. Do not mutate GTM or customer-facing behavior while its gate remains closed. Only after independently verified source and genuine reviewed QA may the protected component/snapshot sequence continue.
+
 ## 2026-09-05 — One source acquisition live; GTM readback exposes version drift
 
 Date: 2026-09-05
