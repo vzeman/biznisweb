@@ -19,6 +19,7 @@ from scripts.validate_growthbook_aa_measurement_window import (
     canonical_evidence_bytes,
     validate_measurement_window,
 )
+from tests.growthbook_aa_fixtures import initial_snapshot
 from tests.test_growthbook_aa_snapshot_assembler import (
     automated_evidence,
     manual_evidence,
@@ -40,7 +41,7 @@ def load(name: str) -> dict[str, object]:
 
 
 def resolved_snapshot() -> dict[str, object]:
-    snapshot = load("growthbook_aa_snapshot.json")
+    snapshot = initial_snapshot()
     evidence = checkpoint_evidence(eligible_devices=1000)
     digest = hashlib.sha256(canonical_evidence_bytes(evidence)).hexdigest()
     return record_checkpoint(

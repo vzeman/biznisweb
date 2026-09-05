@@ -15,9 +15,9 @@ from scripts.record_growthbook_aa_window_checkpoint import (
 from scripts.validate_growthbook_aa_measurement_window import (
     MeasurementWindowError,
     canonical_evidence_bytes,
-    expected_measurement_window,
     validate_measurement_window,
 )
+from tests.growthbook_aa_fixtures import initial_snapshot
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -131,34 +131,11 @@ def checkpoint_evidence(
 
 class GrowthBookAaWindowCheckpointRecorderTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.snapshot = load("growthbook_aa_snapshot.json")
+        self.snapshot = initial_snapshot()
         self.activation = load("growthbook_production_aa_activation.json")
         self.acceptance = load("growthbook_aa_acceptance.json")
         self.reconciliation = load(
             "growthbook_production_reconciliation_deploy_evidence.json"
-        )
-        # Each scenario starts before checkpoint 1, independently of the live record.
-        self.snapshot["measurement_window"] = expected_measurement_window(
-            self.activation, self.acceptance, self.reconciliation
-        )
-        self.snapshot["snapshot_build_allowed"] = False
-        for component_name in ("automated_evidence", "manual_qa_evidence"):
-            self.snapshot[component_name].update(
-                producer_allowed=False,
-                window_status="frozen_waiting_for_completion",
-                through_utc=None,
-                status="not_recorded",
-                run_id=None,
-                main_commit=None,
-                sha256=None,
-            )
-        self.snapshot["automated_evidence"].update(
-            quality_report_status="not_recorded",
-            quality_report_key=None,
-            quality_report_sha256=None,
-        )
-        self.snapshot["manual_qa_evidence"].update(
-            observation_status="not_recorded", observation_sha256=None
         )
 
     def record(

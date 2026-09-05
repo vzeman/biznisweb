@@ -194,6 +194,13 @@ or permits reading arms or outcomes.
 
 ## Post-Resolution Sequence
 
+Current source-quality blocker: see `GROWTHBOOK_AA_QUALITY_SOURCE_AUDIT.md`.
+The rolling quality report's generation date and matching eligible total do
+not prove the exact resolved input window. Do not open either source producer
+or the snapshot gate until the reviewed exact-window source/provenance repair
+is implemented and independently verified. Do not alter the stopping boundary,
+use local AWS credentials, or choose a quality report by observed results.
+
 After the resolved checkpoint is merged, follow the exact checked-in gates in
 this order:
 
