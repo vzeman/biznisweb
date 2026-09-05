@@ -1,10 +1,39 @@
 # A/A quality-source audit — 2026-09-05
 
-Status: `SOURCE_CAPTURE_TIMEOUT_RETAINED_RAW`. The
-source-contract repair and its implementation gate are reviewed, but the first
-managed source failed without an artifact and its diagnostic acquisition timed
-out without an artifact. Source coverage and A/A PASS remain
-unproven. This is not permission to restart an experiment or alter its window.
+Status: `SOURCE_DIAGNOSTIC_ACQUISITION_IN_PROGRESS`. The source-contract repair
+and fixed substep diagnostics are reviewed. The first managed source failed
+without an artifact and the second timed out without an artifact; one new
+diagnostic acquisition is live as recorded below. Source coverage and A/A PASS
+remain unproven. This is not permission to restart an experiment or alter its
+window. Separately, current browser QA is fail-closed on `GTM_LIVE_VERSION_DRIFT`
+(published version 19 versus recorded version 15); see the browser precheck.
+
+### One substep-instrumented acquisition is live — do not duplicate
+
+PR #527 merged as `afea00d095c0a06e46433991f9ae8b0593a01bfa` after the four
+exact-head CI checks and 235 regressions passed. Both previous source runs were
+independently rechecked as terminal with zero artifacts before any new dispatch.
+Fresh same-main health run `33967911035` succeeded and was independently verified
+twice, including sole artifact `9970017379`, GitHub ZIP digest
+`ac6021d06d99e031b8fa4ab29048d804ecac50a9a2152b3965fdb370d9a76a44`,
+single canonical JSON and JSON hash
+`a72582eb192e15bb3924d7826f59e0f1a1ed4c20f0a3ebd743b55a7da1e43610`.
+The original observation `2026-09-05T13:06:24Z` passed offline identity/deployment,
+freshness and latest 03:45 Bratislava reconciliation validation. No local file
+or raw AWS payload was retained.
+
+Source run `33968053395`, job `101311556789`, was created at
+`2026-09-05T13:08:58Z` on that exact original main using that health run/hash.
+Pre-AWS validation and credential steps passed; acquisition began at
+`13:09:45Z` and remains `in_progress` at the metadata check before `13:19:06Z`.
+There is no terminal substep finding or source-quality decision yet. A later
+documentation merge must not replace the source's original commit identity.
+
+Wait for this exact run. On success independently download/verify the original
+source and health artifacts, canonical bytes and original-main Git inputs before
+the offline source recorder. On failure inspect only fixed sanitized phase/code
+and artifact metadata. Never duplicate it, infer failure from a polling timeout,
+change the frozen source/acceptance rules, or recapture an existing artifact.
 
 ### Substep diagnostics prepared; no performance or acceptance change
 
