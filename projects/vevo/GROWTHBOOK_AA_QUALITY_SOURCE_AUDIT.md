@@ -1,14 +1,51 @@
 # A/A quality-source audit — 2026-09-05
 
-Status: `SOURCE_DIAGNOSTIC_ACQUISITION_IN_PROGRESS`. The source-contract repair
-and fixed substep diagnostics are reviewed. The first managed source failed
-without an artifact and the second timed out without an artifact; one new
-diagnostic acquisition is live as recorded below. Source coverage and A/A PASS
-remain unproven. This is not permission to restart an experiment or alter its
-window. Separately, current browser QA is fail-closed on `GTM_LIVE_VERSION_DRIFT`
-(published version 19 versus recorded version 15); see the browser precheck.
+Status: `SOURCE_CAPTURE_TIMEOUT_AFTER_RAW_READS`. The source-contract repair
+and fixed substep diagnostics are reviewed. All three acquisitions are terminal
+without artifacts; the latest run localized the dominant elapsed phase as
+recorded below. Complete source coverage and A/A PASS remain unproven. This is
+not permission to restart an experiment or alter its window. Separately, browser
+QA is fail-closed on `GTM_LIVE_VERSION_DRIFT` and the newly verified static
+`CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK`; see the browser precheck.
 
-### One substep-instrumented acquisition is live — do not duplicate
+### Third acquisition terminal; raw-read elapsed time independently localized
+
+Run `33968053395`, job `101311556789`, on original main
+`afea00d095c0a06e46433991f9ae8b0593a01bfa` completed `cancelled` at
+`2026-09-05T13:54:18Z`. Independently read GitHub check annotations prove the
+maximum execution time was exceeded. Upload was skipped, cleanup succeeded and
+independent run-artifact metadata proves zero artifacts. No live wait remains.
+
+Only fixed sanitized log markers and cancellation metadata were inspected:
+
+| Phase | UTC start on 2026-09-05 |
+| --- | --- |
+| runtime-preflight | 13:09:48.4797236 |
+| retained-raw-source / raw-inventory-before | 13:09:52.3929228 / 13:09:52.3929962 |
+| raw-conditional-reads | 13:09:59.5133737 |
+| raw-event-validation | 13:53:02.1974561 |
+| raw-inventory-after | 13:53:02.5227258 |
+| receipt-parity | 13:53:10.5479016 |
+| Runner cancellation | 13:54:15.2247884 |
+
+The conditional-read phase consumed about 43m03s. The versioned adapter performs
+these reads sequentially. The later markers prove strict event validation and
+stable before/after inventory checks returned successfully, but neither receipt
+parity nor the remaining source calculations completed. Do not equate a timeout
+with quality FAIL, claim a missing/slow particular object, read raw logs or
+attribute the first two failures to this exact cause.
+
+Next review a bounded, deterministic conditional-read optimization through Git
+and tests. Preserve the original request/IfMatch and response/body/receipt
+checks, all object/byte bounds, sorted output, dual inventories, failure cleanup
+and privacy suppression. Prove the managed client can be used safely; do not
+submit an unbounded future per object or relax validation/timeouts. A future
+acquisition still requires a separate reviewed implementation, no retained or
+active source run, fresh independently verified same-main managed health and
+the unchanged source gate. Do not rerun the old workflow attempt or retry until
+PASS. No complete source or downstream gate was recorded by this investigation.
+
+### Historical dispatch provenance of the now-terminal third acquisition
 
 PR #527 merged as `afea00d095c0a06e46433991f9ae8b0593a01bfa` after the four
 exact-head CI checks and 235 regressions passed. Both previous source runs were
@@ -25,15 +62,13 @@ or raw AWS payload was retained.
 Source run `33968053395`, job `101311556789`, was created at
 `2026-09-05T13:08:58Z` on that exact original main using that health run/hash.
 Pre-AWS validation and credential steps passed; acquisition began at
-`13:09:45Z` and remains `in_progress` at the metadata check before `13:19:06Z`.
-There is no terminal substep finding or source-quality decision yet. A later
-documentation merge must not replace the source's original commit identity.
+`13:09:45Z` and was `in_progress` at the metadata check before `13:19:06Z`.
+Its subsequent terminal finding is recorded above. A later documentation merge
+must not replace the source's original commit identity.
 
-Wait for this exact run. On success independently download/verify the original
-source and health artifacts, canonical bytes and original-main Git inputs before
-the offline source recorder. On failure inspect only fixed sanitized phase/code
-and artifact metadata. Never duplicate it, infer failure from a polling timeout,
-change the frozen source/acceptance rules, or recapture an existing artifact.
+This run is no longer pending and produced no artifact to record. Preserve its
+terminal provenance. Never infer failure from a polling timeout, change the
+frozen source/acceptance rules, or recapture an existing artifact.
 
 ### Substep diagnostics prepared; no performance or acceptance change
 
