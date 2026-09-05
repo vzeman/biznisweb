@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import copy
 import hashlib
 import io
@@ -7,6 +8,7 @@ import json
 import traceback
 import unittest
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from reporting_core.experiment_quality_source_io import (
@@ -392,6 +394,37 @@ class ReceiptedOrderCoverageTests(unittest.TestCase):
         self.assertEqual(1, RECEIPTED_ORDER_QUERY.count("getOrder("))
         for forbidden in ("mutation", "getOrderList", "customer", "address", "email", "phone"):
             self.assertNotIn(forbidden, RECEIPTED_ORDER_QUERY)
+
+    def test_query_parses_and_projects_only_existing_reporting_order_fields(self):
+        from graphql import parse
+        from reporting_core.experiment_quality_source_io import _ORDER_SHAPE
+
+        # Parse source text without importing the exporter (which loads .env).
+        text = (Path(__file__).resolve().parents[1] / "export_orders.py").read_text(encoding="utf-8-sig")
+        assignment = next(node for node in ast.parse(text).body
+                          if isinstance(node, ast.Assign)
+                          and any(isinstance(target, ast.Name) and target.id == "ORDER_QUERY"
+                                  for target in node.targets))
+        existing = parse(assignment.value.args[0].value).definitions[0].selection_set.selections[0]
+        existing_order = existing.selection_set.selections[0]  # getOrderList.data
+        operation = parse(RECEIPTED_ORDER_QUERY).definitions[0]
+        self.assertEqual("query", operation.operation.value)
+        self.assertEqual(1, len(operation.selection_set.selections))
+
+        def check(prior, selected, expected_shape):
+            if isinstance(expected_shape, list):
+                expected_shape = expected_shape[0]
+            old = {node.name.value: node for node in prior.selection_set.selections}
+            new = {node.name.value: node for node in selected.selection_set.selections}
+            self.assertEqual(set(expected_shape), set(new))
+            self.assertTrue(set(new) <= set(old))
+            for name, node in new.items():
+                if node.selection_set:
+                    check(old[name], node, expected_shape[name])
+                else:
+                    self.assertIsNone(expected_shape[name])
+
+        check(existing_order, operation.selection_set.selections[0], _ORDER_SHAPE)
 
 
 if __name__ == "__main__":

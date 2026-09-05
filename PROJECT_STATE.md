@@ -15,11 +15,11 @@ What changed:
 
 - Added injected-client, read-only source adapters for stable retained raw receipt partitions and exact receipted BiznisWeb orders. Raw reads require full pagination, bounded bodies, conditional ETags, receipt/partition parity and an identical second inventory. Order reads use a fixed targeted operation, no customer/contact/address fields, explicit not-found answers and a second drift-check pass. No client/credential construction, ordinary publisher, cache/export, source workflow or live caller was added.
 - Source rows remain runner-memory-only, are excluded from result representations and cannot appear in the exportable whole-input proof. SDK/API errors are replaced with fixed unchained messages. Proofs explicitly do not claim historical retention, context-floor validity or an atomic historical order snapshot.
-- Added 28 synthetic input coverage regressions to the required security-baseline CI suite. Detailed remaining acquisition boundaries are recorded in the quality-source audit.
+- Added 29 synthetic input coverage regressions to the required security-baseline CI suite. Detailed remaining acquisition boundaries are recorded in the quality-source audit.
 
 What is verified:
 
-- All 161 combined source/reporting/A/A lifecycle tests pass locally. Coverage includes incomplete/cyclic pagination, object/response drift, exact row/byte limits, invalid metadata, duplicate JSON fields, post-through partition edges, explicit missing orders, caller response reuse and privacy/error sanitization.
+- All 162 combined source/reporting/A/A lifecycle tests pass locally. Coverage includes incomplete/cyclic pagination, object/response drift, exact row/byte limits, invalid metadata, duplicate JSON fields, post-through partition edges, explicit missing orders, caller response reuse and privacy/error sanitization. GraphQL AST verification proves the fixed operation and exact response shape are a read-only projection of existing reporting Order fields, without importing the environment-loading exporter.
 - Frozen snapshot/checkpoint history and all source/producer/snapshot/stop/paid/CTA gates are unchanged. No AWS credentials or calls, source download, BiznisWeb request, infrastructure deployment, Preview wake, commerce mutation or local application process occurred.
 
 Known issues:

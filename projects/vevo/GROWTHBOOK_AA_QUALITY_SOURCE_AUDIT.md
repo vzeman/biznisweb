@@ -108,7 +108,7 @@ receipts, bind the actual capture interval and input proofs to the source
 envelope, and run under the managed credential boundary. Do not treat an
 adapter's returned proof as permission to open a producer.
 
-Verification: 28 new synthetic tests plus the previous 133 regressions pass,
+Verification: 29 new synthetic tests plus the previous 133 regressions pass,
 and the new suite is included in the required `security-baseline` CI job. Tests
 cover complete and cyclic pagination, conditional reads, input changes,
 partition edges, malformed/PII input, explicit missing orders, mutation of
