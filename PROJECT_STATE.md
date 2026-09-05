@@ -5,6 +5,29 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Browser QA access checked; authentication requires the owner
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-qa-access-check`
+
+What changed:
+
+- Read-only access checks in the connected Chrome browser established that GrowthBook redirects to its sign-in/registration page, with no authenticated workspace available. The owner was asked to sign in to the existing account, not create an account or share credentials. No authentication, billing or experiment action was automated.
+- Tag Assistant's landing page reports its browser extension installed and lists an existing VEVO debugging entry. This does not establish a current connected storefront session or validate any event. The existing debugging entry was not opened or stopped; the temporary Tag Assistant tab was closed. The GrowthBook tab was left for the requested owner sign-in.
+
+What is verified:
+
+- Source run `33964597883`, job `101302371923`, remains `in_progress` on original main `2e04784765a74e71ba5b7a21ab075cebd91102e4`, independently checked at `2026-09-05T12:21:41Z`. No duplicate source, health or checkpoint was dispatched. No canonical QA observation, source binding or live JSON manifest changed; no local application process was started.
+
+Known issues:
+
+- Authenticated GrowthBook readback remains unavailable until owner sign-in. Full consent, runtime, commerce, rollback and canonical browser QA remain unverified. The cloud source is still live, not failed or missing; a polling timestamp or observation timeout must not trigger a retry.
+
+Next exact step:
+
+- Observe the same source run until terminal, then independently verify the sole source/health artifacts on success or inspect only sanitized phase/code and artifact metadata on failure. Never duplicate it or change the fixed source/window/acceptance rules. After the owner confirms sign-in, refresh the actual browser state and continue only the read-only configuration/QA scope, without opening experiment results or asserting unperformed tests. The source does not depend on browser authentication.
+
 ## 2026-09-05 — Partial read-only browser precheck while source remains active
 
 Date: 2026-09-05
