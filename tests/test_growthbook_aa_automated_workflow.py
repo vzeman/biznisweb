@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import pathlib
 import textwrap
 import unittest
 
+from tests.growthbook_aa_fixtures import initial_snapshot
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = (
@@ -13,11 +13,6 @@ WORKFLOW = (
     / "workflows"
     / "collect-vevo-growthbook-production-aa-evidence.yml"
 ).read_text(encoding="utf-8")
-MANIFEST = json.loads(
-    (ROOT / "projects" / "vevo" / "growthbook_aa_snapshot.json").read_text(
-        encoding="utf-8"
-    )
-)
 
 
 class GrowthBookAaAutomatedWorkflowTests(unittest.TestCase):
@@ -42,7 +37,7 @@ class GrowthBookAaAutomatedWorkflowTests(unittest.TestCase):
             compile(source, f"automated-workflow-inline-{block_index}.py", "exec")
 
     def test_producer_is_closed_while_window_is_pre_registered(self) -> None:
-        automated = MANIFEST["automated_evidence"]
+        automated = initial_snapshot()["automated_evidence"]
         self.assertFalse(automated["producer_allowed"])
         self.assertEqual("frozen_waiting_for_completion", automated["window_status"])
         self.assertEqual("2026-08-25T22:00:00Z", automated["from_utc"])

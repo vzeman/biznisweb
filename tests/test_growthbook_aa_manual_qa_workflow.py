@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import json
 import pathlib
 import unittest
 
+from tests.growthbook_aa_fixtures import initial_snapshot
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = (
@@ -12,16 +12,11 @@ WORKFLOW = (
     / "workflows"
     / "verify-vevo-growthbook-production-aa-manual-qa.yml"
 ).read_text(encoding="utf-8")
-MANIFEST = json.loads(
-    (ROOT / "projects" / "vevo" / "growthbook_aa_snapshot.json").read_text(
-        encoding="utf-8"
-    )
-)
 
 
 class GrowthBookAaManualQaWorkflowTests(unittest.TestCase):
-    def test_producer_and_observation_are_disabled_and_absent_by_default(self) -> None:
-        manual = MANIFEST["manual_qa_evidence"]
+    def test_pre_registration_scenario_has_no_producer_or_observation_binding(self) -> None:
+        manual = initial_snapshot()["manual_qa_evidence"]
         self.assertFalse(manual["producer_allowed"])
         self.assertEqual("frozen_waiting_for_completion", manual["window_status"])
         self.assertEqual("2026-08-25T22:00:00Z", manual["from_utc"])
@@ -29,9 +24,6 @@ class GrowthBookAaManualQaWorkflowTests(unittest.TestCase):
         self.assertEqual("not_recorded", manual["observation_status"])
         self.assertIsNone(manual["observation_sha256"])
         self.assertEqual("not_recorded", manual["status"])
-        self.assertFalse(
-            (ROOT / "projects" / "vevo" / "growthbook_aa_manual_qa_observation.json").exists()
-        )
 
     def test_main_only_gate_precedes_evidence_creation(self) -> None:
         for marker in (

@@ -5,6 +5,33 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Post-resolution quality-source audit; evaluation held closed
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-post-resolution-quality-audit`
+
+What changed:
+
+- Audited the next exact step after checkpoint 3 merged as `02319d6aa2d994238c43e84b8842c53f62765bd4`. Found an unproven quality-source window boundary, documented with a synthetic-only reproduction and concrete repair requirements in `projects/vevo/GROWTHBOOK_AA_QUALITY_SOURCE_AUDIT.md`.
+- The scheduled reconciler builds quality over 40 complete UTC receipt partitions, while the resolved A/A interval has exact local-day-derived UTC bounds. The report schema has no input-window provenance; generation-after-through and equal eligible totals do not establish the same source population. No live quality object was read and no claim about its actual counts/outcomes is made.
+- Fixed isolated next-stage test fixtures: five evidence-recorder errors and two workflow assertion failures came from inherited live lifecycle state. Shared validated initial fixtures preserve synthetic transition tests after a real resolution; no production validator, workflow, metric, threshold or gate changed.
+- The monitoring runbook now explicitly stops the source-binding sequence at this known contract defect instead of allowing accidental selection of a rolling report with a coincidentally matching count.
+
+What is verified:
+
+- All 86 combined checkpoint, measurement-window, evidence-recorder, automated/manual component, snapshot assembler and workspace tests pass. Workspace/measurement-window validators, security checks and diff checks pass. These checks do not substitute for the missing exact-window source proof.
+- GitHub lists no runs for either post-resolution evidence producer. Snapshot manifest and resolved checkpoint history remain byte-unchanged. Both producers, snapshot, stop, paid and CTA gates remain closed.
+- No AWS calls/credentials, source artifacts, live arm/outcome data, browser QA, external configuration mutation or local application process was used in this audit. Production A/A was not stopped and Preview was not woken.
+
+Known issues:
+
+- `QUALITY_SOURCE_WINDOW_BINDING_BLOCKED`: source production/binding must prove the exact frozen interval, cohort and immutable generation before automated quality can be accepted. No existing repository workflow independently exports that initial quality source under the managed credential boundary. A/A PASS is not established.
+
+Next exact step:
+
+- Merge this test/audit change after CI, then implement the exact-window source/provenance repair specified in the audit through a new reviewed branch. Keep actual source collection closed until its protected workflow and any separately needed runtime gate are reviewed and proven. Never shift the resolved window or restart/backfill further checkpoints to accommodate quality data. Then resume genuine browser QA, both components, protected snapshot PASS and the reviewed stop sequence.
+
 ## 2026-09-05 — Authorized A/A backfill resolves the window at checkpoint 3
 
 Date: 2026-09-05
