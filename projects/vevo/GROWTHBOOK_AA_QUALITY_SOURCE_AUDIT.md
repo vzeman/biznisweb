@@ -1,6 +1,6 @@
 # A/A quality-source audit — 2026-09-05
 
-Status: `FIRST_CAPTURE_FAILED_AWAITING_SAFE_DIAGNOSTICS_REVIEW`. The
+Status: `DIAGNOSTIC_SOURCE_CAPTURE_IN_PROGRESS`. The
 source-contract repair and its implementation gate are reviewed, but the first
 managed source failed without an artifact. Source coverage and A/A PASS remain
 unproven. This is not permission to restart an experiment or alter its window.
@@ -18,7 +18,11 @@ The diagnostic correction adds only fixed operation markers and allowlisted
 failure codes, never exception text, SDK payloads, inputs, counts or identities.
 It preserves SDK-output suppression, source contracts, timeout, query/pacing,
 acceptance rules and canonical output. Synthetic tests exercise the actual CLI
-failure path and all acquisition phases. No replacement source has been run.
+failure path and all acquisition phases. PR #522 merged after all four CI checks
+and 231 tests passed. The one diagnostic acquisition `33964597883` is now in
+progress on main `2e04784765a74e71ba5b7a21ab075cebd91102e4`, after independently
+verified same-main health `33964475551`. Its pre-AWS gate passed, but no source
+quality or A/A PASS is established. Observe this run; do not duplicate it.
 
 After review/CI/merge, inspect the original run and all source history again.
 Any retained artifact must be recovered, not recaptured. With none retained,
