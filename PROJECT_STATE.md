@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Retained-source substep diagnostics prepared without an assumed optimization
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-raw-subphase-diagnostics`
+
+What changed:
+
+- Offline review confirmed the observability gap in the timed-out phase: one `retained-raw-source` marker covered four independently fallible operations. Added an optional silent-by-default callback with exactly four fixed names: `raw-inventory-before`, `raw-conditional-reads`, `raw-event-validation`, `raw-inventory-after`. The managed source passes its existing strictly allowlisted, flushed diagnostic stream to that adapter.
+- No parallelism, transport, timeout, retry, input/object/byte limit, inventory/receipt validation, calculation, artifact schema, source window or live manifest changed. There are no per-object messages, source values, identities, counts or exception strings in the callback. Ordinary and automated-consumer callers retain silent behavior.
+
+What is verified:
+
+- All 235 focused source/reporting/A/A tests and workspace/window/activation/security validators pass. Four new tests compare exact I/O requests, rows and sanitized proofs with/without diagnostics (including empty input), inject real failures into every raw substep, verify pre-I/O bounds/callback failure handling, and exercise the actual CLI plus real adapter to prove raw SDK stdout/stderr and exceptions stay suppressed while the exact failed substep is retained. The full synthetic managed capture verifies every phase in order.
+- Both existing source runs remain terminal without artifacts; no new health, source, checkpoint or producer was dispatched. No live input, local AWS credential, raw payload, application service, infrastructure deploy, Preview wake, shop/experiment/billing change or result query was used for this diagnostics-only change. The finite local test process completed.
+
+Known issues:
+
+- The live raw substep that exceeded the 45-minute limit is still unknown; diagnostics are prepared, not a performance fix or source-quality proof. Source binding, both evidence components, snapshot PASS, stop, paid and CTA gates remain unfulfilled. Authentication is available, but full canonical manual QA remains incomplete.
+
+Next exact step:
+
+- Review this diagnostics-only diff, verify exact-head CI and merge. On clean synchronized main, independently inspect both prior source runs and their artifacts again; recover any retained artifact, never recapture it. Only after confirming no active/successful capture or retained artifact, obtain and independently verify fresh same-main managed health before one new diagnostic acquisition through the unchanged source workflow. Do not rerun an old attempt, raise limits, change acceptance/window or optimize an unobserved failing substep. Consume or wait for that one run; use its fixed substep marker to direct a concrete repair, and stop on any proven source/coverage violation rather than retry until PASS.
+
 ## 2026-09-05 — Source acquisition timed out; authenticated flag readback verified
 
 Date: 2026-09-05

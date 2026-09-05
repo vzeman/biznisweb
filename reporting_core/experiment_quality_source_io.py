@@ -30,6 +30,10 @@ _MAX_EVENT_BYTES = 16_384
 _MAX_EXTRACT_BYTES = 128 * 1024 * 1024
 _MAX_ORDER_BYTES = 128 * 1024
 _MAX_ORDER_EXTRACT_BYTES = 32 * 1024 * 1024
+RAW_SOURCE_PHASES = (
+    "raw-inventory-before", "raw-conditional-reads",
+    "raw-event-validation", "raw-inventory-after",
+)
 
 # The same money/item/status fields used by the existing reporting adapter;
 # intentionally no customer, address, contact, payment credentials or list API.
@@ -103,7 +107,7 @@ class RetainedRawSource:
 
 def read_stable_retained_raw_source(
     s3: Any, *, bucket: str, context_from_utc: datetime, through_utc: datetime,
-    max_objects: int = 100_000,
+    max_objects: int = 100_000, progress: Callable[[str], None] | None = None,
 ) -> RetainedRawSource:
     """Enumerate exact partitions twice; bind every bounded GET with IfMatch.
 
@@ -111,16 +115,18 @@ def read_stable_retained_raw_source(
     midnight inside it. Receipt validation is performed on every row; the
     existing windowed calculator, not this I/O adapter, excludes the later edge.
     ``context_from`` must be a proven UTC midnight to avoid a partial first day.
+    Optional progress receives four fixed substep names, never source values,
+    per-object updates or counts. The default remains silent.
     """
     try:
-        return _read_raw(s3, bucket, context_from_utc, through_utc, max_objects)
+        return _read_raw(s3, bucket, context_from_utc, through_utc, max_objects, progress)
     except Exception:
         # SDK exceptions can contain keys, request IDs and payloads. Never chain
         # or expose them through the future producer's standard error handler.
         raise QualityInputError("retained raw source coverage could not be verified") from None
 
 
-def _read_raw(s3, bucket, context_from, through, max_objects):
+def _read_raw(s3, bucket, context_from, through, max_objects, progress):
     _require(isinstance(bucket, str) and _BUCKET.fullmatch(bucket) is not None,
              "invalid source bucket")
     start = _utc(context_from)
@@ -180,8 +186,14 @@ def _read_raw(s3, bucket, context_from, through, max_objects):
                 used_tokens.add(token)
         return entries
 
+    def mark(phase):
+        if progress is not None:
+            progress(phase)
+
+    mark(RAW_SOURCE_PHASES[0])
     before = inventory()
     rows = []
+    mark(RAW_SOURCE_PHASES[1])
     for key in sorted(before):
         item = before[key]
         response = s3.get_object(Bucket=bucket, Key=key, IfMatch=item["etag"])
@@ -208,7 +220,9 @@ def _read_raw(s3, bucket, context_from, through, max_objects):
             body.close()
     # Shared strict event validation: reject unknown/PII fields, contradictory
     # duplicates and invalid receipt/order identities even on partition edges.
+    mark(RAW_SOURCE_PHASES[2])
     order_completion_receipts(rows)
+    mark(RAW_SOURCE_PHASES[3])
     after = inventory()
     _require(before == after, "source inventory changed during capture")
     digest = _digest([before[key] for key in sorted(before)])

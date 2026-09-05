@@ -30,7 +30,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from reporting_core.experiment_quality_source_io import (
-    QualityInputError, RECEIPTED_ORDER_QUERY, read_receipted_order_source, read_stable_retained_raw_source,
+    QualityInputError, RAW_SOURCE_PHASES, RECEIPTED_ORDER_QUERY,
+    read_receipted_order_source, read_stable_retained_raw_source,
 )
 from reporting_core.experiments import (
     ExperimentReceiptWindow, load_experiment_build_config, order_completion_receipts,
@@ -69,7 +70,7 @@ def require(condition, message):
 
 
 CAPTURE_PHASES = (
-    "runtime-preflight", "retained-raw-source", "receipt-parity",
+    "runtime-preflight", "retained-raw-source", *RAW_SOURCE_PHASES, "receipt-parity",
     "reporting-runtime", "managed-token", "receipted-orders",
     "authoritative-facts", "quality-build", "runtime-readback",
 )
@@ -475,7 +476,8 @@ def collect(plan, client, activation, reconciliation, health_binding, *, progres
     before = runtime_preflight(client, plan, activation, reconciliation)
     progress("retained-raw-source")
     raw = read_stable_retained_raw_source(client("s3"), bucket=before["bucket"],
-                                         context_from_utc=plan.window.context_from_utc, through_utc=plan.window.through_utc)
+                                         context_from_utc=plan.window.context_from_utc,
+                                         through_utc=plan.window.through_utc, progress=progress)
     progress("receipt-parity")
     parity = receipt_parity(client("logs"), before["log_group"], plan, raw.rows)
     receipts = order_completion_receipts(row for row in raw.rows if utc(row["received_at"]) < plan.window.through_utc)

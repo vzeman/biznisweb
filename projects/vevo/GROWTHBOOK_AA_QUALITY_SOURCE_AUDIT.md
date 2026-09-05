@@ -6,6 +6,29 @@ managed source failed without an artifact and its diagnostic acquisition timed
 out without an artifact. Source coverage and A/A PASS remain
 unproven. This is not permission to restart an experiment or alter its window.
 
+### Substep diagnostics prepared; no performance or acceptance change
+
+Offline inspection localized the missing diagnostic boundary: the single raw
+phase wraps initial inventory, conditional GETs, strict event validation and
+final inventory. The adapter now has an optional silent-by-default callback
+with those four exact constant names, admitted by the existing managed source
+diagnostic allowlist. Each marker is emitted before its operation. It contains
+no input-derived text, values, counts, identities or per-object progress.
+
+Four new synthetic tests prove byte-equivalent rows/proofs and identical I/O
+requests with/without diagnostics, every actual failing substep, fail-closed
+invalid bounds/callbacks, and the real CLI/adapter error path with raw SDK output
+suppressed. The full 235-test suite and validators pass. No parallelism, source
+limit, transport/pacing/retry, job timeout, calculation or live manifest changed.
+This is not a performance fix, live substep diagnosis or A/A PASS.
+
+After separate exact-head review/CI/merge, one managed diagnostic acquisition
+may identify the remaining substep only after clean-main synchronization,
+independent recovery checks for every existing run/artifact, and fresh
+independently verified same-main health. No acquisition was dispatched by this
+implementation. Do not rerun an old attempt or use this instrumentation to
+change a source/window/acceptance condition or retry until quality passes.
+
 ### Diagnostic acquisition is terminal, not a live wait
 
 Run `33964597883` on main `2e04784765a74e71ba5b7a21ab075cebd91102e4`
