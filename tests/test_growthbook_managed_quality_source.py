@@ -6,6 +6,7 @@ import io
 import json
 import os
 import sys
+import threading
 import unittest
 import zipfile
 from dataclasses import replace
@@ -195,6 +196,14 @@ class ManagedSourceTests(unittest.TestCase):
         current = plan()
         output, errors, sdk = io.StringIO(), io.StringIO(), MagicMock()
         s3 = MemoryS3([event(received_at=current.window.from_utc)])
+        owner = threading.current_thread()
+
+        def make_client(name):
+            self.assertIs(owner, threading.current_thread())
+            self.assertEqual('s3', name)
+            return s3
+
+        sdk.Session.return_value.client.side_effect = make_client
 
         def fail_get(response):
             response['Body'].close()
@@ -206,9 +215,11 @@ class ManagedSourceTests(unittest.TestCase):
 
         def fail_capture(*args, progress, **kwargs):
             progress('retained-raw-source')
-            read_stable_retained_raw_source(s3, bucket='vevo-test',
+            client = args[1]
+            self.assertIs(client('s3'), client('s3'))
+            read_stable_retained_raw_source(client('s3'), bucket='vevo-test',
                 context_from_utc=current.window.context_from_utc,
-                through_utc=current.window.through_utc, progress=progress)
+                through_utc=current.window.through_utc, progress=progress, max_read_workers=8)
 
         with patch.object(sys, 'argv', ['source']), patch.object(sys, 'stdout', output), \
              patch.object(sys, 'stderr', errors), patch.dict(sys.modules, {'boto3': sdk}), \
@@ -219,7 +230,8 @@ class ManagedSourceTests(unittest.TestCase):
              patch.object(source, 'collect', side_effect=fail_capture), patch.object(Path, 'mkdir') as mkdir:
             self.assertEqual(2, source.main())
             mkdir.assert_not_called()
-        sdk.Session.return_value.client.assert_not_called()
+        sdk.Session.assert_called_once_with(region_name=source.REGION)
+        sdk.Session.return_value.client.assert_called_once_with('s3')
         self.assertEqual('', output.getvalue())
         self.assertEqual([
             'VEVO_AA_QUALITY_SOURCE_PROGRESS:phase=retained-raw-source:raw=false',
@@ -559,11 +571,14 @@ class ManagedSourceTests(unittest.TestCase):
         phases = []
         with patch("dotenv.load_dotenv", return_value=False), patch("requests.Session", return_value=session), \
              patch.object(source.time, "sleep"), patch.object(Path, "mkdir") as mkdir, \
+             patch.object(source, "read_stable_retained_raw_source", wraps=read_stable_retained_raw_source) as raw_read, \
              patch.dict(os.environ, {"REPORT_PROJECT": "vevo", "BIZNISWEB_API_TOKEN": "", "VEVO_BIZNISWEB_API_TOKEN": ""}):
             result = source.collect(current, clients.__getitem__, activation, reconciliation,
                                     {"workflow_run_id": current.health_run_id, "main_commit": current.main_commit, "sha256": current.health_sha256},
                                     progress=phases.append)
             mkdir.assert_not_called()
+        self.assertEqual(8, raw_read.call_args.kwargs['max_read_workers'])
+        self.assertIs(clients['s3'], raw_read.call_args.args[0])
         self.assertEqual(list(source.CAPTURE_PHASES), phases)
         validate_capture(result, current)
         self.assertEqual(1, result["source"]["quality"]["eligible_device_count"])

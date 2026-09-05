@@ -15,8 +15,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from itertools import islice
 from typing import Any, Callable, Mapping
 
 from .experiments import order_completion_receipts
@@ -28,6 +31,7 @@ _ETAG = re.compile(r'^"[a-fA-F0-9]{32}(?:-[1-9][0-9]*)?"$')
 _ORDER = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 _MAX_EVENT_BYTES = 16_384
 _MAX_EXTRACT_BYTES = 128 * 1024 * 1024
+_MAX_RAW_READ_WORKERS = 8
 _MAX_ORDER_BYTES = 128 * 1024
 _MAX_ORDER_EXTRACT_BYTES = 32 * 1024 * 1024
 RAW_SOURCE_PHASES = (
@@ -108,6 +112,7 @@ class RetainedRawSource:
 def read_stable_retained_raw_source(
     s3: Any, *, bucket: str, context_from_utc: datetime, through_utc: datetime,
     max_objects: int = 100_000, progress: Callable[[str], None] | None = None,
+    max_read_workers: int = 1,
 ) -> RetainedRawSource:
     """Enumerate exact partitions twice; bind every bounded GET with IfMatch.
 
@@ -117,16 +122,21 @@ def read_stable_retained_raw_source(
     ``context_from`` must be a proven UTC midnight to avoid a partial first day.
     Optional progress receives four fixed substep names, never source values,
     per-object updates or counts. The default remains silent.
+    Reads default to serial. Opting into 2..8 workers requires an already-created
+    thread-safe client; only conditional GETs run concurrently. Submission stays
+    bounded by that limit, reduction stays in sorted key order, and all workers
+    finish/close their bodies before validation, the second inventory or return.
     """
     try:
-        return _read_raw(s3, bucket, context_from_utc, through_utc, max_objects, progress)
+        return _read_raw(s3, bucket, context_from_utc, through_utc, max_objects,
+                         progress, max_read_workers)
     except Exception:
         # SDK exceptions can contain keys, request IDs and payloads. Never chain
         # or expose them through the future producer's standard error handler.
         raise QualityInputError("retained raw source coverage could not be verified") from None
 
 
-def _read_raw(s3, bucket, context_from, through, max_objects, progress):
+def _read_raw(s3, bucket, context_from, through, max_objects, progress, max_read_workers):
     _require(isinstance(bucket, str) and _BUCKET.fullmatch(bucket) is not None,
              "invalid source bucket")
     start = _utc(context_from)
@@ -139,6 +149,8 @@ def _read_raw(s3, bucket, context_from, through, max_objects, progress):
     _require(1 <= days <= 90, "source partition limit exceeded")
     _require(type(max_objects) is int and 1 <= max_objects <= 100_000,
              "invalid source object limit")
+    _require(type(max_read_workers) is int and 1 <= max_read_workers <= _MAX_RAW_READ_WORKERS,
+             "invalid source read worker limit")
     prefixes = [f"experiment-events/raw/event_date={(start + timedelta(days=i)).date()}/"
                 for i in range(days)]
 
@@ -194,7 +206,8 @@ def _read_raw(s3, bucket, context_from, through, max_objects, progress):
     before = inventory()
     rows = []
     mark(RAW_SOURCE_PHASES[1])
-    for key in sorted(before):
+
+    def read_one(key):
         item = before[key]
         response = s3.get_object(Bucket=bucket, Key=key, IfMatch=item["etag"])
         _require(isinstance(response, Mapping), "invalid source response")
@@ -215,9 +228,31 @@ def _read_raw(s3, bucket, context_from, through, max_objects, progress):
             _utc(receipt)
             expected_prefix = f"experiment-events/raw/event_date={receipt.date()}/"
             _require(key.startswith(expected_prefix), "receipt partition mismatch")
-            rows.append(row)
+            return row
         finally:
             body.close()
+
+    if max_read_workers == 1 or not before:
+        rows = [read_one(key) for key in sorted(before)]
+    else:
+        keys = iter(sorted(before))
+        # Do not use Executor.map: Python 3.11 eagerly submits the whole input.
+        # Only the coordinator submits/reduces; workers never await futures or
+        # mutate shared rows/inventories. On any failure cancel pending work and
+        # let the context manager drain running reads before the sanitized error.
+        with ThreadPoolExecutor(max_workers=max_read_workers) as executor:
+            pending = deque()
+            try:
+                for key in islice(keys, max_read_workers):
+                    pending.append(executor.submit(read_one, key))
+                while pending:
+                    rows.append(pending.popleft().result())
+                    key = next(keys, None)
+                    if key is not None:
+                        pending.append(executor.submit(read_one, key))
+            finally:
+                for future in pending:
+                    future.cancel()
     # Shared strict event validation: reject unknown/PII fields, contradictory
     # duplicates and invalid receipt/order identities even on partition edges.
     mark(RAW_SOURCE_PHASES[2])

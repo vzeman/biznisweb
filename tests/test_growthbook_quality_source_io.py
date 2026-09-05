@@ -5,6 +5,8 @@ import copy
 import hashlib
 import io
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import redirect_stderr, redirect_stdout
 import traceback
 import unittest
@@ -89,6 +91,245 @@ def source_order(number="test-order"):
 
 
 class RawCoverageTests(unittest.TestCase):
+    def test_bounded_concurrent_reads_overlap_but_reduce_in_serial_order(self):
+        rows = [event(received_at=START + timedelta(minutes=i)) for i in range(12)]
+        baseline = read_raw(MemoryS3(rows, page_size=2))
+        memory = MemoryS3(rows, page_size=2)
+        first_keys = sorted(memory.objects)[:3]
+        barrier, later_closed = threading.Barrier(3), threading.Event()
+        lock, closed, workers, pools = threading.Lock(), set(), set(), []
+        owner = threading.current_thread()
+        phases, stdout, stderr = [], io.StringIO(), io.StringIO()
+
+        class TrackedExecutor(ThreadPoolExecutor):
+            def __init__(self, *, max_workers):
+                super().__init__(max_workers=max_workers)
+                self.limit, self.outstanding, self.peak = max_workers, 0, 0
+                pools.append(self)
+
+            def submit(self, fn, *args, **kwargs):
+                self.outstanding += 1
+                self.peak = max(self.peak, self.outstanding)
+                if self.outstanding > self.limit:
+                    raise AssertionError('unbounded future submission')
+                future = super().submit(fn, *args, **kwargs)
+                original_result = future.result
+
+                def result(*args, **kwargs):
+                    try:
+                        return original_result(*args, **kwargs)
+                    finally:
+                        self.outstanding -= 1
+
+                future.result = result
+                return future
+
+        class Body(io.BytesIO):
+            def __init__(self, key):
+                super().__init__(memory.objects[key])
+                self.key = key
+
+            def read(self, size):
+                with lock:
+                    workers.add(threading.current_thread())
+                if self.key in first_keys:
+                    barrier.wait(timeout=5)
+                    if self.key == first_keys[0] and not later_closed.wait(5):
+                        raise AssertionError('later reads did not finish concurrently')
+                return super().read(size)
+
+            def close(self):
+                super().close()
+                with lock:
+                    closed.add(self.key)
+                    if set(first_keys[1:]) <= closed:
+                        later_closed.set()
+
+        original_get = memory.get_object
+
+        def get(**request):
+            response = original_get(**request)
+            response['Body'].close()
+            response['Body'] = Body(request['Key'])
+            memory.bodies.append(response['Body'])
+            return response
+
+        memory.get_object = get
+
+        def progress(phase):
+            self.assertIs(owner, threading.current_thread())
+            phases.append(phase)
+            if phase in RAW_SOURCE_PHASES[2:]:
+                self.assertTrue(all(body.closed for body in memory.bodies))
+                self.assertTrue(all(not worker.is_alive() for worker in workers))
+
+        with patch('reporting_core.experiment_quality_source_io.ThreadPoolExecutor', TrackedExecutor), \
+             redirect_stdout(stdout), redirect_stderr(stderr):
+            result = read_raw(memory, max_read_workers=3, progress=progress)
+        self.assertEqual(baseline, result)
+        self.assertEqual(list(RAW_SOURCE_PHASES), phases)
+        self.assertEqual(3, pools[0].peak)
+        self.assertEqual(0, pools[0].outstanding)
+        self.assertEqual(3, len(workers))
+        self.assertNotIn(owner, workers)
+        self.assertTrue(later_closed.is_set())
+        self.assertEqual(set(memory.objects), closed)
+        self.assertEqual('', stdout.getvalue() + stderr.getvalue())
+        self.assertEqual(sorted(memory.objects), sorted(call['Key'] for call in memory.get_calls))
+        self.assertTrue(all(call['IfMatch'] == memory.metadata(call['Key'])['ETag']
+                            for call in memory.get_calls))
+
+    def test_concurrent_failure_cancels_queued_and_drains_running_reads(self):
+        memory = MemoryS3([event(received_at=START + timedelta(minutes=i)) for i in range(8)])
+        started, second_started, cancelled = threading.Event(), threading.Event(), threading.Event()
+        phases, futures, workers = [], [], set()
+        keys = sorted(memory.objects)
+        original_get = memory.get_object
+
+        # One real worker makes queued cancellation deterministic. The source
+        # still submits its bounded three-future window and must cancel it on
+        # failure before waiting for the already-started second body to close.
+        class QueuedExecutor(ThreadPoolExecutor):
+            def __init__(self, *, max_workers):
+                if max_workers != 3:
+                    raise AssertionError('unexpected worker limit')
+                super().__init__(max_workers=1)
+
+            def submit(self, fn, *args, **kwargs):
+                future = super().submit(fn, *args, **kwargs)
+                futures.append(future)
+                if len(futures) == 1:
+                    original_result = future.result
+
+                    def result(*args, **kwargs):
+                        if not second_started.wait(5):
+                            raise AssertionError('second read did not start before failure observation')
+                        return original_result(*args, **kwargs)
+
+                    future.result = result
+                if len(futures) == 3:
+                    started.set()
+                original_cancel = future.cancel
+
+                def cancel():
+                    result = original_cancel()
+                    if future is futures[2] and result:
+                        cancelled.set()
+                    return result
+
+                future.cancel = cancel
+                return future
+
+        class FailingBody(io.BytesIO):
+            def read(self, size):
+                if not started.wait(5):
+                    raise AssertionError('bounded work was not submitted')
+                raise RuntimeError('SENSITIVE SDK payload')
+
+        class WaitingBody(io.BytesIO):
+            def read(self, size):
+                second_started.set()
+                if not cancelled.wait(5):
+                    raise AssertionError('pending work was not cancelled before drain')
+                return super().read(size)
+
+        def get(**request):
+            workers.add(threading.current_thread())
+            response = original_get(**request)
+            response['Body'].close()
+            body_type = FailingBody if request['Key'] == keys[0] else WaitingBody
+            response['Body'] = body_type(memory.objects[request['Key']])
+            memory.bodies.append(response['Body'])
+            return response
+
+        memory.get_object = get
+        with patch('reporting_core.experiment_quality_source_io.ThreadPoolExecutor', QueuedExecutor):
+            with self.assertRaises(QualityInputError) as caught:
+                read_raw(memory, max_read_workers=3, progress=phases.append)
+        self.assertEqual(list(RAW_SOURCE_PHASES[:2]), phases)
+        self.assertEqual(3, len(futures))
+        self.assertTrue(second_started.is_set())
+        self.assertTrue(cancelled.is_set())
+        self.assertEqual(keys[:2], [call['Key'] for call in memory.get_calls])
+        self.assertTrue(all(future.done() for future in futures))
+        self.assertTrue(any(future.cancelled() for future in futures))
+        self.assertTrue(all(body.closed for body in memory.bodies))
+        self.assertTrue(all(not worker.is_alive() for worker in workers))
+        self.assertIsNone(caught.exception.__cause__)
+        self.assertNotIn('SENSITIVE', ''.join(traceback.format_exception(caught.exception)))
+
+    def test_worker_bounds_fail_before_io_and_serial_empty_paths_create_no_pool(self):
+        for value in (None, True, False, 0, -1, 9, 100000, 1.0, '8'):
+            phases, memory = [], MemoryS3()
+            with self.subTest(value=value), self.assertRaises(QualityInputError):
+                read_raw(memory, max_read_workers=value, progress=phases.append)
+            self.assertEqual([], phases)
+            self.assertEqual([], memory.list_calls)
+        with patch('reporting_core.experiment_quality_source_io.ThreadPoolExecutor') as pool:
+            read_raw(MemoryS3([event(received_at=START)]))
+            read_raw(MemoryS3(), max_read_workers=8)
+            pool.assert_not_called()
+
+    def test_submission_error_drains_prior_worker_before_sanitized_return(self):
+        memory = MemoryS3([event(received_at=START + timedelta(minutes=i)) for i in range(4)])
+        release, entered = threading.Event(), threading.Event()
+        phases, workers, futures = [], [], []
+        original_get = memory.get_object
+
+        class FailingExecutor(ThreadPoolExecutor):
+            def submit(self, fn, *args, **kwargs):
+                if futures:
+                    if not entered.wait(5):
+                        raise AssertionError('first worker never entered')
+                    release.set()
+                    raise RuntimeError('SENSITIVE submission value')
+                future = super().submit(fn, *args, **kwargs)
+                futures.append(future)
+                return future
+
+        def get(**request):
+            workers.append(threading.current_thread())
+            entered.set()
+            if not release.wait(5):
+                raise AssertionError('submission did not fail')
+            return original_get(**request)
+
+        memory.get_object = get
+        with patch('reporting_core.experiment_quality_source_io.ThreadPoolExecutor', FailingExecutor):
+            with self.assertRaises(QualityInputError) as caught:
+                read_raw(memory, max_read_workers=3, progress=phases.append)
+        self.assertEqual(list(RAW_SOURCE_PHASES[:2]), phases)
+        self.assertEqual(1, len(futures))
+        self.assertTrue(futures[0].done())
+        self.assertTrue(all(body.closed for body in memory.bodies))
+        self.assertTrue(all(not worker.is_alive() for worker in workers))
+        self.assertNotIn('SENSITIVE', ''.join(traceback.format_exception(caught.exception)))
+
+    def test_all_worker_limits_preserve_proof_and_strict_failure_checks(self):
+        for limit in range(2, 9):
+            rows = [event(received_at=START), event(received_at=END)]
+            with self.subTest(limit=limit):
+                self.assertEqual(read_raw(MemoryS3(rows)), read_raw(MemoryS3(rows), max_read_workers=limit))
+                for failure in ('metadata', 'json', 'partition', 'validation', 'inventory'):
+                    memory = MemoryS3(rows)
+                    if failure == 'metadata':
+                        memory.get_hook = lambda response: {**response, 'ETag': '"' + 'f' * 32 + '"'}
+                    elif failure == 'json':
+                        key = next(iter(memory.objects))
+                        memory.objects[key] = b'{"received_at":"bad", "received_at": NaN}'
+                    elif failure == 'partition':
+                        memory = MemoryS3([event(received_at=START, event_date='2026-08-24')])
+                    elif failure == 'validation':
+                        memory = MemoryS3([event(received_at=END, email='synthetic@example.invalid')])
+
+                    def progress(phase):
+                        if failure == 'inventory' and phase == RAW_SOURCE_PHASES[3]:
+                            memory.objects.clear()
+
+                    with self.subTest(failure=failure), self.assertRaises(QualityInputError):
+                        read_raw(memory, max_read_workers=limit, progress=progress)
+                    self.assertTrue(all(body.closed for body in memory.bodies))
+
     def test_fixed_substeps_preserve_io_rows_proof_and_default_silence(self):
         for rows in ([], [event(received_at=START + timedelta(minutes=i)) for i in range(3)]):
             baseline, observed = MemoryS3(rows, page_size=1), MemoryS3(rows, page_size=1)

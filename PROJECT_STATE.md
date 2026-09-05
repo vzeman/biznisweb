@@ -5,6 +5,33 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-05 — Bounded raw-read correction; no source or live control changed
+
+Date: 2026-09-05
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-bounded-raw-reads`
+
+What changed:
+
+- PR #529 merged as `8fce8b41f9c97d687d91811629733549de4487ad`. Exact clean main was synchronized before this implementation. The observed 43-minute conditional-read phase supports this narrowly scoped correction; no source was redispatched during implementation.
+- The managed source now opts into eight concurrent conditional reads of the existing retained-object inventory. The shared adapter still defaults to serial. At most eight futures are submitted but not yet reduced, and reduction remains in sorted key order. The same one-object IfMatch/metadata/body/JSON/receipt checks, byte/object bounds, strict all-row validation and stable dual inventories are retained. Pending reads are cancelled on failure and running workers finish/close bodies before return; no partial source is returned.
+- The managed explicit-session S3 client is resolved on the coordinator before workers run; no worker constructs a client, uses the Session/factory, changes client metadata or installs event hooks. No package, retry/pacing, workflow timeout, raw retention, source/acceptance rule, frozen window, checkpoint or live manifest changed. Ordinary reporting and order-source reads remain unchanged. See `GROWTHBOOK_AA_QUALITY_SOURCE_AUDIT.md` for the documented concurrency boundary.
+
+What is verified:
+
+- The 240-test source/lifecycle suite, workspace/window/activation/security validators and `git diff --check` pass locally. Five new tests prove bounded actual concurrency with out-of-order completion, serial-equivalent rows/proofs, no eager submission, queued cancellation/drain, submission-error cleanup, pre-I/O limits and unchanged strict failures. Existing managed tests verify the real CLI's cached client creation stays on the coordinator and raw worker diagnostics remain suppressed. Three synchronization-sensitive cases passed 25 repetitions each. All finite local test processes completed and their test-owned worker threads were verified terminated.
+- Offline tests do not prove live speedup, receipt parity, complete source coverage or A/A PASS. All three earlier source runs remain terminal without a recorded source. No AWS source client, live app process, raw source file or local cloud credential was created by these tests.
+
+Known issues:
+
+- `SOURCE_CAPTURE_TIMEOUT_AFTER_RAW_READS` remains a live-evidence blocker until one complete managed source succeeds and its original artifacts/provenance are independently verified. The prepared optimization is not a reason to weaken a later failure or repeatedly capture until PASS.
+- `GTM_LIVE_VERSION_DRIFT` and `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK` remain separate closed manual-QA paths. Production A/A was not stopped, Preview was not woken, and GTM/GrowthBook/Meta/BiznisWeb/commerce controls were not changed. Paid Pro and CTA remain closed.
+
+Next exact step:
+
+- Review this minimal code change, require all exact-head CI checks and independently verify execution of the full 240-test source/lifecycle step, then merge through PR and synchronize clean main. Recheck every source run/artifact for active/successful/recoverable evidence before considering a new acquisition. Obtain fresh independently verified same-main managed health, then dispatch at most one new source workflow using the existing gate. On success verify both original source/health ZIP digests, single canonical JSON/hash and original Git inputs before the offline recorder; on failure inspect only sanitized phase/code and preserve the frozen boundary.
+- Keep current GTM compatibility/privacy remediation in a separate reviewed scope; do not mutate live tags or rewrite historical activation proof under this source-read correction. No local application service or persistent process was started, so none requires stopping or intentional retention.
+
 ## 2026-09-05 — Source timeout localized; GTM code equality and separate privacy risk verified
 
 Date: 2026-09-05
