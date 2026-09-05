@@ -82,6 +82,10 @@ except ModuleNotFoundError:  # pragma: no cover - direct script execution
 
 
 ROOT = Path(__file__).resolve().parents[1]
+# Remains false until this recorder AND the automated consumer require the
+# managed exact-window capture. The prepared source workflow checks this before
+# configuring AWS credentials; deploying its code alone cannot authorize reads.
+EXACT_WINDOW_SOURCE_CAPTURE_SUPPORTED = False
 RUN_ID_RE = re.compile(r"^[1-9][0-9]{5,19}$")
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
