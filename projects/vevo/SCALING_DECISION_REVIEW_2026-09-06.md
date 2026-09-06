@@ -39,7 +39,7 @@ Historical mature contribution can inform an acquisition-test ceiling only with 
 
 Verified: independent source review of the formulas and decision paths above; synthetic algebra for fixed-cost invariance and the relative-threshold exception. No application code, configuration, advertisement, infrastructure or runtime was changed. No local service was started.
 
-Pending: inspect the exact generated HTML report and its period/source metadata, reconcile displayed CM1/CM2/CM3 and both recommendation baselines, and distinguish those observations from the separate Robyn/MMM/TimesFM analyses whose fit diagnostics and outputs were not provided. The reported financial-period comparison is not independently reproduced by this source review.
+Pending: inspect the exact generated HTML report and its period/source metadata, reconcile displayed CM1/CM2/CM3 and both recommendation baselines, and distinguish those observations from the separate Robyn/MMM/TimesFM analyses whose fit diagnostics and outputs were not provided. The reported financial-period comparison is not independently reproduced by this source review. Direct browser navigation to the documented report route was blocked by the client; no local AWS credentials were available. The user indicated an HTML attachment would be supplied, but only the text reply had arrived at this checkpoint. No new export, credential change or infrastructure workaround was attempted.
 
 If a follow-up implementation is requested, separately design and test the decision contract for incremental contribution, whole-business coverage, cash/payback constraints and 7/14-day confirmation. Do not remove financial guardrails or deploy a recommendation change as part of this read-only review.
 

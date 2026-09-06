@@ -23,7 +23,7 @@ What is verified:
 
 Known issues:
 
-- The exact generated HTML report has not yet been inspected in this task. Financial-period figures supplied in conversation and separate MMM model outputs are not independently reproduced by the source audit. Existing GrowthBook health/source blockers below remain a separate scope and were not touched.
+- The exact generated HTML report has not yet been inspected in this task. The documented report route was blocked by the browser client, no local AWS credentials were available, and the promised HTML attachment had not arrived at this checkpoint. Financial-period figures supplied in conversation and separate MMM model outputs are not independently reproduced by the source audit. Existing GrowthBook health/source blockers below remain a separate scope and were not touched.
 
 Next exact step:
 
