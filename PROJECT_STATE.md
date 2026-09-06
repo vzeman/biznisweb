@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-06 — Customer-return and budget-claim fact check
+
+Date: 2026-09-06
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-scaling-analysis-20260906`
+
+What changed:
+
+- Extended the read-only scaling review to distinguish observed sample-entry return timing, overall repeat-purchase timing, causal acquisition explanations and claims of inevitable budget outcomes. Private aggregate values remain outside this public repository.
+
+What is verified:
+
+- Read the accessible static report's `cohort_summary` and `sample_funnel.summary`, and checked their definitions in `export_orders.py`. Sample-entry means a first observed basket containing samples and no full-size product. Sample return/full-size timing fields are medians among observed converters; overall second-order timing has separate mean and median fields. These statistics cover the source history, not just this year's or the latest acquired cohort.
+- Sample funnel window percentages retain the whole entry-cohort denominator without requiring each customer to have reached that window. They must not be presented as mature-cohort eventual return probabilities.
+- The verified low-spend period supports dependence on repeat revenue, but does not prove the original acquisition channel or the cause of a later repeat-revenue decline. Estimated fixed-cost coverage and preservation of the acquisition base are separate claims; unchanged spend does not logically imply no acquisition or guaranteed business failure. An acquisition increase may defer contribution without necessarily creating a loss or guaranteeing later payback.
+- Clean branch identity, fetch/pull, source inspection and documentation diff were checked. No service or persistent process was started.
+
+Known issues:
+
+- The source still ends 2026-08-28. Neither full September 5 comparison coverage nor customer-level causal attribution was added.
+
+Next exact step:
+
+- Use qualified statements in the business discussion; assess comparable mature acquisition cohorts before inferring budget payback or a causal optimum. Extend the existing reconstruction only when the later export becomes accessible.
+
 ## 2026-09-06 — Year-to-date comparison from the available static report
 
 Date: 2026-09-06

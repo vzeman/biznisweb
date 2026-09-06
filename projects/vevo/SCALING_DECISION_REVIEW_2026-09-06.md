@@ -66,3 +66,11 @@ node scripts/build_vevo_year_comparison.mjs --input <report.html> --output <priv
 ```
 
 The builder validates consecutive source dates, daily array lengths, numeric values, monthly cohort coverage, daily profit/customer-revenue reconciliations and independently aggregated workbook totals. Monthly calculated amounts remain formulas referencing the daily input sheet. The customer chart is formula-linked, and the last partial month plus unobserved tail remain explicit. The delivered workbook's formula scan and visual review of every sheet passed. Generated workbook/QA files contain private aggregates and must not be committed to this public repository.
+
+## Follow-up claim verification
+
+The source's `cohort_summary.avg_days_to_2nd_order` and `median_days_to_2nd_order` describe observed second-order customers; they are not an unconditional promise that every new customer returns. `sample_funnel.summary.median_days_to_repeat` and `median_days_to_fullsize` describe a different sample-entry subset and are medians, not means. Source at `export_orders.py:8424` selects first observed baskets containing a sample and no full-size product, while `8548` and `8549` take medians over non-null conversion times. All these displayed aggregates describe the available source history; do not relabel them as the current acquisition cohort's expected timing.
+
+The sample funnel's window conversion denominators include the whole entry cohort, without a window-age eligibility filter. Its percentages therefore cannot establish mature or eventual return probability; use explicitly mature cohorts for such an inference.
+
+Repeat-revenue dependence in a low-spend period is directly observable. Attributing a later repeat-revenue shortfall specifically to earlier reduced acquisition remains a hypothesis until customer cohorts and competing explanations are checked. Positive estimated fixed-cost coverage in a low-spend month also prevents using that month as evidence that low spend necessarily fails to cover fixed costs. Holding spend steady can still acquire customers. Neither a guaranteed failure without a budget increase nor an inevitable short-term loss after an increase follows from these observations. Longer follow-up is justified by observed return timing, but later repeat purchases do not themselves guarantee acquisition payback.
