@@ -1,9 +1,33 @@
 # PROJECT_STATE
 
-Last updated: 2026-09-05
+Last updated: 2026-09-06
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
+
+## 2026-09-06 — Read-only advertising scaling methodology review
+
+Date: 2026-09-06
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-scaling-analysis-20260906`
+
+What changed:
+
+- Added `projects/vevo/SCALING_DECISION_REVIEW_2026-09-06.md` to preserve the source review and decision principles. No private generated report, financial-period totals, customer data, credential or signed URL is included in this public repository.
+
+What is verified:
+
+- Reviewed `origin/main` at `b9ac75cd` after fetch/pull in an isolated clean worktree. Unrelated working trees were not modified.
+- Constant fixed costs cancel in equal-duration incremental profit comparisons; a positive-CM3 eligibility constraint and the relative 85% corridor ceiling are separate policies that can affect growth recommendations. General advertising and detailed Meta cards use different historical baselines. The detailed account action reads only the 7-day verdict despite explanation text requiring 7/14-day confirmation.
+- Source formulas and cohort boundaries were independently reviewed. No application code, shop/advertising setting, infrastructure or runtime changed; no local service was started.
+
+Known issues:
+
+- The exact generated HTML report has not yet been inspected in this task. Financial-period figures supplied in conversation and separate MMM model outputs are not independently reproduced by the source audit. Existing GrowthBook health/source blockers below remain a separate scope and were not touched.
+
+Next exact step:
+
+- Inspect the exact supplied generated HTML report, reconcile its period figures and recommendation baselines, then complete the business interpretation. Treat any later change to decision policy or the 7/14-day mismatch as a separately scoped implementation with tests and PR review.
 
 ## 2026-09-05 — Fresh health readback blocked before any new source capture
 
