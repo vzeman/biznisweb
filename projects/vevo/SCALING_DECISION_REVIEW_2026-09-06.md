@@ -46,3 +46,23 @@ If a follow-up implementation is requested, separately design and test the decis
 Attachment follow-up: the user subsequently supplied a Windows path for the report ending 2026-09-05. Direct filesystem checks could not find that file. The available drive-root reports end earlier, and no matching report was found in the attachment or default download folders. Do not substitute an older export for the requested period; the exact generated-report verification remains pending receipt of an accessible file.
 
 External methodological reference: [Meta Robyn analyst guide](https://facebookexperimental.github.io/Robyn/docs/analysts-guide-to-MMM/) describes incremental-effect questions, data quality and the need to choose a measurement method that fits the business question. It does not validate this installation's models.
+
+## Year-to-date reconstruction
+
+The follow-up review reads the available static HTML ending 2026-08-28, generated at the timestamp printed in that report. It contains 240 contiguous daily observations for 2026-01-01 through 2026-08-28. The report's application/json block is data; no embedded executable JavaScript is needed or executed.
+
+Use `series` for daily revenue, product costs, packaging, shipping, channel advertising, fixed cost, orders and reported CM2/CM3. Recompute CM1/CM2/CM3 independently. Join `customer_mix` by date for first/repeat-order revenue and reconcile both segments to total revenue. Use `cohort_unit_economics_rows.cohort_month` and `new_customers` for monthly acquisition counts, according to the report's known-first-purchase/history fallback definition. Do not label this channel attribution or infer unavailable monthly segment contribution.
+
+Aggregate by calendar month, retain day counts and flag the last partial month. Normalize per-day values when comparing different-duration months. The supplied comparison's earlier window is July 8 through August 6; its later window is August 7 through September 5. Only the earlier window is fully covered by this snapshot and independently reconciled. Never stitch the partial later window to rounded figures from another export to create an allegedly complete daily series.
+
+Within-day-spend comparisons, monthly revenue variability, acquisition counts and repeat-order revenue composition are descriptive evidence. They do not by themselves identify advertising incrementality, rule out promotions/seasonality, or establish whether an old customer was originally acquired by paid advertising. Advertising carryover and later repeat purchases can move contribution into a different accounting month from acquisition spending; the [Robyn feature documentation](https://facebookexperimental.github.io/Robyn/docs/features/) describes lagged adstock effects as well as saturation. Without a model's actual inputs, fit and validation outputs, this review neither validates nor rejects that fitted model.
+
+Private reconstructed financial totals belong in the generated workbook, not this public source review. The workbook must state its source filename, cutoff, generation timestamp, financial definitions and unverified tail. No new export, infrastructure mutation or advertising action is required to read the available report.
+
+The reusable builder is `scripts/build_vevo_year_comparison.mjs`. Use the Node executable and `node_modules` directory supplied by Codex desktop's workspace dependency loader; the authoring dependency is `@oai/artifact-tool`, not an application/runtime dependency. Example invocation with caller-supplied paths:
+
+```text
+node scripts/build_vevo_year_comparison.mjs --input <report.html> --output <private-output.xlsx> --year 2026 --requested-through 2026-09-05 --dependencies <bundled-node_modules> --qa-dir <private-qa-directory>
+```
+
+The builder validates consecutive source dates, daily array lengths, numeric values, monthly cohort coverage, daily profit/customer-revenue reconciliations and independently aggregated workbook totals. Monthly calculated amounts remain formulas referencing the daily input sheet. The customer chart is formula-linked, and the last partial month plus unobserved tail remain explicit. The delivered workbook's formula scan and visual review of every sheet passed. Generated workbook/QA files contain private aggregates and must not be committed to this public repository.

@@ -5,6 +5,35 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-06 — Year-to-date comparison from the available static report
+
+Date: 2026-09-06
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-scaling-analysis-20260906`
+
+What changed:
+
+- Extended the read-only analysis to calendar-month financial and customer-mix comparisons for 2026. Only methodology and a reusable workbook builder belong in this public repository; generated financial workbooks and source exports remain outside tracked content.
+- Added `scripts/build_vevo_year_comparison.mjs`, a parameterized HTML-to-XLSX builder using the bundled `@oai/artifact-tool` environment. It reads the source JSON as data, validates date coverage and financial/customer reconciliations, and builds formula-driven monthly finance, customer-mix and daily-aggregate sheets without copying customer identifiers.
+
+What is verified:
+
+- The accessible static Vevo HTML ends 2026-08-28 and contains all 240 consecutive dates from January 1 through that cutoff, with no duplicate or missing dates. Embedded application/json was parsed as data without executing report JavaScript.
+- The earlier comparison described in the supplied message is 2026-07-08 through 2026-08-06 versus 2026-08-07 through 2026-09-05. The first window is fully present in the available export and its financial amounts reproduce the supplied comparison after rounding; the second window is incomplete and must not be represented as independently verified.
+- Daily revenue minus product/packaging/shipping minus Meta/Google reconciles to reported contribution before fixed costs, and subtracting reported fixed costs reconciles to company profit. Daily first-order plus repeat-order revenue reconciles to total revenue. An independent analysis verified monthly customer cohorts and revenue mix.
+- Calendar-month comparisons must retain actual day counts and identify partial August. Per-day normalization, customer mix, acquisition carryover and observation-versus-causation distinctions are required when interpreting spend changes. A repeat-revenue share increase does not imply absolute repeat revenue increased.
+- The final workbook was exported with three sheets, a formula-linked stacked first/repeat revenue chart, source filename/generation timestamp/hash, cost definitions and the explicit unavailable tail. Independent aggregate-to-formula totals and monthly cohort counts match, formula-error inspection returned zero errors, and every sheet plus both daily table blocks and chart inputs were visually verified. `node --check` and `git diff --check` passed. The builder contains no private financial totals or machine-specific source/output paths.
+- All finite extraction, authoring and verification processes completed. No local service, worker, tunnel or application runtime was started or left running.
+
+Known issues:
+
+- 2026-08-29 through 2026-09-05 remains unavailable locally. A read-only request to the documented generated-report endpoint returned HTTP 401; no export, credential change or infrastructure workaround was attempted. The year-to-date workbook is explicitly bounded by August 28, not presented as current through September 5.
+- Monthly contribution split between first and repeat orders is not present in this export; whole-report average contribution per order must not be substituted for monthly segment economics. Channel acquisition attribution and causal effects cannot be established from customer/date aggregates.
+
+Next exact step:
+
+- When the later source becomes accessible, rerun the committed builder and extend the cutoff explicitly. For budget decisions, assess acquired-customer contribution over a declared maturity/payback horizon and separate whole-business coverage from incremental contribution. Neither the static year-to-date comparison nor the earlier pair of periods proves a causal budget optimum. No runtime or marketing change is part of this task.
+
 ## 2026-09-06 — Read-only advertising scaling methodology review
 
 Date: 2026-09-06
