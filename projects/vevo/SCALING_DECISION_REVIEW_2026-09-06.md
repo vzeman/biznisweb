@@ -43,4 +43,6 @@ Pending: inspect the exact generated HTML report and its period/source metadata,
 
 If a follow-up implementation is requested, separately design and test the decision contract for incremental contribution, whole-business coverage, cash/payback constraints and 7/14-day confirmation. Do not remove financial guardrails or deploy a recommendation change as part of this read-only review.
 
+Attachment follow-up: the user subsequently supplied a Windows path for the report ending 2026-09-05. Direct filesystem checks could not find that file. The available drive-root reports end earlier, and no matching report was found in the attachment or default download folders. Do not substitute an older export for the requested period; the exact generated-report verification remains pending receipt of an accessible file.
+
 External methodological reference: [Meta Robyn analyst guide](https://facebookexperimental.github.io/Robyn/docs/analysts-guide-to-MMM/) describes incremental-effect questions, data quality and the need to choose a measurement method that fits the business question. It does not validate this installation's models.

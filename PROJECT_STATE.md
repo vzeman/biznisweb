@@ -24,6 +24,7 @@ What is verified:
 Known issues:
 
 - The exact generated HTML report has not yet been inspected in this task. The documented report route was blocked by the browser client, no local AWS credentials were available, and the promised HTML attachment had not arrived at this checkpoint. Financial-period figures supplied in conversation and separate MMM model outputs are not independently reproduced by the source audit. Existing GrowthBook health/source blockers below remain a separate scope and were not touched.
+- Attachment follow-up: the supplied path for the report ending 2026-09-05 does not resolve to a file. The drive-root exports are older; attachment/default download directories contain no matching report. Exact-period validation remains blocked by the missing file, not by the already-completed source-methodology review.
 
 Next exact step:
 
