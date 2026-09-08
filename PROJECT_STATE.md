@@ -5,6 +5,35 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-08 — Complete-log health verified; receipt framing failure identified
+
+Date: 2026-09-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-complete-health-handoff`
+
+What changed:
+
+- PR #534 merged at `2026-09-08T13:25:16Z` as `c7567bc46d8e4ff31326c9011f1d5690dc13a4cf`. All four exact-head checks passed. Independently verified CI `34231527708` and observability `34231527651` against reviewed head `29a83898d9c7758fa8e205ae795a90f7b01a618f`; job `102078605561` actually executed the full 311-test regression step at `13:23:13..13:23:16Z` with zero skips, including all Linux symlink tests. Clean exact main and workspace/window/activation gates were rechecked before dispatch.
+- Fresh corrected-main health run `34231896698` / job `102079861311` succeeded. The new complete-log marker and exact temporary cleanup marker both executed successfully; original marker/parity acceptance and post-cleanup canonical validation/upload also passed. Two independent downloads verified sole artifact `10058147715`, GitHub ZIP digest `0693dddf7e3b50064b843c00886ccacb971fb34e919f37289ef065d53be5ff3e`, single canonical JSON digest `c73ef08758cdd640afe49bb8b5347fe91df639dea52e2f42667109f0ee54ef46`, original run/main ownership, offline deployment-bound validation and freshness/latest-due gate. Observation `2026-09-08T13:26:20Z` verifies the September 8 03:45 Bratislava reconciliation. No local artifact file or raw payload was created.
+- All four earlier source attempts were rechecked terminal with zero artifacts, and no active/successful/recoverable capture existed. On clean exact main above, dispatched exactly one diagnostic source run `34232131717`, created `2026-09-08T13:28:02Z`; job `102080648286` started `13:28:06Z`. It uses the independently verified health run/hash and the previously reviewed receipt diagnostics. Its original source main must stay bound to `c7567bc46d8e4ff31326c9011f1d5690dc13a4cf`, not a later handoff commit.
+- That source is now terminal `failure`, not timeout: job completed `2026-09-08T13:37:55Z`. Source collection failed, upload was skipped, cleanup succeeded, and independently rechecked artifact metadata proves zero artifacts. The fixed terminal marker at `13:37:53.2199022Z` is `VEVO_AA_QUALITY_SOURCE_STOPPED:stage=source-capture:phase=receipt-validation:code=receipt-json-concatenated-markers:raw=false`. No sixth source run was dispatched.
+
+What is verified:
+
+- Complete health readback is now proven, not merely inferred from a green job. It is not A/A PASS, receipt parity, source coverage or proof of the September 5 root cause. This handoff changes documentation only; no manifest, source window or external control changed.
+- Fixed source markers show conditional reads from `13:28:51.3295770Z` to raw validation `13:34:37.1709894Z` (5m45.841s), final inventory at `13:34:37.3996571Z`, receipt parity at `13:34:43.5634934Z`, retention at `13:34:43.5726959Z`, receipt log read at `13:34:44.1761758Z` and receipt validation at `13:37:53.2181642Z`. Receipt comparison, reporting import/token/order reads and quality build were not reached. Only exact-step fixed allowlisted phase/code markers were reported; no raw receipt or AWS payload was emitted or saved locally.
+- The diagnostic is narrowly defined by the reviewed reducer: a bounded message consists entirely of at least two exact canonical four-field collector markers, with only optional whitespace between them, and is still rejected as a single JSON receipt. This proves the observed framing shape, not why it occurred, which component caused it, receipt loss/duplication, historical parity or A/A FAIL/PASS. No malformed line was split, dropped, deduplicated or accepted to produce a result. See the quality-source audit for the next correction boundary.
+- No GrowthBook/GTM/Meta/BiznisWeb/commerce mutation, runtime deployment or Preview wake occurred. A/A has not been stopped. All finite local tests, GitHub inspection and CI/health watch commands completed; no local application service or worker was started.
+
+Known issues:
+
+- `SOURCE_RECEIPT_CONCATENATED_MARKER_FRAMING`: the exact-window receipt proof is unavailable. All five source runs are terminal and artifact-free; there is no live source wait or source binding. Healthy infra and successful raw reads do not bypass the rejected receipt proof.
+- `GTM_LIVE_VERSION_DRIFT` and `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK` still close the independent manual-QA path. A/A snapshot, stop, paid Pro and CTA remain closed.
+
+Next exact step:
+
+- Review the versioned collector emission/log-framing contract and reproduce the observed shape using synthetic concurrent logging only. Distinguish a reproduction from proof of the deployed cause. Propose a narrowly reviewed correction and explicit historical-receipt proof before changing reducer acceptance or considering any acquisition. Do not split/recover/skip malformed historical messages, lower parity/quality requirements, query outcomes, widen the frozen window, restart A/A or deploy the collector merely to get a green capture. Any runtime change still needs its own exact identity/IP/service/path and localhost-marker gate; any new A/A window needs a separately reviewed transition. Keep manual-QA compatibility/privacy reconciliation separately scoped. Complete the documentation PR with exact-head CI, then leave main clean and no local application process running.
+
 ## 2026-09-08 — Complete health log read and failure cleanup prepared
 
 Date: 2026-09-08

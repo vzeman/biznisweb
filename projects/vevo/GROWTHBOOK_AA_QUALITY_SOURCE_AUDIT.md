@@ -1,16 +1,56 @@
-# A/A quality-source audit — 2026-09-05
+# A/A quality-source audit — 2026-09-08
 
-Status: `FRESH_INFRA_HEALTH_MARKER_SUMMARY_UNVERIFIED`. Receipt diagnostics are
-reviewed, but the fresh same-main infrastructure monitor failed before producing
-health evidence. No fifth source acquisition was dispatched. The prior
-`SOURCE_CAPTURE_RECEIPT_PARITY_UNCLASSIFIED_FAILURE` remains unresolved; all four
-source attempts are terminal without artifacts. Complete source coverage and
-A/A PASS remain unproven. This is
+Status: `SOURCE_RECEIPT_CONCATENATED_MARKER_FRAMING`. The complete-log health
+correction is merged and independently verified in production. One subsequent
+source acquisition failed with the exact receipt framing category below. All
+five source attempts are terminal without artifacts; no sixth run was started.
+Complete source coverage and A/A PASS remain unproven. This is
 not permission to restart an experiment or alter its window. Separately, browser
 QA is fail-closed on `GTM_LIVE_VERSION_DRIFT` and the newly verified static
 `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK`; see the browser precheck.
 
-### Fresh health readback failed; do not dispatch source or reuse old health
+### September 8: corrected health passed; receipt framing remains rejected
+
+PR #534 merged as `c7567bc46d8e4ff31326c9011f1d5690dc13a4cf` after all four
+exact-head checks and 311 Linux regressions with zero skips. The read-only
+monitor now completes bounded forward pagination on the original selected
+stream before its unchanged marker/parity check, and attempts exact-scope raw
+cleanup on failure as well as success. Managed health run `34231896698` passed
+with both new complete-log and cleanup markers. Its sole canonical artifact,
+ZIP/JSON digests, run/main ownership, offline validator and latest-due/freshness
+checks passed two independent downloads; see `PROJECT_STATE.md` for hashes.
+No local artifact or raw AWS/receipt payload was retained.
+
+After rechecking all four earlier attempts as terminal and artifact-free, one
+source run `34232131717` / job `102080648286` was dispatched on that exact main.
+It failed, not timed out, at `2026-09-08T13:37:53.2199022Z`; job completion was
+`13:37:55Z`. Upload was skipped, cleanup passed and independent artifact metadata
+confirms zero artifacts. Its fixed diagnostic is:
+
+`VEVO_AA_QUALITY_SOURCE_STOPPED:stage=source-capture:phase=receipt-validation:code=receipt-json-concatenated-markers:raw=false`
+
+Conditional reads took 5m45.841s, raw validation and stable final inventory
+returned, and receipt log acquisition reached validation. Receipt comparison,
+reporting import/token/order reads and quality build were not reached. This
+does not establish complete source quality, missing events or receipt parity.
+
+The reviewed diagnostic recognizes only a bounded message containing at least
+two exact canonical four-field collector marker serializations, with optional
+whitespace between them. It still rejects that message as one JSON receipt.
+This identifies a live framing shape, not whether concurrent stdout writes,
+log-driver framing or another component caused it. No raw message was inspected
+or exported, and no message was repaired, split into accepted events or dropped.
+
+Next: inspect the versioned emission/framing contract and attempt a synthetic
+concurrent-log reproduction. Any correction must separately establish why its
+historical-receipt proof is exact; do not silently relax the existing acceptance,
+recover malformed history, shift the frozen window or repeat source collection.
+A collector deployment still requires its own reviewed runtime identity/IP/
+service/path and localhost-marker gate. A restart/new measurement window is a
+separate reviewed transition, not a fallback inferred from this failure.
+Manual-QA GTM compatibility and Clarity privacy remain independently closed.
+
+### Historical September 5 health failure (superseded by the verified correction)
 
 PR #532 merged at `2026-09-05T15:17:52Z` as
 `81a1fa21b60284946fc6a2042c8c00fbb47e2836`. All four exact-head checks passed
