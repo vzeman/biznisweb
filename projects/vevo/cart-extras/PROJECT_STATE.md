@@ -34,6 +34,33 @@ Bonus products are selected from the existing product catalog; their names are n
 
 Official sources read: https://www.biznisweb.sk/a/851/bonusovy-system-uvod ; https://www.biznisweb.sk/a/173/zaokruhlovanie-cien-meny ; https://www.biznisweb.sk/a/110/jazykove-verzie-webstranok-e-shopov . Products must be shared IDs localized through language categories, never independent duplicate catalog products; stock is shared.
 
+## Completed live changes and verification
+
+Both existing language-scoped programs are active, shown in the cart, and contain the same six shared product IDs in SK order. No catalog records, stock, currency settings, payments, shipping, SK program or unrelated programs were changed.
+
+| Product ID | CZ bonus ID | CZ net | CZ consumer Kč | HU bonus ID | HU net | HU consumer Ft |
+|---|---|---|---|---|---|---|
+| 1549 | 13 | 180.992 | 219 | 25 | 2511.811 | 3190 |
+| 1627 | 22 | 172.727 | 209 | 26 | 2511.811 | 3190 |
+| 1630 | 23 | 197.521 | 239 | 27 | 2748.031 | 3490 |
+| 1551 | 24 | 114.876 | 139 | 28 | 1645.669 | 2090 |
+| 1542 | 15 | 20.661 | 25 | 29 | 275.591 | 350 |
+| 1543 | 11 | 4.132 | 5 | 30 | 78.740 | 100 |
+
+CZ heading: Doporučujeme dokoupit. HU heading: Ajánljuk még a kosárba. Existing local catalog titles and short descriptions render correctly in both carts. New rows automatically use the localized product records; the product selector itself shows SK titles.
+
+Verified by closing/reopening both admin programs: headings, activation, all six saved net prices and order. Verified on https://www.vevopure.cz/e/cart/index and https://www.vevopure.hu/e/cart/index: all six translated names, descriptions, images where present, order and exact consumer prices above.
+
+Functional tests used initially empty CZ and HU carts, one Sample Set (product 1621) per cart. CZ: added bonus Ylang at 209 Kč, total 230 + 209 = 439 Kč. HU: added bonus insurance at 350 Ft, total 3420 + 350 = 3770 Ft. Removed only these test additions; both carts independently confirmed empty afterwards. No order was submitted.
+
+SK admin and public cart readback confirmed the baseline six products, order, heading and prices unchanged (8.90, 8.90, 9.90, 5.90, 0.90, 0.20 EUR). Existing user SK cart of one item / 32.90 EUR was preserved.
+
+Known implementation behavior: ExtJS dialogs load asynchronously; do not fill the heading immediately after opening before reading loaded values, because a late load can overwrite it. One early HU heading attempt did not persist; corrected on fully loaded form and independently verified after reopen. Connector get_product can error for no-variant products; list_products and admin product picker supplied the required verification. Public CZ Shot catalog currently displays 215 Kč, while its separately configured bonus is 219 Kč (the prior bonus was about 220 Kč); catalog prices were not changed.
+
+## Rollback
+
+Only if requested: restore CZ heading Doplňkové služby, remove new bonus rows 22/23/24, restore existing net prices and order Shot (13) 181.8; Spropitné (11) 8.25; Pojištění (15) 19. Restore HU heading Kiegészítő szolgáltatások and remove new bonus rows 25–30, leaving program active with no bonuses. Preserve catalog products and shared stock. Reopen/read back and verify public carts after any rollback.
+
 ## Next exact step
 
-Finish HU baseline and storefront/currency verification, add missing existing products to each program with immediate readback, localize any missing product text, set consumer-rounded bonus prices, and verify both carts plus unchanged SK. Record exact final values and rollback. No local dev service has been started.
+Requested live configuration is complete and verified. Documentation is on codex/vevo-cart-extras-cz-hu for review. No local dev service was started or stopped; no local runtime remains from this task.
