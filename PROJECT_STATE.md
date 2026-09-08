@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-08 — Read-only Meta campaign audit started
+
+Date: 2026-09-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-meta-ads-audit-20260908`
+
+What changed:
+
+- Started a read-only campaign-configuration and economic-methodology audit. This public repository stores only sanitized methodology, evidence boundaries and handoff notes. Private advertising metrics, account identifiers, campaign identifiers, screenshots, financial report totals and customer information remain outside tracked content.
+
+What is verified:
+
+- Repository identity, clean isolated worktree, fetch/prune and pull/rebase were checked before this documentation change. The worktree starts from `origin/main`; existing working branches were not changed.
+- The current generated-report page could not be opened because the browser returned `net::ERR_BLOCKED_BY_CLIENT`. No authentication, browser protection, account setting or infrastructure change was attempted. Any economic evidence from the available older report must retain its actual cutoff and must not be represented as current live data.
+- No application service, worker, watcher or tunnel was started.
+
+Known issues:
+
+- Live campaign evidence and historical reporting economics have different observation periods and attribution definitions. They cannot be compared as though a Meta purchase were necessarily a newly acquired customer.
+
+Next exact step:
+
+- Finish the read-only campaign inspection and preserve the resulting sanitized methodology and limitations here. Reconcile the relevant current customer/cohort economics before treating historical CAC thresholds as current campaign targets. No advertising or runtime mutation is part of this audit.
+
 ## 2026-09-08 — Complete health log read and failure cleanup prepared
 
 Date: 2026-09-08
