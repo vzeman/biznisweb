@@ -14,6 +14,7 @@ Branch: `codex/vevo-meta-ads-audit-20260908`
 What changed:
 
 - Completed the read-only campaign-configuration, measurement and landing-page audit. Added `projects/vevo/META_ADS_AUDIT_2026-09-08.md` with sanitized observations, limitations and the next diagnostic sequence. This public repository stores only methodology and handoff notes; private advertising metrics, account/dataset/campaign identifiers, screenshots, financial report totals and customer information remain outside tracked content.
+- Follow-up clarification prioritizes technical Meta best practices. Added a classification of confirmed instrumentation gaps, matching improvements, conditional setup risks and valid optional settings, plus the remaining end-to-end Purchase validation boundary. No new live-setting change or end-to-end test is implied by this documentation update.
 
 What is verified:
 

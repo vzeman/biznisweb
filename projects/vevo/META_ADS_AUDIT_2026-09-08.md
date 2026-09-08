@@ -16,6 +16,23 @@ The verified main ad destination is the general category path `/c/vevo-fragrance
 
 All campaigns and pre-existing drafts were left unchanged. This audit did not publish an ad, change a budget, alter an audience, modify tracking, edit the storefront or change runtime infrastructure. No service, worker, watcher or tunnel was started.
 
+## Technical best-practice classification
+
+The user's follow-up prioritizes technical weaknesses and Meta setup practices over an economic diagnosis. Keep the following distinctions explicit:
+
+- Missing visible product-view, cart and checkout-start events are a confirmed gap in the observed event list. Validate and complete the customer journey instrumentation. Their absence does not mean that Purchase optimization cannot work.
+- Matching inputs have incomplete coverage. Check which eligible customer information reaches browser and server events, correct formatting and consent behavior. An event-match-quality score alone does not diagnose a broken integration or quantify lost sales. Do not fabricate click identifiers or send data merely to increase the score.
+- Several source domains need ownership and event-type verification. Multiple domains per dataset are not inherently an error, and the diagnostic domain list does not establish that unrelated purchases contaminated optimization.
+- Different attribution windows are valid settings. Use a common reporting window when comparing campaigns; do not describe the difference itself as a delivery failure or require an automatic live-setting change.
+- Recent-purchaser exclusions do not define all-time new customers. Their appropriate use depends on acquisition versus repeat-purchase intent. A test group with different audience controls from its main group is not a controlled creative-only comparison.
+- The observed quantity of active creatives and limited learning signal are reasons to inspect test allocation and consolidate redundant tests. There is no established hard creative-count limit from this audit, and Learning limited does not alone make an ad set invalid.
+
+The inspected website Purchase objective, intended dataset, automatic placements, Highest volume bidding, active Pixel plus CAPI and displayed healthy deduplication remain appropriate baseline settings. A cost cap, manual placements, value optimization or automatic acceptance of every opportunity-score recommendation is not a universal requirement.
+
+Still unverified: Purchase fires once per actual intended order; value and currency match the declared order-value basis; reloads or payment retries do not create extra events; browser/server event identifiers correspond to the same action; consent behavior and product identifiers are correct. These require a scoped end-to-end implementation audit and cannot be inferred solely from Events Manager summary indicators.
+
+Reference: [Meta Blueprint — Optimize Meta Conversions API](https://www.facebookblueprint.com/student/page/566594-optimize-meta-conversions-api) recommends verifying event receipt and the full customer journey, matching parameters, deduplication and freshness. [Meta Blueprint — Direct integration](https://www.facebookblueprint.com/student/path/219714-set-up-implement-verify-conversions-api) covers event preparation, implementation, deduplication and troubleshooting.
+
 ## Economic evidence boundaries
 
 The current generated reporting page was blocked by the Comet browser with `ERR_BLOCKED_BY_CLIENT`. No authentication or browser-protection change was attempted. The inspected historical export ends on 2026-08-28; historical customer contribution values must retain that cutoff and must not be described as current live economics.
