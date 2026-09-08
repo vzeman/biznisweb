@@ -63,6 +63,8 @@ jobs:
           set -euo pipefail
           python -m unittest \
             tests.test_growthbook_aa_infra_health_evidence \
+            tests.test_growthbook_aa_infra_health_log_io \
+            tests.test_growthbook_aa_infra_health_log_cli \
             tests.test_growthbook_aa_infra_health_workflow
           python scripts/validate_growthbook_workspace.py
           python scripts/validate_growthbook_production_aa_activation.py
@@ -542,7 +544,7 @@ jobs:
         if: ${{ env.RUN_INFRA_HEALTH == 'true' && env.HEALTH_PHASE == 'natural_reconciliation_verified' }}
         run: |
           set -euo pipefail
-          aws logs get-log-events --log-group-name "${RECONCILIATION_LOG_GROUP}" --log-stream-name "${RECONCILIATION_LOG_STREAM}" --start-from-head --region "${AWS_REGION}" > "${TEMP_HEALTH_DIR}/task-logs.json"
+          python scripts/growthbook_aa_health_log_io.py
           python - <<'PY'
           import hashlib
           import json
@@ -688,11 +690,15 @@ jobs:
             --deploy-evidence "${DEPLOY_EVIDENCE}"
 
       - name: Remove every temporary AWS response and log message
+        if: ${{ always() && env.RUN_INFRA_HEALTH == 'true' }}
+        run: |
+          set -euo pipefail
+          python scripts/growthbook_aa_health_log_io.py --cleanup-only
+
+      - name: Revalidate canonical evidence after successful cleanup
         if: ${{ env.RUN_INFRA_HEALTH == 'true' }}
         run: |
           set -euo pipefail
-          rm -rf "${TEMP_HEALTH_DIR}"
-          [[ ! -e "${TEMP_HEALTH_DIR}" ]]
           python scripts/validate_growthbook_aa_infra_health_evidence.py \
             --evidence "${HEALTH_EVIDENCE_FILE}" \
             --deploy-evidence "${DEPLOY_EVIDENCE}"
