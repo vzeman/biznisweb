@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-08 — Complete-log health verified; one diagnostic source acquisition live
+
+Date: 2026-09-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-complete-health-handoff`
+
+What changed:
+
+- PR #534 merged at `2026-09-08T13:25:16Z` as `c7567bc46d8e4ff31326c9011f1d5690dc13a4cf`. All four exact-head checks passed. Independently verified CI `34231527708` and observability `34231527651` against reviewed head `29a83898d9c7758fa8e205ae795a90f7b01a618f`; job `102078605561` actually executed the full 311-test regression step at `13:23:13..13:23:16Z` with zero skips, including all Linux symlink tests. Clean exact main and workspace/window/activation gates were rechecked before dispatch.
+- Fresh corrected-main health run `34231896698` / job `102079861311` succeeded. The new complete-log marker and exact temporary cleanup marker both executed successfully; original marker/parity acceptance and post-cleanup canonical validation/upload also passed. Two independent downloads verified sole artifact `10058147715`, GitHub ZIP digest `0693dddf7e3b50064b843c00886ccacb971fb34e919f37289ef065d53be5ff3e`, single canonical JSON digest `c73ef08758cdd640afe49bb8b5347fe91df639dea52e2f42667109f0ee54ef46`, original run/main ownership, offline deployment-bound validation and freshness/latest-due gate. Observation `2026-09-08T13:26:20Z` verifies the September 8 03:45 Bratislava reconciliation. No local artifact file or raw payload was created.
+- All four earlier source attempts were rechecked terminal with zero artifacts, and no active/successful/recoverable capture existed. On clean exact main above, dispatched exactly one diagnostic source run `34232131717`, created `2026-09-08T13:28:02Z`; job `102080648286` started `13:28:06Z`. It uses the independently verified health run/hash and the previously reviewed receipt diagnostics. Its original source main must stay bound to `c7567bc46d8e4ff31326c9011f1d5690dc13a4cf`, not a later handoff commit.
+
+What is verified:
+
+- Complete health readback is now proven, not merely inferred from a green job. It is not A/A PASS, receipt parity, source coverage or proof of the September 5 root cause. This handoff changes documentation only; no manifest, source window or external control changed.
+- No GrowthBook/GTM/Meta/BiznisWeb/commerce mutation, runtime deployment or Preview wake occurred. A/A has not been stopped. All finite local tests, GitHub inspection and CI/health watch commands completed; no local application service or worker was started.
+
+Known issues:
+
+- `SOURCE_CAPTURE_IN_PROGRESS`: run `34232131717` is the only acquisition to follow. There is no successful source binding yet. Do not duplicate or rerun it, reuse partial raw-read success, or declare a repaired receipt source before its terminal artifact/diagnostic is verified.
+- `GTM_LIVE_VERSION_DRIFT` and `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK` still close the independent manual-QA path. A/A snapshot, stop, paid Pro and CTA remain closed.
+
+Next exact step:
+
+- Wait for source run `34232131717` only. On success independently verify the sole original source artifact and both original source/health archives, run IDs, main SHA, ZIP digests, canonical JSON hashes and five original Git inputs before any offline recorder branch/PR. On failure inspect only fixed sanitized phase/code and artifact metadata, preserve the frozen boundary, and do not recapture until the specific failure has a reviewed safe correction. Keep manual-QA compatibility/privacy reconciliation separately scoped; do not mutate live tags or rewrite historical activation proof.
+
 ## 2026-09-08 — Complete health log read and failure cleanup prepared
 
 Date: 2026-09-08
