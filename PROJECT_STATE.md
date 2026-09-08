@@ -23,6 +23,7 @@ What is verified:
 - The inspected main ad landing page is the general perfume category. Its initial product row emphasizes Natural sample offers and lower price anchors, with full-size bundles farther down. This supports testing a specific full-size product or bundle destination with the same creative; it does not establish the cause of weak sales.
 - The current generated-report page could not be opened because the browser returned `net::ERR_BLOCKED_BY_CLIENT`. No authentication, browser protection, account setting or infrastructure change was attempted. Any economic evidence from the available older report must retain its actual cutoff and must not be represented as current live data.
 - Campaigns and all pre-existing drafts were left unchanged. No application service, worker, watcher or tunnel was started.
+- Documentation and staged diff were reviewed for data minimization; `git diff --check` passed. The audit branch is pushed and [draft PR #536](https://github.com/vzeman/biznisweb/pull/536) is open for review. It has not been merged.
 
 Known issues:
 
