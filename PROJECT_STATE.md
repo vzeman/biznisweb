@@ -5,6 +5,35 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-08 — Read-only Meta campaign audit completed
+
+Date: 2026-09-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-meta-ads-audit-20260908`
+
+What changed:
+
+- Completed the read-only campaign-configuration, measurement and landing-page audit. Added `projects/vevo/META_ADS_AUDIT_2026-09-08.md` with sanitized observations, limitations and the next diagnostic sequence. This public repository stores only methodology and handoff notes; private advertising metrics, account/dataset/campaign identifiers, screenshots, financial report totals and customer information remain outside tracked content.
+
+What is verified:
+
+- Repository identity, clean isolated worktree, fetch/prune and pull/rebase were checked before this documentation change. The worktree starts from `origin/main`; existing working branches were not changed.
+- Both inspected main ad sets optimize for website Purchase, use the intended VEVO dataset, Highest volume and Advantage+ placements. Their attribution windows differ, and their audience exclusions are not uniform. A campaign's acquisition label is not evidence of acquiring a new customer.
+- The inspected Events Manager all-events list showed PageView and Purchase; ViewContent, AddToCart and InitiateCheckout were not visible. CAPI is active and the displayed coverage, deduplication and freshness indicators looked healthy; matching still has gaps. These observations are UI evidence, not an end-to-end event audit.
+- The inspected main ad landing page is the general perfume category. Its initial product row emphasizes Natural sample offers and lower price anchors, with full-size bundles farther down. This supports testing a specific full-size product or bundle destination with the same creative; it does not establish the cause of weak sales.
+- The current generated-report page could not be opened because the browser returned `net::ERR_BLOCKED_BY_CLIENT`. No authentication, browser protection, account setting or infrastructure change was attempted. Any economic evidence from the available older report must retain its actual cutoff and must not be represented as current live data.
+- Campaigns and all pre-existing drafts were left unchanged. No application service, worker, watcher or tunnel was started.
+- Documentation and staged diff were reviewed for data minimization; `git diff --check` passed. The audit branch is pushed and [draft PR #536](https://github.com/vzeman/biznisweb/pull/536) is open for review. It has not been merged.
+
+Known issues:
+
+- Live campaign evidence and historical reporting economics have different observation periods and attribution definitions. They cannot be compared as though a Meta purchase were necessarily a newly acquired customer.
+- Full funnel-event delivery, matching inputs and domain-source ownership still need direct validation. The landing-page and offer explanation remains a testable hypothesis.
+
+Next exact step:
+
+- Validate the measurement funnel, matching and domain sources first. Reconcile current new-customer CAC, contribution economics, date coverage and attribution definitions. Then prepare a controlled same-creative landing-page/offer experiment evaluated by contribution and full-size purchase share. Any implementation is a separate task; this audit changed documentation only and does not authorize an advertising or runtime mutation.
+
 ## 2026-09-08 — Complete health log read and failure cleanup prepared
 
 Date: 2026-09-08
