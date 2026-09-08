@@ -1,9 +1,35 @@
 # PROJECT_STATE
 
-Last updated: 2026-09-05
+Last updated: 2026-09-08
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
+
+## 2026-09-08 — Complete health log read and failure cleanup prepared
+
+Date: 2026-09-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-health-log-completeness`
+
+What changed:
+
+- Resumed the known interrupted changes after verifying the exact repository/branch, unchanged `b9ac75cdee4b5ad0211090d75d95fe134ab489e8` main, fetch/prune and pull/rebase. No unrelated edits or remote drift were present. Added a stdlib-only managed-runner helper for the already-selected exact reconciliation log: fixed due-to-capture interval, explicit forward-token completion through empty/partial pages, bounded pages/events/bytes/time, strict JSON/event checks and no deduplication or partial output. The original single-marker/single-summary/parity/hash block, runtime selection, health schema, deployment evidence, A/A window and source schedule remain unchanged.
+- The health workflow now attempts cleanup with `always()` after failures too. Cleanup validates the exact runner-temp/run-ID directory and every child before deleting only regular nonlinked files; no recursive deletion or broad path exists. Successful cleanup cannot resurrect failed evidence: canonical revalidation and the sole artifact upload remain success-only. No raw payload, token, identity or exception text is printed; failure diagnostics are fixed allowlisted codes.
+
+What is verified:
+
+- Today's scheduled run `34198228061`, job `101970707327`, on original main `b9ac75cdee4b5ad0211090d75d95fe134ab489e8` completed successfully. Its actual AWS, exact-task, marker/parity, evidence, cleanup and upload steps executed. Independently verified sole artifact `10044742064`, ZIP digest `aebb1f6245ddd14b548b04f5e50e456d05abc82b90b51d8e4dcda60a527ff457`, single canonical JSON digest `6f1e85480847b762810160e039e3e157e15baa726b3b5433d3cc058c07aab7a9`, original run/main ownership and offline validator against the original Git deployment blob. Observation `2026-09-08T07:13:26Z` verifies the September 8 03:45 Bratislava reconciliation. Download/validation used memory only; no local artifact or raw AWS file exists. Run `34202685213` is the other DST slot: it succeeded by skipping credentials/AWS/evidence/upload, not by performing a second health check.
+- Today's successful evidence does not explain the September 5 failure or prove the missing completeness invariant was harmless. No fifth source acquisition was dispatched. All four source attempts remain terminal; no source binding, A/A PASS, stop, paid Pro or CTA transition exists.
+- Offline regression coverage includes complete/empty/cyclic/malformed/bounded pagination, duplicate preservation, stable original marker/parity hashes, CLI authority before AWS, suppressed raw errors, no partial/overwrite output and exact cleanup on failure. The final full suite passed 311 tests, with three Windows symlink cases skipped; Linux CI must execute those symlink cases too. Workspace/window/activation/security validators and diff check passed. An independent code review found no blocking defect. No app service or persistent worker was started; finite test/inspection processes completed.
+
+Known issues:
+
+- `SOURCE_CAPTURE_RECEIPT_PARITY_UNCLASSIFIED_FAILURE` remains the source blocker. This read-only monitor correction is not a source repair or A/A result. `GTM_LIVE_VERSION_DRIFT` and `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK` still close the independent manual-QA path. A/A has not been stopped and Preview has not been woken.
+- This patch still needs exact-head Linux CI, reviewed PR merge and one fresh same-main complete-log health proof before another diagnostic source run. Do not reuse today's pre-patch evidence to bypass the new-main gate.
+
+Next exact step:
+
+- Commit/push this small monitoring correction, require all exact-head checks plus actual execution of the full 311-test source/lifecycle/health suite, review and merge via PR, then synchronize clean main. Inspect existing health runs first and never duplicate a queued/in-progress run. Obtain the sole canonical artifact from one fresh successful corrected-main health run, independently verify run/main, ZIP digest/contents, JSON hash and offline health validation. Only then recover-check all source runs/artifacts and consider one managed source acquisition with the reviewed receipt diagnostics. Preserve the frozen window; use only fixed failure phase/code if it fails. No runtime, GTM, GrowthBook, Meta, BiznisWeb or commerce mutation is authorized by this correction.
 
 ## 2026-09-05 — Fresh health readback blocked before any new source capture
 

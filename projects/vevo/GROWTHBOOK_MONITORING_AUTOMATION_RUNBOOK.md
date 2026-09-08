@@ -129,6 +129,30 @@ identity-free artifact is uploaded. A missing or failed daily run is an
 infrastructure-monitoring blocker; it does not authorize the A/A checkpoint or
 any live mutation.
 
+The exact selected stream is read by `scripts/growthbook_aa_health_log_io.py`
+only within the managed exact-main health workflow. Every request preserves its
+group, stream, task, inclusive latest local due time and exclusive once-captured
+read time. The selected task's start is already verified at or after that due;
+the read cutoff is not the narrower two-hour task-selection cutoff. Empty and
+partial pages continue until the returned forward token equals the input token.
+An ambiguous nonempty terminal page, token cycle, malformed response, duplicate
+JSON keys or overflow fails closed. No row is deduplicated or repaired. Limits
+are 100 pages, 10,000 events per page, 50,000 total events, 8 MiB per encoded JSON
+page, 32 MiB total encoded pages and a 300-second between-call deadline; the last
+CLI invocation has a 35-second timeout. Only a complete read reaches the unchanged
+single-marker/single-summary/parity/hash checks. Complete pagination does not prove
+that a missing marker on an earlier failed run was caused by pagination.
+
+Raw runner responses are removed by an `always()` cleanup step on both success
+and failure (subject to runner availability/cancellation). It validates exactly
+`RUNNER_TEMP/vevo-aa-infra-GITHUB_RUN_ID`, rejects symlinks, junctions, hardlinks,
+subdirectories and more than 64 children before deleting any file, then removes
+only that directory's regular files and empty directory. Cleanup neither uses
+AWS nor depends on successful task selection or a built artifact. Canonical
+revalidation and upload remain success-only after cleanup; a cleanup success
+cannot turn a failed health job into healthy evidence. No raw payload or identity
+is retained in an artifact or diagnostic. Local tests use synthetic inputs only.
+
 ### PC-independent outcome-blind checkpoint capture
 
 The repository-owned checkpoint workflow also schedules both possible UTC

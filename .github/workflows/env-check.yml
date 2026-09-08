@@ -119,6 +119,10 @@ jobs:
             tests.test_growthbook_quality_source_io \
             tests.test_growthbook_managed_quality_source \
             tests.test_growthbook_receipt_summary \
+            tests.test_growthbook_aa_infra_health_log_io \
+            tests.test_growthbook_aa_infra_health_log_cli \
+            tests.test_growthbook_aa_infra_health_workflow \
+            tests.test_growthbook_aa_infra_health_evidence \
             tests.test_growthbook_aa_source_binding \
             tests.test_growthbook_aa_frozen_consumer \
             tests.test_growthbook_reporting \
