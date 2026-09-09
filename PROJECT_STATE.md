@@ -5,14 +5,15 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
-## 2026-09-09 — Corrected historical discovery passes both live read-only inventories
+## 2026-09-09 — Historical discovery correction merged; managed production verification pending
 
 Date: 2026-09-09
 Repo: `vzeman/biznisweb`
-Branch: `codex/order-automation-live-verification-20260909`
+Branch: `codex/order-automation-production-verification-20260909`
 
 What changed:
 
+- PR #542 merged as `5437b851cd6ee20f6f8896a275dc036bf87fc5a6` after all six checks passed on exact head `489981fa7f74ccb8bfd9d2fe21fe20888afb78e2`. The exact-image build is run `34365220236`. This clean verification branch starts from synchronized merged main; do not merge further changes while the managed deployment's exact-main gates are active.
 - PR #540 merged as `333f6c09cfb734cde968041bd12a20b92f258665` after all six checks passed on exact head `866a1df212521bda11392ce91041f1da7d5f9c5e`. The exact-image build is run `34358176082`. No direct main edits or force pushes were used. This verification branch starts from the synchronized merge commit.
 - The earlier immutable pin remains live with existing cadence. Six ROY and five VEVO historical candidates are durably queued with email holds. CASE-B's verified shipment restoration passed independent API and admin-history readbacks without a customer email. Full local regression: 472 passing tests plus reporting smoke.
 
@@ -40,7 +41,7 @@ Known issues:
 
 Next exact step:
 
-- Complete final documentation-head checks and merge PR #542, build the exact merge image, then dispatch one managed deployment. Verify three stopped host markers, quiet drain, five promoted schedules, actual live runs and all eleven held historical invoice outcomes. Keep main unchanged during the deployment's exact-main gates. Commit/push the verification handoff and preserve unresolved dependencies explicitly.
+- Wait for exact merged-image build `34365220236`, then dispatch one managed deployment on main `5437b851cd6ee20f6f8896a275dc036bf87fc5a6`. Verify three stopped host markers, quiet drain, five promoted schedules, actual live runs and all eleven held historical invoice outcomes. Keep main unchanged during the deployment's exact-main gates. Commit/push the verification handoff and preserve unresolved dependencies explicitly.
 
 ## 2026-09-09 — Order automation remediation resumed; complete historical audit authorized
 
