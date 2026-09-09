@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 from scripts.deploy_order_automations import (
     Deployment, SCHEDULES, SERVICES, candidate_definition, command_for,
-    desired_schedule, promote_schedules, schedule_request,
+    desired_schedule, established_alarm_route, promote_schedules, schedule_request,
 )
 from scripts.order_automation_host_gate import verify_summary
 
@@ -236,7 +236,11 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
 
     def test_host_probe_rejects_live_mode_and_partial_application_failure(self):
         for summary in ({"enabled": True, "dry_run": False}, {"enabled": False, "dry_run": True},
-                        {"enabled": True, "dry_run": True, "failed_invoice_emails": 1}):
+                        {"enabled": True, "dry_run": True, "failed_invoice_emails": 1},
+                        {"enabled": True, "dry_run": True, "missing_invoice_ids": 1},
+                        {"enabled": True, "dry_run": True, "ambiguous_invoice_operations": 1},
+                        {"enabled": True, "dry_run": True, "skipped_locked": True},
+                        {"enabled": True, "dry_run": True, "invoice_scan_complete": False}):
             with self.subTest(summary=summary), self.assertRaises(RuntimeError):
                 verify_summary(summary, "invoice")
         verify_summary({"enabled": True, "dry_run": True, "failed_orders": 0}, "cancellation")
@@ -321,10 +325,11 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
         deployment.provision_monitoring.assert_not_called()
         deployment.restore_state_policies.assert_called_once()
 
-    def test_live_alarms_use_mode_dimension_and_no_external_notifications(self):
+    def test_live_alarms_use_mode_dimension_and_only_established_operator_route(self):
         deployment = object.__new__(Deployment)
         deployment.account = ACCOUNT
         deployment.session = Mock()
+        deployment.alarm_actions = [f"arn:aws:sns:eu-central-1:{ACCOUNT}:verified-test-operator-route"]
         client = deployment.session.client.return_value
         client.create_queue.return_value = {"QueueUrl": "queue-url"}
         client.get_queue_attributes.return_value = {"Attributes": {"QueueArn": "queue-arn"}}
@@ -335,9 +340,28 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
         self.assertGreaterEqual(len(live), 5)
         for alarm in live:
             self.assertIn({"Name": "RunMode", "Value": "live"}, alarm["Dimensions"])
-            self.assertNotIn("AlarmActions", alarm)
+            self.assertEqual(alarm["AlarmActions"], deployment.alarm_actions)
         policy = json.loads(client.set_queue_attributes.call_args.kwargs["Attributes"]["Policy"])
         self.assertEqual(policy["Statement"][0]["Condition"]["StringEquals"]["aws:SourceAccount"], ACCOUNT)
+
+    def test_operator_route_requires_existing_matching_alarms_and_confirmed_lambda(self):
+        session = Mock()
+        client = session.client.return_value
+        topic = f"arn:aws:sns:eu-central-1:{ACCOUNT}:vevo-reporting-alerts-mil-final"
+        client.describe_alarms.return_value = {"MetricAlarms": [
+            {"AlarmName": name, "ActionsEnabled": True, "AlarmActions": [topic]}
+            for name in ("roy-reporting-run-failed", "vevo-reporting-run-failed")
+        ]}
+        client.get_topic_attributes.return_value = {"Attributes": {"TopicArn": topic}}
+        row = {"TopicArn": topic, "Protocol": "lambda", "SubscriptionArn": topic + ":confirmed-test-subscription",
+               "Endpoint": f"arn:aws:lambda:eu-central-1:{ACCOUNT}:function:existing-operator-route"}
+        client.list_subscriptions_by_topic.return_value = {"Subscriptions": [row]}
+        self.assertEqual(established_alarm_route(session, ACCOUNT), topic)
+        client.subscribe.assert_not_called()
+        client.publish.assert_not_called()
+        row["SubscriptionArn"] = "PendingConfirmation"
+        with self.assertRaisesRegex(RuntimeError, "subscription-drift"):
+            established_alarm_route(session, ACCOUNT)
 
     def test_managed_workflow_is_main_only_and_legacy_has_no_aws_path(self):
         root = Path(__file__).resolve().parents[1]

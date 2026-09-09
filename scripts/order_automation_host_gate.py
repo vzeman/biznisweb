@@ -21,12 +21,19 @@ def verify_summary(summary: dict, kind: str) -> None:
     if summary.get("enabled") is not True or summary.get("dry_run") is not True:
         raise RuntimeError("host-gate-mode-mismatch")
     failure_fields = (
-        ("failed_invoices", "failed_invoice_emails", "failed_invoice_status_reconciliations")
+        ("failed_invoices", "failed_invoice_emails", "failed_invoice_status_reconciliations",
+         "missing_invoice_ids", "ambiguous_invoice_operations")
         if kind == "invoice"
         else ("failed_orders", "recovery_failed_orders")
     )
     if any(summary.get(field, 0) != 0 for field in failure_fields):
         raise RuntimeError("host-gate-application-failure")
+    if summary.get("skipped_locked") or summary.get("scan_limit_reached"):
+        raise RuntimeError("host-gate-incomplete-run")
+    # The pre-upgrade pin probe uses the old runner, which has no scan field.
+    # A new runner that exposes this evidence must explicitly report completion.
+    if "invoice_scan_complete" in summary and summary["invoice_scan_complete"] is not True:
+        raise RuntimeError("host-gate-incomplete-scan")
 
 
 def localhost_marker(payload: dict) -> None:

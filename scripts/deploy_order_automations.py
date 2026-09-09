@@ -68,6 +68,38 @@ def command_for(family: str) -> list[str]:
     return ["python", runner, "--project", project]
 
 
+def established_alarm_route(session, account: str) -> str:
+    """Reuse the verified reporting operator route; never subscribe or publish."""
+    topic = f"arn:aws:sns:eu-central-1:{account}:vevo-reporting-alerts-mil-final"
+    names = ["roy-reporting-run-failed", "vevo-reporting-run-failed"]
+    alarms = session.client("cloudwatch").describe_alarms(AlarmNames=names).get("MetricAlarms", [])
+    require({alarm.get("AlarmName") for alarm in alarms} == set(names) and len(alarms) == 2,
+            "operator-alarm-route-missing")
+    require(all(alarm.get("ActionsEnabled") is True and alarm.get("AlarmActions") == [topic] for alarm in alarms),
+            "operator-alarm-route-drift")
+    sns = session.client("sns")
+    require(sns.get_topic_attributes(TopicArn=topic).get("Attributes", {}).get("TopicArn") == topic,
+            "operator-topic-identity-drift")
+    rows, token = [], None
+    for _ in range(20):
+        request = {"TopicArn": topic}
+        if token:
+            request["NextToken"] = token
+        page = sns.list_subscriptions_by_topic(**request)
+        rows.extend(page.get("Subscriptions", []))
+        next_token = page.get("NextToken")
+        if not next_token:
+            break
+        require(next_token != token, "operator-topic-pagination-cycle")
+        token = next_token
+    else:
+        raise RuntimeError("operator-topic-pagination-incomplete")
+    require(len(rows) == 1 and rows[0].get("TopicArn") == topic and rows[0].get("Protocol") == "lambda"
+            and rows[0].get("Endpoint", "").startswith(f"arn:aws:lambda:eu-central-1:{account}:function:")
+            and rows[0].get("SubscriptionArn", "").startswith(topic + ":"), "operator-topic-subscription-drift")
+    return topic
+
+
 def candidate_definition(source: dict, family: str, image: str) -> dict:
     require(family in SERVICES and source.get("family") == family, "task-family-drift")
     require(re.fullmatch(r"[0-9]{12}\.dkr\.ecr\.eu-central-1\.amazonaws\.com/vevo-reporting@sha256:[a-f0-9]{64}", image) is not None,
@@ -409,10 +441,11 @@ class Deployment:
             cloudwatch.put_metric_alarm(AlarmName=f"{family}-{suffix}", AlarmDescription="Order automation live execution health; dry runs are excluded.",
                 Namespace=namespace, MetricName=metric, Dimensions=dims, Statistic="Maximum" if suffix in ("stale-full-scan", "pending-backlog", "ambiguous-operations") else "Sum",
                 Period=period, EvaluationPeriods=1, DatapointsToAlarm=1, Threshold=threshold, ComparisonOperator=comparison,
-                TreatMissingData=missing, ActionsEnabled=True)
+                TreatMissingData=missing, ActionsEnabled=True, AlarmActions=self.alarm_actions)
         cloudwatch.put_metric_alarm(AlarmName=f"{family}-dlq-not-empty", Namespace="AWS/SQS", MetricName="ApproximateNumberOfMessagesVisible",
             Dimensions=[{"Name": "QueueName", "Value": queue_name}], Statistic="Maximum", Period=300, EvaluationPeriods=1,
-            Threshold=1, ComparisonOperator="GreaterThanOrEqualToThreshold", TreatMissingData="notBreaching", ActionsEnabled=True)
+            Threshold=1, ComparisonOperator="GreaterThanOrEqualToThreshold", TreatMissingData="notBreaching", ActionsEnabled=True,
+            AlarmActions=self.alarm_actions)
         return queue_arn
 
     def run(self) -> None:
@@ -453,6 +486,8 @@ class Deployment:
             self.save_private(evidence_bucket)
             raise
         require(len(self.evidence["hosts"]) == len(SERVICES), "host-gate-incomplete")
+        self.alarm_actions = [established_alarm_route(self.session, self.account)]
+        self.evidence["alarm_actions"] = self.alarm_actions
         subprocess.run(["git", "fetch", "origin", "main"], cwd=ROOT, check=True, capture_output=True)
         current_main = subprocess.check_output(["git", "rev-parse", "origin/main"], cwd=ROOT, text=True).strip()
         require(current_main == self.commit, "main-changed-before-promotion")
