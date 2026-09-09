@@ -5,6 +5,35 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-09 — ROY order automation audit: confirmed defects; remediation stopped before production
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-order-automation-audit-20260909`
+
+What changed:
+
+- Added [the incident and automation audit](projects/roy/ORDER_AUTOMATION_AUDIT_2026-09-09.md), with anonymized ROY incident timelines, shared-code findings, runtime verification limits, an unsent BiznisWeb support draft and a sequenced remediation plan. The repository is public: CASE-A is the reported missing-invoice case, CASE-B the status-regression case; order/invoice numbers, amounts and customer details are omitted. Documentation only; no automation code/configuration or production data changed.
+- Verified repository/remotes/branch and fetched/pruned/pulled with rebase before creating a clean isolated worktree from `origin/main` at `c66b0cab05629bd9a28825b1aee87c4c216c8992`. Existing unrelated untracked files and the other checkout's modified creditnote exporter were untouched.
+
+What is verified:
+
+- ROY order `CASE-A` was purchased day 0 and first moved to `Odoslaná` on day 14. The shared seven-day **purchase-date** invoice scan excludes it after delayed fulfillment. Invoice `INVOICE-A` already existed when inspected: created under `ADMIN-A` on day 20 before this audit, with an email shortly afterward. This audit created/sent neither and must not duplicate them.
+- ROY order `CASE-B` accepted Stripe payment shortly after checkout creation, moved to shipped the next morning, then regressed approximately 24 hours after creation to `Stripe - cancelled` and `Stripe - expired`, then returned to paid approximately seven minutes later. The shipped state is lost. The ~24-hour checkout expiry and the invoice reconciliation are plausible responsible paths, but exact Stripe events and the matching ECS log were not retrieved. The earlier cancellation at approximately 24 minutes after creation is attributed to `ADMIN-A` in UI and does not match the configured 14-day/02:10 cancellation rule.
+- Independent read-only code audits and isolated fake-client probes confirm old-order exclusion, swallowed fetch failure, repeated-cursor looping and HTML-login email false success. Source inspection also finds premature success metrics, absent email retry, invoice-only payment proof and absent durable invoice locking. Additional creditnote and deployment risks are in the audit.
+- Existing GitHub smoke run `33866982720` passed on September 4 in dry-run mode. It does not prove natural September 7-9 execution or current runtime. Latest inspected unpaid deploy `33885896205` stopped because its image build `33885896196` failed an auth test; it does not prove the previously running schedule stopped.
+
+Known issues:
+
+- Confirmed incidents remain unremediated. The user's standing instruction says to stop and report when a defect is found; production changes were not attempted.
+- Local AWS CLI has no credentials. Today's instance/task identity, IP, service/path/image, natural-run completeness, alarms/DLQ and incident-specific CloudWatch logs remain unverified. Historical Fargate IPs are not reusable as today's hard-gate.
+- Shared code and both shops' settings were audited; this is not a completed live audit of every e-shop. No claim of nonstop or error-free operation is justified.
+
+Next exact step:
+
+- Continue from the audit's ordered plan: obtain sanitized current managed-AWS readback and exact FLOX/Stripe events; after resolving the incident stop, make narrow reviewed fixes for complete invoice backlog, payment/fulfillment precedence, safe retries/idempotency and honest completion monitoring. Require current identity/IP/service/path before implementation/deploy and host localhost+marker before UI. Do not regenerate invoice `INVOICE-A`, infer shipment from invoice existence, simply replace the payment condition with `paid=true`, or run a broad live backfill from an incomplete scan.
+- No local application server, worker, watcher, tunnel or Docker process was started; none required cleanup and existing processes remain untouched.
+
 ## 2026-09-09 — VEVO receipt-framing reproduction verified offline; history still blocked
 
 Date: 2026-09-09
