@@ -30,6 +30,7 @@ from reporting_core import (
     resolve_project_env_value,
     sanitize_output_tag,
 )
+from reporting_core.storage import resolve_report_s3_location
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -570,6 +571,15 @@ def _validate_status_audit(audit: Any, project: str) -> None:
         seen.add(identity)
 
 
+def _creditnote_audit_storage(project: str, settings: Optional[Dict[str, Any]], strict: bool) -> Tuple[str, str]:
+    if settings is None:
+        settings = load_project_settings(project) if strict else {}
+    try:
+        return resolve_report_s3_location(project, settings, required=strict)
+    except ValueError as exc:
+        raise RuntimeError("Invalid durable creditnote audit storage") from exc
+
+
 def load_creditnote_status_change_audit(project: str, project_settings: Optional[Dict[str, Any]] = None, *, strict: bool = False) -> Dict[str, Any]:
     data_dir = project_data_dir(project)
     audit_path = data_dir / STATUS_CHANGE_AUDIT_FILENAME
@@ -587,15 +597,8 @@ def load_creditnote_status_change_audit(project: str, project_settings: Optional
                 raise RuntimeError("Cannot read existing creditnote status audit") from exc
             logger.warning("Could not read local creditnote status audit for %s: %s", project, exc)
 
-    bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
-    if strict and not bucket:
-        raise RuntimeError("Durable creditnote audit bucket is required")
+    bucket, prefix = _creditnote_audit_storage(project, project_settings, strict)
     if bucket:
-        prefix = os.getenv("REPORT_S3_PREFIX", "").strip().strip("/")
-        if not prefix:
-            prefix = str(((project_settings or {}).get("live_dashboard_artifacts") or {}).get("s3_prefix") or "").strip().strip("/")
-        if not prefix:
-            prefix = f"daily-reports/{project}"
         key = f"{prefix}/state/{STATUS_CHANGE_AUDIT_FILENAME}"
         try:
             import boto3  # type: ignore
@@ -633,19 +636,12 @@ def save_creditnote_status_change_audit(
 ) -> Path:
     if strict:
         _validate_status_audit(audit, project)
-    bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
-    if strict and not bucket:
-        raise RuntimeError("Durable creditnote audit bucket is required")
+    bucket, prefix = _creditnote_audit_storage(project, project_settings, strict)
     data_dir = project_data_dir(project)
     audit_path = data_dir / STATUS_CHANGE_AUDIT_FILENAME
     audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
     if bucket:
-        prefix = os.getenv("REPORT_S3_PREFIX", "").strip().strip("/")
-        if not prefix:
-            prefix = str(((project_settings or {}).get("live_dashboard_artifacts") or {}).get("s3_prefix") or "").strip().strip("/")
-        if not prefix:
-            prefix = f"daily-reports/{project}"
         key = f"{prefix}/state/{STATUS_CHANGE_AUDIT_FILENAME}"
         try:
             import boto3  # type: ignore

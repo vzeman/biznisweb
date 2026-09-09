@@ -5,6 +5,10 @@
   "ses_configuration_set": "vevo-reporting",
   "enable_email_strategy_report": true,
   "report_from_date": "2025-05-03",
+  "live_dashboard_artifacts": {
+    "s3_bucket": "biznisweb-reporting-artifacts-919341186960-eu-central-1",
+    "s3_prefix": "daily-reports/vevo"
+  },
   "report_schedule": {
     "schedule_name": "vevo-daily-report-email",
     "scheduler_role_name": "vevo-reporting-scheduler-role",

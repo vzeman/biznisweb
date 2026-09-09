@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import json
 import unittest
+from reporting_core.storage import resolve_report_s3_location
 
 from invoice_automation_state import (
     AutomationLeaseBusy, AutomationStateError, S3AutomationStateStore,
@@ -59,6 +60,29 @@ class InvoiceAutomationStateTests(unittest.TestCase):
             resolve_automation_state_location("shop", {}, {})
         with self.assertRaises(AutomationStateError):
             resolve_automation_state_location("shop", {}, {"REPORT_S3_BUCKET": "private", "ORDER_AUTOMATION_STATE_PREFIX": "data/another/order-automation"})
+
+    def test_blank_runtime_bucket_uses_only_explicit_project_destination(self):
+        settings = {"live_dashboard_artifacts": {"s3_bucket": "verified-existing-bucket", "s3_prefix": "daily-reports/shop"}}
+        env = {"REPORT_S3_BUCKET": "  ", "REPORT_S3_PREFIX": ""}
+        self.assertEqual(("verified-existing-bucket", "daily-reports/shop"),
+                         resolve_report_s3_location("shop", settings, env, required=True))
+        self.assertEqual(("verified-existing-bucket", "data/shop/order-automation/state.json"),
+                         resolve_automation_state_location("shop", settings, env))
+        with self.assertRaises(ValueError):
+            resolve_report_s3_location("another", {}, env, required=True)
+
+    def test_nonempty_runtime_destination_is_preserved_for_deployment_validation(self):
+        settings = {"live_dashboard_artifacts": {"s3_bucket": "configured-bucket"}}
+        env = {"REPORT_S3_BUCKET": "runtime-bucket", "OTHER_REPORT_S3_BUCKET": "other-bucket"}
+        self.assertEqual("runtime-bucket", resolve_report_s3_location("shop", settings, env, required=True)[0])
+        self.assertEqual("configured-bucket", resolve_report_s3_location("shop", settings, {"OTHER_REPORT_S3_BUCKET": "other-bucket"})[0])
+
+    def test_project_runtime_override_and_invalid_storage_are_explicit(self):
+        self.assertEqual(("project-bucket", "reports/shop"), resolve_report_s3_location("shop", {}, {
+            "SHOP_REPORT_S3_BUCKET": "project-bucket", "REPORT_S3_BUCKET": "generic-bucket", "REPORT_S3_PREFIX_SHOP": "reports/shop"}, required=True))
+        for env in ({"REPORT_S3_BUCKET": "s3://not-a-bucket"}, {"REPORT_S3_PREFIX": "reports/../another"}):
+            with self.assertRaises(ValueError):
+                resolve_report_s3_location("shop", {}, env)
 
     def test_read_missing_state_does_not_write(self):
         state, etag = self.store.read()

@@ -1,6 +1,7 @@
 import unittest
 import json
 import os
+from io import BytesIO
 from pathlib import Path
 import tempfile
 from unittest.mock import Mock, patch
@@ -44,6 +45,7 @@ class CreditnoteAutomationContextTests(unittest.TestCase):
         self.assertIsNone(pending["net_amount"])
         self.assertEqual(12.3, context["ORDER-B"][0]["amount"])
         order = {"sum": {"value": 12.3, "currency": {"code": "EUR"}, "is_net_price": False},
+                 "vat_summary": [{"tax_rate": 23, "tax_base": 10, "amount": 2.3}],
                  "invoices": [{"id": "INV-1"}]}
         self.assertEqual("creditnote_amount_unknown", creditnote_coverage_reason(order, context["ORDER-A"]))
 
@@ -95,6 +97,32 @@ class CreditnoteAutomationContextTests(unittest.TestCase):
             client.return_value.put_object.side_effect = RuntimeError("unavailable")
             with self.assertRaises(RuntimeError):
                 save_creditnote_status_change_audit("roy", {"project": "roy", "orders": []}, strict=True)
+
+    def test_strict_audit_uses_configured_storage_when_runtime_secret_is_blank(self):
+        settings = {"live_dashboard_artifacts": {"s3_bucket": "verified-existing-bucket", "s3_prefix": "daily-reports/shop"}}
+        audit = {"project": "shop", "orders": []}
+        with tempfile.TemporaryDirectory() as folder, \
+             patch("creditnote_export.project_data_dir", return_value=Path(folder)), \
+             patch.dict(os.environ, {"REPORT_S3_BUCKET": "", "REPORT_S3_PREFIX": ""}, clear=True), \
+             patch("boto3.client") as client:
+            client.return_value.get_object.return_value = {"Body": BytesIO(json.dumps(audit).encode())}
+            self.assertEqual(audit, load_creditnote_status_change_audit("shop", settings, strict=True))
+            save_creditnote_status_change_audit("shop", audit, settings, strict=True)
+            expected = {"Bucket": "verified-existing-bucket", "Key": "daily-reports/shop/state/creditnote_status_change_audit.json"}
+            client.return_value.get_object.assert_called_once_with(**expected)
+            sent = client.return_value.put_object.call_args.kwargs
+            self.assertEqual(expected, {key: sent[key] for key in expected})
+
+    def test_strict_audit_has_no_unconfigured_bucket_fallback(self):
+        with tempfile.TemporaryDirectory() as folder, \
+             patch("creditnote_export.project_data_dir", return_value=Path(folder)), \
+             patch.dict(os.environ, {"REPORT_S3_BUCKET": ""}, clear=True), \
+             patch("boto3.client") as client:
+            with self.assertRaises(RuntimeError):
+                load_creditnote_status_change_audit("unconfigured", {}, strict=True)
+            with self.assertRaises(RuntimeError):
+                save_creditnote_status_change_audit("unconfigured", {"project": "unconfigured", "orders": []}, {}, strict=True)
+            client.assert_not_called()
 
 
 if __name__ == "__main__":

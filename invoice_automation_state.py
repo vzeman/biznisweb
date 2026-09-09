@@ -16,6 +16,8 @@ import re
 from typing import Any, Callable, Iterator
 from uuid import uuid4
 
+from reporting_core.storage import resolve_report_s3_location
+
 
 class AutomationStateError(RuntimeError):
     """The durable safety state cannot be trusted or updated."""
@@ -48,12 +50,15 @@ def resolve_automation_state_location(
         raise AutomationStateError("Invalid project identifier for automation state")
     env = os.environ if environ is None else environ
     invoice = settings.get("invoice_generation") or {}
+    try:
+        report_bucket, _ = resolve_report_s3_location(project, settings, env)
+    except ValueError as exc:
+        raise AutomationStateError("Invalid reporting storage destination") from exc
     bucket = str(
         invoice.get("state_bucket")
         or env.get(f"ORDER_AUTOMATION_STATE_BUCKET_{project.upper()}")
         or env.get("ORDER_AUTOMATION_STATE_BUCKET")
-        or env.get(f"REPORT_S3_BUCKET_{project.upper()}")
-        or env.get("REPORT_S3_BUCKET")
+        or report_bucket
         or ""
     ).strip()
     prefix = str(

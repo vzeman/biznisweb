@@ -13,6 +13,7 @@
     "task_family": "roy-reporting-daily"
   },
   "live_dashboard_artifacts": {
+    "s3_bucket": "biznisweb-reporting-artifacts-919341186960-eu-central-1",
     "s3_prefix": "daily-reports/roy-sk"
   },
   "live_dashboard": {

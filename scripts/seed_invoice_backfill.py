@@ -17,6 +17,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from invoice_automation_state import S3AutomationStateStore, parse_utc, resolve_automation_state_location
+from reporting_core.storage import resolve_report_s3_location
 
 
 def seed_state(state, audit, project, now):
@@ -66,7 +67,8 @@ def main():
         SecretId=f"{args.project}/reporting/runtime-env")["SecretString"])
     settings = json.loads((root / "projects" / args.project / "settings.json").read_text(encoding="utf-8"))
     bucket, key = resolve_automation_state_location(args.project, settings, secret)
-    if bucket != secret["REPORT_S3_BUCKET"] or key != f"data/{args.project}/order-automation/state.json":
+    report_bucket, _ = resolve_report_s3_location(args.project, settings, secret, required=True)
+    if bucket != report_bucket or key != f"data/{args.project}/order-automation/state.json":
         raise RuntimeError("State destination differs from the reviewed deployment")
     store = S3AutomationStateStore(session.client("s3"), bucket, key, args.project)
     audit_path = root / "data" / args.project / "order-automation" / "backlog-audit.json"
