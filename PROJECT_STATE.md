@@ -25,12 +25,13 @@ Implementation and validation:
 - All 83 focused dashboard/operations/picking/maintenance/host-gate tests pass, including executed Node regression with 57 orders crossing the former limit, both views and all controls, refresh, shrinking/empty/exact-boundary lists, page-size changes and complete batch/individual picking links. Ruff and `git diff --check` pass.
 - Initial local validation caught the template helper's exactly-once placeholder contract; four unique placeholders now reuse one static pagination component without weakening that safety contract.
 - Candidate host verification now requires all four pagination controls and absence of the old truncation, emitting `LOCALHOST_ROY_ORDER_PAGINATION_OK` before external UI checks.
+- PR `#537` passed all four exact-head CI checks and merged as `e6da0550710309b3e1af512eeef84ddc51354357` at `2026-09-09T03:14:36Z`. ECR build run `34306363312` is building that exact merge. Full generated-dashboard JavaScript syntax also passed Node validation.
 
 Known issues:
 - Production still runs the previous image until PR/build/deployment verification completes. No local application service, worker or tunnel has been started.
 
 Next exact step:
-- Commit/push, review and merge through PR, build/deploy through the versioned workflow, verify localhost markers first and then both live order views; record final evidence here.
+- Await exact-merge ECR build `34306363312`, verify its immutable digest against `latest`, then dispatch the ROY-only versioned deploy. Verify localhost markers first and then both live order views; record final evidence here.
 
 ## 2026-09-08 — Complete-log health verified; receipt framing failure identified
 
