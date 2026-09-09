@@ -5,6 +5,29 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-09 — Complete-discovery follow-up merged; final runtime verification
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-automation-final-verification-20260909`
+
+What changed:
+
+- PR #543 merged as `8b4b7ce4c30bc067c8b3c4036f074d5dcb69a252` after all six exact-head checks passed on `a879a0a70187f7448857f7b8800ee991e7174c28`, including Windows/Linux regression and security checks. Build `34369981850` is preparing its exact immutable image. This verification branch starts from synchronized merged main.
+
+What is verified:
+
+- Immediately before merge, all five production schedule targets remained enabled and pinned to the verified preceding image `26e4bad4aeba6e8e5879fa43a5f4a4037a39ea48f872d0e062c3c8e59a017461`; building the shared image cannot replace those running tasks. The follow-up has not been deployed yet.
+- First live invoice tasks are running on that preceding release: VEVO `0196a28edb25493ba055f52a3b736c15`, IP `172.31.41.230`, and ROY `5e57ed382c464b42ac20e97f18c3f5c0`, IP `172.31.18.168`. Both have Scheduler identity, exact pulled image and renewing project leases. Final summaries and the eleven historical invoice outcomes remain pending.
+
+Known issues:
+
+- Do not claim historical completion or a live cancellation baseline before actual final outcomes. Native FLOX stale Stripe-attempt downgrades and separately pinned daily-report guards retain their documented release boundaries below.
+
+Next exact step:
+
+- Independently verify both completed invoice runs and all six/five seeded outcomes using the clean original verification checkout. After build success and exact ECR readback, dispatch the managed second release once on exact main `8b4b7ce4`; keep main frozen while its promotion gates run. Verify all three full candidate hosts, final schedule/monitoring readbacks and a live complete-discovery cancellation run. Record evidence here and push it through a final documentation PR after the source freeze ends.
+
 ## 2026-09-09 — Complete unpaid-order discovery follow-up; first invoice release live
 
 Date: 2026-09-09
