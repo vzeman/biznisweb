@@ -64,7 +64,7 @@ def scan(client, url, token, status_id, *, delay=1, max_pages=5000):
             number = str(row.get("order_num") or "")
             if not number or number in orders or not isinstance(row.get("invoices"), list):
                 raise RuntimeError("Audit has missing or repeated order evidence")
-            if (row.get("status") or {}).get("id") != status_id:
+            if str((row.get("status") or {}).get("id")) != str(status_id):
                 raise RuntimeError("Audit status changed during scan")
             orders[number] = row
         pages += 1
@@ -127,7 +127,7 @@ def main():
         raise RuntimeError("Status discovery failed")
     statuses = payload["data"]["listOrderStatuses"]
     eligible = settings["invoice_generation"]["eligible_statuses"]
-    ids = [row["id"] for row in statuses if row["name"] in eligible]
+    ids = [int(row["id"]) for row in statuses if row["name"] in eligible]
     if len(ids) != len(eligible):
         raise RuntimeError("Eligible status identity is ambiguous")
     all_rows, pages = [], 0
