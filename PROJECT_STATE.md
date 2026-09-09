@@ -5,6 +5,33 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-09 — VEVO receipt-framing reproduction verified offline; history still blocked
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-receipt-framing-reproduction`
+
+What changed:
+
+- After initial clean-main fetch/prune and pull/rebase, started from `913fdfb9e9a41705bd1d62e2940cd76778595661`. Resumption found only this task's known uncommitted test/CI changes; a fresh fetch confirmed unchanged HEAD/origin/main. Repeated pull correctly refused those unstaged edits; nothing was stashed, overwritten or force-pushed. Unrelated ROY work remains unchanged.
+- Added five offline synthetic framing tests and their existing CI regression-step entry. The actual unchanged emitter deterministically produces body/body/newline/newline under a controlled two-thread interleaving; the unchanged reducer rejects it with `receipt-json-concatenated-markers`. A test-only full-emission lock preserves canonical frames and releases after contained write/flush errors. No collector/runtime implementation or historical acceptance was changed.
+
+What is verified:
+
+- Today's managed infra health run `34321824532` / job `102369967455` succeeded on the original main above. Two independent in-memory downloads verified sole artifact `10092154212`, GitHub ZIP SHA-256 `a36d30cbfdeb141c5e70e58ac174be09f6ba11f54f73634d3c1cb574eb7599b8`, single canonical JSON SHA-256 `91c3e6baac99fb4948ad1b048b0b7d4ce34167453e3c4cc85402365622e74d67`, original run/main ownership, offline deployment-bound validation and latest-due/freshness. Observation `2026-09-09T07:02:23Z` verifies the September 9 03:45 Bratislava reconciliation. No local artifact or raw AWS/receipt file was created; this proof must not be rebound to a later test/documentation commit.
+- Full source/lifecycle suite: 316 tests ran locally, 313 passed and three existing Windows symlink cases skipped; exact-head Linux CI must execute those too. All five new tests passed 100 repetitions with no remaining test-owned threads. Workspace/window/activation/security validators and `git diff --check` passed. Independent read-only review passed the five tests 100 times, 13 framing/reducer tests and 16 existing collector tests with no blocking finding. An initial local fixture used the wrong summary-key name; it was corrected to the existing `collector_received_event_count`, without changing production code or schemas.
+- Delivery is tracked in PR #539. Once the known task changes were committed/pushed, clean-branch `git pull --rebase` succeeded with `Already up to date`. Independent code and documentation review found no blocking issue. Merge remains conditional on all exact-head checks and actual Linux regression execution; this entry does not claim CI has already passed.
+- Code establishes concurrent request handling and separate body/newline emission. This proves a possible mechanism, not the deployed cause, complete historical receipt delivery or A/A PASS. See `GROWTHBOOK_AA_QUALITY_SOURCE_AUDIT.md` for the prevention-only proposal and historical-proof requirements.
+
+Known issues:
+
+- `SOURCE_RECEIPT_CONCATENATED_MARKER_FRAMING` still blocks exact-window source proof. All five acquisitions remain terminal and artifact-free; no sixth run, repair/splitting of historical messages, source binding, A/A result, stop, paid Pro or CTA transition was attempted. Separate `GTM_LIVE_VERSION_DRIFT` and `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK` still close manual QA. Preview was not woken; A/A was not stopped.
+- Only finite offline tests and GitHub inspection were used. Every synthetic worker joined; no local application service, watcher, tunnel or persistent worker was started or left running.
+
+Next exact step:
+
+- Complete this test/documentation PR with all exact-head checks and actual Linux execution of the 316-test step, then return to clean synchronized main. Separately review a managed, sanitized deployed-framing readback and a narrow full-emission-lock prevention change; require exact live identity/IP/service/path before any runtime change and localhost markers before UI. Before changing historical acceptance, establish an explicit lossless, complete, immutable, time-window-bound historical receipt proof (including duplicates and boundary ambiguity), or report that the existing history cannot satisfy it. The current four-field receipts and synthetic reproduction do not provide that proof. Do not acquire again, split/recover/skip malformed history, relax parity, query outcomes, restart A/A or shift the frozen window merely to obtain PASS. Keep manual-QA reconciliation separately scoped.
+
 ## 2026-09-09 — ROY order pagination deployed and verified
 
 Date: 2026-09-09

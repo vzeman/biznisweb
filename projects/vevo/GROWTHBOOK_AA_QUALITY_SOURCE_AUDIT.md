@@ -1,4 +1,4 @@
-# A/A quality-source audit — 2026-09-08
+# A/A quality-source audit — 2026-09-09
 
 Status: `SOURCE_RECEIPT_CONCATENATED_MARKER_FRAMING`. The complete-log health
 correction is merged and independently verified in production. One subsequent
@@ -8,6 +8,72 @@ Complete source coverage and A/A PASS remain unproven. This is
 not permission to restart an experiment or alter its window. Separately, browser
 QA is fail-closed on `GTM_LIVE_VERSION_DRIFT` and the newly verified static
 `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK`; see the browser precheck.
+
+### September 9: possible emitter race reproduced; no historical recovery
+
+Fresh managed health run `34321824532` on original main
+`913fdfb9e9a41705bd1d62e2940cd76778595661` verified today's natural
+reconciliation. Its sole canonical artifact passed two independent downloads,
+GitHub ZIP digest/single-JSON checks, original run/main binding, offline health
+validation and freshness/latest-due checks; hashes are in `PROJECT_STATE.md`.
+No new source acquisition or runtime mutation followed.
+
+The versioned contract has these independently inspected properties:
+
+- `growthbook_collector/server.py` uses `ThreadingHTTPServer` for concurrent
+  requests. Its startup message precedes request serving; routine request logs
+  are suppressed.
+- `handler._emit_receipt_marker` prints compact sorted four-field JSON with
+  `flush=True`, after persistence. It contains logging exceptions to avoid
+  converting a persisted event into a failed request or retry.
+- The Dockerfile uses Python 3.12 with unbuffered output. The checked-in
+  CloudFormation awslogs options contain no multiline/datetime framing option.
+  Neither fact proves the exact deployed interpreter, logging configuration,
+  delivery mode or behavior of the live log driver.
+
+`tests/test_growthbook_receipt_framing.py` calls the actual unchanged emitter
+with a synthetic stdout sink. A bounded barrier permits both JSON-body writes
+before either newline, deterministically creating body/body/newline/newline.
+The unchanged strict reducer rejects the resulting single message with the
+same fixed `receipt-json-concatenated-markers` code observed live. No actual
+receipt was fetched, inspected, printed, saved, split, recovered or accepted.
+This is a possible mechanism, **not proof of the deployed cause**.
+
+The prevention-only candidate is one shared process-local lock around the
+entire canonical print and flush transaction, retaining the existing exception
+containment, persistence order and HTTP behavior. A test-only wrapper around
+the unchanged emitter proves intact frames across 16 workers and lock release
+after contained write/flush errors. It changes neither `handler.py` nor the
+deployment. A future implementation must replace the pre-fix barrier
+characterization with a genuine prevention regression; placing that barrier
+inside the new lock would deliberately prevent its second participant entering.
+The lock would prevent this same-process interleaving only; it cannot prove
+cross-process/log-driver integrity or repair earlier receipts.
+
+Five new tests passed 100 repetitions, each with every worker joined, and the
+full source/lifecycle suite ran 316 tests locally (313 passed, three Windows
+symlink cases skipped pending Linux CI). Independent review also passed 13 framing/reducer and
+16 existing collector tests. No network, socket, server or AWS client is used
+by the new tests; only synthetic receipt values exist in memory.
+
+Historical proof remains a **separate closed gate**. Before even proposing
+different acceptance, a reviewed design must prove immutable complete input,
+lossless and unique framing, delivery/multiplicity including duplicate receipts,
+and exact time-window membership including boundary cases. The four-field
+marker has no per-receipt timestamp or identity. Its concatenated shape alone
+cannot establish those properties or distinguish missing/replayed receipts.
+A forward-only lock or agreement of one total is not that proof. Do not split,
+skip, deduplicate or recover historical messages, relax parity, query outcomes,
+extend/restart the experiment or dispatch another source to obtain a green run.
+
+Next, after this test/documentation PR passes exact-head Linux CI, separately
+review a managed identity-free deployed-framing diagnostic and the narrow
+prevention change. Any runtime mutation still requires exact live instance/IP/
+service/path before code/deploy and localhost markers before UI. Determine
+whether the existing historical evidence can satisfy the explicit proof above;
+if it cannot, report that limitation rather than inferring permission for a new
+measurement window. Manual-QA compatibility/privacy remains independently
+blocked. No A/A PASS, stop, paid Pro or CTA gate was opened.
 
 ### September 8: corrected health passed; receipt framing remains rejected
 
