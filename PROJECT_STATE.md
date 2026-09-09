@@ -26,12 +26,13 @@ Implementation and validation:
 - Initial local validation caught the template helper's exactly-once placeholder contract; four unique placeholders now reuse one static pagination component without weakening that safety contract.
 - Candidate host verification now requires all four pagination controls and absence of the old truncation, emitting `LOCALHOST_ROY_ORDER_PAGINATION_OK` before external UI checks.
 - PR `#537` passed all four exact-head CI checks and merged as `e6da0550710309b3e1af512eeef84ddc51354357` at `2026-09-09T03:14:36Z`. ECR build run `34306363312` is building that exact merge. Full generated-dashboard JavaScript syntax also passed Node validation.
+- ECR build `34306363312` succeeded. Verified the exact merge tag and `latest` both resolve to `sha256:06edde2801ddef74c7e4c84f154233575fa8f5715c7724da36c662245f6602ad`, main still matches the reviewed merge, and no other dashboard deploy is active. Dispatched protected ROY-only deploy `34306554292` with `skip_artifact_refresh=true`; host/live verification is pending.
 
 Known issues:
 - Production still runs the previous image until PR/build/deployment verification completes. No local application service, worker or tunnel has been started.
 
 Next exact step:
-- Await exact-merge ECR build `34306363312`, verify its immutable digest against `latest`, then dispatch the ROY-only versioned deploy. Verify localhost markers first and then both live order views; record final evidence here.
+- Monitor deploy `34306554292`. Verify candidate identity and localhost markers first, then the exact App Runner image and both live order views; record final evidence here.
 
 ## 2026-09-08 — Complete-log health verified; receipt framing failure identified
 
