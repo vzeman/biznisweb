@@ -118,6 +118,9 @@ outcomes remain blocked for review. Invoice existence alone is never shipment pr
    reviewed historical records, then dispatch **Deploy Order Automations** on
    current main. Three identified candidate hosts must pass the existing runners
    in dry-run mode and a localhost marker before any schedule promotion. The
+   new invoice candidates explicitly force complete historical discovery,
+   regardless of the last saved full-scan watermark; legacy pin probes retain
+   their existing compatible arguments. The
    deployer then pauses the five schedules, waits for existing tasks to finish
    and requires two continuously quiet minutes before promotion. It never stops
    natural tasks. The bounded drain also covers pending/stopping tasks; failed

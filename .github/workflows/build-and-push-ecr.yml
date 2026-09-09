@@ -14,6 +14,7 @@ on:
       - invoice_runner.py
       - invoice_automation_state.py
       - order_status_safety.py
+      - order_inventory.py
       - creditnote_export.py
       - creditnote_storno_guard.py
       - money_s3_invoice_export.py

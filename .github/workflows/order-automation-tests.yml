@@ -7,6 +7,7 @@ on:
       - '*creditnote*.py'
       - 'unpaid_order_cancellation*.py'
       - 'order_status_safety.py'
+      - 'order_inventory.py'
       - 'daily_report_runner.py'
       - 'reporting_core/**'
       - 'projects/*/settings.json'
