@@ -2,6 +2,7 @@ import copy
 import io
 import json
 import shutil
+import subprocess
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -28,6 +29,29 @@ from roy_operations_dashboard import (
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+
+
+class RoyOrderPaginationTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for dashboard JavaScript regression tests")
+    def test_pagination_and_picking_across_refreshes(self) -> None:
+        html = build_roy_operations_dashboard_html("roy")
+        self.assertEqual(4, html.count('data-orders-pagination aria-label='))
+        self.assertNotIn("__ORDER_PAGINATION", html)
+        script = html.split("  <script>\n", 1)[1].split("  </script>", 1)[0]
+        helpers = script[script.index("    const project ="):script.index("    let refreshTimer")]
+        order_functions = script[script.index("    function orderItemsHtml"):script.index("    function renderPickups")]
+        regression = (ROOT_DIR / "tests" / "roy_order_pagination.cjs").read_text(encoding="utf-8")
+        result = subprocess.run(
+            [shutil.which("node"), "-"],
+            input=regression.replace("__DASHBOARD_CODE__", json.dumps(helpers + "\nlet ordersPage = 1; let ordersPageSize = 10;\n" + order_functions)),
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("ROY_ORDER_PAGINATION_OK", result.stdout)
 
 
 def make_project_settings() -> dict:

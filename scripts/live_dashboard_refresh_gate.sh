@@ -121,6 +121,9 @@ if project == "roy":
     assert "excluded_restock_rows" in inventory, "Restock exclusion audit rows missing"
     assert "data-restock-enabled" in production_html, "Restock preference checkbox missing"
     assert "inventory-restock-preference" in production_html, "Restock preference action marker missing"
+    assert production_html.count('data-orders-pagination aria-label=') == 4, "Order pagination controls missing"
+    assert "orders.slice(0, 24)" not in production_html, "Order list is still truncated"
+    print("LOCALHOST_ROY_ORDER_PAGINATION_OK:controls=4:truncation=false")
 
 for period in ("7d", "30d", "90d", "full"):
     payload = json.load(open(f"/tmp/local-accounting-{period}.json", encoding="utf-8"))
