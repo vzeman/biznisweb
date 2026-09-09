@@ -14,6 +14,7 @@ Branch: `codex/order-invoice-contract-production-verification-20260909`
 What changed:
 
 - PR #544 merged as `c9a7d3e6e5e2a312a3a7a472b234696a4c4f6693` after all six exact-head checks passed on `ff8b0d03d480fc653cdc374b91d44b3ce1a7faff`, including Windows/Linux regression and security checks. Exact-image build `34375495049` is in progress. This clean verification branch starts from synchronized merged main; no direct main edits or force pushes occurred.
+- Build `34375495049` completed successfully. Independent ECR readback verifies digest `7182a6a316a8a4e4c7f23c9850976136268f4dd4960e985647c811d0a2840e9f` for exact merged source. Managed deployment `34375837853` was dispatched once after checking unchanged main, no active managed deployment and all five preceding schedule pins. Main is frozen until its promotion/rollback gates finish; no further PR may merge during that interval.
 
 What is verified:
 
@@ -23,6 +24,8 @@ What is verified:
 Known issues:
 
 - Actual final documents remain uncreated. The superseded `5ae96eea...` image must not be dispatched. Native FLOX stale payment-attempt handling remains external; the possible separate daily creditnote guard migration below is not yet implemented or live.
+- Before implementation of that separate migration, read-only source-host identity is confirmed for the latest scheduled pinned reports: ROY `roy-reporting-daily:71`, task `a908f6f8fec944d5aacb9942c803ce5f`, IP `172.31.42.115`, `/app`, immutable `9ff4738f998e3d80e7b76dc543f11bc36413d9d016e72b4a78eb3411433bc541`; VEVO `vevo-reporting-daily:33`, task `854f446a850341dfa911e80291612b3b`, IP `172.31.37.102`, `/app`, immutable `30a23fcd69eb2d7a41195bffa0bc055d38bc2dd706e9eb07d5126675a21a6add`. Both instance IDs are not applicable (Fargate), and these are historical stopped hosts. CloudTrail RunTask attachment UUIDs join exact EC2 ENI/IP events; ECR config blobs and host log paths independently confirm the images and working directory. More recent streams in the same log groups belong to different task definitions and are not source-host proof.
+- Report schedules remain enabled at 01:30 ROY / 01:00 VEVO Europe/Bratislava with the unchanged task pins and no target input. A separate candidate-only identity/skip-flag probe and new standalone guard dry-run localhost gates are required before any report override. Existing reporting smoke is unsuitable because it also uploads artifacts and can print raw logs; existing invoice deployment is intentionally scoped to its three families.
 
 Next exact step:
 
