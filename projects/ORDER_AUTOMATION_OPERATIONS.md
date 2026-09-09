@@ -32,6 +32,19 @@ An uncertain document creation is reconciled by reading the order; uncertain
 email delivery requires review rather than blindly sending again. A confirmed
 email failure can be retried without recreating its invoice.
 
+Document preparation and finalization are separate journaled phases. Reuse the
+unique preinvoice currently associated with the order. If none exists, call
+`preinvoiceOrder` once, selecting only its ID and explicitly setting customer,
+admin and salesperson notification conditions to `NONE`. Then reread the order's
+associated preinvoice before the native single GET finalization by preinvoice ID.
+The live installations expose broken preinvoice-number and nested-order API
+resolvers, so neither field is used or inferred. Finalization must be confirmed
+by a fresh final invoice on the same order. Transport failures never trigger an
+alternate endpoint or an automatic repeat of an uncertain financial operation.
+The vendor documents the suppression condition in
+[NotificationCondition](https://www.biznisweb.sk/api/docs/notificationcondition.doc.html);
+an empty notification list is not used as an undocumented substitute.
+
 Payment settlement, invoicing and shipment are separate facts. Existing invoices
 alone cannot promote an order to paid. Known shipment status is retained privately
 and used only with fresh settlement/creditnote evidence. Insufficient history and
@@ -92,6 +105,23 @@ and never creates an invoice itself. Historical candidates receive
 `email_policy=hold`, so document creation does not send old customer emails.
 Normal newly eligible invoices keep the configured email behavior. The runner
 freshly checks every seeded order and skips invoices created elsewhere.
+
+For this reviewed migration only, an operator can preview and make one normal
+generator attempt for the next unambiguous held seed from clean, pushed source:
+
+```powershell
+python scripts/retry_seeded_invoice.py --project roy --profile codex --expected-count 6
+python scripts/retry_seeded_invoice.py --project roy --profile codex --expected-count 6 --apply
+```
+
+Use count five for VEVO. This helper has no arbitrary-order option and does not
+loop or wait through lease contention. Apply authenticates within the shared
+lease, checks the whole seed batch again, attempts one selected order and verifies
+its final invoice and retained email hold. Stop and inspect the private journal
+after any failed or uncertain outcome; do not replay it by clearing a phase.
+First promote and drain to a runtime that preserves every current journal phase.
+An older runner that does not understand preparation uncertainty must not resume
+after this helper creates such a record.
 
 After a live run has released its lease, independently verify the seeded records:
 
