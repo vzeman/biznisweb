@@ -1183,6 +1183,15 @@ def build_roy_operations_dashboard_html(
     maintenance_message = escape(
         str(maintenance_status.get("message") or DEFAULT_MAINTENANCE_MESSAGE)
     )
+    order_pagination_html = """<nav class="order-pagination" data-orders-pagination aria-label="Stránkovanie objednávok">
+      <span data-orders-range role="status" aria-live="polite"></span>
+      <div class="actions">
+        <label>Na stranu <select data-orders-page-size aria-label="Objednávok na stranu"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select></label>
+        <button type="button" data-orders-page="previous" disabled>Predchádzajúca</button>
+        <span data-orders-page-label></span>
+        <button type="button" data-orders-page="next" disabled>Ďalšia</button>
+      </div>
+    </nav>"""
     html = """<!doctype html>
 <html lang="sk">
 <head>
@@ -1246,6 +1255,9 @@ def build_roy_operations_dashboard_html(
     .print-cell { display:grid; gap:6px; justify-items:start; min-width:132px; }
     a.order-print-button { padding:0 8px; font-size:12px; white-space:nowrap; }
     .table-wrap { overflow:auto; }
+    .order-pagination { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding:10px 14px; }
+    .order-pagination label { display:flex; align-items:center; gap:6px; }
+    .order-pagination select { min-width:65px; }
     table { width:100%; min-width:980px; border-collapse:collapse; }
     th,td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; font-size:13px; }
     th { color:var(--muted); background:#fafbf8; text-transform:uppercase; font-size:11px; letter-spacing:.04em; }
@@ -1349,12 +1361,14 @@ def build_roy_operations_dashboard_html(
               <p id="ordersMeta">-</p>
             </div>
           </div>
+          __ORDER_PAGINATION_OVERVIEW_TOP__
           <div class="table-wrap">
             <table>
               <thead><tr><th>Objednávka</th><th>Status</th><th>Tlač</th><th>Platba</th><th>Doprava</th><th>Suma</th><th>Položky</th></tr></thead>
               <tbody id="ordersBody"></tbody>
             </table>
           </div>
+          __ORDER_PAGINATION_OVERVIEW_BOTTOM__
         </article>
         <article class="panel">
           <div class="panel-head">
@@ -1467,12 +1481,14 @@ def build_roy_operations_dashboard_html(
     <section id="view-orders" class="hidden">
       <article class="panel">
         <div class="panel-head"><h2>Všetky vybaviteľné objednávky</h2><p id="ordersScanMeta">-</p></div>
+        __ORDER_PAGINATION_ORDERS_TOP__
         <div class="table-wrap">
           <table>
             <thead><tr><th>Objednávka</th><th>Dátum</th><th>Status</th><th>Tlač</th><th>Platba</th><th>Doprava</th><th>Suma</th><th>Položky</th></tr></thead>
             <tbody id="ordersFullBody"></tbody>
           </table>
         </div>
+        __ORDER_PAGINATION_ORDERS_BOTTOM__
       </article>
     </section>
     <section id="view-inventory" class="hidden">
@@ -1533,6 +1549,8 @@ def build_roy_operations_dashboard_html(
     let latestData = null;
     let refreshTimer = null;
     let kpiScope = 'monthly';
+    let ordersPage = 1;
+    let ordersPageSize = 10;
     let orderSoundEnabled = false;
     let orderSoundArmed = false;
     let orderAudioContext = null;
@@ -2011,10 +2029,42 @@ def build_roy_operations_dashboard_html(
       const summary = ordersPayload.summary || {};
       el('ordersMeta').textContent = `${fmtInt(orders.length)} objednávok · ${fmtInt(summary.picking_unprinted_orders)} nevytlačených · hodnota ${fmtMoney(summary.fulfillable_value)}`;
       el('ordersScanMeta').textContent = `${fmtInt(scan.orders_scanned)} skenovaných objednávok, ${fmtInt(scan.pages_scanned)} strán, stop=${text(scan.stop_reason)}`;
-      const limited = orders.slice(0, 24);
-      el('ordersBody').innerHTML = limited.length ? limited.map((order) => orderRow(order)).join('') : '<tr><td colspan="7" class="muted">Žiadne vybaviteľné objednávky.</td></tr>';
-      el('ordersFullBody').innerHTML = orders.length ? orders.map((order) => orderRow(order, true)).join('') : '<tr><td colspan="8" class="muted">Žiadne vybaviteľné objednávky.</td></tr>';
+      const pageCount = Math.max(1, Math.ceil(orders.length / ordersPageSize));
+      ordersPage = Math.max(1, Math.min(ordersPage, pageCount));
+      const start = (ordersPage - 1) * ordersPageSize;
+      const pageOrders = orders.slice(start, start + ordersPageSize);
+      el('ordersBody').innerHTML = pageOrders.length ? pageOrders.map((order) => orderRow(order)).join('') : '<tr><td colspan="7" class="muted">Žiadne vybaviteľné objednávky.</td></tr>';
+      el('ordersFullBody').innerHTML = pageOrders.length ? pageOrders.map((order) => orderRow(order, true)).join('') : '<tr><td colspan="8" class="muted">Žiadne vybaviteľné objednávky.</td></tr>';
+      document.querySelectorAll('[data-orders-pagination]').forEach((nav) => {
+        nav.querySelector('[data-orders-range]').textContent = orders.length
+          ? `${fmtInt(start + 1)}–${fmtInt(start + pageOrders.length)} z ${fmtInt(orders.length)} objednávok`
+          : '0 objednávok';
+        nav.querySelector('[data-orders-page-label]').textContent = `Strana ${fmtInt(ordersPage)} z ${fmtInt(pageCount)}`;
+        nav.querySelector('[data-orders-page="previous"]').disabled = ordersPage === 1;
+        nav.querySelector('[data-orders-page="next"]').disabled = ordersPage === pageCount;
+        nav.querySelector('[data-orders-page-size]').value = String(ordersPageSize);
+      });
       updatePickingControls();
+    }
+    function initializeOrdersPagination() {
+      document.querySelectorAll('[data-orders-pagination]').forEach((nav) => {
+        const renderPage = () => {
+          renderOrders(latestData);
+          nav.closest('article').querySelector('[data-orders-pagination]').scrollIntoView({block:'start'});
+        };
+        nav.querySelectorAll('[data-orders-page]').forEach((button) => button.addEventListener('click', () => {
+          if (!latestData) return;
+          ordersPage += button.dataset.ordersPage === 'next' ? 1 : -1;
+          renderPage();
+        }));
+        nav.querySelector('[data-orders-page-size]').addEventListener('change', (event) => {
+          const size = Number(event.target.value);
+          if (![10, 25, 50].includes(size)) return;
+          ordersPageSize = size;
+          ordersPage = 1;
+          if (latestData) renderPage();
+        });
+      });
     }
     function renderPickups(data) {
       const pickups = ((data.orders || {}).personal_pickups) || [];
@@ -2432,6 +2482,7 @@ def build_roy_operations_dashboard_html(
       }
     });
     initializeOrderSound();
+    initializeOrdersPagination();
     document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
       document.querySelectorAll('[data-view]').forEach((btn) => btn.classList.toggle('active', btn === button));
       ['overview','orders','inventory'].forEach((view) => el(`view-${view}`).classList.toggle('hidden', button.dataset.view !== view));
@@ -2445,6 +2496,10 @@ def build_roy_operations_dashboard_html(
         html,
         {
             "__BOOTSTRAP_JSON__": bootstrap_json,
+            "__ORDER_PAGINATION_OVERVIEW_TOP__": order_pagination_html,
+            "__ORDER_PAGINATION_OVERVIEW_BOTTOM__": order_pagination_html,
+            "__ORDER_PAGINATION_ORDERS_TOP__": order_pagination_html,
+            "__ORDER_PAGINATION_ORDERS_BOTTOM__": order_pagination_html,
             "__MAINTENANCE_BODY_CLASS__": "maintenance-active" if maintenance_locked else "",
             "__MAINTENANCE_ACTIVE__": "true" if maintenance_locked else "false",
             "__MAINTENANCE_HIDDEN__": "" if maintenance_locked else "hidden",

@@ -1,9 +1,36 @@
 # PROJECT_STATE
 
-Last updated: 2026-09-08
+Last updated: 2026-09-09
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
+
+## 2026-09-09 — ROY order pagination in progress
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-orders-pagination-20260909`
+
+What changed:
+- Created a clean isolated worktree from `origin/main` (`294ab19c`) and completed fetch/prune and pull/rebase. The existing Playground checkout contains unrelated untracked projects/files and was left untouched.
+- Confirmed the overview silently discards orders after `orders.slice(0, 24)`. Implement pagination in both order tables using the complete existing snapshot, default 10 rows with 25/50 options, preserving the selected page during refresh and clamping it when the list shrinks. Picking actions must retain the complete order list.
+
+What is verified:
+- Pre-code AWS hard gate: account `919341186960`, App Runner service `biznisweb-roy-operations-dashboard`, service ID `ff762bb1c93148638741c62e7abb45b2`, RUNNING; instance ID/private IP N/A (managed App Runner). Observed dynamic public DNS IPs: `3.74.6.217`, `3.66.161.94`, `3.68.0.57`.
+- Runtime `/app` (Docker WORKDIR), command `python live_dashboard_server.py --host 0.0.0.0 --port 8080`, UI `/production/roy`; live image digest `sha256:19ab8ab8b1313dbf627808eafff42dffe557d12891fb401149fd0cd27aa2f3fd`.
+- Existing protected App Runner deployment workflow provides candidate Fargate identity/private IP and curl localhost health/HTML/API/marker gates before production UI verification. Use `project=roy`, exact service name and `skip_artifact_refresh=true` for this UI-only change.
+
+Implementation and validation:
+- Both order views now share pagination with controls above/below each table, 10/25/50 rows per page, range/total and page count. Navigation returns to the table start; refresh retains the page and clamps after removals. Full snapshot counts and picking/PDF selection remain unchanged.
+- All 83 focused dashboard/operations/picking/maintenance/host-gate tests pass, including executed Node regression with 57 orders crossing the former limit, both views and all controls, refresh, shrinking/empty/exact-boundary lists, page-size changes and complete batch/individual picking links. Ruff and `git diff --check` pass.
+- Initial local validation caught the template helper's exactly-once placeholder contract; four unique placeholders now reuse one static pagination component without weakening that safety contract.
+- Candidate host verification now requires all four pagination controls and absence of the old truncation, emitting `LOCALHOST_ROY_ORDER_PAGINATION_OK` before external UI checks.
+
+Known issues:
+- Production still runs the previous image until PR/build/deployment verification completes. No local application service, worker or tunnel has been started.
+
+Next exact step:
+- Commit/push, review and merge through PR, build/deploy through the versioned workflow, verify localhost markers first and then both live order views; record final evidence here.
 
 ## 2026-09-08 — Complete-log health verified; receipt framing failure identified
 
