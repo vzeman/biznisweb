@@ -27,6 +27,7 @@ Implementation and validation:
 - Candidate host verification now requires all four pagination controls and absence of the old truncation, emitting `LOCALHOST_ROY_ORDER_PAGINATION_OK` before external UI checks.
 - PR `#537` passed all four exact-head CI checks and merged as `e6da0550710309b3e1af512eeef84ddc51354357` at `2026-09-09T03:14:36Z`. ECR build run `34306363312` is building that exact merge. Full generated-dashboard JavaScript syntax also passed Node validation.
 - ECR build `34306363312` succeeded. Verified the exact merge tag and `latest` both resolve to `sha256:06edde2801ddef74c7e4c84f154233575fa8f5715c7724da36c662245f6602ad`, main still matches the reviewed merge, and no other dashboard deploy is active. Dispatched protected ROY-only deploy `34306554292` with `skip_artifact_refresh=true`; host/live verification is pending.
+- Candidate host gate passed: Fargate task `efaf13b9f4eb44cfaf97364677dcbacd`, private IP `172.31.9.15`, service `roy-daily-report-email`, task definition `roy-reporting-daily:76`, runtime `/app`, exact digest above. CloudWatch confirms `LOCALHOST_ROY_ORDER_PAGINATION_OK:controls=4:truncation=false`, `LOCALHOST_LIVE_DASHBOARD_OK:roy:periods=7d,30d,90d,full` and localhost JSON `LIVE_ARTIFACT_MARKER_OK` for ROY in skip-refresh mode. Task independently confirmed STOPPED, exit `0`. Production deployment is still in progress.
 
 Known issues:
 - Production still runs the previous image until PR/build/deployment verification completes. No local application service, worker or tunnel has been started.
