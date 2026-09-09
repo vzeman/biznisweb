@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-09 — Complete unpaid-order discovery follow-up; active deployment remains frozen
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/unpaid-discovery-continuity-20260909`
+
+What changed:
+
+- Created a clean isolated follow-up worktree from pushed production-verification head `4059bb64` and pulled/rebased against unchanged main `5437b851`. It includes the existing verification documentation; subsequent project-state updates belong on this branch to avoid competing documentation edits. The original clean verification checkout remains available for the active runtime checks.
+- Read-only synthetic reproduction found that unpaid discovery can silently omit a surviving order when an earlier row disappears between offset pages. Scanning mutable statuses separately can also omit an order moved into an already-read status, even with one page per status. Both paths report `api_exhausted`; duplicate checks do not catch them. Current and final safety checks still protect listed orders; this did not demonstrate an unsafe cancellation or a real live omitted order.
+
+What is verified:
+
+- Main `5437b851` and managed deployment `34365578095` remain the active release. The ROY invoice candidate passed; VEVO and cancellation/promotion gates are pending. No duplicate deployment, source edit or production change was made for this follow-up.
+- Current production cancellation remains the previously verified `roy-unpaid-order-cancellation:37`. A fresh identified cancellation host gate is required before follow-up implementation; the active managed deployment will supply it.
+
+Known issues:
+
+- Nightly retry may recover omitted unpaid orders, but it cannot guarantee discovery under recurring movement. Do not claim all status automation discovery is complete until this follow-up is verified.
+- Existing native FLOX status downgrades, unassigned early CASE-B cancellation and separately pinned daily-report creditnote guards retain the explicit limits below.
+
+Next exact step:
+
+- After capturing the active cancellation candidate's task ID, IP, service and `/app` path, extract the already-tested unique-ID inventory pagination for shared invoice/unpaid use. Keep unpaid payment fields, omit mutable status filters, filter statuses locally, preserve fresh mutation guards and finite budgets. Add both omission regressions and require independent review plus CI. Do not merge while the current deployment's exact-main gate is active. Finish and verify the eleven historical invoices through the already-authorized release while this follow-up is prepared.
+
 ## 2026-09-09 — Historical discovery correction merged; managed production verification pending
 
 Date: 2026-09-09
