@@ -17,6 +17,7 @@ What changed:
 - Corrected the earlier access conclusion: AWS API works with the existing `codex` profile. The failed default-profile check did not establish absent credentials. Secrets are read in memory from the existing runtime secret; never copied into source or public evidence.
 - Adding complete all-age invoice discovery, durable per-shop S3 operation state/lease, fresh checks before writes, conservative payment/fulfillment decisions, strict creditnote evidence, truthful completion metrics and immutable candidate-gated deployment. Implementation is in progress and has not been promoted.
 - Added a reproducible read-only historical audit script. Its order-level output is generated under ignored `data/<project>/order-automation/`; only aggregate outcomes belong in this public repository.
+- The first read-only audit request with a 100-row page was rejected: the ordinary API token allows at most 30 rows. Corrected to the verified limit before retrying; no partial report or mutation resulted.
 
 What is verified:
 

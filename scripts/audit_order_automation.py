@@ -35,7 +35,7 @@ def scan(client, url, token, status_id, *, delay=1, max_pages=5000):
     pages = 0
     total_pages = None
     while pages < max_pages:
-        params = {"limit": 100, "order_by": "pur_date", "sort": "DESC"}
+        params = {"limit": 30, "order_by": "pur_date", "sort": "DESC"}
         if cursor is not None:
             params["cursor"] = cursor
         payload = None
