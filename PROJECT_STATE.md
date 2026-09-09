@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-09 — Separate creditnote guard migration in progress; report pins preserved
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+What changed:
+
+- Started an isolated, clean, pushed worktree from verification head `03c788ac` after fetch/pull. The historical report task/IP/image/path gates below were verified before implementation. This branch owns subsequent state documentation to avoid competing documentation PRs. Main remains frozen for invoice deployment `34375837853`; this work cannot merge or deploy until that release ends.
+- Implementing a standalone wrapper around the already corrected creditnote business rules, with its own live/dry-run metrics, durable-state preflight and failure boundary. A separate narrow deployer will verify candidate hosts and transition only the two inline guard flags; report task definitions, immutable images and source commands remain pinned. Existing three-family invoice deployment code will not be widened indirectly.
+
+What is verified:
+
+- Both pinned report exporters use local order caches without S3 restoration. Their task definitions have no mounts/volumes; the SHA-verified application layers contain no `app/data` entries, and Docker build context excludes `data/`. No cache-forcing flag exists in task environment, secret mappings or runtime bundles. A fresh report starts with a fresh order cache, so no extra cache-clear override is necessary; the standalone guard must complete before its dependent report.
+- A complete current Scheduler inventory examined ten schedules and found only the two expected report-family targets: `roy-daily-report-email` to `roy-reporting-daily:71` and `vevo-daily-report-email` to `vevo-reporting-daily:33`, both enabled. No report override, new guard task or new guard schedule has been created.
+
+Known issues:
+
+- Deployment must preserve the fixed VEVO source and avoid an active source/A/A evidence capture, whose contract fingerprints the full Scheduler configuration. Guard/report completion ordering, failure handling, old-writer drain, private rollback evidence and actual localhost gates must be reviewed before promotion. Merely running the guard module as a script would silently perform no work because it has no entry point.
+
+Next exact step:
+
+- Finish the standalone runner and separate deployment/probe tests, review the exact two-report configuration delta and runtime ordering, and integrate CI/runbook documentation. Commit/push reviewed steps. First finish and verify the active invoice deployment and all historical invoices; only then merge/build and perform this independently gated guard migration. Native FLOX stale payment-attempt handling remains an external dependency.
+
 ## 2026-09-09 — Invoice contract correction merged; exact build and release pending
 
 Date: 2026-09-09
