@@ -84,7 +84,11 @@ outcomes remain blocked for review. Invoice existence alone is never shipment pr
 4. Ensure old natural jobs have finished; they predate the shared lease. Seed
    reviewed historical records, then dispatch **Deploy Order Automations** on
    current main. Three identified candidate hosts must pass the existing runners
-   in dry-run mode and a localhost marker before any schedule promotion.
+   in dry-run mode and a localhost marker before any schedule promotion. The
+   deployer then pauses the five schedules, waits for existing tasks to finish
+   and requires two continuously quiet minutes before promotion. It never stops
+   natural tasks. The bounded drain also covers pending/stopping tasks; failed
+   partial promotion drains any new generation before restoring old schedules.
 5. Verify five schedule readbacks, immutable image/commands, live application
    completion, durable invoice/email outcomes and only then shop UI/history.
    Do not confuse a diagnostic success with a production success.
@@ -96,6 +100,10 @@ for concurrent operator drift. A drift or failed rollback requires operator revi
 Candidate failure restores changed state IAM policies. Monitoring provisioning can
 leave harmless resource additions; this is not a transactional rollback of all AWS
 resources. Never overwrite the journal as a rollback: it contains financial effects.
+If concurrent changes or an unfinished rollback prevent safe restoration, leave
+the protected schedules paused for operator review and use the private snapshot.
+The managed workflow has a three-hour bound to leave room for all finite host and
+rollback gates; normal deployment is expected to be substantially shorter.
 
 ## Monitoring and remaining external dependency
 
@@ -115,6 +123,12 @@ supported conditional stale-attempt guard was found. Removing required events or
 changing status semantics blindly is not a verified fix. The local guard prevents
 unsafe invoice-only recovery and restores only independently supported fulfillment.
 A provider fix is required to prevent the native downgrade itself.
+
+The daily report tasks use separately pinned images. Their creditnote-guard source
+changes are not deployed by this three-service release. VEVO's reporting task is
+also a fixed A/A data source; its upgrade needs a separately reviewed source
+transition. Keep this limitation explicit until both report runtimes have their
+own verified deployment. Do not silently replace their images through this tool.
 
 No local application server is required by this workflow. Finite diagnostic ECS
 tasks are explicitly verified stopped; unrelated local processes are untouched.
