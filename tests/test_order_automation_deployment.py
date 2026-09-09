@@ -8,7 +8,7 @@ from scripts.deploy_order_automations import (
     Deployment, SCHEDULES, SERVICES, candidate_definition, command_for,
     desired_schedule, established_alarm_route, promote_schedules, schedule_request,
 )
-from scripts.order_automation_host_gate import verify_summary
+from scripts.order_automation_host_gate import main as run_host_gate, verify_summary
 
 
 ACCOUNT = "123456789012"
@@ -78,6 +78,55 @@ class FakeStateClients:
 
 
 class OrderAutomationDeploymentTests(unittest.TestCase):
+    def test_new_invoice_candidate_forces_full_inventory_but_old_pin_keeps_legacy_args(self):
+        for family, old_image, expected in (
+            ("roy-invoice-daily", False, True),
+            ("vevo-invoice-daily", False, True),
+            ("roy-invoice-daily", True, False),
+            ("roy-unpaid-order-cancellation", False, False),
+        ):
+            with self.subTest(family=family, old_image=old_image):
+                deployment = object.__new__(Deployment)
+                deployment.ecs = Mock()
+                deployment.ecs.run_task.return_value = {"failures": [{"reason": "synthetic"}]}
+                schedule = snapshot("roy-daily-invoice-generation")
+                schedule["Target"]["EcsParameters"]["NetworkConfiguration"] = {
+                    "awsvpcConfiguration": {"Subnets": ["subnet-test"], "SecurityGroups": ["sg-test"]}
+                }
+                with self.assertRaisesRegex(RuntimeError, "candidate-start-failed"):
+                    deployment.host_gate(family, "synthetic-task", schedule, "sha256:test", old_image=old_image)
+                command = deployment.ecs.run_task.call_args.kwargs["overrides"]["containerOverrides"][0]["command"]
+                self.assertEqual("--full-backlog" in command, expected)
+
+    def test_full_inventory_request_reaches_invoice_runner_and_verified_localhost_marker(self):
+        for force_full in (False, True):
+            with self.subTest(force_full=force_full):
+                args = ["host-gate", "--project", "roy", "--kind", "invoice"]
+                if force_full:
+                    args.append("--full-backlog")
+                summary = {"enabled": True, "dry_run": True, "invoice_scan_complete": True,
+                           "invoice_scan_all_ages": force_full}
+                with patch("sys.argv", args), patch("scripts.order_automation_host_gate.os.getcwd", return_value="/app"), \
+                     patch("invoice_runner.parse_args") as parse, \
+                     patch("invoice_runner.run_invoice_runner", return_value=summary) as runner, \
+                     patch("scripts.order_automation_host_gate.localhost_marker") as marker, patch("builtins.print"):
+                    run_host_gate()
+                self.assertEqual("--full-backlog" in parse.call_args.args[0], force_full)
+                runner.assert_called_once_with(parse.return_value)
+                self.assertEqual(marker.call_args.args[0].get("full_backlog", False), force_full)
+
+    def test_full_inventory_gate_rejects_missing_or_false_execution_evidence(self):
+        for evidence in ({}, {"invoice_scan_all_ages": False}):
+            with self.subTest(evidence=evidence):
+                summary = {"enabled": True, "dry_run": True, "invoice_scan_complete": True, **evidence}
+                with patch("sys.argv", ["host-gate", "--project", "roy", "--kind", "invoice", "--full-backlog"]), \
+                     patch("scripts.order_automation_host_gate.os.getcwd", return_value="/app"), \
+                     patch("invoice_runner.run_invoice_runner", return_value=summary), \
+                     patch("scripts.order_automation_host_gate.localhost_marker") as marker:
+                    with self.assertRaisesRegex(RuntimeError, "full-backlog-not-verified"):
+                        run_host_gate()
+                marker.assert_not_called()
+
     def candidates(self):
         original = {name: snapshot(name) for name in SCHEDULES}
         desired = {name: schedule_request(value) for name, value in original.items()}

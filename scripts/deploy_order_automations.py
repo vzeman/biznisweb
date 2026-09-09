@@ -341,6 +341,8 @@ class Deployment:
                             "--project", project, "--kind", kind]
         else:
             gate_command = ["python", "scripts/order_automation_host_gate.py", "--project", project, "--kind", kind]
+            if kind == "invoice":
+                gate_command.append("--full-backlog")
         overrides = {"containerOverrides": [{"name": "reporting", "command": gate_command}]}
         require(len(json.dumps(overrides).encode()) <= 8192, "candidate-command-too-large")
         response = self.ecs.run_task(
@@ -377,6 +379,8 @@ class Deployment:
         ips = [entry["privateIpv4Address"] for entry in container.get("networkInterfaces", []) if entry.get("privateIpv4Address")]
         require(len(ips) == 1 and task.get("launchType") == "FARGATE", "candidate-host-identity-incomplete")
         expected = {"marker": MARKER, "project": project, "kind": kind, "path": "/app", "dry_run": True}
+        if kind == "invoice" and not old_image:
+            expected["full_backlog"] = True
         markers = []
         token = None
         for _ in range(100):

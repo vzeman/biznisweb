@@ -38,6 +38,19 @@ and used only with fresh settlement/creditnote evidence. Insufficient history an
 uncertain previous writes remain visible in a durable review queue. Corrections
 suppress customer status emails. Partial creditnotes do not cancel whole orders.
 
+## Unpaid-order discovery
+
+The nightly ROY cancellation run uses the same bounded inventory scanner before
+acquiring its mutation lease. It reads all orders, including blocked ones, with
+its own payment-element query and selects configured statuses locally. Separate
+status-filtered offset scans can silently omit orders when rows move between
+statuses; an unfiltered unique-ID inventory removes that pagination dependency.
+The maximum is 5,000 reads within twenty minutes, with two-second read pacing and
+bounded transient-read retries. An incomplete inventory stops before any status
+write. Existing eligibility checks and both fresh mutation checks still apply.
+Orders whose status changes after their inventory row was read are evaluated
+from fresh data if selected, or rediscovered in the next nightly inventory.
+
 ## Historical migration
 
 Run the committed read-only auditor using the configured AWS profile:
@@ -118,6 +131,9 @@ outcomes remain blocked for review. Invoice existence alone is never shipment pr
    reviewed historical records, then dispatch **Deploy Order Automations** on
    current main. Three identified candidate hosts must pass the existing runners
    in dry-run mode and a localhost marker before any schedule promotion. The
+   new invoice candidates explicitly force complete historical discovery,
+   regardless of the last saved full-scan watermark; legacy pin probes retain
+   their existing compatible arguments. The
    deployer then pauses the five schedules, waits for existing tasks to finish
    and requires two continuously quiet minutes before promotion. It never stops
    natural tasks. The bounded drain also covers pending/stopping tasks; failed

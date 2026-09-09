@@ -75,20 +75,30 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", choices=("roy", "vevo"), required=True)
     parser.add_argument("--kind", choices=("invoice", "cancellation"), required=True)
+    parser.add_argument("--full-backlog", action="store_true")
     args = parser.parse_args()
+    if args.full_backlog and args.kind != "invoice":
+        raise RuntimeError("host-gate-full-backlog-kind-mismatch")
     if args.kind == "cancellation" and args.project != "roy":
         raise RuntimeError("host-gate-service-not-allowed")
     if os.getcwd() != "/app":
         raise RuntimeError("host-gate-path-mismatch")
     if args.kind == "invoice":
         from invoice_runner import parse_args, run_invoice_runner
-        summary = run_invoice_runner(parse_args(["--project", args.project, "--dry-run"]))
+        runner_args = ["--project", args.project, "--dry-run"]
+        if args.full_backlog:
+            runner_args.append("--full-backlog")
+        summary = run_invoice_runner(parse_args(runner_args))
     else:
         from unpaid_order_cancellation_runner import parse_args, run_unpaid_cancellation_runner
         summary = run_unpaid_cancellation_runner(parse_args(["--project", args.project, "--dry-run"]))
     verify_summary(summary, args.kind)
+    if args.full_backlog and summary.get("invoice_scan_all_ages") is not True:
+        raise RuntimeError("host-gate-full-backlog-not-verified")
     payload = {"marker": MARKER, "project": args.project, "kind": args.kind,
                "path": "/app", "dry_run": True}
+    if args.full_backlog:
+        payload["full_backlog"] = True
     localhost_marker(payload)
     print(MARKER + " " + json.dumps(payload, sort_keys=True), flush=True)
 

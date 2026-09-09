@@ -7,6 +7,7 @@ on:
       - '*creditnote*.py'
       - 'unpaid_order_cancellation*.py'
       - 'order_status_safety.py'
+      - 'order_inventory.py'
       - 'daily_report_runner.py'
       - 'reporting_core/**'
       - 'projects/*/settings.json'
@@ -40,6 +41,7 @@ jobs:
           python -m unittest
           tests.test_invoice_generation tests.test_invoice_automation_state
           tests.test_order_status_safety tests.test_unpaid_order_cancellation
+          tests.test_order_inventory
           tests.test_creditnote_storno_guard tests.test_creditnote_export
           tests.test_creditnote_automation_context tests.test_automation_runner_health
           tests.test_restore_verified_fulfillment tests.test_invoice_backfill_verification tests.test_invoice_discovery_verification tests.test_invoice_backfill_seed tests.test_order_automation_audit tests.test_order_automation_deployment

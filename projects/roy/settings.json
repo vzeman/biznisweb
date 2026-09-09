@@ -300,8 +300,10 @@
       "Vrátené",
       "Dobropis"
     ],
-    "scan_max_pages": 50,
+    "scan_max_pages": 5000,
     "page_limit": 30,
+    "page_delay_seconds": 2,
+    "read_attempts": 4,
     "schedule_name": "roy-unpaid-order-cancellation",
     "schedule_expression": "cron(10 2 * * ? *)",
     "timezone": "Europe/Bratislava",
