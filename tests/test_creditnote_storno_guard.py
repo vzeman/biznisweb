@@ -31,6 +31,7 @@ def order_row(order_num: str, status_name: str) -> dict:
         "status": {"id": 1, "name": status_name},
         "price_elements": [],
         "blocked": False, "sum": money(12.30),
+        "vat_summary": [{"tax_rate": 23, "tax_base": 10, "amount": 2.30}],
         "invoices": [{"id": "invoice-" + order_num}],
     }
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 import unicodedata
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable, Mapping
 
@@ -27,6 +28,7 @@ query GetOrderAutomationSafetyContext($order_num: String!) {
     price_elements { type title value reference_id price { value formatted } }
     shipments { carrier status shipment_number }
     sum { MONEY }
+    vat_summary { tax_rate tax_base amount }
     invoices {
       id invoice_num created paid pay_date sum { MONEY }
       payments { RECEIPT }
@@ -153,8 +155,17 @@ def assess_payment_evidence(order: Mapping[str, Any]) -> Evidence:
             if not isinstance(receipt, Mapping) or not receipt.get("id"):
                 return Evidence("unknown", "invalid_receipt")
             amount = _money(receipt.get("sum"))
-            pay_date = str(receipt.get("pay_date") or "").strip()
-            if amount is None or not _same_basis(total, amount) or not pay_date:
+            if "pay_date" not in receipt:
+                return Evidence("unknown", "receipt_payment_date_missing")
+            raw_date = receipt["pay_date"]
+            pay_date = "" if raw_date is None else str(raw_date).strip()
+            if raw_date is not None:
+                try:
+                    if date.fromisoformat(pay_date).isoformat() != pay_date:
+                        raise ValueError("non-ISO receipt date")
+                except ValueError:
+                    return Evidence("unknown", "receipt_payment_date_invalid")
+            if amount is None or not _same_basis(total, amount):
                 return Evidence("unknown", "receipt_amount_currency_or_date_unknown")
             identity = str(receipt["id"])
             fingerprint = (amount, pay_date)
@@ -165,6 +176,13 @@ def assess_payment_evidence(order: Mapping[str, Any]) -> Evidence:
     if any(entry[0].amount < 0 for entry in receipts.values()):
         return Evidence("unknown", "payment_reversal_requires_review")
     if received >= total.amount:
+        if any(not entry[1] for entry in receipts.values()):
+            # Receipt.pay_date is nullable in the official schema. A complete
+            # paid invoice remains authoritative when its consistent full
+            # receipts omit only that optional date, as verified in production.
+            if paid_invoice:
+                return Evidence("confirmed", "full_invoice_marked_paid")
+            return Evidence("unknown", "receipt_payment_date_unknown")
         return Evidence("confirmed", "full_receipt_settlement")
     if receipts:
         return Evidence("partial", "partial_receipt_settlement")
@@ -206,7 +224,7 @@ def creditnote_coverage_reason(order: Mapping[str, Any], creditnotes: list[dict[
     """Only complete credit of the current order permits whole-order Storno."""
     total = _money(order.get("sum"))
     invoices = api_collection(order, "invoices")
-    if total is None or total.amount <= 0 or total.net is None or not invoices:
+    if total is None or total.amount <= 0 or not invoices:
         return "creditnote_order_amount_or_invoice_unknown"
     invoice_ids = {str(row.get("id") or "") for row in invoices if isinstance(row, Mapping)}
     if "" in invoice_ids or len(invoice_ids) != len(invoices):
@@ -215,6 +233,31 @@ def creditnote_coverage_reason(order: Mapping[str, Any], creditnotes: list[dict[
     seen: set[str] = set()
     if not creditnotes:
         return "creditnote_missing"
+    # The Price.is_net_price flag is inverted in verified live order totals.
+    # Bind the payable sum to explicit VAT arithmetic, never select net credit
+    # amounts from this flag. Tax-exempt rows have equal net/gross credit values.
+    taxation = api_collection(order, "vat_summary")
+    if taxation is None:
+        return "creditnote_order_tax_basis_unknown"
+    gross_total = Decimal(0)
+    for row in taxation:
+        if not isinstance(row, Mapping):
+            return "creditnote_order_tax_basis_unknown"
+        components = []
+        for key in ("tax_base", "amount"):
+            raw = row.get(key)
+            if isinstance(raw, bool) or raw is None:
+                return "creditnote_order_tax_basis_unknown"
+            try:
+                component = Decimal(str(raw))
+            except InvalidOperation:
+                return "creditnote_order_tax_basis_unknown"
+            if not component.is_finite():
+                return "creditnote_order_tax_basis_unknown"
+            components.append(component)
+        gross_total += sum(components)
+    if taxation and abs(gross_total - total.amount) > Decimal("0.01"):
+        return "creditnote_order_tax_basis_unknown"
     for document in creditnotes:
         if not isinstance(document, Mapping):
             return "creditnote_document_invalid"
@@ -224,7 +267,7 @@ def creditnote_coverage_reason(order: Mapping[str, Any], creditnotes: list[dict[
         seen.add(identity)
         if document.get("currency") != total.currency:
             return "creditnote_currency_mismatch"
-        raw_amount = document.get("net_amount" if total.net else "amount")
+        raw_amount = document.get("amount")
         if isinstance(raw_amount, bool) or raw_amount is None:
             return "creditnote_amount_unknown"
         try:
@@ -233,6 +276,13 @@ def creditnote_coverage_reason(order: Mapping[str, Any], creditnotes: list[dict[
             return "creditnote_amount_unknown"
         if not amount.is_finite() or amount <= 0:
             return "creditnote_amount_unknown"
+        if not taxation:
+            try:
+                net_amount = Decimal(str(document.get("net_amount")))
+            except InvalidOperation:
+                return "creditnote_order_tax_basis_unknown"
+            if not net_amount.is_finite() or net_amount != amount:
+                return "creditnote_order_tax_basis_unknown"
         credited += amount
     if credited < total.amount:
         return "partial_creditnote"

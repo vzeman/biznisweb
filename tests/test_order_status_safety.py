@@ -32,6 +32,7 @@ def order(*, paid=False, receipts=None, shipments=None):
         "id": "order-1", "order_num": "ORDER-1", "blocked": False,
         "status": {"id": 69, "name": "Stripe - expired"},
         "sum": money(), "shipments": [] if shipments is None else shipments,
+        "vat_summary": [{"tax_rate": 0, "tax_base": 100, "amount": 0}],
         "invoices": [{"id": "invoice-1", "paid": paid, "sum": money(),
                       "payments": [] if receipts is None else receipts, "preinvoice": None}],
         "preinvoices": [],
@@ -86,6 +87,36 @@ class PaymentEvidenceTests(unittest.TestCase):
 
     def test_full_invoice_marked_paid_without_receipt_can_confirm_payment(self):
         self.assertEqual("confirmed", assess_payment_evidence(order(paid=True)).state)
+
+    def test_explicit_null_receipt_date_preserves_exact_paid_invoice_authority(self):
+        value = order(paid=True, receipts=[{**receipt(), "pay_date": None}])
+        result = assess_payment_evidence(value)
+        self.assertEqual(("confirmed", "full_invoice_marked_paid"), (result.state, result.reason))
+
+    def test_undated_receipt_requires_paid_invoice_and_full_consistent_coverage(self):
+        for paid, amounts in ((False, [100]), (True, [10]), (True, [110, -10])):
+            value = order(paid=paid, receipts=[{**receipt(str(index), amount), "pay_date": None}
+                for index, amount in enumerate(amounts)])
+            self.assertNotEqual("confirmed", assess_payment_evidence(value).state)
+        value = order(paid=True, receipts=[{**receipt(), "pay_date": None}])
+        value["invoices"][0]["sum"]["value"] = 10
+        self.assertNotEqual("confirmed", assess_payment_evidence(value).state)
+
+    def test_paid_invoice_cannot_hide_undated_receipt_currency_or_identity_conflicts(self):
+        value = order(paid=True, receipts=[{**receipt(), "pay_date": None}])
+        value["invoices"][0]["payments"][0]["sum"]["currency"]["code"] = "USD"
+        self.assertNotEqual("confirmed", assess_payment_evidence(value).state)
+        value = order(paid=True, receipts=[{**receipt(), "pay_date": None}])
+        value["preinvoices"] = [{"id": "pre-1", "payments": [receipt()]}]
+        self.assertEqual("conflicting_duplicate_receipt", assess_payment_evidence(value).reason)
+
+    def test_missing_or_malformed_receipt_date_is_distinct_from_explicit_null(self):
+        for raw_date in ("", "not-a-date", "2026-02-30"):
+            value = order(paid=True, receipts=[{**receipt(), "pay_date": raw_date}])
+            self.assertEqual("receipt_payment_date_invalid", assess_payment_evidence(value).reason)
+        value = order(paid=True, receipts=[receipt()])
+        value["invoices"][0]["payments"][0].pop("pay_date")
+        self.assertEqual("receipt_payment_date_missing", assess_payment_evidence(value).reason)
 
     def test_receipts_allow_verified_bank_payment_with_paid_false(self):
         result = assess_payment_evidence(order(receipts=[receipt()]))
@@ -230,12 +261,30 @@ class CreditnoteCoverageTests(unittest.TestCase):
                 {"id": "b", "invoice_id": "invoice-1", "amount": 60, "currency": "EUR"}]
         self.assertEqual("full_creditnote", creditnote_coverage_reason(order(), docs))
 
-    def test_net_order_requires_net_credit_amount(self):
+    def test_inverted_net_flag_never_selects_net_credit_amount(self):
         value = order()
         value["sum"]["is_net_price"] = True
-        document = {"id": "credit-1", "invoice_id": "invoice-1", "amount": 123, "currency": "EUR"}
-        self.assertEqual("creditnote_amount_unknown", creditnote_coverage_reason(value, [document]))
-        self.assertEqual("full_creditnote", creditnote_coverage_reason(value, [{**document, "net_amount": 100}]))
+        value["sum"]["value"] = 123
+        value["vat_summary"] = [{"tax_rate": 23, "tax_base": 100, "amount": 23}]
+        document = {"id": "credit-1", "invoice_id": "invoice-1", "amount": 123, "net_amount": 100, "currency": "EUR"}
+        self.assertEqual("full_creditnote", creditnote_coverage_reason(value, [document]))
+        self.assertEqual("partial_creditnote", creditnote_coverage_reason(value, [{**document, "amount": 100}]))
+
+    def test_inconsistent_or_missing_vat_basis_prevents_cancellation(self):
+        value = order()
+        document = {"id": "credit-1", "invoice_id": "invoice-1", "amount": 100, "net_amount": 80, "currency": "EUR"}
+        value.pop("vat_summary")
+        self.assertEqual("creditnote_order_tax_basis_unknown", creditnote_coverage_reason(value, [document]))
+        value["vat_summary"] = [{"tax_rate": 23, "tax_base": 100, "amount": 23}]
+        self.assertEqual("creditnote_order_tax_basis_unknown", creditnote_coverage_reason(value, [document]))
+        value["vat_summary"] = None
+        self.assertEqual("creditnote_order_tax_basis_unknown", creditnote_coverage_reason(value, [document]))
+
+    def test_tax_exempt_credit_can_match_with_explicit_empty_vat_summary(self):
+        value = order()
+        value["vat_summary"] = None
+        document = {"id": "credit-1", "invoice_id": "invoice-1", "amount": 100, "net_amount": 100, "currency": "EUR"}
+        self.assertEqual("full_creditnote", creditnote_coverage_reason(value, [document]))
 
 
 class FakeClient:
