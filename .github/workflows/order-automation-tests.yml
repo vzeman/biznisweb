@@ -11,6 +11,8 @@ on:
       - 'reporting_core/**'
       - 'projects/*/settings.json'
       - 'scripts/*order_automation*.py'
+      - 'scripts/seed_invoice_backfill.py'
+      - 'scripts/restore_verified_fulfillment.py'
       - 'tests/**'
       - '.github/workflows/order-automation-tests.yml'
       - '.github/workflows/deploy-order-automations.yml'

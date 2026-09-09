@@ -13,6 +13,7 @@ on:
       - generate_invoices.py
       - invoice_runner.py
       - invoice_automation_state.py
+      - order_status_safety.py
       - creditnote_export.py
       - creditnote_storno_guard.py
       - money_s3_invoice_export.py
