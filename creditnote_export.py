@@ -184,7 +184,7 @@ def parse_creditnote_datetime(value: Any) -> Optional[datetime]:
 
 
 def parse_money(value: Any) -> Tuple[Optional[float], str]:
-    text = str(value or "").strip()
+    text = str("" if value is None else value).strip()
     if not text:
         return None, ""
     raw_currency = re.sub(r"[\d\s.,\-+]", "", text).strip()
@@ -353,15 +353,20 @@ def normalize_creditnote_automation_context(raw_rows: Iterable[Dict[str, Any]]) 
         net_amount, _ = parse_money(row.get("price"))
         currency = first_currency(row.get("taxed_price"), row.get("currencied_price"), row.get("currencied_to_repay"))
         currency = {"€": "EUR", "Kč": "CZK", "Ft": "HUF", "zł": "PLN", "lei": "RON"}.get(currency, currency.upper())
-        if not order_num or not identity or not number or amount is None or not currency:
+        if not order_num or not identity or amount is None or not currency:
             raise RuntimeError("Creditnote context cannot be safely attributed")
         if identity in seen_ids:
             raise RuntimeError("Duplicate creditnote evidence")
         seen_ids.add(identity)
+        # The live admin list also contains opened, zero-value documents with
+        # an ID and order link but no final number. Retain their presence for
+        # that order, without treating an unfinished document as refund proof.
+        numbered = bool(number)
         context.setdefault(order_num, []).append({
-            "id": identity, "number": number, "amount": abs(amount), "currency": currency,
+            "id": identity, "number": number, "amount": abs(amount) if numbered else None, "currency": currency,
             "invoice_id": str(row.get("inv_id") or ""),
-            "net_amount": abs(net_amount) if net_amount is not None else None,
+            "net_amount": abs(net_amount) if numbered and net_amount is not None else None,
+            "numbered": numbered,
         })
     return context
 

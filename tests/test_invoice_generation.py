@@ -21,7 +21,7 @@ from generate_invoices import (
     resolve_invoice_generation_settings,
     run_invoice_generation,
 )
-from invoice_automation_state import S3AutomationStateStore
+from invoice_automation_state import AutomationStateError, S3AutomationStateStore
 from tests.test_invoice_automation_state import MemoryS3
 from invoice_runner import resolve_invoice_runner_window
 
@@ -964,8 +964,8 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
                           invoices=[{"id": "fixture-invoice", "invoice_num": "fixture-number"}],
                           last_change="2026-06-15 10:30:00")
         with patch("creditnote_export.fetch_creditnote_automation_context", side_effect=RuntimeError("incomplete context")):
-            with self.assertRaises(RuntimeError):
-                self.run_fixture()
+            first = self.run_fixture()
+        self.assertEqual(1, first.failed_invoice_status_reconciliations)
         saved = self.store.read()[0]
         self.assertEqual("open", saved["orders"]["fixture-order"]["status_review"]["state"])
         self.assertTrue(saved["last_scan"]["changed_watermark"])
@@ -975,6 +975,41 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
         self.assertTrue(callable(context.call_args.kwargs["progress_callback"]))
         self.assertFalse(second.invoice_scan_all_ages)
         self.assertEqual(1, second.invoice_status_review_required)
+        self.assertEqual([], self.web.post_urls)
+
+    def test_creditnote_context_failure_does_not_starve_independent_invoice(self):
+        self.settings["invoice_generation"]["existing_invoice_status_reconciliation"] = {"enabled": True}
+        review_order = invoice_order("fixture-review", status={"id": 69, "name": "Stripe - expired"},
+                                     invoices=[{"id": "prior-invoice"}], last_change="2026-06-15 10:30:00")
+        execute = self.api.execute
+
+        def with_review(query, variable_values=None):
+            variables = variable_values or {}
+            if variables.get("order_num") == "fixture-review":
+                return {"getOrder": deepcopy(review_order)}
+            result = execute(query, variable_values=variables)
+            if "changed_from" in variables:
+                result["getOrderList"]["data"].append(deepcopy(review_order))
+            return result
+
+        self.api.execute = with_review
+        with patch("creditnote_export.fetch_creditnote_automation_context", side_effect=RuntimeError("incomplete context")):
+            result = self.run_fixture()
+        self.assertEqual(1, result.created_invoices)
+        self.assertEqual(1, result.failed_invoice_status_reconciliations)
+        self.assertEqual(1, result.invoice_status_review_required)
+        self.assertEqual(1, sum("/finalize/" in url for url in self.web.post_urls))
+        saved = self.store.read()[0]["orders"]
+        self.assertEqual("open", saved["fixture-review"]["status_review"]["state"])
+        self.assertEqual("complete", saved["fixture-order"]["phase"])
+
+    def test_lost_lease_during_creditnote_context_still_stops_all_mutations(self):
+        self.settings["invoice_generation"]["existing_invoice_status_reconciliation"] = {"enabled": True}
+        self.order.update(status={"id": 69, "name": "Stripe - expired"},
+                          invoices=[{"id": "fixture-invoice"}], last_change="2026-06-15 10:30:00")
+        with patch("creditnote_export.fetch_creditnote_automation_context", side_effect=AutomationStateError("lost lease")):
+            with self.assertRaises(AutomationStateError):
+                self.run_fixture()
         self.assertEqual([], self.web.post_urls)
 
 

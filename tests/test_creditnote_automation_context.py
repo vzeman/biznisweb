@@ -6,7 +6,8 @@ import tempfile
 from unittest.mock import Mock, patch
 
 from creditnote_export import (fetch_project_creditnotes, normalize_creditnote_automation_context,
-                              load_creditnote_status_change_audit, save_creditnote_status_change_audit)
+                              load_creditnote_status_change_audit, save_creditnote_status_change_audit, parse_money)
+from order_status_safety import creditnote_coverage_reason
 
 
 def document(**extra):
@@ -30,6 +31,33 @@ class CreditnoteAutomationContextTests(unittest.TestCase):
                      [document(taxed_price="invalid")]):
             with self.subTest(rows=rows), self.assertRaises(RuntimeError):
                 normalize_creditnote_automation_context(rows)
+
+    def test_open_unnumbered_zero_document_is_attributed_but_cannot_prove_refund(self):
+        context = normalize_creditnote_automation_context([
+            document(number="", taxed_price="0 €", price="0", open="1", storno="0"),
+            document(creditnote_id="2", number="CN-2", order_num="ORDER-B"),
+        ])
+        pending = context["ORDER-A"][0]
+        self.assertFalse(pending["numbered"])
+        self.assertEqual("", pending["number"])
+        self.assertIsNone(pending["amount"])
+        self.assertIsNone(pending["net_amount"])
+        self.assertEqual(12.3, context["ORDER-B"][0]["amount"])
+        order = {"sum": {"value": 12.3, "currency": {"code": "EUR"}, "is_net_price": False},
+                 "invoices": [{"id": "INV-1"}]}
+        self.assertEqual("creditnote_amount_unknown", creditnote_coverage_reason(order, context["ORDER-A"]))
+
+    def test_unnumbered_positive_document_cannot_prove_refund_either(self):
+        row = normalize_creditnote_automation_context([document(number="")])["ORDER-A"][0]
+        self.assertIsNone(row["amount"])
+        self.assertIsNone(row["net_amount"])
+
+    def test_numeric_zero_is_a_valid_amount(self):
+        self.assertEqual((0.0, ""), parse_money(0))
+        row = normalize_creditnote_automation_context([
+            document(taxed_price=0, price=0, currencied_price="0 €")
+        ])["ORDER-A"][0]
+        self.assertEqual(0.0, row["amount"])
 
     def test_page_total_and_identity_must_be_complete(self):
         for pages in ([{"total": 2, "rows": [document()]}, {"total": 2, "rows": []}],

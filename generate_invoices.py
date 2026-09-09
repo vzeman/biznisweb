@@ -1583,14 +1583,23 @@ def run_invoice_generation(
                     scan_update["full_scan_completed_at"] = iso_utc(utc_now())
                     summary.full_scan_age_hours = 0.0
                 journal.record_scan(**scan_update)
+            creditnote_context_failed = False
             if (creditnote_order_numbers is None and settings["existing_invoice_status_reconciliation"]["enabled"]
                     and any(_is_existing_invoice_status_reconciliation_candidate(row, settings["existing_invoice_status_reconciliation"])
                             for row in changed_orders)):
                 from creditnote_export import fetch_creditnote_automation_context
 
-                creditnote_order_numbers = set(fetch_creditnote_automation_context(
-                    project_name, progress_callback=journal.assert_owned if journal else None,
-                ))
+                try:
+                    creditnote_order_numbers = set(fetch_creditnote_automation_context(
+                        project_name, progress_callback=journal.assert_owned if journal else None,
+                    ))
+                except AutomationStateError:
+                    raise
+                except Exception as exc:
+                    # Unknown creditnotes prevent status recovery. They do not
+                    # invalidate independently checked shipped invoice orders.
+                    creditnote_context_failed = True
+                    logger.error("Creditnote context unavailable; status recovery requires review (%s)", type(exc).__name__)
             reconciliation = reconcile_existing_invoice_statuses(
                 generator.client, changed_orders, settings["existing_invoice_status_reconciliation"], dry_run=dry_run,
                 journal=journal, creditnote_order_numbers=creditnote_order_numbers,
@@ -1599,7 +1608,7 @@ def run_invoice_generation(
             summary.invoice_status_reconciliation_enabled = reconciliation["enabled"]
             summary.invoice_status_reconciliation_candidates = reconciliation["candidates"]
             summary.reconciled_invoice_statuses = reconciliation["reconciled"]
-            summary.failed_invoice_status_reconciliations = reconciliation["failed"]
+            summary.failed_invoice_status_reconciliations = reconciliation["failed"] + int(creditnote_context_failed)
             summary.skipped_invoice_status_reconciliations_after_recheck = reconciliation["skipped_after_recheck"]
             summary.invoice_status_reconciliation_target_name = reconciliation["target_status_name"]
             summary.invoice_status_reconciliation_target_id = reconciliation["target_status_id"]
