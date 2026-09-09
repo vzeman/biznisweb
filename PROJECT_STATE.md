@@ -14,12 +14,14 @@ Branch: `codex/order-automation-production-verification-20260909`
 What changed:
 
 - PR #542 merged as `5437b851cd6ee20f6f8896a275dc036bf87fc5a6` after all six checks passed on exact head `489981fa7f74ccb8bfd9d2fe21fe20888afb78e2`. The exact-image build is run `34365220236`. This clean verification branch starts from synchronized merged main; do not merge further changes while the managed deployment's exact-main gates are active.
+- Build `34365220236` succeeded, including the application regression and reporting smoke, and ECR readback verifies exact immutable digest `26e4bad4aeba6e8e5879fa43a5f4a4037a39ea48f872d0e062c3c8e59a017461` for that main commit. Managed deployment `34365578095` was dispatched once after confirming unchanged main and no other active managed deployment. Candidate/promotion results are pending.
 - PR #540 merged as `333f6c09cfb734cde968041bd12a20b92f258665` after all six checks passed on exact head `866a1df212521bda11392ce91041f1da7d5f9c5e`. The exact-image build is run `34358176082`. No direct main edits or force pushes were used. This verification branch starts from the synchronized merge commit.
 - The earlier immutable pin remains live with existing cadence. Six ROY and five VEVO historical candidates are durably queued with email holds. CASE-B's verified shipment restoration passed independent API and admin-history readbacks without a customer email. Full local regression: 472 passing tests plus reporting smoke.
 
 What is verified:
 
 - Both pin diagnostic hosts stopped with actual localhost markers; private deployment snapshots and historical operation evidence are in the existing private S3 bucket. No local application service was started.
+- Fresh pre-dispatch readback found all five old schedules enabled with the expected pinned images/cadences and no active automation tasks or drift. Both separately pinned daily-report tasks explicitly set `REPORT_SKIP_INVOICES=true`, and their exact source defaults agree; they do not retain an old invoice/reconciliation writer. Their older creditnote guards remain the separate known release boundary.
 - Daily-report revenue/guard settings and the legacy eligibility decision methods match their exact pinned source commits. A separate read-only audit is checking whether any currently linked creditnote orders are exposed to the older guard.
 - That current-risk audit is complete: ROY 170 creditnotes / 164 current linked orders and VEVO 313 / 304, with zero current legacy-eligible unsafe candidates and zero unreadable orders. Four shipped VEVO orders have only open unnumbered creditnotes, which the old guard excludes. This does not repair the future partial-creditnote defect. Both historical backlog audits and risk audits were saved under private S3 `data/<project>/order-automation/audits/2026-09-09/` with exact readback checks.
 - PR #541 merged as `d8a392ae2b1a970bb544685c9ed4c2144e4e689c` after all six exact-head checks passed. Build `34359016619` succeeded, producing immutable digest `0517335c2c8bbe0b1f212adf00bd37ec8bef4dd90c775bf102a4bdca04a4f691`. Managed deployment `34359306326` passed dependency initialization but stopped at the VEVO read-only candidate before promotion. Its private snapshot phase is `candidate-failed-state-policy-restored`; all five production schedules remain enabled on the previous pinned definitions, and changed state IAM grants were restored.
@@ -41,7 +43,7 @@ Known issues:
 
 Next exact step:
 
-- Wait for exact merged-image build `34365220236`, then dispatch one managed deployment on main `5437b851cd6ee20f6f8896a275dc036bf87fc5a6`. Verify three stopped host markers, quiet drain, five promoted schedules, actual live runs and all eleven held historical invoice outcomes. Keep main unchanged during the deployment's exact-main gates. Commit/push the verification handoff and preserve unresolved dependencies explicitly.
+- Follow managed deployment `34365578095` on main `5437b851cd6ee20f6f8896a275dc036bf87fc5a6`; do not dispatch a duplicate. Verify three stopped host markers, quiet drain, five promoted schedules, actual live runs and all eleven held historical invoice outcomes. Keep main unchanged during the deployment's exact-main gates. Commit/push the verification handoff and preserve unresolved dependencies explicitly.
 
 ## 2026-09-09 — Order automation remediation resumed; complete historical audit authorized
 
