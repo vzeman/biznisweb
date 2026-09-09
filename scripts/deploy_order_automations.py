@@ -454,6 +454,107 @@ class Deployment:
             require(f":task-definition/{SCHEDULES[name]}:" in target["EcsParameters"]["TaskDefinitionArn"], "source-family-drift")
             require(target["EcsParameters"].get("TaskCount", 1) == 1 and not target.get("Input"), "source-overrides-drift")
 
+    def unfinished_automation_tasks(self, schedules: dict) -> list[dict]:
+        """Include actual PENDING and stopping tasks; never terminate natural jobs.
+
+        ECS desiredStatus=PENDING returns nothing. Tasks actually PENDING are
+        returned under desiredStatus=RUNNING; STOPPED can still be stopping.
+        """
+        cluster = next(iter(schedules.values()))["Target"]["Arn"]
+        require(all(row["Target"]["Arn"] == cluster for row in schedules.values()), "drain-cluster-drift")
+        families = {SCHEDULES[name] for name in schedules}
+        identities = set()
+        for family in sorted(families):
+            for desired in ("RUNNING", "STOPPED"):
+                token, seen = None, set()
+                for _ in range(100):
+                    request = {"cluster": cluster, "family": family, "desiredStatus": desired, "maxResults": 100}
+                    if token:
+                        request["nextToken"] = token
+                    page = self.ecs.list_tasks(**request)
+                    identities.update(page.get("taskArns", []))
+                    token = page.get("nextToken")
+                    if not token:
+                        break
+                    require(token not in seen, "drain-task-pagination-cycle")
+                    seen.add(token)
+                else:
+                    raise RuntimeError("drain-task-pagination-incomplete")
+        unfinished = []
+        values = sorted(identities)
+        for start in range(0, len(values), 100):
+            requested = values[start:start + 100]
+            result = self.ecs.describe_tasks(cluster=cluster, tasks=requested)
+            tasks = result.get("tasks", [])
+            require(not result.get("failures") and {row.get("taskArn") for row in tasks} == set(requested),
+                    "drain-task-readback-incomplete")
+            for task in tasks:
+                definition = task.get("taskDefinitionArn", "")
+                family = definition.rsplit("/", 1)[-1].rsplit(":", 1)[0]
+                require(family in families and task.get("clusterArn") == cluster
+                        and definition.startswith(f"arn:aws:ecs:eu-central-1:{self.account}:task-definition/"),
+                        "drain-task-identity-mismatch")
+                require(bool(task.get("lastStatus")), "drain-task-status-missing")
+                if task["lastStatus"] != "STOPPED":
+                    unfinished.append({key: task.get(key) for key in (
+                        "taskArn", "taskDefinitionArn", "lastStatus", "desiredStatus",
+                    )})
+        return unfinished
+
+    def wait_for_drain(self, paused: dict, *, timeout_seconds: int = 1800, quiet_seconds: int = 120) -> None:
+        """Require a quiet interval after pause propagation, bounded to 30 minutes."""
+        deadline, quiet_since = time.monotonic() + timeout_seconds, None
+        while time.monotonic() < deadline:
+            for name, expected in paused.items():
+                current = schedule_request(self.scheduler.get_schedule(Name=name))
+                require(current == schedule_request(expected) and current["State"] == "DISABLED",
+                        "schedule-changed-during-drain")
+            active = self.unfinished_automation_tasks(paused)
+            now = time.monotonic()
+            if active:
+                quiet_since = None
+            elif quiet_since is None:
+                quiet_since = now
+            elif now - quiet_since >= quiet_seconds:
+                self.evidence["drain"] = {"verified_at": datetime.now(timezone.utc).isoformat(),
+                                           "quiet_seconds": quiet_seconds, "unfinished_tasks": 0}
+                return
+            time.sleep(10)
+        raise RuntimeError("old-automation-tasks-drain-timeout")
+
+    def pause_drain_and_promote(self, originals: dict, desired: dict) -> None:
+        paused = {name: {**schedule_request(row), "State": "DISABLED"} for name, row in originals.items()}
+        # The existing transactional updater handles partial/ambiguous pauses and
+        # restores their original states without overwriting concurrent edits.
+        promote_schedules(self.scheduler, originals, paused)
+        promotion_started = False
+        try:
+            self.evidence["phase"] = "schedules-paused-draining"
+            self.save_private(self.evidence_bucket)
+            self.wait_for_drain(paused)
+            self.evidence["phase"] = "drain-verified-before-promotion"
+            self.save_private(self.evidence_bucket)
+            promotion_started = True
+            promote_schedules(self.scheduler, paused, desired)
+        except Exception:
+            try:
+                restore_from = paused
+                if promotion_started:
+                    # A candidate may have started during a partial promotion.
+                    # Keep both generations paused and drain it before restoring
+                    # old runners, which do not understand the shared lease.
+                    current = {name: schedule_request(self.scheduler.get_schedule(Name=name)) for name in originals}
+                    require(all(current[name] in (paused[name], desired[name], schedule_request(originals[name]))
+                                for name in originals), "drain-rollback-concurrent-change")
+                    restore_from = {name: {**row, "State": "DISABLED"} for name, row in current.items()}
+                    promote_schedules(self.scheduler, current, restore_from)
+                    self.wait_for_drain(restore_from)
+                promote_schedules(self.scheduler, restore_from,
+                                  {name: schedule_request(row) for name, row in originals.items()})
+            except Exception:
+                raise RuntimeError("schedule-drain-rollback-requires-operator") from None
+            raise RuntimeError("schedule-drain-or-promotion-failed-originals-restored") from None
+
     def provision_monitoring(self, family: str, schedules: list[dict], bucket: str, task: dict) -> str:
         project, kind, _ = SERVICES[family]
         queue_name = f"{family}-dlq"
@@ -554,7 +655,7 @@ class Deployment:
         self.evidence.update(desired_schedules=desired, phase="ready-to-promote")
         self.save_private(evidence_bucket)
         try:
-            promote_schedules(self.scheduler, snapshots, desired)
+            self.pause_drain_and_promote(snapshots, desired)
         except Exception:
             self.evidence["phase"] = "promotion-failed-review-rollback"
             self.save_private(evidence_bucket)

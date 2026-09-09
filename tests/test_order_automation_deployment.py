@@ -136,6 +136,123 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
             promote_schedules(scheduler, original, desired)
         self.assertEqual(scheduler.writes, [])
 
+    def drain_deployment(self):
+        deployment = object.__new__(Deployment)
+        deployment.account = ACCOUNT
+        deployment.ecs = Mock()
+        deployment.scheduler = FakeScheduler()
+        deployment.evidence, deployment.evidence_bucket = {}, "private-fixture"
+        deployment.save_private = Mock()
+        return deployment
+
+    def test_pause_drain_precedes_first_candidate_schedule(self):
+        deployment = self.drain_deployment()
+        originals, desired = self.candidates()
+        def drained(paused):
+            self.assertEqual(set(paused), set(SCHEDULES))
+            self.assertTrue(all(row["State"] == "DISABLED" for row in deployment.scheduler.values.values()))
+            self.assertTrue(all(row["Target"]["EcsParameters"]["TaskDefinitionArn"].endswith(":2")
+                                for row in deployment.scheduler.values.values()))
+        deployment.wait_for_drain = Mock(side_effect=drained)
+        deployment.pause_drain_and_promote(originals, desired)
+        deployment.wait_for_drain.assert_called_once()
+        self.assertEqual(desired, deployment.scheduler.values)
+        deployment.ecs.stop_task.assert_not_called()
+
+    def test_drain_timeout_restores_original_schedules_without_starting_candidates(self):
+        deployment = self.drain_deployment()
+        originals, desired = self.candidates()
+        deployment.wait_for_drain = Mock(side_effect=RuntimeError("old-automation-tasks-drain-timeout"))
+        with self.assertRaisesRegex(RuntimeError, "originals-restored"):
+            deployment.pause_drain_and_promote(originals, desired)
+        self.assertEqual({name: schedule_request(row) for name, row in originals.items()}, deployment.scheduler.values)
+        deployment.ecs.stop_task.assert_not_called()
+
+    def test_pause_failure_restores_ambiguous_pause_and_never_drains(self):
+        deployment = self.drain_deployment()
+        deployment.scheduler = FakeScheduler(fail_call=2, ambiguous=True)
+        originals, desired = self.candidates()
+        deployment.wait_for_drain = Mock()
+        with self.assertRaisesRegex(RuntimeError, "rollback-verified"):
+            deployment.pause_drain_and_promote(originals, desired)
+        self.assertEqual({name: schedule_request(row) for name, row in originals.items()},
+                         {name: schedule_request(row) for name, row in deployment.scheduler.values.items()})
+        deployment.wait_for_drain.assert_not_called()
+
+    def test_operator_change_during_drain_is_never_overwritten(self):
+        deployment = self.drain_deployment()
+        originals, desired = self.candidates()
+        name = next(iter(SCHEDULES))
+        def drift(paused):
+            deployment.scheduler.values[name]["Description"] = "concurrent operator"
+            raise RuntimeError("schedule-changed-during-drain")
+        deployment.wait_for_drain = Mock(side_effect=drift)
+        with self.assertRaisesRegex(RuntimeError, "requires-operator"):
+            deployment.pause_drain_and_promote(originals, desired)
+        self.assertEqual("concurrent operator", deployment.scheduler.values[name]["Description"])
+        self.assertTrue(all(row["State"] == "DISABLED" for row in deployment.scheduler.values.values()))
+
+    def test_partial_promotion_drains_new_tasks_before_restoring_old_generation(self):
+        deployment = self.drain_deployment()
+        deployment.scheduler = FakeScheduler(fail_call=7, ambiguous=True)
+        originals, desired = self.candidates()
+        def drained(paused):
+            self.assertTrue(all(row["State"] == "DISABLED" for row in deployment.scheduler.values.values()))
+        deployment.wait_for_drain = Mock(side_effect=drained)
+        with self.assertRaisesRegex(RuntimeError, "originals-restored"):
+            deployment.pause_drain_and_promote(originals, desired)
+        self.assertEqual(2, deployment.wait_for_drain.call_count)
+        self.assertEqual({name: schedule_request(row) for name, row in originals.items()}, deployment.scheduler.values)
+
+    def test_unfinished_candidate_during_rollback_leaves_schedules_paused_for_review(self):
+        deployment = self.drain_deployment()
+        deployment.scheduler = FakeScheduler(fail_call=7)
+        originals, desired = self.candidates()
+        deployment.wait_for_drain = Mock(side_effect=[None, RuntimeError("candidate-still-running")])
+        with self.assertRaisesRegex(RuntimeError, "requires-operator"):
+            deployment.pause_drain_and_promote(originals, desired)
+        self.assertTrue(all(row["State"] == "DISABLED" for row in deployment.scheduler.values.values()))
+        deployment.ecs.stop_task.assert_not_called()
+
+    def test_drain_requires_continuous_quiet_and_rechecks_paused_state(self):
+        deployment = self.drain_deployment()
+        paused = {name: {**schedule_request(row), "State": "DISABLED"} for name, row in deployment.scheduler.values.items()}
+        deployment.scheduler.values = copy.deepcopy(paused)
+        deployment.unfinished_automation_tasks = Mock(side_effect=[[], [{"status": "PENDING"}], [], [], []])
+        clock = [0]
+        def sleep(seconds):
+            clock[0] += seconds
+        with patch("scripts.deploy_order_automations.time.monotonic", side_effect=lambda: clock[0]), \
+             patch("scripts.deploy_order_automations.time.sleep", side_effect=sleep):
+            deployment.wait_for_drain(paused, timeout_seconds=60, quiet_seconds=20)
+        self.assertEqual(40, clock[0])
+        self.assertEqual(5, deployment.unfinished_automation_tasks.call_count)
+        self.assertEqual(0, deployment.evidence["drain"]["unfinished_tasks"])
+
+    def test_drain_reads_pending_and_stopping_tasks_in_correct_desired_statuses(self):
+        deployment = self.drain_deployment()
+        schedules = deployment.scheduler.values
+        cluster = next(iter(schedules.values()))["Target"]["Arn"]
+        prefix = f"arn:aws:ecs:eu-central-1:{ACCOUNT}"
+        tasks = [
+            {"taskArn": prefix + ":task/cluster/one", "clusterArn": cluster,
+             "taskDefinitionArn": prefix + ":task-definition/roy-invoice-daily:3", "desiredStatus": "RUNNING", "lastStatus": "PENDING"},
+            {"taskArn": prefix + ":task/cluster/two", "clusterArn": cluster,
+             "taskDefinitionArn": prefix + ":task-definition/roy-invoice-daily:3", "desiredStatus": "STOPPED", "lastStatus": "STOPPING"},
+            {"taskArn": prefix + ":task/cluster/three", "clusterArn": cluster,
+             "taskDefinitionArn": prefix + ":task-definition/roy-invoice-daily:3", "desiredStatus": "STOPPED", "lastStatus": "STOPPED"},
+        ]
+        def list_tasks(**kwargs):
+            return {"taskArns": [row["taskArn"] for row in tasks if kwargs["family"] == "roy-invoice-daily"
+                                  and row["desiredStatus"] == kwargs["desiredStatus"]]}
+        deployment.ecs.list_tasks.side_effect = list_tasks
+        deployment.ecs.describe_tasks.return_value = {"tasks": tasks, "failures": []}
+        result = deployment.unfinished_automation_tasks(schedules)
+        self.assertEqual(["PENDING", "STOPPING"], [row["lastStatus"] for row in result])
+        self.assertEqual({"RUNNING", "STOPPED"}, {call.kwargs["desiredStatus"] for call in deployment.ecs.list_tasks.call_args_list})
+        self.assertEqual(set(SERVICES), {call.kwargs["family"] for call in deployment.ecs.list_tasks.call_args_list})
+        deployment.ecs.stop_task.assert_not_called()
+
     def pin_deployment(self):
         deployment = object.__new__(Deployment)
         deployment.account = ACCOUNT
