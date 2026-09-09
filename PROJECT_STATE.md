@@ -5,6 +5,36 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-09 — Order automation remediation resumed; complete historical audit authorized
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-order-automation-audit-20260909`
+
+What changed:
+
+- The user explicitly authorized repairing the automations and checking all existing eligible orders older than seven days. Work resumed on the clean audit branch after fetch/prune and pull/rebase. PR #540 is the delivery branch; no direct main edits.
+- Corrected the earlier access conclusion: AWS API works with the existing `codex` profile. The failed default-profile check did not establish absent credentials. Secrets are read in memory from the existing runtime secret; never copied into source or public evidence.
+- Adding complete all-age invoice discovery, durable per-shop S3 operation state/lease, fresh checks before writes, conservative payment/fulfillment decisions, strict creditnote evidence, truthful completion metrics and immutable candidate-gated deployment. Implementation is in progress and has not been promoted.
+- Added a reproducible read-only historical audit script. Its order-level output is generated under ignored `data/<project>/order-automation/`; only aggregate outcomes belong in this public repository.
+
+What is verified:
+
+- Pre-code invoice hard gate: ROY ECS task `4bd7a0fbb8f24a8d8f3cbc020864b9fd`, private IP `172.31.10.125`, service/schedule `roy-daily-invoice-generation`, command `python invoice_runner.py --project roy`, runtime `/app/invoice_runner.py`. VEVO task `35068c1413c947d095318752949be3e9`, IP `172.31.17.143`, corresponding VEVO command/service. Both stopped with exit 0 and image digest `sha256:3279c0e6ce112005835f759b7a2635d06296b6462841bc84176112ccb28e0162` from the audited main source. A separate ROY natural run failed on exhausted HTTP 429 retries: exit 0 elsewhere is not evidence of continuous success.
+- Pre-code cancellation hard gate: isolated existing dry-run command on current task definition `roy-unpaid-order-cancellation:37`, task `fd186f9ee5a742eb9f3705572b675953`, private IP `172.31.9.135`, `/app/unpaid_order_cancellation_runner.py`, image `sha256:de5c1f91cc8e95fb17dbf8a29fe85272df84499976b0541a242f9591b8f0b768`. Stopped with exit 0; the production schedule was unchanged.
+- CASE-B now has direct evidence: a failed older Stripe payment attempt expired after a different attempt succeeded. The expiry event reached the shop's native payment notification handler with HTTP 200 at the status downgrade. A matching AWS invoice reconciliation log identifies the subsequent paid-status write. These two writers together explain loss of the previously shipped status. The earlier short-age cancellation remains unattributed beyond the admin actor shown in shop history.
+- CASE-A already has an invoice; it must be excluded from backfill. Invoice creation dates, numbers, customer details and exact incident times remain private.
+
+Known issues:
+
+- Production still runs the old automation. The native shop payment webhook is outside this repository; a supported way to reject stale payment-attempt downgrades is still being checked.
+- Existing invoice tasks use a mutable image tag, schedules lack DLQs, and completion/backlog alarms are absent. No claim of error-free or nonstop operation is made.
+
+Next exact step:
+
+- Complete focused regression tests and complete read-only historical audits for both shops; review the combined branch, commit/push small steps, require CI before PR merge. Then deploy the exact immutable image through the new documented candidate gate, verify localhost markers on identified hosts before UI, and process only freshly verified eligible backfill records with durable duplicate prevention. Persist private execution evidence and public aggregate results.
+- No local application server, watcher, tunnel or Docker stack was started. The diagnostic ECS task is stopped; production schedules remain running.
+
 ## 2026-09-09 — ROY order automation audit: confirmed defects; remediation stopped before production
 
 Date: 2026-09-09
