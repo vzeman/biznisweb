@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 import unicodedata
+from contextlib import contextmanager, ExitStack
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -430,6 +431,38 @@ def status_write_block_reason(
             return ""
         return "repeated_status_regression"
     return "previous_status_mutation_unresolved"
+
+
+@contextmanager
+def acquire_status_automation_lease(
+    store: Any, *, owner: str, max_wait_seconds: float = 900, retry_seconds: float = 30,
+    monotonic=None, sleep=None,
+):
+    """Wait for another runner to finish; never retry a mutation body.
+
+    Nightly writers otherwise miss a full day after one invoice-run collision.
+    Only the explicit busy-before-acquisition signal can be retried. CAS errors,
+    uncertain storage writes and any failure after entry remain terminal.
+    """
+    from invoice_automation_state import AutomationLeaseBusy
+
+    if not 0 <= max_wait_seconds <= 900 or not 0 < retry_seconds <= 30:
+        raise ValueError("Status lease wait must be bounded to fifteen minutes")
+    monotonic = monotonic or time.monotonic
+    sleep = sleep or time.sleep
+    deadline = monotonic() + max_wait_seconds
+    with ExitStack() as stack:
+        while True:
+            try:
+                journal = stack.enter_context(store.lease(owner=owner))
+            except AutomationLeaseBusy:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise
+                sleep(min(retry_seconds, remaining))
+            else:
+                break
+        yield journal
 
 
 def _validate_target(order: Any, order_num: str, status_id: int, status_name: str) -> None:

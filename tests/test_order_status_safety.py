@@ -8,6 +8,7 @@ from gql import gql
 
 from order_status_safety import (
     ORDER_SAFETY_QUERY,
+    acquire_status_automation_lease,
     assess_fulfillment_evidence,
     assess_payment_evidence,
     change_status_verified,
@@ -364,6 +365,74 @@ class VerifiedMutationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 execute_read(client, ORDER_SAFETY_QUERY, variable_values={"order_num": "ORDER-1"})
         self.assertEqual(1, request.call_count)
+
+
+class BoundedLeaseAcquisitionTests(unittest.TestCase):
+    def setUp(self):
+        self.clock = 0
+        self.waits = []
+
+    def sleep(self, seconds):
+        self.waits.append(seconds)
+        self.clock += seconds
+
+    def acquire(self, store, **kwargs):
+        return acquire_status_automation_lease(store, owner="test", monotonic=lambda: self.clock, sleep=self.sleep, **kwargs)
+
+    def test_busy_once_then_acquired_body_runs_once_and_releases(self):
+        from invoice_automation_state import AutomationLeaseBusy
+        store = MemoryAutomationStore()
+        original = store.lease
+        calls = []
+        @contextmanager
+        def lease(*, owner):
+            calls.append(owner)
+            if len(calls) == 1:
+                raise AutomationLeaseBusy("busy")
+            with original(owner=owner) as journal:
+                yield journal
+        store.lease = lease
+        bodies = []
+        with self.acquire(store) as journal:
+            journal.assert_owned()
+            bodies.append(True)
+        self.assertEqual([True], bodies)
+        self.assertEqual([30], self.waits)
+        self.assertEqual(2, len(calls))
+        self.assertFalse(store.owned)
+
+    def test_permanent_busy_fails_at_bounded_deadline_without_body(self):
+        from invoice_automation_state import AutomationLeaseBusy
+        store = MemoryAutomationStore()
+        with patch.object(store, "lease", side_effect=AutomationLeaseBusy("busy")) as lease:
+            with self.assertRaises(AutomationLeaseBusy):
+                with self.acquire(store, max_wait_seconds=65):
+                    self.fail("Lease body must not run")
+        self.assertEqual([30, 30, 5], self.waits)
+        self.assertEqual(4, lease.call_count)
+
+    def test_busy_exception_after_entry_never_replays_body(self):
+        from invoice_automation_state import AutomationLeaseBusy
+        store = MemoryAutomationStore()
+        bodies = []
+        with self.assertRaises(AutomationLeaseBusy):
+            with self.acquire(store):
+                bodies.append(True)
+                raise AutomationLeaseBusy("body failed after mutation")
+        self.assertEqual([True], bodies)
+        self.assertEqual(1, store.acquired)
+        self.assertEqual([], self.waits)
+        self.assertFalse(store.owned)
+
+    def test_storage_uncertainty_is_not_retried_as_contention(self):
+        from invoice_automation_state import AutomationStateError
+        store = MemoryAutomationStore()
+        with patch.object(store, "lease", side_effect=AutomationStateError("uncertain write")) as lease:
+            with self.assertRaises(AutomationStateError):
+                with self.acquire(store):
+                    self.fail("Lease body must not run")
+        self.assertEqual(1, lease.call_count)
+        self.assertEqual([], self.waits)
 
 
 if __name__ == "__main__":

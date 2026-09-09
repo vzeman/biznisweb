@@ -16,6 +16,7 @@ from gql.transport.requests import RequestsHTTPTransport
 
 from logger_config import get_logger
 from order_status_safety import (
+    acquire_status_automation_lease,
     ORDER_SAFETY_QUERY,
     assess_fulfillment_evidence,
     assess_payment_evidence,
@@ -730,7 +731,7 @@ def run_unpaid_order_cancellation(
         from invoice_automation_state import build_automation_state_store
 
         automation_state_store = build_automation_state_store(project, project_settings)
-    lease = nullcontext(None) if dry_run else automation_state_store.lease(owner="unpaid-cancellation")
+    lease = nullcontext(None) if dry_run else acquire_status_automation_lease(automation_state_store, owner="unpaid-cancellation")
     with lease as journal:
         for listed in provisional_orders:
             if journal:

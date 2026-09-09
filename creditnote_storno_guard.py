@@ -22,7 +22,10 @@ from creditnote_export import (
     save_creditnote_status_change_audit,
 )
 from logger_config import get_logger
-from order_status_safety import creditnote_coverage_reason, fetch_order_safety_context, status_write_block_reason
+from order_status_safety import (
+    acquire_status_automation_lease, creditnote_coverage_reason,
+    fetch_order_safety_context, status_write_block_reason,
+)
 from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_settings, resolve_biznisweb_api_url
 from unpaid_order_cancellation import build_client, change_order_status, normalize_text, resolve_target_status_id
 
@@ -345,7 +348,7 @@ def run_creditnote_storno_guard(
         from invoice_automation_state import build_automation_state_store
 
         automation_state_store = build_automation_state_store(project, project_settings)
-    with automation_state_store.lease(owner="creditnote-storno") as journal:
+    with acquire_status_automation_lease(automation_state_store, owner="creditnote-storno") as journal:
         journal.assert_owned()
         status_audit = load_creditnote_status_change_audit(project, project_settings, strict=True)
         for order in eligible_orders:
