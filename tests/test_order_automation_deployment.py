@@ -104,7 +104,8 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
                 args = ["host-gate", "--project", "roy", "--kind", "invoice"]
                 if force_full:
                     args.append("--full-backlog")
-                summary = {"enabled": True, "dry_run": True, "invoice_scan_complete": True}
+                summary = {"enabled": True, "dry_run": True, "invoice_scan_complete": True,
+                           "invoice_scan_all_ages": force_full}
                 with patch("sys.argv", args), patch("scripts.order_automation_host_gate.os.getcwd", return_value="/app"), \
                      patch("invoice_runner.parse_args") as parse, \
                      patch("invoice_runner.run_invoice_runner", return_value=summary) as runner, \
@@ -113,6 +114,18 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
                 self.assertEqual("--full-backlog" in parse.call_args.args[0], force_full)
                 runner.assert_called_once_with(parse.return_value)
                 self.assertEqual(marker.call_args.args[0].get("full_backlog", False), force_full)
+
+    def test_full_inventory_gate_rejects_missing_or_false_execution_evidence(self):
+        for evidence in ({}, {"invoice_scan_all_ages": False}):
+            with self.subTest(evidence=evidence):
+                summary = {"enabled": True, "dry_run": True, "invoice_scan_complete": True, **evidence}
+                with patch("sys.argv", ["host-gate", "--project", "roy", "--kind", "invoice", "--full-backlog"]), \
+                     patch("scripts.order_automation_host_gate.os.getcwd", return_value="/app"), \
+                     patch("invoice_runner.run_invoice_runner", return_value=summary), \
+                     patch("scripts.order_automation_host_gate.localhost_marker") as marker:
+                    with self.assertRaisesRegex(RuntimeError, "full-backlog-not-verified"):
+                        run_host_gate()
+                marker.assert_not_called()
 
     def candidates(self):
         original = {name: snapshot(name) for name in SCHEDULES}

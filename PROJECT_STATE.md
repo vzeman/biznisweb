@@ -5,7 +5,7 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
-## 2026-09-09 — Complete unpaid-order discovery follow-up; active deployment remains frozen
+## 2026-09-09 — Complete unpaid-order discovery follow-up; first invoice release live
 
 Date: 2026-09-09
 Repo: `vzeman/biznisweb`
@@ -17,12 +17,16 @@ What changed:
 - Read-only synthetic reproduction found that unpaid discovery can silently omit a surviving order when an earlier row disappears between offset pages. Scanning mutable statuses separately can also omit an order moved into an already-read status, even with one page per status. Both paths report `api_exhausted`; duplicate checks do not catch them. Current and final safety checks still protect listed orders; this did not demonstrate an unsafe cancellation or a real live omitted order.
 - The fresh pre-code cancellation gate passed on task `5c23fb5ec7cf4d7da758ad25b3a69cba`, Fargate instance ID not applicable, IP `172.31.12.18`, service `roy-unpaid-order-cancellation:38`, `/app`, production command `python unpaid_order_cancellation_runner.py --project roy`, exact image `26e4bad4aeba6e8e5879fa43a5f4a4037a39ea48f872d0e062c3c8e59a017461`. It stopped with exit zero and an independently read actual curl-localhost marker. Shared inventory implementation is now in progress on this branch.
 - New invoice candidate gates explicitly request a complete historical scan even after production has saved a recent watermark. The marker includes that request; the old-image pin probe keeps its compatible legacy arguments. Both build and PR workflow triggers include the forthcoming shared inventory module. All 31 deployment tests pass, including forwarding and old-pin compatibility.
+- Extracted the existing bounded unique-ID scanner into `order_inventory.py`, preserving invoice full/changed shared page/time budgets, read pacing and lease heartbeat. Unpaid discovery now reads one unfiltered inventory with its own payment-element fields and filters configured status IDs locally. Its default and ROY configured page limit are 5,000, with two-second pacing, four bounded read attempts and the shared twenty-minute deadline. Incomplete discovery stops before the mutation lease; fresh and final payment/status guards remain unchanged.
+- Independent review caught a host-gate evidence gap: requesting full discovery alone was sufficient for the marker. The gate now requires the actual runner's `invoice_scan_all_ages=true` before its localhost marker, with missing/false evidence regressions. Legacy pin behavior remains compatible. Both CI regression commands now include the shared scanner tests.
 
 What is verified:
 
 - Managed deployment `34365578095` completed successfully on exact main `5437b851`; its source freeze has ended. Private snapshot `data/roy/order-automation/deployments/5437b851cd6ee20f6f8896a275dc036bf87fc5a6/3a8ceb0381ef4c3384c571c1eb829a40.json` reached `promotion-readback-verified`. All three candidate hosts passed actual localhost markers and stopped with exit zero on the exact immutable image. The deployer independently proved 120 continuously quiet seconds and zero unfinished tasks before promotion.
 - All five schedules were independently read back ENABLED on `roy-invoice-daily:5`, `vevo-invoice-daily:5` and `roy-unpaid-order-cancellation:38`. Invoice cadences now cover every fifteen minutes throughout the day/night, with existing sweeps and nightly cancellation preserved. Retries are two attempts within 900 seconds and each target has its corresponding DLQ.
 - All 17 alarms have their intended metrics, live-run dimensions and enabled established operator route. All three DLQs use managed encryption, fourteen-day retention and had zero visible/inflight/delayed messages. Invoice completion/freshness alarms initially lack live baselines; their presence is not proof of successful business runs. First live upgraded invoice jobs and eleven historical outcomes remain pending.
+- Full build regression passed 527 tests; reporting smoke, focused Ruff and whitespace checks passed. Independent review separately passed 181 scanner/invoice/status/deployment tests and found no remaining concrete defect. Regressions cover offset deletion, one-page cross-status movement, timestamp ties, metadata failures, partial responses, retry pacing, shared budgets and no writes after an incomplete inventory. All finite local test processes ended; no local service or tunnel was started.
+- Fresh post-host-gate admin UI confirms CASE-A retains its already-existing final invoice and CASE-B remains shipped with its original invoice. The first natural upgraded VEVO task `0196a28edb25493ba055f52a3b736c15`, IP `172.31.41.230`, service `vevo-invoice-daily:5`, started with the exact image and a renewing shared lease. Its five historical records were still pending before discovery finished; do not claim final invoice creation yet.
 
 Known issues:
 
@@ -31,7 +35,7 @@ Known issues:
 
 Next exact step:
 
-- Complete shared unique-ID inventory pagination for invoice/unpaid use. Keep unpaid payment fields, omit mutable status filters, filter statuses locally, preserve fresh mutation guards and finite budgets. Add both omission regressions and require independent review plus CI. Finish and verify the eleven historical invoices through the already-authorized live release while preparing this separately gated follow-up. Final live cancellation baseline should use the complete-discovery release.
+- Push the reviewed complete-discovery follow-up and open its PR; require exact-head Windows/Linux CI before merging and an exact immutable build before the second managed release. Finish and independently verify the eleven historical invoices through the current live release. Final live cancellation baseline must use the complete-discovery release. Keep the separate FLOX and daily-report guard limitations explicit.
 
 ## 2026-09-09 — Historical discovery correction merged; managed production verification pending
 

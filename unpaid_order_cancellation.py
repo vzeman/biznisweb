@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 import unicodedata
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
@@ -15,6 +16,7 @@ from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
 
 from logger_config import get_logger
+from order_inventory import InventoryScanBudget, scan_order_inventory
 from order_status_safety import (
     acquire_status_automation_lease,
     ORDER_SAFETY_QUERY,
@@ -34,7 +36,7 @@ logger = get_logger("unpaid_order_cancellation")
 DEFAULT_TARGET_STATUS_NAME = "Nezaplaten\u00e1 - zru\u0161en\u00e1 objedn\u00e1vka"
 DEFAULT_RECOVERY_TARGET_STATUS_NAME = "Platba online - zaplaten\u00e9"
 DEFAULT_AGE_DAYS = 14
-DEFAULT_SCAN_MAX_PAGES = 200
+DEFAULT_SCAN_MAX_PAGES = 5000
 DEFAULT_PAGE_LIMIT = 30
 DEFAULT_LANG_CODE = "SK"
 DEFAULT_PAYMENT_REFERENCE_IDS = ("6", "17", "18", "11", "20")
@@ -96,8 +98,8 @@ DEFAULT_RECOVERY_SOURCE_STATUSES = ("Stripe - expired",)
 
 UNPAID_ORDER_QUERY = gql(
     """
-query GetOrdersForUnpaidCancellation($status: Int, $params: OrderParams) {
-  getOrderList(status: $status, params: $params) {
+query GetOrdersForUnpaidCancellation($params: OrderParams) {
+  getOrderList(include_blocking: true, params: $params) {
     data {
       id
       order_num
@@ -128,6 +130,7 @@ query GetOrdersForUnpaidCancellation($status: Int, $params: OrderParams) {
       nextCursor
       pageIndex
       totalPages
+      totalRecords
     }
   }
 }
@@ -168,6 +171,8 @@ class UnpaidCancellationSettings:
     excluded_statuses: Tuple[str, ...] = DEFAULT_EXCLUDED_STATUSES
     scan_max_pages: int = DEFAULT_SCAN_MAX_PAGES
     page_limit: int = DEFAULT_PAGE_LIMIT
+    page_delay_seconds: float = 2.0
+    read_attempts: int = 4
     schedule_name: str = ""
     schedule_expression: str = ""
     timezone: str = "Europe/Bratislava"
@@ -282,7 +287,7 @@ def resolve_unpaid_cancellation_settings(project_settings: Dict[str, Any]) -> Un
 
     age_days = max(1, int(raw.get("age_days", DEFAULT_AGE_DAYS)))
     scan_max_pages = max(1, int(raw.get("scan_max_pages", DEFAULT_SCAN_MAX_PAGES)))
-    page_limit = max(1, min(DEFAULT_PAGE_LIMIT, int(raw.get("page_limit", DEFAULT_PAGE_LIMIT))))
+    page_limit = max(2, min(DEFAULT_PAGE_LIMIT, int(raw.get("page_limit", DEFAULT_PAGE_LIMIT))))
     return UnpaidCancellationSettings(
         enabled=bool(raw.get("enabled", False)),
         age_days=age_days,
@@ -305,6 +310,8 @@ def resolve_unpaid_cancellation_settings(project_settings: Dict[str, Any]) -> Un
         excluded_statuses=_tuple_from_settings(raw.get("excluded_statuses"), DEFAULT_EXCLUDED_STATUSES),
         scan_max_pages=scan_max_pages,
         page_limit=page_limit,
+        page_delay_seconds=max(0.0, float(raw.get("page_delay_seconds", 2.0))),
+        read_attempts=max(1, min(4, int(raw.get("read_attempts", 4)))),
         schedule_name=str(raw.get("schedule_name") or ""),
         schedule_expression=str(raw.get("schedule_expression") or ""),
         timezone=str(raw.get("timezone") or "Europe/Bratislava"),
@@ -537,67 +544,68 @@ def fetch_orders_for_cancellation(
     settings: UnpaidCancellationSettings,
     status_ids: Sequence[int],
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    orders: List[Dict[str, Any]] = []
-    page_count = 0
-    oldest_order_date = ""
-    seen_orders: set[str] = set()
-    for status_id in status_ids:
-        cursor = 0
-        has_next_page = True
-        while has_next_page:
-            if page_count >= settings.scan_max_pages:
-                raise RuntimeError("Unpaid cancellation scan is incomplete: page budget exhausted")
-            params: Dict[str, Any] = {
-                "limit": settings.page_limit,
-                "order_by": "pur_date",
-                "sort": "DESC",
-            }
-            if cursor:
-                params["cursor"] = cursor
-            result = execute_read(
-                client, UNPAID_ORDER_QUERY,
-                variable_values={"status": int(status_id), "params": params},
-            )
-            payload = result.get("getOrderList")
-            if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
-                raise RuntimeError("Unpaid cancellation scan returned an invalid order page")
-            page_orders = payload["data"]
-            for order in page_orders:
-                number = str(order.get("order_num") or "").strip() if isinstance(order, dict) else ""
-                if not number or number in seen_orders:
-                    raise RuntimeError("Unpaid cancellation scan contains a missing or duplicate order identity")
-                seen_orders.add(number)
-            orders.extend(page_orders)
-            page_count += 1
+    """Read one complete ID inventory, then retain candidate statuses locally."""
+    budget = InventoryScanBudget(max_pages=settings.scan_max_pages)
+    last_read_at = 0.0
 
-            for order in page_orders:
-                purchased_at = order_purchase_date(order)
-                if purchased_at:
-                    text = purchased_at.strftime("%Y-%m-%d")
-                    if not oldest_order_date or text < oldest_order_date:
-                        oldest_order_date = text
+    def read(variables: Dict[str, Any], deadline: float) -> Dict[str, Any]:
+        nonlocal last_read_at
 
-            page_info = payload.get("pageInfo")
-            if not isinstance(page_info, dict) or not isinstance(page_info.get("hasNextPage"), bool):
-                raise RuntimeError("Unpaid cancellation scan has no complete pagination metadata")
-            has_next_page = page_info["hasNextPage"]
-            if has_next_page:
-                next_cursor = page_info.get("nextCursor")
-                if isinstance(next_cursor, bool):
-                    raise RuntimeError("Unpaid cancellation scan cursor is invalid")
-                try:
-                    next_cursor = int(next_cursor)
-                except (TypeError, ValueError):
-                    raise RuntimeError("Unpaid cancellation scan next cursor is missing or invalid") from None
-                if not page_orders or next_cursor <= cursor:
-                    raise RuntimeError("Unpaid cancellation scan cursor did not advance")
-                cursor = next_cursor
+        def check_deadline(delay: float = 0) -> None:
+            if time.monotonic() + delay >= deadline:
+                raise RuntimeError("Unpaid cancellation scan time limit reached before completion")
 
+        for attempt in range(settings.read_attempts):
+            check_deadline()
+            remaining = settings.page_delay_seconds - (time.monotonic() - last_read_at)
+            if remaining > 0:
+                check_deadline(remaining)
+                time.sleep(remaining)
+            check_deadline()
+            last_read_at = time.monotonic()
+            try:
+                result = execute_read(client, UNPAID_ORDER_QUERY, variable_values=variables, attempts=1)
+                check_deadline()
+                return result
+            except Exception as exc:
+                code = getattr(exc, "code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+                transient = code in {429, 500, 502, 503, 504} or type(exc).__name__ in {
+                    "Timeout", "ReadTimeout", "ConnectTimeout", "ConnectionError", "TransportProtocolError",
+                    "TransportQueryError",
+                }
+                # A supplied partial response is never accepted as a page.
+                if getattr(exc, "data", None) or not transient or attempt + 1 == settings.read_attempts:
+                    raise
+                delay = min(30, 10 * (attempt + 1))
+                check_deadline(delay)
+                time.sleep(delay)
+        raise RuntimeError("Unpaid cancellation scan read retries exhausted")
+
+    def validate_order(order: Any) -> None:
+        if (not isinstance(order, dict) or "status" not in order
+                or (order["status"] is not None and (not isinstance(order["status"], dict)
+                                                     or not order["status"].get("id")))
+                or not isinstance(order.get("blocked"), bool) or "pur_date" not in order
+                or "price_elements" not in order
+                or (order["price_elements"] is not None and not isinstance(order["price_elements"], list))
+                or any(not isinstance(element, dict)
+                       or not {"type", "title", "reference_id"}.issubset(element)
+                       for element in (order["price_elements"] or []))):
+            raise RuntimeError("Unpaid cancellation inventory has incomplete status or payment fields")
+
+    inventory = scan_order_inventory(
+        read, validate_order, budget=budget, page_limit=settings.page_limit,
+        label="Unpaid cancellation scan", logger=logger,
+    )
+    expected = {str(status_id) for status_id in status_ids}
+    orders = [order for order in inventory if str((order.get("status") or {}).get("id")) in expected]
+    dates = [purchased.isoformat() for order in orders if (purchased := order_purchase_date(order))]
     return orders, {
-        "pages_scanned": page_count,
+        "pages_scanned": budget.pages,
+        "inventory_orders_scanned": len(inventory),
         "scan_limit_reached": False,
         "scan_stop_reason": "api_exhausted",
-        "oldest_order_date": oldest_order_date,
+        "oldest_order_date": min(dates, default=""),
     }
 
 
@@ -664,7 +672,7 @@ def run_unpaid_order_cancellation(
 
     candidate_status_ids = resolve_candidate_status_ids(statuses, settings)
     orders, scan = fetch_orders_for_cancellation(client, settings, candidate_status_ids)
-    summary.total_orders_scanned = len(orders)
+    summary.total_orders_scanned = int(scan["inventory_orders_scanned"])
     summary.pages_scanned = int(scan.get("pages_scanned") or 0)
     summary.scan_limit_reached = bool(scan.get("scan_limit_reached"))
     summary.scan_stop_reason = str(scan.get("scan_stop_reason") or "")

@@ -16,6 +16,8 @@ import math
 from contextlib import nullcontext
 from zoneinfo import ZoneInfo
 
+from order_inventory import InventoryScanBudget, scan_order_inventory
+
 from invoice_automation_state import (
     AutomationLeaseBusy,
     AutomationStateError,
@@ -983,141 +985,28 @@ class InvoiceGenerator:
 
     def _fetch_order_pages(self, *, changed_from: Optional[str] = None,
                            purchase_window: Optional[Tuple[str, str]] = None) -> List[Dict[str, Any]]:
-        """Read a bounded ID inventory, proving continuity across mutable offsets.
+        """Discover a bounded inventory using the shared ID continuity scanner."""
+        budget = InventoryScanBudget(max_pages=self.scan_max_pages, pages=self.scan_pages,
+                                     started_at=self._scan_started_at)
 
-        Full discovery has no mutable status filter. New internal IDs beyond the
-        initial maximum wait for the next pass. Every continuation overlaps the
-        previous ID; deletion shifts are repaired by finding and consuming a page
-        containing its predecessor/successor boundary. A changed-from scan can
-        gain older IDs behind the cursor, so its caller persists the scan START
-        watermark (with overlap), never the completion time.
-        """
-        orders: Dict[str, Dict[str, Any]] = {}
-        if self._scan_started_at is None:
-            self._scan_started_at = time.monotonic()
-        started = self._scan_started_at
-        repairs = 0
-
-        def order_id(order: Dict[str, Any]) -> int:
-            raw = order.get("id")
-            if (isinstance(raw, bool) or not isinstance(raw, (int, str))
-                    or not str(raw).isascii() or not str(raw).isdigit() or int(raw) <= 0):
-                raise RuntimeError("Invoice scan has an invalid internal order ID")
-            return int(raw)
-
-        def read_page(offset: int, *, limit: int = 30, descending: bool = False,
-                      unfiltered: bool = False) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-            if self.scan_pages >= self.scan_max_pages or time.monotonic() - started > 1200:
-                raise RuntimeError("Invoice scan limit reached before completion")
-            variables: Dict[str, Any] = {"params": {
-                "limit": limit, "order_by": "order_id", "sort": "DESC" if descending else "ASC",
-                "cursor": offset,
-            }}
-            if changed_from is not None and not unfiltered:
-                variables["changed_from"] = changed_from
-            self._scan_read_deadline = started + 1200
+        def read(variables: Dict[str, Any], deadline: float) -> Dict[str, Any]:
+            # Preserve the existing public progress counter and shared full /
+            # changed scan deadline, including pacing, retries and lease renewal.
+            self.scan_pages = budget.pages
+            self._scan_read_deadline = deadline
             try:
-                result = self.execute_read(ORDER_QUERY, variables)
+                return self.execute_read(ORDER_QUERY, variables)
             finally:
                 self._scan_read_deadline = None
-            self.scan_pages += 1
-            if time.monotonic() - started > 1200:
-                raise RuntimeError("Invoice scan time limit reached before completion")
-            payload = result.get("getOrderList")
-            if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
-                raise RuntimeError("Incomplete invoice scan response")
-            page = payload["data"]
-            info = payload.get("pageInfo")
-            if (not isinstance(info, dict) or not isinstance(info.get("hasNextPage"), bool)
-                    or not isinstance(info.get("totalRecords"), int)
-                    or isinstance(info["totalRecords"], bool) or info["totalRecords"] < 0):
-                raise RuntimeError("Invoice scan lacks reliable pagination metadata")
-            if len(page) > limit:
-                raise RuntimeError("Invoice scan exceeded the requested page size")
-            end = offset + len(page)
-            if (info["hasNextPage"] != (end < info["totalRecords"])
-                    or (page and end > info["totalRecords"])
-                    or (not page and offset < info["totalRecords"])
-                    or (info["hasNextPage"] and len(page) != limit)):
-                raise RuntimeError(f"Invoice scan has inconsistent pagination metadata at offset {offset}")
-            for order in page:
-                # Unassigned status is legitimate in the unfiltered inventory;
-                # fresh pre-mutation evidence still requires a concrete status.
-                self._validate_order_for_invoice_read(order, allow_null_status=True)
-            ids = [order_id(order) for order in page]
-            if any((a <= b if descending else a >= b) for a, b in zip(ids, ids[1:])):
-                raise RuntimeError(f"Invoice scan order IDs are not strictly sorted at offset {offset}")
-            if not page and info["hasNextPage"]:
-                raise RuntimeError("Invoice scan has an empty non-final page")
-            if info["hasNextPage"]:
-                next_cursor = info.get("nextCursor")
-                if (not isinstance(next_cursor, int) or isinstance(next_cursor, bool)
-                        or next_cursor != offset + len(page)):
-                    raise RuntimeError(f"Invoice scan cursor did not advance reliably at offset {offset}")
-            return page, info
 
-        def boundary_is_proven(page: List[Dict[str, Any]], info: Dict[str, Any],
-                               offset: int, previous_id: int) -> bool:
-            if not page:
-                return offset == 0 and not info["hasNextPage"]
-            if order_id(page[0]) > previous_id:
-                return offset == 0
-            return order_id(page[-1]) > previous_id or not info["hasNextPage"]
-
-        def recover_boundary(offset: int, page: List[Dict[str, Any]], info: Dict[str, Any],
-                             previous_id: int) -> Tuple[int, List[Dict[str, Any]], Dict[str, Any]]:
-            nonlocal repairs
-            while not boundary_is_proven(page, info, offset, previous_id):
-                repairs += 1
-                if repairs > 8:
-                    raise RuntimeError(f"Invoice scan boundary repair limit reached at offset {offset}")
-                logger.warning("Invoice scan repairing offset boundary: offset=%s previous_internal_id=%s attempt=%s",
-                               offset, previous_id, repairs)
-                # Seek a current lower bound, then verify its adjacent boundary
-                # in ONE response. Churn during these probes can invalidate the
-                # estimate; it never invalidates the final continuity check.
-                low, high = 0, max(offset, info["totalRecords"])
-                for _ in range(32):
-                    if low >= high:
-                        break
-                    middle = (low + high) // 2
-                    probe, _ = read_page(middle, limit=1)
-                    if not probe or order_id(probe[0]) > previous_id:
-                        high = middle
-                    else:
-                        low = middle + 1
-                else:
-                    raise RuntimeError("Invoice scan boundary seek limit reached")
-                offset = max(0, low - 1)
-                page, info = read_page(offset)
-            return offset, page, info
-
-        anchor, _ = read_page(0, limit=1, descending=True, unfiltered=True)
-        if not anchor:
-            return []
-        upper_id = order_id(anchor[0])
-        previous_id = 0
-        offset = 0
-        while True:
-            page, info = read_page(offset)
-            offset, page, info = recover_boundary(offset, page, info, previous_id)
-            # Use this exact verified page. A second fetch at its offset could
-            # lose the successor to another concurrent deletion.
-            for order in page:
-                identity = order_id(order)
-                if identity <= previous_id:
-                    continue  # Explicitly verified overlap, not blind deduplication.
-                if identity > upper_id:
-                    break
-                number = str(order["order_num"])
-                if number in orders:
-                    raise RuntimeError(f"Invoice scan reused an order number at offset {offset}")
-                orders[number] = order
-                previous_id = identity
-            if not page or order_id(page[-1]) >= upper_id or not info["hasNextPage"]:
-                break
-            offset += len(page) - 1
-        result_orders = list(orders.values())
+        try:
+            result_orders = scan_order_inventory(
+                read, lambda order: self._validate_order_for_invoice_read(order, allow_null_status=True),
+                budget=budget, changed_from=changed_from, label="Invoice scan", logger=logger,
+            )
+        finally:
+            self.scan_pages = budget.pages
+            self._scan_started_at = budget.started_at
         if purchase_window:
             result_orders = [order for order in result_orders
                              if purchase_window[0] <= _order_purchase_date(order) <= purchase_window[1]]

@@ -93,6 +93,8 @@ def main() -> None:
         from unpaid_order_cancellation_runner import parse_args, run_unpaid_cancellation_runner
         summary = run_unpaid_cancellation_runner(parse_args(["--project", args.project, "--dry-run"]))
     verify_summary(summary, args.kind)
+    if args.full_backlog and summary.get("invoice_scan_all_ages") is not True:
+        raise RuntimeError("host-gate-full-backlog-not-verified")
     payload = {"marker": MARKER, "project": args.project, "kind": args.kind,
                "path": "/app", "dry_run": True}
     if args.full_backlog:
