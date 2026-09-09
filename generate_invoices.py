@@ -617,7 +617,7 @@ class InvoiceGenerator:
             if self.login_web_session(username, password):
                 logger.info("âś“ Successfully logged in to web session")
                 if self.arf_token:
-                    logger.info(f"âś“ ARF token obtained: {self.arf_token[:8]}...")
+                    logger.info("Authentication token obtained")
                 else:
                     logger.info("âš  No ARF token found yet, will try to obtain during invoice creation")
             else:
@@ -635,8 +635,8 @@ class InvoiceGenerator:
             
             # Check if we got a session cookie
             if 'SSID' in self.web_session.cookies:
-                session_id = self.web_session.cookies['SSID']
-                logger.info(f"âś“ Session established: {session_id[:10]}...")
+                _ = self.web_session.cookies['SSID']
+                logger.info("Web session cookie received")
             else:
                 logger.error("âś— No session cookie received from login page")
                 return False
@@ -646,13 +646,13 @@ class InvoiceGenerator:
             arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', login_page_response.text)
             if arf_match:
                 arf_token = arf_match.group(1)
-                logger.info(f"âś“ Found arf token in login page: {arf_token[:8]}...")
+                logger.info("Login-page authentication token found")
             else:
                 # Try to find CsrfToken in the page
                 csrf_match = re.search(r"var\s+CsrfToken\s*=\s*function\s*\(\)\s*\{\s*var\s+\w+\s*=\s*'([a-zA-Z0-9]+)'", login_page_response.text)
                 if csrf_match:
                     arf_token = csrf_match.group(1)
-                    logger.info(f"âś“ Found CsrfToken: {arf_token[:8]}...")
+                    logger.info("Login-page authentication token found")
             
             # Step 2: POST credentials with session
             logger.info("Submitting login credentials...")
@@ -675,9 +675,7 @@ class InvoiceGenerator:
             response_text = login_response.text
             response_url = str(login_response.url)
             
-            logger.debug(f"Login response URL: {response_url}")
             logger.debug(f"Response status: {login_response.status_code}")
-            logger.debug(f"Response headers: {dict(login_response.headers)}")
             
             # Check if response is JSON (try to parse even if content-type is wrong)
             try:
@@ -693,8 +691,6 @@ class InvoiceGenerator:
                 else:
                     response_json = login_response.json()
                 
-                logger.debug(f"JSON response: {response_json}")
-                
                 # Check for success in JSON response
                 if response_json.get('success') or response_json.get('status') == 'ok':
                     logger.info("âś“ Login successful (JSON response)")
@@ -702,12 +698,12 @@ class InvoiceGenerator:
                     # Extract arf from JSON if available
                     if 'arf' in response_json:
                         self.arf_token = response_json['arf']
-                        logger.info(f"âś“ ARF token from JSON: {self.arf_token[:8]}...")
+                        logger.info("Login response supplied an authentication token")
                     
                     # Extract redirect URL if available
                     if 'redirect' in response_json or 'url' in response_json:
                         redirect_url = response_json.get('redirect') or response_json.get('url')
-                        logger.info(f"Following redirect to: {redirect_url}")
+                        logger.info("Following authentication redirect")
                         
                         # Follow the redirect
                         redirect_response = self.web_session.get(f"{self.base_url}{redirect_url}")
@@ -717,7 +713,7 @@ class InvoiceGenerator:
                         arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', redirect_response.url)
                         if arf_match:
                             self.arf_token = arf_match.group(1)
-                            logger.info(f"âś“ ARF token from redirect: {self.arf_token[:8]}...")
+                            logger.info("Authentication redirect supplied a token")
                     
                     # If login successful, navigate to dashboard to establish session properly
                     logger.info("Navigating to dashboard...")
@@ -725,52 +721,37 @@ class InvoiceGenerator:
                     dashboard_response = self.web_session.get(dashboard_url, allow_redirects=True)
                     
                     logger.debug(f"Dashboard status: {dashboard_response.status_code}")
-                    logger.debug(f"Dashboard URL: {dashboard_response.url}")
                     
                     # Extract ARF from dashboard URL
                     arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', str(dashboard_response.url))
                     if arf_match:
                         self.arf_token = arf_match.group(1)
-                        logger.info(f"âś“ ARF token from dashboard: {self.arf_token[:8]}...")
+                        logger.info("Dashboard authentication token found")
                     else:
                         # Try to find in response
                         arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', dashboard_response.text)
                         if arf_match:
                             self.arf_token = arf_match.group(1)
-                            logger.info(f"âś“ ARF token from dashboard HTML: {self.arf_token[:8]}...")
+                            logger.info("Dashboard authentication token found")
                         else:
-                            # Save dashboard for debugging
-                            if os.getenv('DEBUG'):
-                                with open('dashboard_response.html', 'w') as f:
-                                    f.write(dashboard_response.text)
-                                logger.debug("Saved dashboard response to dashboard_response.html")
-                            
                             # Try to find CsrfToken in the dashboard
                             csrf_match = re.search(r"var\s+CsrfToken\s*=\s*function\s*\(\)\s*\{\s*var\s+\w+\s*=\s*'([a-zA-Z0-9]+)'", dashboard_response.text)
                             if csrf_match:
                                 self.arf_token = csrf_match.group(1)
-                                logger.info(f"âś“ Found CsrfToken in dashboard: {self.arf_token[:8]}...")
+                                logger.info("Dashboard authentication token found")
                             else:
                                 # Maybe the system doesn't use ARF tokens consistently
                                 logger.warning("No ARF token found - system might not require it for all operations")
                     
                     return True
                 else:
-                    logger.error(f"âś— Login failed: {response_json.get('message', 'Unknown error')}")
+                    logger.error("Web login was rejected")
                     return False
                     
             except json.JSONDecodeError:
                 # Not JSON, check HTML response
                 logger.debug("Response is not JSON, checking HTML...")
-                logger.debug(f"Response length: {len(response_text)}")
-                logger.debug(f"First 500 chars: {response_text[:500]}")
                 
-                # Save response for debugging
-                if os.getenv('DEBUG'):
-                    with open('login_response.html', 'w') as f:
-                        f.write(response_text)
-                    logger.debug("Saved response to login_response.html")
-            
             # Check for login failure indicators
             if 'error' in response_text.lower() or 'invalid' in response_text.lower() or 'nesprĂˇvne' in response_text.lower():
                 logger.error("âś— Login failed - invalid credentials")
@@ -788,7 +769,7 @@ class InvoiceGenerator:
             
             if arf_match:
                 self.arf_token = arf_match.group(1)
-                logger.info(f"âś“ Successfully logged in and extracted arf token: {self.arf_token[:8]}...")
+                logger.info("Web login verified and authentication token obtained")
                 return True
             else:
                 # Even without arf, check if we're logged in
@@ -799,11 +780,10 @@ class InvoiceGenerator:
                     return True
                 else:
                     logger.error("âś— Login failed - could not verify successful login")
-                    logger.debug(f"Final URL: {response_url}")
                     return False
                 
         except Exception as e:
-            logger.error(f"Error during web login: {e}")
+            logger.error("Web login failed (%s)", type(e).__name__)
             return False
     
     def get_arf_token(self) -> Optional[str]:
@@ -817,39 +797,38 @@ class InvoiceGenerator:
             response = self.web_session.get(dashboard_url)
             
             logger.debug(f"ARF search response status: {response.status_code}")
-            logger.debug(f"ARF search response URL: {response.url}")
             
             # Search for arf in URL first
             arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', str(response.url))
             if arf_match:
                 self.arf_token = arf_match.group(1)
-                logger.info(f"âś“ Found arf token in URL: {self.arf_token}")
+                logger.info("Authentication token found in page URL")
                 return self.arf_token
             
             # Search for arf in response text
             arf_match = re.search(r'[?&]arf=([a-zA-Z0-9]+)', response.text)
             if arf_match:
                 self.arf_token = arf_match.group(1)
-                logger.info(f"âś“ Found arf token in HTML: {self.arf_token}")
+                logger.info("Authentication token found in page content")
                 return self.arf_token
             
             # Try to find it in JavaScript or forms
             arf_match = re.search(r'arf["\']?\s*[:=]\s*["\']([a-zA-Z0-9]+)["\']', response.text)
             if arf_match:
                 self.arf_token = arf_match.group(1)
-                logger.info(f"âś“ Found arf token in JavaScript: {self.arf_token}")
+                logger.info("Authentication token found in page script")
                 return self.arf_token
             
             # Try to find CsrfToken
             csrf_match = re.search(r"var\s+CsrfToken\s*=\s*function\s*\(\)\s*\{\s*var\s+\w+\s*=\s*'([a-zA-Z0-9]+)'", response.text)
             if csrf_match:
                 self.arf_token = csrf_match.group(1)
-                logger.info(f"âś“ Found CsrfToken as ARF: {self.arf_token}")
+                logger.info("Authentication token found in page script")
                 return self.arf_token
             
             logger.debug("No ARF token found in dashboard response")
         except Exception as e:
-            logger.error(f"Error getting arf token: {e}")
+            logger.error("Authentication token lookup failed (%s)", type(e).__name__)
         
         return None
     
@@ -868,10 +847,7 @@ class InvoiceGenerator:
             
             # Check if we're still logged in
             logger.debug(f"Validation response status: {response.status_code}")
-            logger.debug(f"Validation response URL: {response.url}")
             response_text = response.text
-            logger.debug(f"Response contains 'logout': {'logout' in response_text.lower()}")
-            logger.debug(f"Response contains 'login': {'login' in response_text.lower()}")
             
             # If we get redirected to login page, session is invalid
             if 'login' in str(response.url).lower() and 'logout' not in response_text.lower():
@@ -897,7 +873,7 @@ class InvoiceGenerator:
                     
                     if arf_match:
                         self.arf_token = arf_match.group(1)
-                        logger.info(f"âś“ ARF token obtained from session validation: {self.arf_token[:8]}...")
+                        logger.info("Session validation supplied an authentication token")
                 
                 return True
             else:
@@ -905,7 +881,7 @@ class InvoiceGenerator:
                 return False
                 
         except Exception as e:
-            logger.error(f"âś— Error validating web session: {e}")
+            logger.error("Web session validation failed (%s)", type(e).__name__)
             return False
     
     def execute_read(self, query: Any, variables: Dict[str, Any]) -> Dict[str, Any]:
