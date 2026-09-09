@@ -5,6 +5,29 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-09 — Invoice contract correction merged; exact build and release pending
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-invoice-contract-production-verification-20260909`
+
+What changed:
+
+- PR #544 merged as `c9a7d3e6e5e2a312a3a7a472b234696a4c4f6693` after all six exact-head checks passed on `ff8b0d03d480fc653cdc374b91d44b3ce1a7faff`, including Windows/Linux regression and security checks. Exact-image build `34375495049` is in progress. This clean verification branch starts from synchronized merged main; no direct main edits or force pushes occurred.
+
+What is verified:
+
+- Both migration helper previews passed from clean pushed source against real order reads, with zero invoice, email or journal writes. The first VEVO preview stopped at its safety gate during an overlapping old run; after that run released its lease, a fresh seed selection and preview passed. The private journal now contains six ROY and five VEVO `create_failed` seeds, no invoice IDs and all eleven email holds. These previews do not prove creation.
+- Final local regression is 572 passing tests, plus reporting smoke, focused Ruff and an independent 120-test review. The existing five schedules remain on the preceding immutable image; no financial canary has run against the new preparation phases.
+
+Known issues:
+
+- Actual final documents remain uncreated. The superseded `5ae96eea...` image must not be dispatched. Native FLOX stale payment-attempt handling remains external; the possible separate daily creditnote guard migration below is not yet implemented or live.
+
+Next exact step:
+
+- Verify build success and exact ECR digest for merged `c9a7d3e6`, dispatch the managed deployment once on unchanged main, and freeze main until its three actual localhost gates, old-writer drain and five schedule readbacks finish. Only then verify natural invoice runs or use one held-seed helper attempt under the shared lease. Confirm all eleven final documents independently, run the complete-discovery cancellation baseline, and record runtime/UI evidence without customer data in Git.
+
 ## 2026-09-09 — Verified invoice contract and pagination corrections ready for release
 
 Date: 2026-09-09
