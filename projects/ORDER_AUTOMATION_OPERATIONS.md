@@ -60,6 +60,19 @@ and never creates an invoice itself. Historical candidates receive
 Normal newly eligible invoices keep the configured email behavior. The runner
 freshly checks every seeded order and skips invoices created elsewhere.
 
+After a live run has released its lease, independently verify the seeded records:
+
+```powershell
+python scripts/verify_invoice_backfill.py --project roy --profile codex --expected-count 6 --publish-report
+python scripts/verify_invoice_backfill.py --project vevo --profile codex --expected-count 5 --publish-report
+```
+
+These counts belong to the reviewed migration, not a default for future audits.
+The helper checks each fresh order and the stable private journal, never changes
+business data, and fails incomplete or uncertain outcomes. It writes ignored
+JSON/Markdown evidence; the optional flag also saves immutable encrypted copies
+under the same private bucket's project verification prefix.
+
 ## Release sequence and rollback
 
 For a previously shipped order whose state was lost, first inspect its authenticated

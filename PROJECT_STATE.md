@@ -20,6 +20,9 @@ What is verified:
 
 - Both pin diagnostic hosts stopped with actual localhost markers; private deployment snapshots and historical operation evidence are in the existing private S3 bucket. No local application service was started.
 - Daily-report revenue/guard settings and the legacy eligibility decision methods match their exact pinned source commits. A separate read-only audit is checking whether any currently linked creditnote orders are exposed to the older guard.
+- That current-risk audit is complete: ROY 170 creditnotes / 164 current linked orders and VEVO 313 / 304, with zero current legacy-eligible unsafe candidates and zero unreadable orders. Four shipped VEVO orders have only open unnumbered creditnotes, which the old guard excludes. This does not repair the future partial-creditnote defect. Both historical backlog audits and risk audits were saved under private S3 `data/<project>/order-automation/audits/2026-09-09/` with exact readback checks.
+- PR #541 merged as `d8a392ae2b1a970bb544685c9ed4c2144e4e689c` after all six exact-head checks passed. Build `34359016619` succeeded, producing immutable digest `0517335c2c8bbe0b1f212adf00bd37ec8bef4dd90c775bf102a4bdca04a4f691`. Managed deployment `34359306326` now passes dependency initialization and has entered candidate preparation. The failed earlier run left all five schedules enabled on old definitions and created no deployment snapshot.
+- Added a reproducible read-only historical verifier in `07bf67c4`; all 14 focused tests pass. It requires the exact seeded count, stable lease-free journal and independently fresh invoice/email-hold outcomes; private JSON/Markdown evidence can be persisted to the same private S3 bucket. Its Windows/Linux PR validation and operations procedure are now explicit. No live verification is claimed before actual upgraded runs finish.
 
 Known issues:
 
