@@ -315,10 +315,14 @@ chmod +x generate_invoices*.sh
 ## Invoice Generation
 
 ### Overview
-The `generate_invoices.py` script automatically creates invoices for orders based on specific criteria:
-- Status: "Odoslaná" (sent)
-- Payment method: "Dobierkou" (cash on delivery)
-- No existing invoice
+The invoice runner creates invoices for unblocked, positive-value orders in the
+project's configured eligible status (ROY/VEVO: "Odoslaná") without a final
+invoice. Eligibility is not restricted to a payment method. ROY and VEVO perform
+an all-age inventory once per day and use changed-order watermarks between full
+scans, so delayed shipment does not exclude an old purchase.
+
+Use the [order automation operations guide](projects/ORDER_AUTOMATION_OPERATIONS.md)
+for historical migration, current runtime verification, deployment and rollback.
 
 ### Requirements
 
@@ -333,24 +337,21 @@ BIZNISWEB_PASSWORD=your_password
 ### Usage
 
 ```bash
-# Create invoices for last 7 days
-python generate_invoices.py
+# Preview the complete historical ROY backlog without financial writes
+python invoice_runner.py --project roy --dry-run --full-backlog
 
-# Create invoices for specific date range
-python generate_invoices.py --from-date 2024-01-01 --to-date 2024-01-31
-
-# Dry run (preview without creating invoices)
-python generate_invoices.py --dry-run
+# Preview VEVO using its persisted scan schedule and watermark
+python invoice_runner.py --project vevo --dry-run
 ```
 
 ### How it Works
 
 1. **Login** - Authenticates with BizniWeb web interface using provided credentials
 2. **Session Validation** - Verifies the session is active and obtains ARF token
-3. **Fetch Orders** - Retrieves orders from GraphQL API for the specified date range
-4. **Filter Orders** - Identifies orders matching the criteria (cash on delivery, no invoice)
-5. **Create Invoices** - Creates invoices for each matching order via web API
-6. **Send Emails** - Automatically sends invoice emails to customers through the BizniWeb invoice email action
+3. **Fetch Orders** - Completes bounded pagination for the all-age inventory and changed orders
+4. **Filter Orders** - Checks eligibility and durably queues candidates under the shop's shared lease
+5. **Create Invoices** - Rereads each order, issues one creation attempt and independently checks its result
+6. **Send Emails** - Applies the configured email policy; reviewed historical candidates retain an email hold
 
 When `invoice_generation.send_invoice_email` is enabled, the invoice run fails if a newly created invoice cannot be emailed or if the invoice ID cannot be resolved for the BizniWeb send action.
 

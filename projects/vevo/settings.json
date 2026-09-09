@@ -118,7 +118,7 @@
     "all_age_backlog_enabled": true,
     "full_scan_interval_hours": 24,
     "scan_max_pages": 5000,
-    "page_delay_seconds": 1,
+    "page_delay_seconds": 2,
     "safety_state_enabled": true,
     "exclude_zero_total_orders": true,
     "send_invoice_email": true,
