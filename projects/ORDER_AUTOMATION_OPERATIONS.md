@@ -12,6 +12,14 @@ orders without a purchase-date cutoff. Between full scans they read changed orde
 from the last complete scan-start watermark with overlap. The cold-start fallback
 is ninety days; it does not restrict the full historical scan.
 
+Full discovery reads the unfiltered order inventory by ascending unique internal
+ID and stops at the maximum ID captured at its start. This keeps status changes
+from moving rows between pages. Adjacent pages overlap; a shifted offset requires
+a bounded search for a response that proves the previous-ID boundary. That same
+response must be consumed, without an unverified second fetch. New IDs and later
+incremental membership changes are covered by the next scan-start watermark.
+Purchase timestamps are not pagination keys and do not stop this all-age scan.
+
 Only unblocked, positive-value orders in configured eligible statuses without a
 final invoice may be invoiced. Every write rereads the order. A private encrypted
 S3 document at `data/<project>/order-automation/state.json` provides a conditional
@@ -44,6 +52,18 @@ ignored private reports under `data/<project>/order-automation/backlog-audit.jso
 The standard API token permits thirty rows per page. A partial scan produces no
 complete report. Audit outputs are generated artifacts, not a separate source of
 code or truth.
+
+Before releasing a discovery correction, independently exercise the actual
+generator's complete read-only scan against the reviewed private audit baseline:
+
+```powershell
+python scripts/verify_invoice_discovery.py --project vevo --profile codex --expected-count 5 --publish-report
+```
+
+Use the selected project's reviewed count (six for ROY in this migration). This
+helper has no web login and performs no invoice, email, status or journal writes.
+A still-eligible baseline candidate missing from discovery is a failure. Its
+private evidence is separate from final verification of created invoices below.
 
 After reviewing a complete report, seed its old candidates into the private
 journal before the first upgraded live run:

@@ -25,15 +25,17 @@ python export_orders.py
 
 ### Identify orders needing invoices
 ```bash
-# Identify orders needing invoices for last 7 days
-python generate_invoices.py
+# Preview all-age invoice discovery without financial writes
+python invoice_runner.py --project roy --dry-run --full-backlog
 
-# Identify orders for specific date range
-python generate_invoices.py --from-date 2024-01-01 --to-date 2024-01-31
-
-# Dry run (preview what would be identified)
-python generate_invoices.py --dry-run
+# Preview the normal project scan schedule and watermark
+python invoice_runner.py --project vevo --dry-run
 ```
+
+ROY/VEVO historical discovery is not limited to seven purchase days. Use
+`projects/ORDER_AUTOMATION_OPERATIONS.md` for the durable state, historical email
+holds, verification and managed production deployment. A preview is not evidence
+that the production schedules were upgraded or that invoices were created.
 
 ### Running invoice generation with scripts
 
