@@ -62,6 +62,15 @@ freshly checks every seeded order and skips invoices created elsewhere.
 
 ## Release sequence and rollback
 
+For a previously shipped order whose state was lost, first inspect its authenticated
+admin history and record fresh, project-matched evidence under the ignored private
+automation directory. Preview `scripts/restore_verified_fulfillment.py` with the
+exact order number, expected current status ID and evidence path. Apply only after
+the preview passes against current full payment and complete creditnote evidence.
+The helper requires committed/pushed source, holds the shared lease, journals intent,
+makes one silent status write and independently verifies the result. Uncertain
+outcomes remain blocked for review. Invoice existence alone is never shipment proof.
+
 1. Verify repository, clean branch, fetched/pulled upstream and PROJECT_STATE.
    Record current ECS task identity, private IP, exact image, service and `/app`
    runner path before infrastructure changes.

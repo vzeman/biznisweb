@@ -38,4 +38,4 @@ jobs:
           tests.test_order_status_safety tests.test_unpaid_order_cancellation
           tests.test_creditnote_storno_guard tests.test_creditnote_export
           tests.test_creditnote_automation_context tests.test_automation_runner_health
-          tests.test_invoice_backfill_seed tests.test_order_automation_audit tests.test_order_automation_deployment
+          tests.test_restore_verified_fulfillment tests.test_invoice_backfill_seed tests.test_order_automation_audit tests.test_order_automation_deployment

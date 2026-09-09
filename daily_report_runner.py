@@ -313,6 +313,8 @@ def maybe_run_creditnote_storno_guard(
     put_metric("CreditnoteStornoGuardEligibleOrders", summary.eligible_orders, project, reporting_defaults)
     put_metric("CreditnoteStornoGuardUpdatedOrders", summary.updated_orders, project, reporting_defaults)
     put_metric("CreditnoteStornoGuardFailedOrders", summary.failed_orders, project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardReviewRequired", getattr(summary, "review_required_orders", 0), project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardPartialCreditsSkipped", getattr(summary, "partial_creditnote_orders", 0), project, reporting_defaults)
 
     print("CREDITNOTE_STORNO_GUARD_SUMMARY " + json.dumps(summary.as_dict(), ensure_ascii=False, sort_keys=True))
 

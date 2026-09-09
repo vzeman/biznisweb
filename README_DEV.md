@@ -3,6 +3,9 @@
 This repository is the source of truth for the BizniWeb reporting stack.
 Do not treat any local Desktop/Downloads scripts as authoritative.
 
+Order/invoice automation audits, historical backfill, immutable deployment and
+runtime recovery are documented in [the operations runbook](projects/ORDER_AUTOMATION_OPERATIONS.md).
+
 ## Rules
 
 - Start every session with `git pull --rebase` on the active branch.
