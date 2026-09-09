@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 from reporting_core import BASE_DEFAULT_PROJECT, load_project_settings, put_metric, resolve_reporting_defaults
+from reporting_core.metrics import automation_metric_defaults
 from unpaid_order_cancellation import resolve_unpaid_cancellation_settings, run_unpaid_order_cancellation
 
 
@@ -66,7 +67,9 @@ def run_unpaid_cancellation_runner(args: argparse.Namespace) -> Dict[str, Any]:
     os.environ["REPORT_PROJECT"] = project
 
     project_settings = load_project_settings(project)
-    reporting_defaults = resolve_reporting_defaults(project, project_settings)
+    reporting_defaults = automation_metric_defaults(
+        resolve_reporting_defaults(project, project_settings), dry_run=args.dry_run,
+    )
     cancellation_settings = resolve_unpaid_cancellation_settings(project_settings)
 
     if not cancellation_settings.enabled:
@@ -90,26 +93,27 @@ def run_unpaid_cancellation_runner(args: argparse.Namespace) -> Dict[str, Any]:
             dry_run=args.dry_run,
             project_settings=project_settings,
         )
+        counters = {
+            "OrdersScanned": summary.total_orders_scanned,
+            "EligibleOrders": summary.eligible_orders,
+            "UpdatedOrders": summary.updated_orders,
+            "RecoveryCandidates": summary.recovery_candidates,
+            "RecoveredOrders": summary.recovered_orders,
+            "RecoveryFailedOrders": summary.recovery_failed_orders,
+            "RecheckedOrders": summary.rechecked_orders,
+            "FailedOrders": summary.failed_orders,
+            "ReviewRequiredOrders": summary.review_required_orders,
+        }
+        for name, value in counters.items():
+            put_metric("UnpaidCancellation" + name, value, project, reporting_defaults)
+        print("UNPAID_CANCELLATION_SUMMARY " + json.dumps(summary.as_dict(), ensure_ascii=False, sort_keys=True))
+        if summary.failed_orders or summary.scan_limit_reached or summary.scan_stop_reason not in {"", "api_exhausted"}:
+            raise RuntimeError(f"Unpaid order cancellation failed or requires review in project '{project}'")
+        put_metric("UnpaidCancellationRunSucceeded", 1, project, reporting_defaults)
+        return summary.as_dict()
     except Exception:
         put_metric("UnpaidCancellationRunFailed", 1, project, reporting_defaults)
         raise
-
-    put_metric("UnpaidCancellationOrdersScanned", summary.total_orders_scanned, project, reporting_defaults)
-    put_metric("UnpaidCancellationEligibleOrders", summary.eligible_orders, project, reporting_defaults)
-    put_metric("UnpaidCancellationUpdatedOrders", summary.updated_orders, project, reporting_defaults)
-    put_metric("UnpaidCancellationRecoveryCandidates", summary.recovery_candidates, project, reporting_defaults)
-    put_metric("UnpaidCancellationRecoveredOrders", summary.recovered_orders, project, reporting_defaults)
-    put_metric("UnpaidCancellationRecoveryFailedOrders", summary.recovery_failed_orders, project, reporting_defaults)
-    put_metric("UnpaidCancellationRecheckedOrders", summary.rechecked_orders, project, reporting_defaults)
-    put_metric("UnpaidCancellationFailedOrders", summary.failed_orders, project, reporting_defaults)
-    put_metric("UnpaidCancellationRunSucceeded", 1, project, reporting_defaults)
-
-    print("UNPAID_CANCELLATION_SUMMARY " + json.dumps(summary.as_dict(), ensure_ascii=False, sort_keys=True))
-
-    if not args.dry_run and summary.failed_orders:
-        raise RuntimeError(f"Unpaid order cancellation failed for {summary.failed_orders} order(s) in project '{project}'")
-
-    return summary.as_dict()
 
 
 def main() -> None:

@@ -13,6 +13,7 @@
     "task_family": "roy-reporting-daily"
   },
   "live_dashboard_artifacts": {
+    "s3_bucket": "biznisweb-reporting-artifacts-919341186960-eu-central-1",
     "s3_prefix": "daily-reports/roy-sk"
   },
   "live_dashboard": {
@@ -94,7 +95,12 @@
   ],
   "invoice_generation": {
     "enabled": true,
-    "lookback_days": 7,
+    "lookback_days": 90,
+    "all_age_backlog_enabled": true,
+    "full_scan_interval_hours": 24,
+    "scan_max_pages": 5000,
+    "page_delay_seconds": 1,
+    "safety_state_enabled": true,
     "exclude_zero_total_orders": true,
     "send_invoice_email": true,
     "eligible_statuses": [
@@ -107,7 +113,7 @@
       "lang_code": "SK"
     },
     "schedule_name": "roy-daily-invoice-generation",
-    "schedule_expression": "cron(5/15 6-23 * * ? *)",
+    "schedule_expression": "cron(5/15 * * * ? *)",
     "final_sweep_schedule_name": "roy-same-day-invoice-sweep",
     "final_sweep_schedule_expression": "cron(59 23 * * ? *)",
     "timezone": "Europe/Bratislava",

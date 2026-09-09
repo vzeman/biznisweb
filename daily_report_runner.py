@@ -31,6 +31,7 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from creditnote_storno_guard import resolve_creditnote_storno_settings, run_creditnote_storno_guard
 from generate_invoices import resolve_invoice_date_window, resolve_invoice_generation_settings, run_invoice_generation
+from reporting_core.metrics import automation_metric_defaults
 from reporting_core import (
     BASE_DEFAULT_PROJECT,
     build_artifact_set,
@@ -186,6 +187,7 @@ def maybe_run_invoice_automation(
     reporting_defaults: Dict[str, Any],
     dry_run: bool = False,
 ) -> Optional[Dict[str, Any]]:
+    reporting_defaults = automation_metric_defaults(reporting_defaults, dry_run)
     invoice_settings = resolve_invoice_generation_settings(load_project_settings(project))
     if not invoice_settings["enabled"]:
         print(f"Invoice automation disabled for project={project}")
@@ -209,6 +211,10 @@ def maybe_run_invoice_automation(
     except Exception:
         put_metric("InvoiceAutomationRunFailed", 1, project, reporting_defaults)
         raise
+
+    if getattr(summary, "skipped_locked", False):
+        put_metric("InvoiceAutomationLeaseBusy", 1, project, reporting_defaults)
+        return {"project": project, "dry_run": dry_run, "skipped_locked": True}
 
     put_metric("InvoiceAutomationMatchedOrders", summary.matched_orders, project, reporting_defaults)
     put_metric("InvoiceAutomationSkippedZeroTotal", summary.skipped_zero_total_orders, project, reporting_defaults)
@@ -235,13 +241,15 @@ def maybe_run_invoice_automation(
         project,
         reporting_defaults,
     )
-    put_metric("InvoiceAutomationRunSucceeded", 1, project, reporting_defaults)
-
-    if not dry_run and (
+    if (
         summary.failed_invoices
         or summary.failed_invoice_emails
         or summary.failed_invoice_status_reconciliations
+        or summary.missing_invoice_ids
+        or not getattr(summary, "invoice_scan_complete", True)
+        or getattr(summary, "ambiguous_invoice_operations", 0)
     ):
+        put_metric("InvoiceAutomationRunFailed", 1, project, reporting_defaults)
         raise RuntimeError(
             (
                 f"Invoice automation failed for project '{project}': "
@@ -251,6 +259,7 @@ def maybe_run_invoice_automation(
             )
         )
 
+    put_metric("InvoiceAutomationRunSucceeded", 1, project, reporting_defaults)
     return {
         "from_date": summary.date_from,
         "to_date": summary.date_to,
@@ -281,6 +290,7 @@ def maybe_run_creditnote_storno_guard(
     reporting_defaults: Dict[str, Any],
     dry_run: bool = False,
 ) -> Optional[Dict[str, Any]]:
+    reporting_defaults = automation_metric_defaults(reporting_defaults, dry_run)
     project_settings = load_project_settings(project)
     guard_settings = resolve_creditnote_storno_settings(project_settings)
     if not guard_settings.enabled:
@@ -303,13 +313,16 @@ def maybe_run_creditnote_storno_guard(
     put_metric("CreditnoteStornoGuardEligibleOrders", summary.eligible_orders, project, reporting_defaults)
     put_metric("CreditnoteStornoGuardUpdatedOrders", summary.updated_orders, project, reporting_defaults)
     put_metric("CreditnoteStornoGuardFailedOrders", summary.failed_orders, project, reporting_defaults)
-    put_metric("CreditnoteStornoGuardRunSucceeded", 1, project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardReviewRequired", getattr(summary, "review_required_orders", 0), project, reporting_defaults)
+    put_metric("CreditnoteStornoGuardPartialCreditsSkipped", getattr(summary, "partial_creditnote_orders", 0), project, reporting_defaults)
 
     print("CREDITNOTE_STORNO_GUARD_SUMMARY " + json.dumps(summary.as_dict(), ensure_ascii=False, sort_keys=True))
 
-    if not dry_run and summary.failed_orders:
+    if summary.failed_orders:
+        put_metric("CreditnoteStornoGuardRunFailed", 1, project, reporting_defaults)
         raise RuntimeError(f"Creditnote storno guard failed for {summary.failed_orders} order(s) in project '{project}'")
 
+    put_metric("CreditnoteStornoGuardRunSucceeded", 1, project, reporting_defaults)
     return summary.as_dict()
 
 

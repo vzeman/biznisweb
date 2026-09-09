@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 
 from generate_invoices import resolve_invoice_date_window, resolve_invoice_generation_settings, run_invoice_generation
 from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_settings, put_metric, resolve_reporting_defaults
+from reporting_core.metrics import automation_metric_defaults
 
 
 DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
@@ -23,6 +24,12 @@ DEFAULT_PROJECT = os.getenv("REPORT_PROJECT", BASE_DEFAULT_PROJECT).strip() or B
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate invoices as a standalone scheduled job")
+    parser.add_argument(
+        "--full-backlog",
+        action="store_true",
+        default=None,
+        help="Force a complete all-age eligible-order audit, ignoring the purchase-date window.",
+    )
     parser.add_argument(
         "--project",
         default=os.getenv("REPORT_PROJECT", DEFAULT_PROJECT),
@@ -108,7 +115,7 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
     load_project_env(project)
 
     settings = load_project_settings(project)
-    reporting_defaults = resolve_reporting_defaults(project, settings)
+    reporting_defaults = automation_metric_defaults(resolve_reporting_defaults(project, settings), args.dry_run)
     invoice_settings = resolve_invoice_generation_settings(settings)
 
     if not invoice_settings["enabled"]:
@@ -138,10 +145,16 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
             date_to=invoice_to_date,
             dry_run=args.dry_run,
             no_web_login=args.no_web_login,
+            full_backlog=getattr(args, "full_backlog", None),
         )
     except Exception:
         put_metric("InvoiceStandaloneRunFailed", 1, project, reporting_defaults)
         raise
+
+    if getattr(summary, "skipped_locked", False):
+        put_metric("InvoiceStandaloneLeaseBusy", 1, project, reporting_defaults)
+        return {"project": project, "enabled": True, "dry_run": args.dry_run,
+                "skipped_locked": True, "invoice_scan_complete": False}
 
     put_metric("InvoiceStandaloneMatchedOrders", summary.matched_orders, project, reporting_defaults)
     put_metric("InvoiceStandaloneSkippedZeroTotal", summary.skipped_zero_total_orders, project, reporting_defaults)
@@ -168,7 +181,12 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         project,
         reporting_defaults,
     )
-    put_metric("InvoiceStandaloneRunSucceeded", 1, project, reporting_defaults)
+    put_metric("InvoiceStandaloneScanComplete", int(getattr(summary, "invoice_scan_complete", True)), project, reporting_defaults)
+    put_metric("InvoiceStandaloneScanPages", getattr(summary, "invoice_scan_pages", 0), project, reporting_defaults)
+    put_metric("InvoiceStandaloneBacklogPending", getattr(summary, "pending_invoice_operations", 0), project, reporting_defaults)
+    put_metric("InvoiceStandaloneAmbiguousOperations", getattr(summary, "ambiguous_invoice_operations", 0), project, reporting_defaults)
+    put_metric("InvoiceStandaloneFullScanAgeHours", getattr(summary, "full_scan_age_hours", 0), project, reporting_defaults)
+    put_metric("InvoiceStandaloneReviewRequired", getattr(summary, "invoice_status_review_required", 0), project, reporting_defaults)
 
     print(
         "Standalone invoice summary: "
@@ -184,11 +202,15 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         f"skipped_zero_total={summary.skipped_zero_total_orders}"
     )
 
-    if not args.dry_run and (
+    if (
         summary.failed_invoices
         or summary.failed_invoice_emails
         or summary.failed_invoice_status_reconciliations
+        or summary.missing_invoice_ids
+        or not getattr(summary, "invoice_scan_complete", True)
+        or getattr(summary, "ambiguous_invoice_operations", 0)
     ):
+        put_metric("InvoiceStandaloneRunFailed", 1, project, reporting_defaults)
         raise RuntimeError(
             (
                 f"Invoice automation failed for project '{project}': "
@@ -197,6 +219,8 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
                 f"status_reconciliation_failures={summary.failed_invoice_status_reconciliations}"
             )
         )
+
+    put_metric("InvoiceStandaloneRunSucceeded", 1, project, reporting_defaults)
 
     return {
         "project": summary.project,
@@ -222,6 +246,13 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         "invoice_status_reconciliation_target_id": summary.invoice_status_reconciliation_target_id,
         "skipped_zero_total_orders": summary.skipped_zero_total_orders,
         "dry_run": summary.dry_run,
+        "invoice_scan_complete": getattr(summary, "invoice_scan_complete", True),
+        "invoice_scan_pages": getattr(summary, "invoice_scan_pages", 0),
+        "invoice_scan_all_ages": getattr(summary, "invoice_scan_all_ages", False),
+        "pending_invoice_emails": getattr(summary, "pending_invoice_emails", 0),
+        "ambiguous_invoice_operations": getattr(summary, "ambiguous_invoice_operations", 0),
+        "pending_invoice_operations": getattr(summary, "pending_invoice_operations", 0),
+        "full_scan_age_hours": getattr(summary, "full_scan_age_hours", 0),
     }
 
 

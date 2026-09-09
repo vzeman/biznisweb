@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import re
 import unicodedata
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
@@ -14,6 +15,17 @@ from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
 
 from logger_config import get_logger
+from order_status_safety import (
+    acquire_status_automation_lease,
+    ORDER_SAFETY_QUERY,
+    assess_fulfillment_evidence,
+    assess_payment_evidence,
+    change_status_verified,
+    decide_recovery,
+    execute_read,
+    fetch_order_safety_context,
+    status_write_block_reason,
+)
 from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_settings, resolve_biznisweb_api_url
 
 
@@ -91,6 +103,7 @@ query GetOrdersForUnpaidCancellation($status: Int, $params: OrderParams) {
       order_num
       pur_date
       last_change
+      blocked
       status {
         id
         name
@@ -122,43 +135,7 @@ query GetOrdersForUnpaidCancellation($status: Int, $params: OrderParams) {
 )
 
 
-ORDER_RECHECK_QUERY = gql(
-    """
-query GetOrderForUnpaidCancellationRecheck($order_num: String!) {
-  getOrder(order_num: $order_num) {
-    id
-    order_num
-    pur_date
-    last_change
-    status {
-      id
-      name
-    }
-    invoices {
-      id
-      invoice_num
-      created
-      paid
-      pay_date
-    }
-    price_elements {
-      type
-      title
-      value
-      reference_id
-      price {
-        value
-        formatted
-      }
-    }
-    sum {
-      value
-      formatted
-    }
-  }
-}
-"""
-)
+ORDER_RECHECK_QUERY = ORDER_SAFETY_QUERY
 
 
 LIST_ORDER_STATUSES_QUERY = gql(
@@ -167,22 +144,6 @@ query ListOrderStatuses($lang_code: CountryCodeAlpha2!) {
   listOrderStatuses(lang_code: $lang_code, only_active: true) {
     id
     name
-  }
-}
-"""
-)
-
-
-CHANGE_ORDER_STATUS_MUTATION = gql(
-    """
-mutation ChangeOrderStatus($order_num: String!, $status_id: Int!) {
-  changeOrderStatus(order_num: $order_num, status_id: $status_id) {
-    order_num
-    last_change
-    status {
-      id
-      name
-    }
   }
 }
 """
@@ -198,6 +159,7 @@ class UnpaidCancellationSettings:
     recovery_enabled: bool = False
     recovery_target_status_name: str = DEFAULT_RECOVERY_TARGET_STATUS_NAME
     recovery_target_status_id: Optional[int] = None
+    recovery_shipped_status_name: str = "Odoslaná"
     recovery_source_statuses: Tuple[str, ...] = DEFAULT_RECOVERY_SOURCE_STATUSES
     lang_code: str = DEFAULT_LANG_CODE
     payment_reference_ids: Tuple[str, ...] = DEFAULT_PAYMENT_REFERENCE_IDS
@@ -265,6 +227,7 @@ class UnpaidCancellationSummary:
     recovery_candidates: int = 0
     recovered_orders: int = 0
     recovery_failed_orders: int = 0
+    review_required_orders: int = 0
     rechecked_orders: int = 0
     failed_orders: int = 0
     scan_limit_reached: bool = False
@@ -330,6 +293,7 @@ def resolve_unpaid_cancellation_settings(project_settings: Dict[str, Any]) -> Un
             raw.get("recovery_target_status_name") or DEFAULT_RECOVERY_TARGET_STATUS_NAME
         ),
         recovery_target_status_id=parsed_recovery_target_status_id,
+        recovery_shipped_status_name=str(raw.get("recovery_shipped_status_name") or "Odoslaná"),
         recovery_source_statuses=_tuple_from_settings(
             raw.get("recovery_source_statuses"),
             DEFAULT_RECOVERY_SOURCE_STATUSES,
@@ -358,7 +322,7 @@ def build_client(project: str, project_settings: Dict[str, Any]) -> Client:
         url=api_url,
         headers={"BW-API-Key": f"Token {api_token}"},
         verify=True,
-        retries=3,
+        retries=0,
         timeout=timeout,
     )
     return Client(transport=transport, fetch_schema_from_transport=False)
@@ -429,7 +393,10 @@ def has_final_invoice(order: Dict[str, Any]) -> bool:
     return bool(_final_invoices(order))
 
 
-def recovery_eligibility_reason(order: Dict[str, Any], settings: UnpaidCancellationSettings) -> str:
+def recovery_eligibility_reason(
+    order: Dict[str, Any], settings: UnpaidCancellationSettings, *,
+    creditnote_status: str = "unknown", verified_previous_status: Optional[str] = None,
+) -> str:
     if not settings.recovery_enabled:
         return "recovery_disabled"
 
@@ -440,13 +407,22 @@ def recovery_eligibility_reason(order: Dict[str, Any], settings: UnpaidCancellat
         return "not_recovery_status"
     if not has_final_invoice(order):
         return "missing_final_invoice"
-    return "eligible"
+    decision = decide_recovery(
+        order, settings.recovery_source_statuses,
+        paid_target=settings.recovery_target_status_name,
+        shipped_target=settings.recovery_shipped_status_name,
+        creditnote_status=creditnote_status,
+        verified_previous_status=verified_previous_status,
+    )
+    return "eligible" if decision.action in {"paid", "shipped"} else decision.reason
 
 
 def cancellation_eligibility_reason(
     order: Dict[str, Any],
     settings: UnpaidCancellationSettings,
     cutoff_date: date,
+    *,
+    require_payment_context: bool = True,
 ) -> str:
     purchased_at = order_purchase_date(order)
     if purchased_at is None:
@@ -467,6 +443,21 @@ def cancellation_eligibility_reason(
         return "not_candidate_status"
     if not payment_matches(order, settings):
         return "payment_not_matched"
+    if order.get("blocked") is True:
+        return "order_blocked"
+    if order.get("blocked") is not False:
+        return "order_block_flag_missing"
+    if require_payment_context:
+        payment = assess_payment_evidence(order)
+        if payment.state == "unknown":
+            return "payment_evidence_unknown"
+        if payment.state != "unpaid":
+            return "payment_present"
+        fulfillment = assess_fulfillment_evidence(order)
+        if fulfillment.state == "unknown":
+            return "shipment_evidence_unknown"
+        if fulfillment.state != "none":
+            return "shipment_present"
     return "eligible"
 
 
@@ -479,7 +470,7 @@ def is_order_eligible_for_cancellation(
 
 
 def list_order_statuses(client: Client, settings: UnpaidCancellationSettings) -> List[Dict[str, Any]]:
-    result = client.execute(LIST_ORDER_STATUSES_QUERY, variable_values={"lang_code": settings.lang_code})
+    result = execute_read(client, LIST_ORDER_STATUSES_QUERY, variable_values={"lang_code": settings.lang_code})
     return [row for row in (result.get("listOrderStatuses") or []) if row]
 
 
@@ -538,11 +529,7 @@ def resolve_candidate_status_ids(
 
 
 def fetch_order_for_recheck(client: Client, order_num: str) -> Dict[str, Any]:
-    result = client.execute(
-        ORDER_RECHECK_QUERY,
-        variable_values={"order_num": str(order_num)},
-    )
-    return result.get("getOrder") or {}
+    return fetch_order_safety_context(client, order_num)
 
 
 def fetch_orders_for_cancellation(
@@ -553,47 +540,35 @@ def fetch_orders_for_cancellation(
     orders: List[Dict[str, Any]] = []
     page_count = 0
     oldest_order_date = ""
-    stop_reason = "api_exhausted"
-
-    scan_limit_reached = False
+    seen_orders: set[str] = set()
     for status_id in status_ids:
-        cursor: Any = None
+        cursor = 0
         has_next_page = True
-        status_page_count = 0
-        while has_next_page and page_count < settings.scan_max_pages:
+        while has_next_page:
+            if page_count >= settings.scan_max_pages:
+                raise RuntimeError("Unpaid cancellation scan is incomplete: page budget exhausted")
             params: Dict[str, Any] = {
                 "limit": settings.page_limit,
                 "order_by": "pur_date",
                 "sort": "DESC",
             }
-            if cursor not in ("", None):
+            if cursor:
                 params["cursor"] = cursor
-
-            try:
-                result = client.execute(
-                    UNPAID_ORDER_QUERY,
-                    variable_values={"status": int(status_id), "params": params},
-                )
-            except Exception as exc:
-                partial_data = getattr(exc, "data", None)
-                if not partial_data:
-                    if status_page_count == 0:
-                        raise
-                    stop_reason = "api_error_after_partial_scan"
-                    logger.warning(
-                        "Stopping order-list scan for status_id=%s after BizniWeb API error on page %s: %s",
-                        status_id,
-                        status_page_count + 1,
-                        exc,
-                    )
-                    break
-                logger.warning("Using partial order-list response after BizniWeb API error: %s", exc)
-                result = partial_data
-            payload = result.get("getOrderList") or {}
-            page_orders = [order for order in (payload.get("data") or []) if order]
+            result = execute_read(
+                client, UNPAID_ORDER_QUERY,
+                variable_values={"status": int(status_id), "params": params},
+            )
+            payload = result.get("getOrderList")
+            if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+                raise RuntimeError("Unpaid cancellation scan returned an invalid order page")
+            page_orders = payload["data"]
+            for order in page_orders:
+                number = str(order.get("order_num") or "").strip() if isinstance(order, dict) else ""
+                if not number or number in seen_orders:
+                    raise RuntimeError("Unpaid cancellation scan contains a missing or duplicate order identity")
+                seen_orders.add(number)
             orders.extend(page_orders)
             page_count += 1
-            status_page_count += 1
 
             for order in page_orders:
                 purchased_at = order_purchase_date(order)
@@ -602,33 +577,34 @@ def fetch_orders_for_cancellation(
                     if not oldest_order_date or text < oldest_order_date:
                         oldest_order_date = text
 
-            page_info = payload.get("pageInfo") or {}
-            has_next_page = bool(page_info.get("hasNextPage"))
-            cursor = page_info.get("nextCursor")
-            if cursor in ("", None):
-                has_next_page = False
-
-        if has_next_page and page_count >= settings.scan_max_pages:
-            scan_limit_reached = True
-            break
-
-    if scan_limit_reached:
-        stop_reason = "scan_max_pages"
+            page_info = payload.get("pageInfo")
+            if not isinstance(page_info, dict) or not isinstance(page_info.get("hasNextPage"), bool):
+                raise RuntimeError("Unpaid cancellation scan has no complete pagination metadata")
+            has_next_page = page_info["hasNextPage"]
+            if has_next_page:
+                next_cursor = page_info.get("nextCursor")
+                if isinstance(next_cursor, bool):
+                    raise RuntimeError("Unpaid cancellation scan cursor is invalid")
+                try:
+                    next_cursor = int(next_cursor)
+                except (TypeError, ValueError):
+                    raise RuntimeError("Unpaid cancellation scan next cursor is missing or invalid") from None
+                if not page_orders or next_cursor <= cursor:
+                    raise RuntimeError("Unpaid cancellation scan cursor did not advance")
+                cursor = next_cursor
 
     return orders, {
         "pages_scanned": page_count,
-        "scan_limit_reached": scan_limit_reached,
-        "scan_stop_reason": stop_reason,
+        "scan_limit_reached": False,
+        "scan_stop_reason": "api_exhausted",
         "oldest_order_date": oldest_order_date,
     }
 
 
-def change_order_status(client: Client, order_num: str, status_id: int) -> Dict[str, Any]:
-    result = client.execute(
-        CHANGE_ORDER_STATUS_MUTATION,
-        variable_values={"order_num": str(order_num), "status_id": int(status_id)},
-    )
-    return result.get("changeOrderStatus") or {}
+def change_order_status(
+    client: Client, order_num: str, status_id: int, status_name: str, *, silent: bool = False,
+) -> Dict[str, Any]:
+    return change_status_verified(client, order_num, status_id, status_name, silent=silent)
 
 
 def run_unpaid_order_cancellation(
@@ -637,6 +613,8 @@ def run_unpaid_order_cancellation(
     dry_run: bool = False,
     client: Optional[Client] = None,
     project_settings: Optional[Dict[str, Any]] = None,
+    automation_state_store: Optional[Any] = None,
+    creditnote_context: Optional[Dict[str, List[Dict[str, Any]]]] = None,
 ) -> UnpaidCancellationSummary:
     project = (project_name or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
     os.environ["REPORT_PROJECT"] = project
@@ -692,145 +670,150 @@ def run_unpaid_order_cancellation(
     summary.scan_stop_reason = str(scan.get("scan_stop_reason") or "")
     summary.oldest_order_date = str(scan.get("oldest_order_date") or "")
 
-    def record_failure(order_num: str, recovery: bool) -> None:
-        summary.failed_orders += 1
-        summary.failed_order_nums.append(order_num)
-        if recovery:
+    def increment(counts: Dict[str, int], reason: str) -> None:
+        counts[reason] = counts.get(reason, 0) + 1
+
+    def record_failure(order_num: str, recovery: bool, *, review: bool = False) -> None:
+        if order_num not in summary.failed_order_nums:
+            summary.failed_orders += 1
+            summary.failed_order_nums.append(order_num)
+            summary.review_required_orders += int(review)
+        if recovery and order_num not in summary.recovery_failed_order_nums:
             summary.recovery_failed_orders += 1
             summary.recovery_failed_order_nums.append(order_num)
 
-    provisional_orders: List[Dict[str, Any]] = []
-    skipped: Dict[str, int] = {}
-    for order in orders:
-        status = normalize_text(_status_name(order))
-        if settings.recovery_enabled and status in settings.normalized_recovery_source_statuses:
-            provisional_orders.append(order)
-            continue
+    injected_creditnote_context = creditnote_context is not None
+    unknown_reasons = {"missing_purchase_date", "missing_status", "order_block_flag_missing", "payment_evidence_unknown", "shipment_evidence_unknown"}
 
+    def refresh_creditnotes(heartbeat=None) -> None:
+        nonlocal creditnote_context
+        from creditnote_export import fetch_creditnote_automation_context
+
+        creditnote_context = fetch_creditnote_automation_context(project, progress_callback=heartbeat)
+
+    def needs_recovery_evidence(order: Dict[str, Any]) -> bool:
+        return settings.recovery_enabled and normalize_text(_status_name(order)) in settings.normalized_recovery_source_statuses and has_final_invoice(order)
+
+    def choose_action(order: Dict[str, Any], prior: Dict[str, Any], *, heartbeat=None) -> Tuple[str, str, str]:
+        if needs_recovery_evidence(order):
+            if creditnote_context is None:
+                refresh_creditnotes(heartbeat)
+            decision = decide_recovery(
+                order, settings.recovery_source_statuses,
+                paid_target=settings.recovery_target_status_name,
+                shipped_target=settings.recovery_shipped_status_name,
+                creditnote_status="present" if str(order["order_num"]) in creditnote_context else "clear",
+                verified_previous_status=prior.get("verified_fulfillment_status"),
+            )
+            if decision.action in {"paid", "shipped"}:
+                return "recover", decision.target_status_name, decision.reason
+            return "review", "", decision.reason
         reason = cancellation_eligibility_reason(order, settings, cutoff_date)
-        if reason == "eligible":
+        if reason in unknown_reasons:
+            return "review", "", reason
+        return ("cancel", settings.target_status_name, reason) if reason == "eligible" else ("skip", "", reason)
+
+    provisional_orders = []
+    for order in orders:
+        if settings.recovery_enabled and normalize_text(_status_name(order)) in settings.normalized_recovery_source_statuses:
             provisional_orders.append(order)
         else:
-            skipped[reason] = skipped.get(reason, 0) + 1
-
-    recovery_candidates: List[Dict[str, Any]] = []
-    eligible_orders: List[Dict[str, Any]] = []
-    recovery_skipped: Dict[str, int] = {}
-    for order in provisional_orders:
-        order_num = str(order.get("order_num") or "").strip()
-        listed_status = normalize_text(_status_name(order))
-        if not order_num:
-            record_failure("", recovery=listed_status in settings.normalized_recovery_source_statuses)
-            continue
-        try:
-            checked_order = fetch_order_for_recheck(client, order_num)
-            summary.rechecked_orders += 1
-        except Exception as exc:  # pragma: no cover - API failure path
-            record_failure(
-                order_num,
-                recovery=listed_status in settings.normalized_recovery_source_statuses,
-            )
-            logger.error("Failed to inspect candidate order %s: %s", order_num, exc)
-            continue
-        if not checked_order:
-            record_failure(
-                order_num,
-                recovery=listed_status in settings.normalized_recovery_source_statuses,
-            )
-            logger.error("Candidate order %s was not returned by the detail recheck", order_num)
-            continue
-
-        recovery_reason = recovery_eligibility_reason(checked_order, settings)
-        checked_status = normalize_text(_status_name(checked_order))
-        if recovery_reason == "eligible":
-            recovery_candidates.append(checked_order)
-            continue
-        if settings.recovery_enabled and checked_status in settings.normalized_recovery_source_statuses:
-            recovery_skipped[recovery_reason] = recovery_skipped.get(recovery_reason, 0) + 1
-
-        reason = cancellation_eligibility_reason(checked_order, settings, cutoff_date)
-        if reason == "eligible":
-            eligible_orders.append(checked_order)
-        else:
-            skipped[reason] = skipped.get(reason, 0) + 1
-
-    summary.eligible_orders = len(eligible_orders)
-    summary.recovery_candidates = len(recovery_candidates)
-    summary.skipped_by_reason = dict(sorted(skipped.items()))
-    summary.recovery_skipped_by_reason = dict(sorted(recovery_skipped.items()))
-    summary.eligible_order_nums = [str(order.get("order_num") or "") for order in eligible_orders]
-    summary.recovery_candidate_order_nums = [
-        str(order.get("order_num") or "") for order in recovery_candidates
-    ]
-
-    logger.info(
-        "Unpaid order cancellation scan project=%s cutoff=%s scanned=%s eligible=%s "
-        "recovery_candidates=%s dry_run=%s",
-        project,
-        summary.cutoff_date,
-        summary.total_orders_scanned,
-        summary.eligible_orders,
-        summary.recovery_candidates,
-        dry_run,
-    )
-
-    if dry_run:
+            reason = cancellation_eligibility_reason(order, settings, cutoff_date, require_payment_context=False)
+            if reason == "eligible":
+                provisional_orders.append(order)
+            else:
+                increment(summary.skipped_by_reason, reason)
+                if reason in unknown_reasons:
+                    record_failure(str(order["order_num"]), False, review=True)
+    if not provisional_orders:
         return summary
+    if not dry_run and automation_state_store is None:
+        from invoice_automation_state import build_automation_state_store
 
-    planned_orders = [("recover", order) for order in recovery_candidates]
-    planned_orders.extend(("cancel", order) for order in eligible_orders)
-    recheck_skipped: Dict[str, int] = {}
-
-    for planned_action, order in planned_orders:
-        order_num = str(order.get("order_num") or "").strip()
-        if not order_num:
-            record_failure("", recovery=planned_action == "recover")
-            continue
-
-        try:
-            live_order = fetch_order_for_recheck(client, order_num)
-            summary.rechecked_orders += 1
-        except Exception as exc:  # pragma: no cover - API failure path
-            record_failure(order_num, recovery=planned_action == "recover")
-            logger.error("Failed to re-read order %s before status change: %s", order_num, exc)
-            continue
-
-        if not live_order:
-            record_failure(order_num, recovery=planned_action == "recover")
-            logger.error("Order %s was not returned by the live pre-mutation recheck", order_num)
-            continue
-
-        live_recovery_reason = recovery_eligibility_reason(live_order, settings)
-        if live_recovery_reason == "eligible":
-            action = "recover"
-            action_status_id = recovery_target_status_id
-        elif planned_action == "recover":
-            reason = f"recovery_{live_recovery_reason}"
-            recheck_skipped[reason] = recheck_skipped.get(reason, 0) + 1
-            logger.info("Skipped recovery for order %s after live recheck: %s", order_num, live_recovery_reason)
-            continue
-        else:
-            live_cancellation_reason = cancellation_eligibility_reason(live_order, settings, cutoff_date)
-            if live_cancellation_reason != "eligible":
-                reason = f"cancellation_{live_cancellation_reason}"
-                recheck_skipped[reason] = recheck_skipped.get(reason, 0) + 1
-                logger.info(
-                    "Skipped cancellation for order %s after live recheck: %s",
-                    order_num,
-                    live_cancellation_reason,
-                )
+        automation_state_store = build_automation_state_store(project, project_settings)
+    lease = nullcontext(None) if dry_run else acquire_status_automation_lease(automation_state_store, owner="unpaid-cancellation")
+    with lease as journal:
+        for listed in provisional_orders:
+            if journal:
+                journal.assert_owned()
+            order_num = str(listed["order_num"])
+            prior = journal.get_order(order_num) if journal else {}
+            is_recovery = normalize_text(_status_name(listed)) in settings.normalized_recovery_source_statuses
+            try:
+                checked = fetch_order_for_recheck(client, order_num)
+                summary.rechecked_orders += 1
+                action, target_name, reason = choose_action(checked, prior, heartbeat=journal.assert_owned if journal else None)
+                if journal:
+                    journal.assert_owned()
+            except Exception:
+                record_failure(order_num, is_recovery)
+                logger.error("Order safety inspection failed for order %s", order_num)
                 continue
-            action = "cancel"
-            action_status_id = target_status_id
-
-        if action_status_id is None:
-            record_failure(order_num, recovery=action == "recover")
-            logger.error("Missing target status id for action=%s order=%s", action, order_num)
-            continue
-
-        try:
-            change_order_status(client, order_num, action_status_id)
+            if action == "review":
+                record_failure(order_num, is_recovery, review=True)
+                increment(summary.recovery_skipped_by_reason if is_recovery else summary.skipped_by_reason, reason)
+                if journal:
+                    journal.update_order(order_num, status_review_reason=reason)
+                continue
+            if action == "skip":
+                increment(summary.skipped_by_reason, reason)
+                continue
             if action == "recover":
+                summary.recovery_candidates += 1
+                summary.recovery_candidate_order_nums.append(order_num)
+            else:
+                summary.eligible_orders += 1
+                summary.eligible_order_nums.append(order_num)
+            if dry_run:
+                continue
+            blocked_reason = status_write_block_reason(prior)
+            if blocked_reason:
+                record_failure(order_num, action == "recover", review=True)
+                increment(summary.recheck_skipped_by_reason, blocked_reason)
+                journal.update_order(order_num, status_review_reason=blocked_reason)
+                continue
+            journal.assert_owned()
+            try:
+                if action == "recover" and not injected_creditnote_context:
+                    refresh_creditnotes(journal.assert_owned)
+                live_order = fetch_order_for_recheck(client, order_num)
+                summary.rechecked_orders += 1
+                if action != "recover" and needs_recovery_evidence(live_order) and not injected_creditnote_context:
+                    refresh_creditnotes(journal.assert_owned)
+                    # The complete creditnote scan may be slow. The actual
+                    # mutation candidate must be read after that scan finishes.
+                    live_order = fetch_order_for_recheck(client, order_num)
+                    summary.rechecked_orders += 1
+                live_action, target_name, reason = choose_action(live_order, prior, heartbeat=journal.assert_owned)
+                journal.assert_owned()
+            except Exception:
+                record_failure(order_num, action == "recover")
+                continue
+            if live_action in {"skip", "review"}:
+                increment(summary.recheck_skipped_by_reason, reason)
+                if live_action == "review":
+                    record_failure(order_num, action == "recover", review=True)
+                    journal.update_order(order_num, status_review_reason=reason)
+                continue
+            # Resolve again from the same verified shop status catalogue. A
+            # shipped recovery never reuses the configured paid target ID.
+            action_status_id = _resolve_status_id(statuses, target_name, None)
+            mutation_record = {
+                "state": "pending", "source_status": live_order.get("status"),
+                "source_last_change": live_order.get("last_change"),
+                "target_status_id": action_status_id, "target_status_name": target_name,
+                "reason": reason,
+            }
+            journal.update_order(order_num, status_mutation=mutation_record)
+            journal.assert_owned()
+            try:
+                change_order_status(client, order_num, action_status_id, target_name, silent=live_action == "recover")
+            except Exception:
+                journal.update_order(order_num, status_mutation={**mutation_record, "state": "uncertain"})
+                record_failure(order_num, live_action == "recover")
+                continue
+            journal.update_order(order_num, status_mutation={**mutation_record, "state": "verified"}, status_review_reason=None)
+            if live_action == "recover":
                 summary.recovered_orders += 1
                 summary.recovered_order_nums.append(order_num)
                 logger.info("Recovered order %s to status_id=%s", order_num, action_status_id)
@@ -838,10 +821,4 @@ def run_unpaid_order_cancellation(
                 summary.updated_orders += 1
                 summary.updated_order_nums.append(order_num)
                 logger.info("Cancelled unpaid order %s with status_id=%s", order_num, action_status_id)
-        except Exception as exc:  # pragma: no cover - API failure path
-            record_failure(order_num, recovery=action == "recover")
-            logger.error("Failed action=%s for order %s: %s", action, order_num, exc)
-
-    summary.recheck_skipped_by_reason = dict(sorted(recheck_skipped.items()))
-
     return summary

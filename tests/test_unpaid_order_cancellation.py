@@ -2,13 +2,20 @@ import json
 import unittest
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from tests.test_order_status_safety import MemoryAutomationStore, money, receipt
 
 from unpaid_order_cancellation import (
     cancellation_eligibility_reason,
     recovery_eligibility_reason,
     resolve_unpaid_cancellation_settings,
     run_unpaid_order_cancellation,
+    fetch_orders_for_cancellation,
+    UnpaidCancellationSummary,
 )
+from unpaid_order_cancellation_runner import run_unpaid_cancellation_runner
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -36,6 +43,7 @@ def make_invoice(
         "created": created,
         "paid": paid,
         "pay_date": created if paid else None,
+        "sum": money(), "payments": [], "preinvoice": None,
     }
 
 
@@ -54,10 +62,11 @@ def make_order(
         "order_num": order_num,
         "pur_date": pur_date,
         "last_change": last_change or pur_date,
+        "blocked": False,
         "status": {"id": 1, "name": status_name},
         "price_elements": [price_element("payment", payment_title, payment_ref)],
         "invoices": list(invoices or []),
-        "sum": {"value": 100, "formatted": "100,00 EUR"},
+        "sum": money(), "shipments": [], "preinvoices": [],
     }
 
 
@@ -84,10 +93,17 @@ class FakeBizniswebClient:
             return {"listOrderStatuses": self.statuses}
         if "order_num" in variables and "status_id" in variables:
             self.mutations.append((variables["order_num"], variables["status_id"]))
+            status = next(row for row in self.statuses if row["id"] == variables["status_id"])
+            for page in self.pages:
+                for order in page:
+                    if order["order_num"] == variables["order_num"]:
+                        order["status"] = dict(status)
+            if variables["order_num"] in self.detail_sequences:
+                self.detail_sequences[variables["order_num"]] = [{"order_num": variables["order_num"], "status": dict(status)}]
             return {
                 "changeOrderStatus": {
                     "order_num": variables["order_num"],
-                    "status": {"id": variables["status_id"], "name": self.statuses[0]["name"]},
+                    "status": dict(status),
                 }
             }
         if "order_num" in variables:
@@ -243,73 +259,18 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
             with self.subTest(order=order["order_num"]):
                 self.assertEqual(expected_reason, cancellation_eligibility_reason(order, settings, cutoff))
 
-    def test_recovery_requires_only_a_final_invoice_in_a_recovery_status(self) -> None:
+    def test_recovery_requires_payment_and_fulfillment_evidence(self) -> None:
         settings = self.make_settings()
-        cases = [
-            (
-                make_order(
-                    "R-1",
-                    "Stripe - expired",
-                    "Bankov\u00fdm prevodom",
-                    "6",
-                    "2026-05-01 10:00:00",
-                    last_change="2026-05-20 10:00:00",
-                    invoices=[make_invoice(created="2026-05-02 10:00:00")],
-                ),
-                "eligible",
-            ),
-            (
-                make_order(
-                    "R-2",
-                    "Stripe - expired",
-                    "Okam\u017eit\u00e1 platba online",
-                    "18",
-                    "2026-05-01 10:00:00",
-                    last_change="2026-05-20 10:00:00",
-                    invoices=[make_invoice(created="2026-05-02 10:00:00", paid=True)],
-                ),
-                "eligible",
-            ),
-            (
-                make_order(
-                    "R-3",
-                    "Stripe - expired",
-                    "Okam\u017eit\u00e1 platba online",
-                    "18",
-                    "2026-05-01 10:00:00",
-                    last_change="2026-05-20 10:00:00",
-                    invoices=[make_invoice(created="2026-05-02 10:00:00")],
-                ),
-                "eligible",
-            ),
-            (
-                make_order(
-                    "R-4",
-                    "Stripe - expired",
-                    "Bankov\u00fdm prevodom",
-                    "6",
-                    "2026-05-01 10:00:00",
-                    last_change="2026-05-20 10:00:00",
-                    invoices=[make_invoice(created="2026-05-21 10:00:00")],
-                ),
-                "eligible",
-            ),
-            (
-                make_order(
-                    "R-5",
-                    "Stripe - expired",
-                    "Bankov\u00fdm prevodom",
-                    "6",
-                    "2026-05-01 10:00:00",
-                    last_change="2026-05-20 10:00:00",
-                ),
-                "missing_final_invoice",
-            ),
-        ]
-
-        for order, expected_reason in cases:
-            with self.subTest(order=order["order_num"]):
-                self.assertEqual(expected_reason, recovery_eligibility_reason(order, settings))
+        value = make_order("R-1", "Stripe - expired", "Bank transfer", "6", "2026-05-01",
+                           invoices=[make_invoice()])
+        self.assertEqual("no_settlement_evidence", recovery_eligibility_reason(value, settings, creditnote_status="clear"))
+        value["invoices"][0]["payments"] = [receipt()]
+        self.assertEqual("shipment_history_unavailable", recovery_eligibility_reason(value, settings, creditnote_status="clear"))
+        value["shipments"] = [{"shipment_number": "TEST-TRACK", "status": "delivered"}]
+        self.assertEqual("eligible", recovery_eligibility_reason(value, settings, creditnote_status="clear"))
+        self.assertEqual("creditnote_context_missing", recovery_eligibility_reason(value, settings))
+        value["invoices"] = []
+        self.assertEqual("missing_final_invoice", recovery_eligibility_reason(value, settings, creditnote_status="clear"))
 
     def test_runner_dry_run_resolves_target_status_without_mutation(self) -> None:
         project_settings = {
@@ -370,6 +331,8 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
             reference_date="2026-05-27",
             dry_run=False,
             client=client,
+            automation_state_store=MemoryAutomationStore(),
+            creditnote_context={},
             project_settings=project_settings,
         )
 
@@ -377,7 +340,7 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
         self.assertEqual(["R-1"], summary.updated_order_nums)
         self.assertEqual([("R-1", 74)], client.mutations)
 
-    def test_runner_recovers_invoice_backed_stripe_expired_order_to_paid(self) -> None:
+    def test_runner_recovers_verified_delivered_order_to_shipped(self) -> None:
         project_settings = {
             "unpaid_order_cancellation": {
                 "enabled": True,
@@ -398,8 +361,9 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
             "6",
             "2026-05-01 10:00:00",
             last_change="2026-05-20 10:00:00",
-            invoices=[make_invoice(created="2026-05-02 10:00:00")],
+            invoices=[make_invoice(created="2026-05-02 10:00:00", paid=True)],
         )
+        order["shipments"] = [{"shipment_number": "TEST-TRACK", "status": "delivered"}]
         client = FakeBizniswebClient([[order]])
 
         summary = run_unpaid_order_cancellation(
@@ -407,6 +371,8 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
             reference_date="2026-05-27",
             dry_run=False,
             client=client,
+            automation_state_store=MemoryAutomationStore(),
+            creditnote_context={},
             project_settings=project_settings,
         )
 
@@ -416,9 +382,9 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
         self.assertEqual(1, summary.recovered_orders)
         self.assertEqual(["R-RECOVER"], summary.recovered_order_nums)
         self.assertEqual(0, summary.updated_orders)
-        self.assertEqual([("R-RECOVER", 55)], client.mutations)
+        self.assertEqual([("R-RECOVER", 4)], client.mutations)
 
-    def test_live_recheck_prefers_recovery_over_planned_cancellation(self) -> None:
+    def test_live_invoice_recheck_prevents_cancellation_without_inventing_payment(self) -> None:
         project_settings = {
             "unpaid_order_cancellation": {
                 "enabled": True,
@@ -463,16 +429,19 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
             reference_date="2026-05-27",
             dry_run=False,
             client=client,
+            automation_state_store=MemoryAutomationStore(),
+            creditnote_context={},
             project_settings=project_settings,
         )
 
         self.assertEqual(1, summary.eligible_orders)
         self.assertEqual(0, summary.recovery_candidates)
         self.assertEqual(0, summary.updated_orders)
-        self.assertEqual(1, summary.recovered_orders)
-        self.assertEqual([("R-RACE", 55)], client.mutations)
+        self.assertEqual(0, summary.recovered_orders)
+        self.assertEqual(1, summary.review_required_orders)
+        self.assertEqual([], client.mutations)
 
-    def test_runner_uses_partial_order_pages_from_biznisweb_errors(self) -> None:
+    def test_runner_rejects_partial_graphql_page_before_mutations(self) -> None:
         project_settings = {
             "unpaid_order_cancellation": {
                 "enabled": True,
@@ -487,16 +456,12 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
             [[make_order("R-1", "\u010cak\u00e1 na \u00fahradu", "Bankov\u00fdm prevodom", "6", "2026-05-01 10:00:00")]]
         )
 
-        summary = run_unpaid_order_cancellation(
-            "roy",
-            reference_date="2026-05-27",
-            dry_run=True,
-            client=client,
-            project_settings=project_settings,
-        )
-
-        self.assertEqual(1, summary.total_orders_scanned)
-        self.assertEqual(1, summary.eligible_orders)
+        with self.assertRaises(PartialDataError):
+            run_unpaid_order_cancellation(
+                "roy", reference_date="2026-05-27", dry_run=False, client=client,
+                project_settings=project_settings, automation_state_store=MemoryAutomationStore(),
+            )
+        self.assertEqual([], client.mutations)
 
     def test_roy_settings_enable_unpaid_order_cancellation_scheduler(self) -> None:
         project_settings = json.loads((ROOT_DIR / "projects" / "roy" / "settings.json").read_text(encoding="utf-8"))
@@ -516,25 +481,166 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
         self.assertIn("\u010cak\u00e1 na vybavenie", settings.candidate_statuses)
         self.assertNotIn("\u010cak\u00e1 na vybavenie", settings.excluded_statuses)
 
-    def test_deploy_waits_for_the_exact_merge_image(self) -> None:
-        build_workflow = (
-            ROOT_DIR / ".github" / "workflows" / "build-and-push-ecr.yml"
-        ).read_text(encoding="utf-8")
-        deploy_workflow = (
-            ROOT_DIR / ".github" / "workflows" / "deploy-unpaid-order-cancellation.yml"
-        ).read_text(encoding="utf-8")
+    def test_legacy_deploy_cannot_bypass_protected_automation_deploy(self) -> None:
+        workflow = (ROOT_DIR / ".github" / "workflows" / "deploy-unpaid-order-cancellation.yml").read_text(encoding="utf-8")
+        self.assertNotIn("  push:", workflow)
+        self.assertNotIn("configure-aws-credentials", workflow)
+        self.assertNotIn("aws scheduler", workflow)
+        self.assertIn("deploy-order-automations.yml", workflow)
 
-        exact_tag = 'COMMIT_IMAGE_TAG="${COMMIT_IMAGE_TAG_PREFIX}${GITHUB_SHA}"'
-        self.assertIn(exact_tag, build_workflow)
-        self.assertIn('docker push "$COMMIT_IMAGE_URI"', build_workflow)
-        self.assertIn("ECR_EXACT_IMAGE_OK", build_workflow)
-        self.assertIn('IMAGE_TAG="${COMMIT_IMAGE_TAG_PREFIX}${GITHUB_SHA}"', deploy_workflow)
-        self.assertIn("Waiting for exact ECR image tag", deploy_workflow)
-        self.assertIn("ECR_EXACT_IMAGE_RESOLVED", deploy_workflow)
-        self.assertLess(
-            deploy_workflow.index("ECR_EXACT_IMAGE_RESOLVED"),
-            deploy_workflow.index("aws ecs register-task-definition"),
+
+class CancellationSafetyRegressionTests(unittest.TestCase):
+    def settings(self, **overrides):
+        return {"unpaid_order_cancellation": {
+            "enabled": True, "target_status_id": 74,
+            "candidate_statuses": ["Čaká na úhradu"], "payment_reference_ids": ["6"],
+            "recovery_enabled": False, **overrides,
+        }}
+
+    def order(self, number="R-1"):
+        return make_order(number, "Čaká na úhradu", "Bankovým prevodom", "6", "2026-05-01 10:00:00")
+
+    def run_case(self, client, *, settings=None, store=None, dry_run=False, **kwargs):
+        return run_unpaid_order_cancellation(
+            "roy", reference_date="2026-05-27", dry_run=dry_run, client=client,
+            project_settings=settings or self.settings(), automation_state_store=store or MemoryAutomationStore(), **kwargs,
         )
+
+    def test_page_budget_exhaustion_prevents_all_writes(self):
+        client = FakeBizniswebClient([[self.order()], [self.order("R-2")]])
+        with self.assertRaisesRegex(RuntimeError, "page budget"):
+            self.run_case(client, settings=self.settings(scan_max_pages=1))
+        self.assertEqual([], client.mutations)
+
+    def test_repeated_cursor_duplicate_order_and_missing_pagination_fail_closed(self):
+        settings = resolve_unpaid_cancellation_settings(self.settings())
+        payloads = [
+            {"data": [self.order()], "pageInfo": {"hasNextPage": True, "nextCursor": 0}},
+            {"data": [self.order(), self.order()], "pageInfo": {"hasNextPage": False}},
+            {"data": [self.order()], "pageInfo": {}},
+        ]
+        for payload in payloads:
+            client = FakeBizniswebClient([])
+            with patch.object(client, "execute", return_value={"getOrderList": payload}):
+                with self.assertRaises(RuntimeError):
+                    fetch_orders_for_cancellation(client, settings, [2])
+            self.assertEqual([], client.mutations)
+
+    def test_manual_bank_receipt_blocks_cancellation_even_without_final_invoice(self):
+        for amount in (10, 100):
+            value = self.order()
+            value["preinvoices"] = [{"id": "pre-1", "payments": [receipt(amount=amount)]}]
+            client = FakeBizniswebClient([[value]])
+            summary = self.run_case(client)
+            self.assertEqual(0, summary.updated_orders)
+            self.assertEqual(1, summary.skipped_by_reason["payment_present"])
+            self.assertEqual([], client.mutations)
+
+    def test_missing_payment_field_is_review_failure_not_successful_skip(self):
+        value = self.order()
+        value.pop("preinvoices")
+        client = FakeBizniswebClient([[value]])
+        summary = self.run_case(client)
+        self.assertEqual(1, summary.failed_orders)
+        self.assertEqual(1, summary.review_required_orders)
+        self.assertEqual(0, summary.recovery_failed_orders)
+        self.assertEqual([], client.mutations)
+
+    def test_new_payment_at_final_recheck_prevents_cancellation(self):
+        listed = self.order()
+        paid = self.order()
+        paid["preinvoices"] = [{"id": "pre-1", "payments": [receipt()]}]
+        client = FakeBizniswebClient([[listed]], detail_sequences={"R-1": [listed, paid]})
+        summary = self.run_case(client)
+        self.assertEqual(1, summary.eligible_orders)
+        self.assertEqual(0, summary.updated_orders)
+        self.assertEqual(1, summary.recheck_skipped_by_reason["payment_present"])
+        self.assertEqual([], client.mutations)
+
+    def test_pending_journal_blocks_replay(self):
+        client = FakeBizniswebClient([[self.order()]])
+        store = MemoryAutomationStore({"R-1": {"status_mutation": {"state": "pending"}}})
+        summary = self.run_case(client, store=store)
+        self.assertEqual(1, summary.failed_orders)
+        self.assertEqual([], client.mutations)
+
+    def test_failed_readback_persists_uncertainty_and_does_not_replay(self):
+        value = self.order()
+        client = FakeBizniswebClient([[value]])
+        store = MemoryAutomationStore()
+        original = client.execute
+        def wrong_outcome(query, variable_values=None):
+            if "status_id" in (variable_values or {}):
+                client.mutations.append((variable_values["order_num"], variable_values["status_id"]))
+                return {"changeOrderStatus": {"order_num": "OTHER", "status": {"id": 74, "name": "incorrect"}}}
+            return original(query, variable_values)
+        with patch.object(client, "execute", side_effect=wrong_outcome):
+            first = self.run_case(client, store=store)
+            client.page_calls = 0
+            second = self.run_case(client, store=store)
+        self.assertEqual(1, first.failed_orders)
+        self.assertEqual(1, second.failed_orders)
+        self.assertEqual("uncertain", store.orders["R-1"]["status_mutation"]["state"])
+        self.assertEqual(1, len(client.mutations))
+
+    def test_creditnote_added_at_recovery_recheck_prevents_status_write(self):
+        value = self.order()
+        value.update(status={"id": 69, "name": "Stripe - expired"}, invoices=[make_invoice(paid=True)],
+                     shipments=[{"status": "delivered", "shipment_number": "shipment-1"}])
+        client = FakeBizniswebClient([[value]])
+        context_calls = []
+        def context(project, *, progress_callback=None):
+            self.assertTrue(callable(progress_callback))
+            progress_callback()
+            context_calls.append(project)
+            return {} if len(context_calls) == 1 else {"R-1": [{"id": "credit-1"}]}
+        settings = self.settings(recovery_enabled=True, recovery_source_statuses=["Stripe - expired"])
+        with patch("creditnote_export.fetch_creditnote_automation_context", side_effect=context):
+            summary = self.run_case(client, settings=settings)
+        self.assertEqual(2, len(context_calls))
+        self.assertEqual(1, summary.review_required_orders)
+        self.assertEqual([], client.mutations)
+
+    def test_dry_run_never_acquires_mutation_lease(self):
+        client = FakeBizniswebClient([[self.order()]])
+        store = MemoryAutomationStore()
+        summary = self.run_case(client, store=store, dry_run=True)
+        self.assertEqual(1, summary.eligible_orders)
+        self.assertEqual(0, store.acquired)
+        self.assertEqual([], client.mutations)
+
+
+class CancellationRunnerHealthTests(unittest.TestCase):
+    def test_failure_or_incomplete_scan_never_emits_success_in_either_run_mode(self):
+        for dry_run in (False, True):
+            for failure in ({"failed_orders": 1}, {"scan_limit_reached": True}, {"scan_stop_reason": "incomplete"}):
+                summary = UnpaidCancellationSummary(project="roy", enabled=True, dry_run=dry_run,
+                    reference_date="2026-05-27", cutoff_date="2026-05-13", target_status_name="Cancelled", **failure)
+                self.assert_runner_metrics(summary, dry_run, expect_failure=True)
+
+    def test_completed_scan_reports_success_with_correct_run_mode(self):
+        for dry_run in (False, True):
+            summary = UnpaidCancellationSummary(project="roy", enabled=True, dry_run=dry_run,
+                reference_date="2026-05-27", cutoff_date="2026-05-13", target_status_name="Cancelled", scan_stop_reason="api_exhausted")
+            self.assert_runner_metrics(summary, dry_run, expect_failure=False)
+
+    def assert_runner_metrics(self, summary, dry_run, *, expect_failure):
+        args = SimpleNamespace(project="roy", reference_date="2026-05-27", timezone="Europe/Bratislava", dry_run=dry_run)
+        with patch("unpaid_order_cancellation_runner.load_project_settings", return_value={"unpaid_order_cancellation": {"enabled": True}}), patch(
+            "unpaid_order_cancellation_runner.resolve_reporting_defaults", return_value={}
+        ), patch("unpaid_order_cancellation_runner.run_unpaid_order_cancellation", return_value=summary), patch(
+            "unpaid_order_cancellation_runner.put_metric"
+        ) as metric, patch("builtins.print"):
+            if expect_failure:
+                with self.assertRaises(RuntimeError):
+                    run_unpaid_cancellation_runner(args)
+            else:
+                run_unpaid_cancellation_runner(args)
+        names = [call.args[0] for call in metric.call_args_list]
+        self.assertEqual(not expect_failure, "UnpaidCancellationRunSucceeded" in names)
+        self.assertEqual(expect_failure, "UnpaidCancellationRunFailed" in names)
+        for call in metric.call_args_list:
+            self.assertEqual("dry-run" if dry_run else "live", call.args[3]["metric_run_mode"])
 
 
 if __name__ == "__main__":

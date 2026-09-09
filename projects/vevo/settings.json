@@ -5,6 +5,10 @@
   "ses_configuration_set": "vevo-reporting",
   "enable_email_strategy_report": true,
   "report_from_date": "2025-05-03",
+  "live_dashboard_artifacts": {
+    "s3_bucket": "biznisweb-reporting-artifacts-919341186960-eu-central-1",
+    "s3_prefix": "daily-reports/vevo"
+  },
   "report_schedule": {
     "schedule_name": "vevo-daily-report-email",
     "scheduler_role_name": "vevo-reporting-scheduler-role",
@@ -110,7 +114,12 @@
   },
   "invoice_generation": {
     "enabled": true,
-    "lookback_days": 7,
+    "lookback_days": 90,
+    "all_age_backlog_enabled": true,
+    "full_scan_interval_hours": 24,
+    "scan_max_pages": 5000,
+    "page_delay_seconds": 1,
+    "safety_state_enabled": true,
     "exclude_zero_total_orders": true,
     "send_invoice_email": true,
     "eligible_statuses": [
@@ -123,7 +132,7 @@
       "lang_code": "SK"
     },
     "schedule_name": "vevo-daily-invoice-generation",
-    "schedule_expression": "cron(0/15 6-23 * * ? *)",
+    "schedule_expression": "cron(0/15 * * * ? *)",
     "final_sweep_schedule_name": "vevo-same-day-invoice-sweep",
     "final_sweep_schedule_expression": "cron(58 23 * * ? *)",
     "timezone": "Europe/Bratislava",
