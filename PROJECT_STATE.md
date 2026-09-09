@@ -24,6 +24,7 @@ What is verified:
 Known issues:
 
 - New business automation runtime is not yet promoted; historical invoice creation and three actual live success baselines remain unverified.
+- First managed deployment `34358484771` stopped before any infrastructure mutation with a missing Python module: the clean GitHub runner installed only boto3, while importing the shared storage package also loads the declared reporting dependencies. The immutable build `34358176082` succeeded with all application tests; this was a deployment-environment gap. Install the canonical requirements and explicitly import shared storage before AWS credentials. Do not retry the old workflow or claim candidate/promoted evidence from this failed run.
 - Native FLOX stale Stripe-attempt downgrades remain a provider dependency. Separately pinned daily-report creditnote guards are not upgraded by this release; VEVO's report is also a fixed A/A source, requiring its own reviewed transition.
 
 Next exact step:
