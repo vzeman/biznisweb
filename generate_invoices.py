@@ -30,6 +30,7 @@ from invoice_automation_state import (
 from dotenv import load_dotenv
 from gql import gql, Client
 from gql.transport.requests import RequestsHTTPTransport
+from gql.transport.exceptions import TransportQueryError, TransportServerError
 from http_client import build_retry_session, resolve_timeout
 from logger_config import get_logger
 from reporting_core import (
@@ -136,8 +137,19 @@ query GetOrderInvoices($order_num: String!) {
       id
       invoice_num
     }
+    preinvoices { id }
     sum { value formatted is_net_price currency { code } }
   }
+}
+""")
+
+PREINVOICE_ORDER_MUTATION = gql("""
+mutation PrepareOrderInvoice($order_num: String!) {
+  preinvoiceOrder(order_num: $order_num, send_notification: [
+    {type: EMAIL_CUSTOMER, if: [NONE]},
+    {type: EMAIL_ADMIN, if: [NONE]},
+    {type: EMAIL_SALESPERSON, if: [NONE]}
+  ]) { id }
 }
 """)
 
@@ -594,9 +606,8 @@ class InvoiceGenerator:
         self.api_token = api_token
         self.base_url = base_url.rstrip("/")
         self.login_url = f"{self.base_url}/admin/login/authenticate/"
-        self.invoice_create_url = f"{self.base_url}/erp/orders/invoices/create/{{order_num}}"
-        self.invoice_finalize_url = f"{self.base_url}/erp/orders/invoices/finalize/{{order_num}}"
-        self.invoice_send_url = f"{self.base_url}/erp/orders/invoices/sendEmail/{{invoice_id}}"
+        self.invoice_finalize_url = f"{self.base_url}/erp/orders/invoices/finalize/{{preinvoice_id}}"
+        self.invoice_send_url = f"{self.base_url}/erp/orders/invoices/sendEmail/{{order_id}}"
         self.web_session = None
         self.arf_token = None
         self.exclude_zero_total_orders = exclude_zero_total_orders
@@ -616,7 +627,7 @@ class InvoiceGenerator:
         
         # Initialize web session if credentials provided
         if username and password:
-            # Web GET fallbacks can mutate too; never replay an invoice request.
+            # Native invoice email uses GET and must never replay.
             self.web_session = build_retry_session(timeout=WEB_TIMEOUT, total=0)
             logger.info("Attempting to login to web interface...")
             if self.login_web_session(username, password):
@@ -1113,9 +1124,134 @@ class InvoiceGenerator:
         if self.operation_journal:
             self.operation_journal.update_order(order_num, **fields)
 
-    def _confirm_created_invoice(self, order_num: str, claimed_id: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    @staticmethod
+    def _positive_internal_id(value: Any) -> str:
+        if isinstance(value, bool) or not isinstance(value, (str, int)) or not re.fullmatch(r"[1-9][0-9]*", str(value)):
+            raise ValueError("invalid_internal_id")
+        return str(value)
+
+    def _preinvoice_id(self, order: Dict[str, Any]) -> str:
+        if "preinvoices" not in order:
+            raise ValueError("preinvoice_malformed")
+        rows = order.get("preinvoices")
+        if rows is None or rows == []:
+            raise ValueError("preinvoice_missing")
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise ValueError("preinvoice_malformed")
+        if len(rows) != 1:
+            raise ValueError("preinvoice_multiple")
+        try:
+            return self._positive_internal_id(rows[0].get("id"))
+        except ValueError:
+            raise ValueError("preinvoice_malformed") from None
+
+    def _creation_preflight_failed(self, order_num: str, kind: str) -> None:
+        logger.warning("Invoice preflight failed: kind=%s", kind)
+        self._journal_update(order_num, phase="create_failed",
+                             last_creation_failure={"stage": "preflight", "http_status": None, "kind": kind})
+
+    @staticmethod
+    def _mutation_failure(stage: str, error: Exception) -> Dict[str, Any]:
+        """Classify only known no-execution rejections; never retain provider text."""
+        status = error.code if isinstance(error, TransportServerError) else None
+        if not isinstance(status, int) or isinstance(status, bool) or not 100 <= status <= 599:
+            status = None
+        rejected = status in {400, 401, 403, 404, 405, 429}
+        if isinstance(error, TransportQueryError) and not error.data and error.errors:
+            rejected = all(isinstance(row, dict) and isinstance(row.get("extensions"), dict)
+                           and row["extensions"].get("code") in {
+                "GRAPHQL_VALIDATION_FAILED", "GRAPHQL_PARSE_FAILED",
+            } for row in error.errors)
+        return {"stage": stage, "http_status": status, "kind": "rejected" if rejected else "unconfirmed"}
+
+    def _confirm_preinvoice(self, order_num: str, order_id: str, claimed: Any) -> Optional[Dict[str, Any]]:
         for attempt in range(3):
             current = self.fetch_order_for_invoice(order_num)
+            if self._positive_internal_id(current.get("id")) != order_id:
+                raise RuntimeError("Preparation readback changed order identity")
+            try:
+                identity = self._preinvoice_id(current)
+            except ValueError as exc:
+                if str(exc) != "preinvoice_missing":
+                    raise
+            else:
+                if claimed is not None and identity != claimed:
+                    raise RuntimeError("Preparation identity differs from order readback")
+                return current
+            if attempt < 2:
+                time.sleep(1)
+        return None
+
+    def _preparation_readback(self, order_num: str, order_id: str, claimed: Optional[str],
+                              failure: Dict[str, Any], result: InvoiceCreationResult) -> Optional[Dict[str, Any]]:
+        try:
+            current = self._confirm_preinvoice(order_num, order_id, claimed)
+        except AutomationStateError:
+            raise
+        except Exception as exc:
+            result.ambiguous = True
+            self._journal_update(order_num, phase="prepare_ambiguous", last_creation_failure={
+                "stage": "readback", "http_status": failure.get("http_status"),
+                "kind": "preinvoice_readback_failed", "exception": type(exc).__name__,
+            })
+            return None
+        if current is None:
+            result.ambiguous = failure.get("kind") != "rejected"
+            self._journal_update(order_num, phase="prepare_ambiguous" if result.ambiguous else "create_failed",
+                                 last_creation_failure=failure)
+            return None
+        self._journal_update(order_num, phase="pending", preinvoice_id=self._preinvoice_id(current),
+                             order_id=order_id, last_creation_failure=None)
+        return current
+
+    def _prepare_invoice(self, current: Dict[str, Any], order_id: str,
+                         result: InvoiceCreationResult) -> Optional[Dict[str, Any]]:
+        order_num = str(current["order_num"])
+        latest = self.fetch_order_for_invoice(order_num)
+        if latest["invoices"] or not self.filter_orders_for_invoice([latest])[0]:
+            result.skipped = True
+            self._journal_update(order_num, phase="complete", reason="eligibility_changed")
+            return None
+        try:
+            if self._positive_internal_id(latest.get("id")) != order_id:
+                raise ValueError("order_identity_changed")
+            if str(latest["status"]["id"]) != str(current["status"]["id"]):
+                raise ValueError("status_changed")
+            try:
+                self._preinvoice_id(latest)
+                return latest  # Another actor prepared it before our intent.
+            except ValueError as exc:
+                if str(exc) != "preinvoice_missing":
+                    raise
+        except ValueError as exc:
+            self._creation_preflight_failed(order_num, str(exc))
+            return None
+        if self.operation_journal:
+            self.operation_journal.assert_owned()
+        self._journal_update(order_num, phase="preparing", attempted_at=iso_utc(utc_now()),
+                             order_id=order_id, preinvoice_id=None, claimed_preinvoice_id=None,
+                             last_creation_failure=None)
+        claimed = None
+        failure = {"stage": "preparation", "http_status": None, "kind": "preinvoice_readback_missing"}
+        try:
+            # This mutation has no transport retry, read retry wrapper or fallback.
+            payload = self.client.execute(PREINVOICE_ORDER_MUTATION, variable_values={"order_num": order_num})
+            claimed = self._positive_internal_id(payload["preinvoiceOrder"]["id"])
+            self._journal_update(order_num, claimed_preinvoice_id=claimed)
+        except AutomationStateError:
+            raise
+        except Exception as exc:
+            failure = self._mutation_failure("preparation", exc)
+            logger.warning("Invoice preparation needs readback: stage=%s http_status=%s kind=%s exception=%s",
+                           failure["stage"], failure["http_status"], failure["kind"], type(exc).__name__)
+        return self._preparation_readback(order_num, order_id, claimed, failure, result)
+
+    def _confirm_created_invoice(self, order_num: str, claimed_id: Optional[str],
+                                 expected_order_id: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
+        for attempt in range(3):
+            current = self.fetch_order_for_invoice(order_num)
+            if expected_order_id is not None and self._positive_internal_id(current.get("id")) != expected_order_id:
+                raise RuntimeError("Invoice readback changed order identity")
             invoices = current["invoices"]
             if invoices:
                 if len(invoices) != 1:
@@ -1139,10 +1275,23 @@ class InvoiceGenerator:
         if not result.invoice_id:
             result.email_error = "missing_invoice_id"
             return
+        if not self.web_session:
+            result.email_error = "failed"
+            self.last_email_outcome = "failed"
+            self._journal_update(order_num, phase="email", email_state="failed")
+            return
         current = self.fetch_order_for_invoice(order_num)
         if (current["blocked"] or not self._status_is_eligible(current)
-                or not any(str(inv["id"]) == str(result.invoice_id) for inv in current["invoices"])):
+                or len(current["invoices"]) != 1
+                or str(current["invoices"][0]["id"]) != str(result.invoice_id)):
             result.email_error = "eligibility_changed"
+            result.ambiguous = True
+            self._journal_update(order_num, phase="email", email_state="ambiguous")
+            return
+        try:
+            order_id = self._positive_internal_id(current.get("id"))
+        except ValueError:
+            result.email_error = "invalid_order_identity"
             result.ambiguous = True
             self._journal_update(order_num, phase="email", email_state="ambiguous")
             return
@@ -1150,7 +1299,7 @@ class InvoiceGenerator:
             self.operation_journal.assert_owned()
         self._journal_update(order_num, phase="email", email_state="sending", invoice_id=result.invoice_id,
                              invoice_num=result.invoice_num)
-        result.email_sent = self.send_invoice_email(result.invoice_id)
+        result.email_sent = self.send_invoice_email(order_id)
         result.email_error = "" if result.email_sent else self.last_email_outcome
         result.ambiguous = self.last_email_outcome == "ambiguous"
         self._journal_update(order_num, phase="complete" if result.email_sent else "email",
@@ -1166,12 +1315,46 @@ class InvoiceGenerator:
         prior = self.operation_journal.get_order(order_num) if self.operation_journal else {}
         if prior.get("email_policy") == "hold":
             result.email_required = False
+        uncertain_phase = prior.get("phase") in {"preparing", "prepare_ambiguous", "creating", "create_ambiguous"}
+        try:
+            order_id = self._positive_internal_id(current.get("id"))
+            if order.get("id") is not None and self._positive_internal_id(order["id"]) != order_id:
+                raise ValueError("order_identity_changed")
+            if prior.get("phase") in {"preparing", "prepare_ambiguous"} and prior.get("order_id") is None:
+                raise ValueError("invalid_internal_id")
+            if uncertain_phase and prior.get("order_id") is not None and self._positive_internal_id(prior["order_id"]) != order_id:
+                raise ValueError("order_identity_changed")
+        except ValueError as exc:
+            if uncertain_phase:
+                result.ambiguous = True
+                self._journal_update(order_num, last_creation_failure={
+                    "stage": "preflight", "http_status": None, "kind": str(exc),
+                })
+            else:
+                self._creation_preflight_failed(order_num, str(exc))
+            return result
         if current["invoices"]:
             if prior.get("phase") not in {"creating", "create_ambiguous"}:
                 result.skipped = True
                 self._journal_update(order_num, phase="complete", reason="invoice_exists")
                 return result
-            result.invoice_id, result.invoice_num = self._confirm_created_invoice(order_num, None)
+            try:
+                result.invoice_id, result.invoice_num = self._confirm_created_invoice(
+                    order_num, None, order_id)
+            except AutomationStateError:
+                raise
+            except Exception as exc:
+                result.ambiguous = True
+                self._journal_update(order_num, phase="create_ambiguous", last_creation_failure={
+                    "stage": "readback", "http_status": None, "kind": "readback_failed", "exception": type(exc).__name__,
+                })
+                return result
+            if not result.invoice_id:
+                result.ambiguous = True
+                self._journal_update(order_num, phase="create_ambiguous", last_creation_failure={
+                    "stage": "readback", "http_status": None, "kind": "final_invoice_readback_missing",
+                })
+                return result
             result.created = True
             result.recovered = True
             self._journal_update(order_num, phase="email", invoice_id=result.invoice_id,
@@ -1184,41 +1367,69 @@ class InvoiceGenerator:
             result.ambiguous = True
             self._journal_update(order_num, phase="create_ambiguous")
             return result
+        if prior.get("phase") in {"preparing", "prepare_ambiguous"}:
+            # An uncertain preparation may only reconcile an associated document.
+            # An empty readback is never permission to replay preinvoiceOrder.
+            current = self._preparation_readback(order_num, order_id, prior.get("claimed_preinvoice_id"), {
+                "stage": "preparation", "http_status": None, "kind": "preinvoice_readback_missing",
+            }, result)
+            if current is None:
+                return result
         eligible, _ = self.filter_orders_for_invoice([current])
         if not eligible:
             result.skipped = True
             self._journal_update(order_num, phase="complete", reason="eligibility_changed")
             return result
         if not self.web_session:
-            raise RuntimeError("Invoice web session is unavailable")
+            self._creation_preflight_failed(order_num, "web_session_unavailable")
+            return result
+        try:
+            preinvoice_id = self._preinvoice_id(current)
+        except ValueError as exc:
+            if str(exc) != "preinvoice_missing":
+                self._creation_preflight_failed(order_num, str(exc))
+                return result
+            current = self._prepare_invoice(current, order_id, result)
+            if current is None:
+                return result
+            preinvoice_id = self._preinvoice_id(current)
+        # Native FLOX finalizes an existing preinvoice by its own internal ID.
+        # Neither the public order number nor the final invoice ID is that key.
+        latest = self.fetch_order_for_invoice(order_num)
+        if latest["invoices"] or not self.filter_orders_for_invoice([latest])[0]:
+            result.skipped = True
+            self._journal_update(order_num, phase="complete", reason="changed_before_finalization")
+            return result
+        try:
+            if self._positive_internal_id(latest.get("id")) != order_id:
+                raise ValueError("order_identity_changed")
+            if str(latest["status"]["id"]) != str(current["status"]["id"]):
+                raise ValueError("status_changed")
+            if self._preinvoice_id(latest) != preinvoice_id:
+                raise ValueError("preinvoice_changed")
+        except ValueError as exc:
+            self._creation_preflight_failed(order_num, str(exc))
+            return result
         if self.operation_journal:
             self.operation_journal.assert_owned()
-        self._journal_update(order_num, phase="creating", attempted_at=iso_utc(utc_now()))
+        self._journal_update(order_num, phase="creating", attempted_at=iso_utc(utc_now()),
+                             preinvoice_id=preinvoice_id, order_id=order_id,
+                             last_creation_failure=None)
         headers = {
             "X-Requested-With": "XMLHttpRequest",
             "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Referer": f"{self.base_url}/erp/orders/orders/detail/{order_num}",
+            "Referer": f"{self.base_url}/erp/orders/orders/detail/{order_id}",
         }
         suffix = f"?arf={self.arf_token}" if self.arf_token else ""
         claimed_id = None
         definite_rejection = False
+        request_stage = "finalization"
+        request_status = None
+        failure_kind = ""
         try:
-            prepared = self.web_session.post(self.invoice_create_url.format(order_num=order_num) + suffix,
-                                             headers=headers, allow_redirects=False)
-            if prepared.status_code != 200:
-                definite_rejection = prepared.status_code in {400, 401, 403, 404, 405, 429}
-                raise RuntimeError(f"Invoice preparation returned HTTP {prepared.status_code}")
-            # Creation opens the provider's preparation form; it is not evidence
-            # that an accounting document exists. Only finalization + readback is.
-            if self.operation_journal:
-                self.operation_journal.assert_owned()
-            latest = self.fetch_order_for_invoice(order_num)
-            if latest["invoices"] or not self.filter_orders_for_invoice([latest])[0]:
-                result.skipped = True
-                self._journal_update(order_num, phase="complete", reason="changed_before_finalization")
-                return result
-            response = self.web_session.post(self.invoice_finalize_url.format(order_num=order_num) + suffix,
-                                            headers=headers, allow_redirects=False)
+            response = self.web_session.get(self.invoice_finalize_url.format(preinvoice_id=preinvoice_id) + suffix,
+                                           headers=headers, allow_redirects=False)
+            request_status = response.status_code
             if response.status_code != 200:
                 definite_rejection = response.status_code in {400, 401, 403, 404, 405, 429}
                 raise RuntimeError(f"Invoice finalization returned HTTP {response.status_code}")
@@ -1226,24 +1437,35 @@ class InvoiceGenerator:
                 payload = response.json()
             except (ValueError, json.JSONDecodeError):
                 payload = None
-            if not isinstance(payload, dict) or payload.get("success") is not True:
+            if not isinstance(payload, dict) or not (payload.get("success") is True or payload.get("success") == "true"):
                 definite_rejection = isinstance(payload, dict) and payload.get("success") is False
                 raise RuntimeError("Invoice finalization did not explicitly confirm success")
-            claimed_id = _extract_invoice_id_from_payload(payload)
+            # Native response ID fields are not a verified final-document key.
+            # Only the unique final invoice on fresh order readback is authoritative.
         except AutomationStateError:
             raise
         except Exception as exc:
-            logger.warning("Invoice request for order %s needs readback (%s)", order_num, type(exc).__name__)
+            failure_kind = "rejected" if definite_rejection else "unconfirmed"
+            # Fixed classification only: response bodies, redirect URLs and
+            # provider exception messages may contain credentials or customer data.
+            logger.warning("Invoice request for order %s needs readback: stage=%s http_status=%s kind=%s exception=%s",
+                           order_num, request_stage, request_status, failure_kind, type(exc).__name__)
             result.recovered = True
         try:
-            result.invoice_id, result.invoice_num = self._confirm_created_invoice(order_num, claimed_id)
-        except Exception:
-            self._journal_update(order_num, phase="create_ambiguous")
+            result.invoice_id, result.invoice_num = self._confirm_created_invoice(order_num, claimed_id, order_id)
+        except AutomationStateError:
+            raise
+        except Exception as exc:
+            self._journal_update(order_num, phase="create_ambiguous",
+                                 last_creation_failure={"stage": "readback", "http_status": request_status,
+                                                        "kind": "readback_failed", "exception": type(exc).__name__})
             result.ambiguous = True
             return result
         if not result.invoice_id:
             result.ambiguous = not definite_rejection
-            self._journal_update(order_num, phase="create_ambiguous" if result.ambiguous else "create_failed")
+            self._journal_update(order_num, phase="create_ambiguous" if result.ambiguous else "create_failed",
+                                 last_creation_failure={"stage": request_stage, "http_status": request_status,
+                                                        "kind": failure_kind or "final_invoice_readback_missing"})
             return result
         result.created = True
         self._journal_update(order_num, phase="email", invoice_id=result.invoice_id,
@@ -1251,15 +1473,19 @@ class InvoiceGenerator:
         self._send_journaled_email(order_num, result)
         return result
 
-    def send_invoice_email(self, invoice_id: str) -> bool:
+    def send_invoice_email(self, order_id: str) -> bool:
         """A single send attempt; HTTP 200 HTML and timeouts remain ambiguous."""
+        if not self.web_session:
+            self.last_email_outcome = "failed"
+            return False
         self.last_email_outcome = "ambiguous"
         suffix = f"?arf={self.arf_token}" if self.arf_token else ""
         try:
-            response = self.web_session.post(
-                self.invoice_send_url.format(invoice_id=invoice_id) + suffix,
+            order_id = self._positive_internal_id(order_id)
+            response = self.web_session.get(
+                self.invoice_send_url.format(order_id=order_id) + suffix,
                 headers={"X-Requested-With": "XMLHttpRequest", "Accept": "application/json",
-                         "Referer": f"{self.base_url}/erp/orders/invoices/detail/{invoice_id}"},
+                         "Referer": f"{self.base_url}/erp/orders/orders/detail/{order_id}"},
                 allow_redirects=False,
             )
             if response.status_code in {400, 401, 403, 404, 405, 429}:
@@ -1268,7 +1494,7 @@ class InvoiceGenerator:
             if response.status_code != 200:
                 return False
             payload = response.json()
-            if isinstance(payload, dict) and payload.get("success") is True:
+            if isinstance(payload, dict) and (payload.get("success") is True or payload.get("success") == "true"):
                 self.last_email_outcome = "sent"
                 return True
             if isinstance(payload, dict) and payload.get("success") is False:
@@ -1509,7 +1735,8 @@ def run_invoice_generation(
                         by_number[str(row["order_num"])] = row
                 changed_orders = list(changed_by_number.values())
                 for record in journal.pending_orders():
-                    if record.get("phase") in {"pending", "creating", "create_failed", "create_ambiguous"}:
+                    if record.get("phase") in {"pending", "preparing", "prepare_ambiguous",
+                                               "creating", "create_failed", "create_ambiguous"}:
                         row = generator.fetch_order_for_invoice(record["order_num"])
                         by_number[str(row["order_num"])] = row
                         if row["invoices"]:
@@ -1592,7 +1819,8 @@ def run_invoice_generation(
                 pending = journal.pending_orders()
                 summary.pending_invoice_emails = sum(record.get("phase") == "email" for record in pending)
                 summary.pending_invoice_operations = sum(record.get("phase") in {
-                    "pending", "creating", "create_failed", "create_ambiguous", "email"} for record in pending)
+                    "pending", "preparing", "prepare_ambiguous", "creating", "create_failed",
+                    "create_ambiguous", "email"} for record in pending)
             logger.info("Invoice automation finished: scan_complete=%s full_scan=%s pages=%s matched=%s created=%s failed=%s email_failed=%s ambiguous=%s",
                         summary.invoice_scan_complete, summary.invoice_scan_all_ages, summary.invoice_scan_pages,
                         summary.matched_orders, summary.created_invoices, summary.failed_invoices,

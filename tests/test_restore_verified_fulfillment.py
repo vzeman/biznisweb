@@ -128,6 +128,8 @@ class VerifiedFulfillmentRestorationTests(unittest.TestCase):
     def test_any_existing_lease_or_uncertain_document_prevents_work(self):
         for field in ({"lease": {"expires_at": "2020-01-01T00:00:00Z"}},
                       {"orders": {"ORDER-1": {"phase": "create_ambiguous"}}},
+                      {"orders": {"ORDER-1": {"phase": "preparing"}}},
+                      {"orders": {"ORDER-1": {"phase": "prepare_ambiguous"}}},
                       {"orders": {"ORDER-1": {"email_state": "sending"}}},
                       {"orders": {"ORDER-1": {"status_mutation": {"state": "verified"}}}}):
             self.setUp()

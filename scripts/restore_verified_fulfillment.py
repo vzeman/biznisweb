@@ -59,7 +59,7 @@ def validate_prior(prior):
         raise RestorationBlocked("Invalid order journal")
     if status_write_block_reason(prior):
         raise RestorationBlocked("Previous status operation requires review")
-    if (prior.get("phase") in {"creating", "create_ambiguous"}
+    if (prior.get("phase") in {"preparing", "prepare_ambiguous", "creating", "create_ambiguous"}
             or prior.get("email_state") in {"sending", "ambiguous"}):
         raise RestorationBlocked("Previous document or email operation is uncertain")
 
