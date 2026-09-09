@@ -12,6 +12,7 @@ on:
       - inventory_demand_model.py
       - generate_invoices.py
       - invoice_runner.py
+      - invoice_automation_state.py
       - creditnote_export.py
       - creditnote_storno_guard.py
       - money_s3_invoice_export.py
@@ -36,6 +37,9 @@ on:
       - templates/**
       - tests/**
       - scripts/reporting_qa_smoke.py
+      - scripts/deploy_order_automations.py
+      - scripts/order_automation_host_gate.py
+      - .github/workflows/deploy-order-automations.yml
       - scripts/growthbook_reconcile_host_gate.sh
       - scripts/growthbook_preview_reconcile_host_gate.sh
       - scripts/reconcile_growthbook_facts.py
