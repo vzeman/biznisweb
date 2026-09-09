@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-09 — Live VEVO changed-order scan failed closed; next release paused
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-pagination-metadata-recheck-20260909`
+
+What changed:
+
+- The first upgraded natural VEVO run stopped with exit one on internally inconsistent pagination metadata at offset 1,044 in its changed-order pass after the full inventory. No aggregate success summary was emitted. All five historical operations remain pending with no invoice IDs, their email holds preserved and the project lease released. The full-scan watermark was not saved. Do not run the final backfill verifier or promote the pending image as if this were complete.
+- Paused the planned second managed deployment; image `5ae96eea29e63045ea234e95db0c95be8d8e63e7ab60898ed9d762e94cb3c6ab` has not been dispatched. It shares the same strict metadata assertion. Current enabled schedules retain the already verified `26e4...` image and its fail-closed behavior; no business mutation or schedule change was made in response to this failure.
+
+What is verified:
+
+- Fresh failing-host identity is task `0196a28edb25493ba055f52a3b736c15`, Fargate instance ID not applicable, IP `172.31.41.230`, service `vevo-invoice-daily:5`, `/app`, exact `26e4bad4aeba6e8e5879fa43a5f4a4037a39ea48f872d0e062c3c8e59a017461`. Private CloudWatch stack identifies `fetch_changed_orders` and the `read_page` metadata-consistency assertion, not state IAM or invoice creation. ROY is still running without a reported failure.
+- The earlier standalone read-only discovery verifier proved full inventory completeness but did not execute the changed-order pass. Existing host candidates did exercise that pass successfully on their earlier reads; this is insufficient to explain the later live inconsistency. Runtime logs remain the private evidence source.
+
+Known issues:
+
+- Endpoint metadata semantics versus transient count/page skew is not yet established. Do not weaken completeness checks or retry business writes to get a passing result.
+
+Next exact step:
+
+- Probe bounded repeated changed-order pages with aggregate-only output and independently review a correction. Preserve unique-ID continuity, complete discovery before writes, scan-start watermark, finite request/time bounds and unchanged mutation guards. Reproduce the actual failure before changing code; add an appropriate regression, full review/CI and a new exact immutable release. Continue watching natural runs without starting a duplicate task.
+
 ## 2026-09-09 — Complete-discovery follow-up merged; final runtime verification
 
 Date: 2026-09-09
