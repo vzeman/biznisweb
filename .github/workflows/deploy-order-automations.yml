@@ -29,7 +29,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install deployment dependencies
-        run: pip install boto3
+        run: pip install -r requirements.txt
+      - name: Verify shared deployment imports before AWS access
+        run: python -c "from reporting_core.storage import resolve_report_s3_location"
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
         with:

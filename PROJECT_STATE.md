@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-09 — Order automation release merged; production verification in progress
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-automation-live-verification-20260909`
+
+What changed:
+
+- PR #540 merged as `333f6c09cfb734cde968041bd12a20b92f258665` after all six checks passed on exact head `866a1df212521bda11392ce91041f1da7d5f9c5e`. The exact-image build is run `34358176082`. No direct main edits or force pushes were used. This verification branch starts from the synchronized merge commit.
+- The earlier immutable pin remains live with existing cadence. Six ROY and five VEVO historical candidates are durably queued with email holds. CASE-B's verified shipment restoration passed independent API and admin-history readbacks without a customer email. Full local regression: 472 passing tests plus reporting smoke.
+
+What is verified:
+
+- Both pin diagnostic hosts stopped with actual localhost markers; private deployment snapshots and historical operation evidence are in the existing private S3 bucket. No local application service was started.
+- Daily-report revenue/guard settings and the legacy eligibility decision methods match their exact pinned source commits. A separate read-only audit is checking whether any currently linked creditnote orders are exposed to the older guard.
+
+Known issues:
+
+- New business automation runtime is not yet promoted; historical invoice creation and three actual live success baselines remain unverified.
+- First managed deployment `34358484771` stopped before any infrastructure mutation with a missing Python module: the clean GitHub runner installed only boto3, while importing the shared storage package also loads the declared reporting dependencies. The immutable build `34358176082` succeeded with all application tests; this was a deployment-environment gap. Install the canonical requirements and explicitly import shared storage before AWS credentials. Do not retry the old workflow or claim candidate/promoted evidence from this failed run.
+- Native FLOX stale Stripe-attempt downgrades remain a provider dependency. Separately pinned daily-report creditnote guards are not upgraded by this release; VEVO's report is also a fixed A/A source, requiring its own reviewed transition.
+
+Next exact step:
+
+- Wait for exact merged-image build, dispatch the main-only managed deployment once, verify three stopped host markers plus quiet drain and five promoted schedules, then inspect actual live runs and all eleven historical invoice outcomes. Keep main unchanged until this deployment's exact-main gates finish. Commit/push the resulting verification handoff and preserve unresolved dependencies explicitly.
+
 ## 2026-09-09 — Order automation remediation resumed; complete historical audit authorized
 
 Date: 2026-09-09
