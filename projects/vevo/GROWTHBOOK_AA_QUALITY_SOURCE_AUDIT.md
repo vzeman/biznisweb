@@ -51,8 +51,8 @@ The lock would prevent this same-process interleaving only; it cannot prove
 cross-process/log-driver integrity or repair earlier receipts.
 
 Five new tests passed 100 repetitions, each with every worker joined, and the
-full source/lifecycle suite passed 316 tests locally (three Windows symlink
-skips pending Linux CI). Independent review also passed 13 framing/reducer and
+full source/lifecycle suite ran 316 tests locally (313 passed, three Windows
+symlink cases skipped pending Linux CI). Independent review also passed 13 framing/reducer and
 16 existing collector tests. No network, socket, server or AWS client is used
 by the new tests; only synthetic receipt values exist in memory.
 
