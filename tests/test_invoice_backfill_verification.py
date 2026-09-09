@@ -147,7 +147,10 @@ class InvoiceBackfillVerificationTests(unittest.TestCase):
             run.return_value.returncode = 0
             paths = write_private_report(Path(folder), report)
             self.assertEqual({".json", ".md"}, {path.suffix for path in paths})
-            self.assertTrue(all(path.is_relative_to(Path(folder) / "data" / "roy" / "order-automation") for path in paths))
+            # Windows runner temp directories can use a short-name alias while
+            # the helper intentionally returns canonical resolved paths.
+            expected_folder = (Path(folder) / "data" / "roy" / "order-automation").resolve()
+            self.assertTrue(all(path.is_relative_to(expected_folder) for path in paths))
             self.assertEqual(report, json.loads(paths[0].read_text(encoding="utf-8")))
             run.return_value.returncode = 1
             with self.assertRaises(RuntimeError):
