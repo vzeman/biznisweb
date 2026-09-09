@@ -61,6 +61,8 @@ def scan(client, url, token, status_id, *, delay=1, max_pages=5000):
             raise RuntimeError("Collection changed during audit; rerun from the beginning")
         total_pages = page.get("totalPages")
         for row in block["data"]:
+            if "invoices" in row and row["invoices"] is None:
+                row["invoices"] = []
             number = str(row.get("order_num") or "")
             if not number or number in orders or not isinstance(row.get("invoices"), list):
                 raise RuntimeError("Audit has missing or repeated order evidence")
