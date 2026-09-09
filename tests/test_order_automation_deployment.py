@@ -2,7 +2,7 @@ import copy
 import json
 from pathlib import Path
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from scripts.deploy_order_automations import (
     Deployment, SCHEDULES, SERVICES, candidate_definition, command_for,
@@ -253,10 +253,88 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
         deployment.session = session
         ref = f"arn:aws:secretsmanager:eu-central-1:{ACCOUNT}:secret:test-secret:REPORT_S3_BUCKET::"
         definition = {"containerDefinitions": [{"secrets": [{"name": "REPORT_S3_BUCKET", "valueFrom": ref}]}]}
-        self.assertEqual(deployment.bucket(definition), "private-test-bucket")
+        self.assertEqual(deployment.source_bucket(definition), "private-test-bucket")
         definition["containerDefinitions"][0]["secrets"][0]["valueFrom"] = ref.replace(":REPORT_S3_BUCKET::", ":UNRELATED_SECRET::")
         with self.assertRaisesRegex(RuntimeError, "reference-type"):
-            deployment.bucket(definition)
+            deployment.source_bucket(definition)
+
+    def storage_deployment(self):
+        deployment = object.__new__(Deployment)
+        deployment.account = ACCOUNT
+        deployment.evidence = {}
+        deployment.session = Mock()
+        aws = deployment.session.client.return_value
+        aws.get_secret_value.return_value = {"SecretString": json.dumps({"REPORT_S3_BUCKET": ""})}
+        aws.get_bucket_location.return_value = {"LocationConstraint": "eu-central-1"}
+        aws.get_public_access_block.return_value = {"PublicAccessBlockConfiguration": {
+            "BlockPublicAcls": True, "IgnorePublicAcls": True, "BlockPublicPolicy": True, "RestrictPublicBuckets": True,
+        }}
+        deployment.scheduler = Mock()
+        deployment.scheduler.get_schedule.return_value = {
+            "Name": "roy-daily-report-email", "Target": {
+                "Arn": f"arn:aws:ecs:eu-central-1:{ACCOUNT}:cluster/vevo-reporting-cluster",
+                "EcsParameters": {"TaskDefinitionArn": f"arn:aws:ecs:eu-central-1:{ACCOUNT}:task-definition/roy-reporting-daily:71"},
+            },
+        }
+        deployment.ecs = Mock()
+        deployment.ecs.describe_task_definition.return_value = {"taskDefinition": {
+            "family": "roy-reporting-daily", "containerDefinitions": [{"name": "reporting", "environment": [
+                {"name": "REPORT_S3_BUCKET", "value": "private-test-bucket"},
+                {"name": "REPORT_S3_PREFIX", "value": "daily-reports/roy-sk"},
+            ]}],
+        }}
+        source = {"family": "roy-invoice-daily", "containerDefinitions": [{"secrets": [{"name": "REPORT_S3_BUCKET",
+            "valueFrom": f"arn:aws:secretsmanager:eu-central-1:{ACCOUNT}:secret:fixture:REPORT_S3_BUCKET::"}]}]}
+        settings = {"report_schedule": {"schedule_name": "roy-daily-report-email"}, "live_dashboard_artifacts": {
+            "s3_bucket": "private-test-bucket", "s3_prefix": "daily-reports/roy-sk",
+        }}
+        return deployment, source, settings
+
+    def test_empty_invoice_secret_uses_only_verified_private_reporting_runtime(self):
+        deployment, source, settings = self.storage_deployment()
+        with patch("pathlib.Path.read_text", return_value=json.dumps(settings)):
+            self.assertEqual("private-test-bucket", deployment.bucket(source))
+        deployment.session.client.return_value.head_bucket.assert_called_once_with(
+            Bucket="private-test-bucket", ExpectedBucketOwner=ACCOUNT)
+        self.assertEqual("daily-reports/roy-sk", deployment.evidence["storage_bindings"]["roy"]["report_prefix"])
+
+    def test_canonical_storage_drift_public_access_or_foreign_bucket_fails_closed(self):
+        for change in ("configured_bucket", "runtime_prefix", "owner", "public", "region", "automation_bucket"):
+            deployment, source, settings = self.storage_deployment()
+            aws = deployment.session.client.return_value
+            runtime = deployment.ecs.describe_task_definition.return_value["taskDefinition"]["containerDefinitions"][0]
+            if change == "configured_bucket":
+                settings["live_dashboard_artifacts"]["s3_bucket"] = "other"
+            elif change == "runtime_prefix":
+                runtime["environment"][1]["value"] = "daily-reports/vevo"
+            elif change == "owner":
+                aws.head_bucket.side_effect = RuntimeError("synthetic owner mismatch")
+            elif change == "public":
+                aws.get_public_access_block.return_value["PublicAccessBlockConfiguration"]["BlockPublicPolicy"] = False
+            elif change == "region":
+                aws.get_bucket_location.return_value["LocationConstraint"] = "us-east-1"
+            else:
+                aws.get_secret_value.return_value = {"SecretString": json.dumps({"REPORT_S3_BUCKET": "other"})}
+            with patch("pathlib.Path.read_text", return_value=json.dumps(settings)), self.assertRaises(RuntimeError):
+                deployment.bucket(source)
+            self.assertNotIn("storage_bindings", deployment.evidence)
+
+    def test_new_candidates_receive_canonical_storage_without_conflicting_secrets(self):
+        family = "roy-invoice-daily"
+        source = {"family": family, "networkMode": "awsvpc", "containerDefinitions": [{
+            "name": "reporting", "command": command_for(family), "secrets": [
+                {"name": "REPORT_S3_BUCKET", "valueFrom": "empty-legacy"},
+                {"name": "REPORT_S3_PREFIX", "valueFrom": "empty-legacy"},
+                {"name": "BIZNISWEB_API_TOKEN", "valueFrom": "keep"},
+            ],
+        }]}
+        candidate = candidate_definition(source, family, IMAGE, ("private-test-bucket", "daily-reports/roy-sk"))
+        container = candidate["containerDefinitions"][0]
+        env = {item["name"]: item["value"] for item in container["environment"]}
+        self.assertEqual("private-test-bucket", env["REPORT_S3_BUCKET"])
+        self.assertEqual("daily-reports/roy-sk", env["REPORT_S3_PREFIX"])
+        self.assertEqual([{"name": "BIZNISWEB_API_TOKEN", "valueFrom": "keep"}], container["secrets"])
+        self.assertEqual(3, len(source["containerDefinitions"][0]["secrets"]))
 
     def test_state_bootstrap_never_overwrites_existing_journal_and_iam_is_reversible(self):
         for existing in (False, True):

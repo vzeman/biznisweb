@@ -100,7 +100,7 @@ def established_alarm_route(session, account: str) -> str:
     return topic
 
 
-def candidate_definition(source: dict, family: str, image: str) -> dict:
+def candidate_definition(source: dict, family: str, image: str, report_location: tuple[str, str] | None = None) -> dict:
     require(family in SERVICES and source.get("family") == family, "task-family-drift")
     require(re.fullmatch(r"[0-9]{12}\.dkr\.ecr\.eu-central-1\.amazonaws\.com/vevo-reporting@sha256:[a-f0-9]{64}", image) is not None,
             "image-not-immutable")
@@ -120,8 +120,11 @@ def candidate_definition(source: dict, family: str, image: str) -> dict:
                  "UNPAID_CANCELLATION_REFERENCE_DATE", "REPORT_INVOICE_DRY_RUN",
                  "REPORT_UNPAID_CANCELLATION_DRY_RUN", "ORDER_AUTOMATION_STATE_BUCKET"):
         environment.pop(name, None)
+    if report_location:
+        environment.update(REPORT_S3_BUCKET=report_location[0], REPORT_S3_PREFIX=report_location[1])
     container["environment"] = [{"name": name, "value": value} for name, value in sorted(environment.items())]
-    container["secrets"] = [item for item in container.get("secrets", []) if item["name"] in SECRET_NAMES]
+    container["secrets"] = [item for item in container.get("secrets", []) if item["name"] in SECRET_NAMES
+                            and not (report_location and item["name"] in {"REPORT_S3_BUCKET", "REPORT_S3_PREFIX"})]
     return result
 
 
@@ -197,13 +200,15 @@ class Deployment:
         self.evidence = {"schema": 1, "commit": commit, "hosts": [], "created_at": datetime.now(timezone.utc).isoformat()}
         self.snapshot_key = f"data/roy/order-automation/deployments/{commit}/{uuid.uuid4().hex}.json"
 
-    def bucket(self, definition: dict) -> str:
+    def source_bucket(self, definition: dict) -> str:
         container = definition["containerDefinitions"][0]
         env = {item["name"]: item["value"] for item in container.get("environment", [])}
         value = env.get("REPORT_S3_BUCKET")
         if not value:
             refs = [item["valueFrom"] for item in container.get("secrets", []) if item["name"] == "REPORT_S3_BUCKET"]
-            require(len(refs) == 1, "state-bucket-reference-missing")
+            if not refs:
+                return ""
+            require(len(refs) == 1, "state-bucket-reference-ambiguous")
             ref = refs[0]
             if ref.startswith(f"arn:aws:ssm:eu-central-1:{self.account}:parameter/"):
                 value = self.session.client("ssm").get_parameter(Name=ref, WithDecryption=True)["Parameter"]["Value"]
@@ -215,9 +220,53 @@ class Deployment:
                 # neither the bundle nor its other fields enter evidence/logs.
                 secret = self.session.client("secretsmanager").get_secret_value(SecretId=":".join(parts[:7]))
                 value = json.loads(secret["SecretString"])["REPORT_S3_BUCKET"]
-        require(isinstance(value, str) and re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", value) is not None,
+        require(isinstance(value, str) and (not value or re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", value) is not None),
                 "state-bucket-invalid")
         return value
+
+    def bucket(self, definition: dict) -> str:
+        """Bind private state to the current reporting runtime and reviewed config.
+
+        Older invoice task secrets can contain an empty bucket; that is not the
+        reporting service's explicit runtime bucket. Never invent a destination.
+        """
+        from reporting_core.storage import resolve_report_s3_location
+        family = definition.get("family")
+        require(family in SERVICES, "storage-task-family-drift")
+        project = SERVICES[family][0]
+        settings = json.loads((ROOT / "projects" / project / "settings.json").read_text(encoding="utf-8"))
+        configured = resolve_report_s3_location(project, settings, environ={})
+        name = f"{project}-daily-report-email"
+        require(settings["report_schedule"]["schedule_name"] == name, "report-storage-schedule-drift")
+        schedule = self.scheduler.get_schedule(Name=name)
+        require(schedule.get("Name") == name and schedule["Target"]["Arn"] ==
+                f"arn:aws:ecs:eu-central-1:{self.account}:cluster/vevo-reporting-cluster", "report-storage-cluster-drift")
+        task_arn = schedule["Target"]["EcsParameters"]["TaskDefinitionArn"]
+        require(task_arn.startswith(f"arn:aws:ecs:eu-central-1:{self.account}:task-definition/{project}-reporting-daily:"),
+                "report-storage-task-drift")
+        reporting = self.ecs.describe_task_definition(taskDefinition=task_arn)["taskDefinition"]
+        containers = reporting.get("containerDefinitions", [])
+        require(reporting.get("family") == f"{project}-reporting-daily" and len(containers) == 1
+                and containers[0].get("name") == "reporting", "report-storage-container-drift")
+        env = {row["name"]: row["value"] for row in containers[0].get("environment", [])}
+        require(not any(row["name"] in {"REPORT_S3_BUCKET", "REPORT_S3_PREFIX"}
+                        for row in containers[0].get("secrets", [])), "report-storage-secret-overrides-env")
+        actual = (env.get("REPORT_S3_BUCKET"), env.get("REPORT_S3_PREFIX"))
+        require(actual == configured and all(actual), "report-storage-config-runtime-mismatch")
+        source = self.source_bucket(definition)
+        require(not source or source == actual[0], "automation-report-storage-mismatch")
+        s3 = self.session.client("s3")
+        s3.head_bucket(Bucket=actual[0], ExpectedBucketOwner=self.account)
+        require(s3.get_bucket_location(Bucket=actual[0], ExpectedBucketOwner=self.account).get("LocationConstraint")
+                == "eu-central-1", "report-storage-region-drift")
+        block = s3.get_public_access_block(Bucket=actual[0], ExpectedBucketOwner=self.account)["PublicAccessBlockConfiguration"]
+        require(all(block.get(key) is True for key in (
+            "BlockPublicAcls", "IgnorePublicAcls", "BlockPublicPolicy", "RestrictPublicBuckets",
+        )), "report-storage-public-access-not-blocked")
+        self.evidence.setdefault("storage_bindings", {})[project] = {
+            "report_schedule": name, "report_task_definition": task_arn, "bucket": actual[0], "report_prefix": actual[1],
+        }
+        return actual[0]
 
     def save_private(self, bucket: str) -> None:
         self.session.client("s3").put_object(
@@ -456,10 +505,13 @@ class Deployment:
         snapshots = {name: self.scheduler.get_schedule(Name=name) for name in SCHEDULES}
         self.validate_snapshots(snapshots)
         definitions, candidates, buckets = {}, {}, {}
-        for family, (_, _, schedule_name) in SERVICES.items():
+        for family, (project, _, schedule_name) in SERVICES.items():
             source = self.ecs.describe_task_definition(taskDefinition=snapshots[schedule_name]["Target"]["EcsParameters"]["TaskDefinitionArn"])["taskDefinition"]
-            definitions[family] = candidate_definition(source, family, image_uri)
             buckets[family] = self.bucket(source)
+            from reporting_core.storage import resolve_report_s3_location
+            settings = json.loads((ROOT / "projects" / project / "settings.json").read_text(encoding="utf-8"))
+            _, prefix = resolve_report_s3_location(project, settings, environ={})
+            definitions[family] = candidate_definition(source, family, image_uri, (buckets[family], prefix))
         require(buckets["roy-invoice-daily"] == buckets["roy-unpaid-order-cancellation"], "roy-state-bucket-mismatch")
         self.evidence.update(original_schedules=snapshots, candidate_task_definitions=definitions,
                              image_digest=digest, phase="before-candidates")
