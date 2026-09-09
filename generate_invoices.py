@@ -7,10 +7,23 @@ import os
 import argparse
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Iterable, Optional, Tuple, Union
+from typing import Callable, Dict, List, Any, Iterable, Optional, Tuple, Union
 import json
 import re
 import unicodedata
+import time
+import math
+from contextlib import nullcontext
+from zoneinfo import ZoneInfo
+
+from invoice_automation_state import (
+    AutomationLeaseBusy,
+    AutomationStateError,
+    build_automation_state_store,
+    iso_utc,
+    parse_utc,
+    utc_now,
+)
 
 from dotenv import load_dotenv
 from gql import gql, Client
@@ -70,77 +83,34 @@ DEFAULT_EXISTING_INVOICE_SOURCE_STATUSES = (
 
 # GraphQL query to fetch orders with specific criteria
 ORDER_QUERY = gql("""
-query GetOrders($filter: OrderFilter, $params: OrderParams) {
-  getOrderList(filter: $filter, params: $params) {
+query GetOrders($status: Int, $changed_from: DateTime, $params: OrderParams) {
+  getOrderList(status: $status, changed_from: $changed_from, include_blocking: true, params: $params) {
     data {
       id
       order_num
-      external_ref
       pur_date
-      var_symb
       last_change
+      blocked
       status {
         id
         name
-        color
-      }
-      customer {
-        ... on Company {
-          company_name
-          company_id
-          vat_id
-          vat_id2
-          name
-          surname
-          phone
-          email
-        }
-        ... on Person {
-          name
-          surname
-          phone
-          email
-        }
-        ... on UnauthenticatedEmail {
-          name
-          surname
-          phone
-          email
-        }
       }
       invoices {
         id
         invoice_num
-      }
-      items {
-        item_label
-        quantity
-        price {
-          value
-          formatted
-          is_net_price
-          currency {
-            symbol
-            code
-          }
-        }
       }
       sum {
         value
         formatted
         is_net_price
         currency {
-          symbol
-          code
+            code
         }
       }
     }
     pageInfo {
       hasNextPage
-      hasPreviousPage
       nextCursor
-      previousCursor
-      pageIndex
       totalPages
     }
   }
@@ -150,7 +120,11 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
 ORDER_INVOICE_QUERY = gql("""
 query GetOrderInvoices($order_num: String!) {
   getOrder(order_num: $order_num) {
+    id
     order_num
+    pur_date
+    last_change
+    blocked
     status {
       id
       name
@@ -159,6 +133,7 @@ query GetOrderInvoices($order_num: String!) {
       id
       invoice_num
     }
+    sum { value formatted is_net_price currency { code } }
   }
 }
 """)
@@ -207,6 +182,18 @@ class InvoiceRunSummary:
     invoice_status_reconciliation_target_name: str = ""
     invoice_status_reconciliation_target_id: Optional[int] = None
     total_amount: float = 0.0
+    invoice_scan_complete: bool = False
+    invoice_scan_pages: int = 0
+    invoice_scan_all_ages: bool = False
+    skipped_blocked_orders: int = 0
+    skipped_after_recheck_orders: int = 0
+    pending_invoice_emails: int = 0
+    ambiguous_invoice_operations: int = 0
+    skipped_locked: bool = False
+    recovered_invoices: int = 0
+    invoice_status_review_required: int = 0
+    pending_invoice_operations: int = 0
+    full_scan_age_hours: float = 0.0
 
 
 @dataclass
@@ -217,6 +204,9 @@ class InvoiceCreationResult:
     email_required: bool = True
     email_sent: bool = False
     email_error: str = ""
+    skipped: bool = False
+    ambiguous: bool = False
+    recovered: bool = False
 
     def __bool__(self) -> bool:
         return self.created and (not self.email_required or self.email_sent)
@@ -269,6 +259,12 @@ def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dic
         "exclude_zero_total_orders": bool(raw_settings.get("exclude_zero_total_orders", True)),
         "eligible_statuses": eligible_statuses,
         "send_invoice_email": bool(raw_settings.get("send_invoice_email", True)),
+        "all_age_backlog_enabled": bool(raw_settings.get("all_age_backlog_enabled", False)),
+        "safety_state_enabled": bool(raw_settings.get("safety_state_enabled", False)),
+        "full_scan_interval_hours": max(1, int(raw_settings.get("full_scan_interval_hours", 24))),
+        "scan_max_pages": max(1, int(raw_settings.get("scan_max_pages", 5000))),
+        "page_delay_seconds": max(0.0, float(raw_settings.get("page_delay_seconds", 1))),
+        "read_attempts": max(1, min(5, int(raw_settings.get("read_attempts", 4)))),
         "existing_invoice_status_reconciliation": {
             "enabled": bool(raw_reconciliation.get("enabled", False)),
             "source_statuses": reconciliation_source_statuses,
@@ -391,90 +387,96 @@ def _resolve_existing_invoice_target_status_id(
 
 
 def reconcile_existing_invoice_statuses(
-    client: Client,
-    orders: List[Dict[str, Any]],
-    reconciliation_settings: Dict[str, Any],
-    *,
-    dry_run: bool,
+    client: Client, orders: List[Dict[str, Any]], reconciliation_settings: Dict[str, Any], *,
+    dry_run: bool, journal: Any = None, creditnote_order_numbers: Optional[set[str]] = None,
+    read_order: Optional[Callable[[str], Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
+    from order_status_safety import (
+        change_status_verified, decide_recovery, fetch_order_safety_context, status_write_block_reason,
+    )
+
     enabled = bool(reconciliation_settings.get("enabled"))
-    result = {
-        "enabled": enabled,
-        "candidates": 0,
-        "reconciled": 0,
-        "failed": 0,
-        "skipped_after_recheck": 0,
-        "target_status_name": "",
-        "target_status_id": None,
-    }
+    result = {"enabled": enabled, "candidates": 0, "reconciled": 0, "failed": 0,
+              "skipped_after_recheck": 0, "review_required": 0,
+              "target_status_name": "", "target_status_id": None}
     if not enabled:
         return result
-
-    target_name = str(
-        reconciliation_settings.get("target_status_name")
-        or DEFAULT_EXISTING_INVOICE_TARGET_STATUS_NAME
-    )
-    target_status_id = _resolve_existing_invoice_target_status_id(client, reconciliation_settings)
-    result["target_status_name"] = target_name
-    result["target_status_id"] = target_status_id
-
-    candidates = [
-        order
-        for order in orders
-        if _is_existing_invoice_status_reconciliation_candidate(order, reconciliation_settings)
-    ]
+    target_name = str(reconciliation_settings.get("target_status_name") or DEFAULT_EXISTING_INVOICE_TARGET_STATUS_NAME)
+    target_id = _resolve_existing_invoice_target_status_id(client, reconciliation_settings)
+    result.update(target_status_name=target_name, target_status_id=target_id)
+    candidates = [order for order in orders
+                  if _is_existing_invoice_status_reconciliation_candidate(order, reconciliation_settings)]
     result["candidates"] = len(candidates)
-    if dry_run:
-        return result
-
+    if journal:
+        records = journal.snapshot()["orders"]
+        source_names = _normalized_invoice_statuses(reconciliation_settings.get("source_statuses") or DEFAULT_EXISTING_INVOICE_SOURCE_STATUSES)
+        for order in orders:
+            number = str(order.get("order_num") or "")
+            if ((records.get(number, {}).get("status_review") or {}).get("state") == "open"
+                    and _normalize_status_text((order.get("status") or {}).get("name", "")) not in source_names):
+                journal.update_order(number, status_review={"state": "closed", "reason": "status_resolved_elsewhere"})
     for order in candidates:
         order_num = str(order.get("order_num") or "").strip()
-        if not order_num:
-            result["failed"] += 1
-            logger.error("Existing-invoice reconciliation candidate is missing order_num")
-            continue
         try:
-            refreshed = client.execute(
-                ORDER_INVOICE_QUERY,
-                variable_values={"order_num": order_num},
-            ).get("getOrder") or {}
-        except Exception as exc:
-            result["failed"] += 1
-            logger.error("Failed to re-read invoice reconciliation candidate %s: %s", order_num, exc)
-            continue
-
-        if not _is_existing_invoice_status_reconciliation_candidate(refreshed, reconciliation_settings):
-            result["skipped_after_recheck"] += 1
-            logger.info("Skipped invoice status reconciliation for order %s after live recheck", order_num)
-            continue
-
-        try:
-            mutation = client.execute(
-                CHANGE_ORDER_STATUS_MUTATION,
-                variable_values={"order_num": order_num, "status_id": target_status_id},
-            ).get("changeOrderStatus") or {}
-            changed_status = mutation.get("status") or {}
-            changed_status_id = int(changed_status.get("id") or 0)
-            changed_status_name = str(changed_status.get("name") or "")
-            if (
-                changed_status_id != target_status_id
-                or _normalize_status_text(changed_status_name) != _normalize_status_text(target_name)
-            ):
-                raise RuntimeError(
-                    f"BizniWeb returned status id={changed_status_id} name='{changed_status_name}' "
-                    f"after targeting id={target_status_id} name='{target_name}'."
-                )
-            result["reconciled"] += 1
-            logger.info(
-                "Reconciled order %s with a final invoice to status '%s' (id=%s)",
-                order_num,
-                target_name,
-                target_status_id,
+            if journal:
+                journal.assert_owned()
+            refreshed = read_order(order_num) if read_order else fetch_order_safety_context(client, order_num)
+            if not _is_existing_invoice_status_reconciliation_candidate(refreshed, reconciliation_settings):
+                result["skipped_after_recheck"] += 1
+                continue
+            record = journal.get_order(order_num) if journal else {}
+            creditnote_status = ("unknown" if creditnote_order_numbers is None
+                                 else "present" if order_num in creditnote_order_numbers else "clear")
+            decision = decide_recovery(
+                refreshed, reconciliation_settings.get("source_statuses") or DEFAULT_EXISTING_INVOICE_SOURCE_STATUSES,
+                paid_target=target_name, creditnote_status=creditnote_status,
+                verified_previous_status=record.get("verified_fulfillment_status"),
             )
+            if decision.action == "review":
+                result["review_required"] += 1
+                if journal:
+                    journal.update_order(order_num, status_review={"state": "open", "reason": decision.reason})
+                logger.warning("Invoice-backed status requires review: order=%s reason=%s", order_num, decision.reason)
+                continue
+            if decision.action == "skip":
+                result["skipped_after_recheck"] += 1
+                continue
+            block_reason = status_write_block_reason(record)
+            if block_reason:
+                result["review_required"] += 1
+                if journal:
+                    journal.update_order(order_num, status_review={"state": "open", "reason": block_reason})
+                logger.warning("Repeated or uncertain status correction requires review: order=%s", order_num)
+                continue
+            if dry_run:
+                continue
+            if journal is None:
+                raise AutomationStateError("Status correction requires the shared durable lease")
+            actual_target = decision.target_status_name
+            actual_id = target_id if actual_target == target_name else _resolve_existing_invoice_target_status_id(
+                client, {"target_status_name": actual_target, "lang_code": reconciliation_settings.get("lang_code", "SK")})
+            journal.assert_owned()
+            operation = {"state": "pending", "source_status_id": refreshed["status"]["id"],
+                         "source_status_name": refreshed["status"]["name"],
+                         "last_change": refreshed.get("last_change"), "target_status_id": actual_id,
+                         "target_status_name": actual_target, "reason": decision.reason}
+            journal.update_order(order_num, status_mutation=operation)
+            try:
+                change_status_verified(client, order_num, actual_id, actual_target, silent=True)
+            except Exception:
+                journal.update_order(order_num, status_mutation={**operation, "state": "uncertain"})
+                raise
+            journal.update_order(order_num, status_mutation={**operation, "state": "verified"},
+                                 status_review={"state": "closed", "reason": "verified_correction"})
+            result["reconciled"] += 1
         except Exception as exc:
             result["failed"] += 1
-            logger.error("Failed invoice status reconciliation for order %s: %s", order_num, exc)
-
+            logger.error("Invoice status reconciliation failed for order %s (%s)", order_num, type(exc).__name__)
+    if journal:
+        result["review_required"] = sum(
+            (record.get("status_review") or {}).get("state") == "open"
+            for record in journal.snapshot()["orders"].values()
+        )
     return result
 
 
@@ -573,13 +575,16 @@ class InvoiceGenerator:
         exclude_zero_total_orders: bool = True,
         eligible_statuses: Optional[Iterable[str]] = None,
         send_invoice_email: bool = True,
+        scan_max_pages: int = 5000,
+        page_delay_seconds: float = 1.0,
+        read_attempts: int = 4,
     ):
         """Initialize the invoice generator with API credentials"""
         transport = RequestsHTTPTransport(
             url=api_url,
             headers={'BW-API-Key': f'Token {api_token}'},
             verify=True,
-            retries=3,
+            retries=0,
             timeout=GRAPHQL_TIMEOUT_SEC,
         )
         self.client = Client(transport=transport, fetch_schema_from_transport=False)
@@ -594,10 +599,20 @@ class InvoiceGenerator:
         self.exclude_zero_total_orders = exclude_zero_total_orders
         self.eligible_statuses = tuple(eligible_statuses or DEFAULT_INVOICE_ELIGIBLE_STATUSES)
         self.send_invoice_email_enabled = bool(send_invoice_email)
+        self.scan_max_pages = scan_max_pages
+        self.page_delay_seconds = page_delay_seconds
+        self.read_attempts = read_attempts
+        self.scan_pages = 0
+        self.eligible_status_ids: set[int] = set()
+        self.operation_journal = None
+        self.last_email_outcome = "failed"
+        self._last_read_at = 0.0
+        self._last_lease_renewal_at = 0.0
         
         # Initialize web session if credentials provided
         if username and password:
-            self.web_session = build_retry_session(timeout=WEB_TIMEOUT)
+            # Web GET fallbacks can mutate too; never replay an invoice request.
+            self.web_session = build_retry_session(timeout=WEB_TIMEOUT, total=0)
             logger.info("Attempting to login to web interface...")
             if self.login_web_session(username, password):
                 logger.info("âś“ Successfully logged in to web session")
@@ -672,7 +687,7 @@ class InvoiceGenerator:
                     json_text = response_text.replace("'", '"').replace('True', 'true').replace('False', 'false')
                     try:
                         response_json = json.loads(json_text)
-                    except:
+                    except Exception:
                         # Try the built-in method as fallback
                         response_json = login_response.json()
                 else:
@@ -893,200 +908,156 @@ class InvoiceGenerator:
             logger.error(f"âś— Error validating web session: {e}")
             return False
     
-    def fetch_orders(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
-        """Fetch all orders and filter client-side (API filter requires partner token)"""
-        all_orders = []
-        has_next_page = True
-        cursor = None
-        date_from_str = date_from.strftime("%Y-%m-%d")
-        date_to_str = date_to.strftime("%Y-%m-%d")
+    def execute_read(self, query: Any, variables: Dict[str, Any]) -> Dict[str, Any]:
+        """Retry only reads; the transport used for writes has retries disabled."""
+        from graphql import OperationType
 
-        logger.info("Note: Fetching orders in descending purchase-date order due to API filter limitations")
-        logger.info("Pagination will stop once the export reaches orders older than %s", date_from_str)
-
-        while has_next_page:
-            # Remove the filter param as it requires partner token
-            # We'll filter by date on the client side instead
-            variables = {
-                'params': {
-                    'limit': 30,  # API max limit is 30
-                    'order_by': 'pur_date',
-                    'sort': 'DESC'
-                }
-            }
-
-            if cursor is not None:
-                variables['params']['cursor'] = cursor
-
+        document = getattr(query, "document", query)
+        operations = [node for node in document.definitions if hasattr(node, "operation")]
+        if not operations or any(node.operation != OperationType.QUERY for node in operations):
+            raise ValueError("Invoice execute_read only accepts queries")
+        for attempt in range(self.read_attempts):
+            if self.operation_journal and time.monotonic() - self._last_lease_renewal_at >= 30:
+                self.operation_journal.assert_owned()
+                self._last_lease_renewal_at = time.monotonic()
+            remaining = self.page_delay_seconds - (time.monotonic() - self._last_read_at)
+            if remaining > 0:
+                time.sleep(remaining)
+            self._last_read_at = time.monotonic()
             try:
-                logger.debug(f"Executing query with variables: {json.dumps(variables, indent=2)}")
-                result = self.client.execute(ORDER_QUERY, variable_values=variables)
-                orders_data = result.get('getOrderList', {})
-                orders = orders_data.get('data', [])
+                result = self.client.execute(query, variable_values=variables)
+                if not isinstance(result, dict):
+                    raise RuntimeError("BiznisWeb returned an invalid read response")
+                return result
+            except Exception:
+                if attempt + 1 == self.read_attempts:
+                    raise
+                # FLOX can return quota errors inside HTTP 200 GraphQL responses.
+                # Short 1s retries extend that throttle instead of recovering.
+                time.sleep(min(30, 10 * (attempt + 1)))
+        raise RuntimeError("Invoice read retries exhausted")
 
-                # Filter out None values (orders that failed to fetch)
-                valid_orders = [o for o in orders if o is not None]
-                all_orders.extend(valid_orders)
+    def resolve_eligible_status_ids(self) -> set[int]:
+        result = self.execute_read(LIST_ORDER_STATUSES_QUERY, {"lang_code": "SK"})
+        rows = result.get("listOrderStatuses")
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise RuntimeError("Incomplete invoice status catalog")
+        found: set[int] = set()
+        for requested in self.eligible_statuses:
+            matches = [int(row["id"]) for row in rows
+                       if _normalize_status_text(row.get("name", "")) == _normalize_status_text(requested)]
+            if len(matches) != 1 or matches[0] <= 0:
+                raise RuntimeError("Invoice eligible status is missing or ambiguous")
+            found.add(matches[0])
+        self.eligible_status_ids = found
+        return found
 
-                page_info = orders_data.get('pageInfo', {})
-                has_next_page = page_info.get('hasNextPage', False)
-                cursor = page_info.get('nextCursor')
+    @staticmethod
+    def _validate_order_for_invoice_read(order: Any) -> None:
+        if (not isinstance(order, dict) or not str(order.get("order_num") or "").strip()
+                or not isinstance(order.get("status"), dict)
+                or not order["status"].get("id")
+                or "invoices" not in order
+                or (order["invoices"] is not None and not isinstance(order["invoices"], list))
+                or any(not isinstance(inv, dict) or not inv.get("id") for inv in (order["invoices"] or []))
+                or not isinstance(order.get("blocked"), bool)
+                or not isinstance(order.get("sum"), dict)
+                or order["sum"].get("value") is None):
+            raise RuntimeError("Incomplete invoice order evidence; no mutations are allowed")
+        # FLOX returns explicit null for a present, empty nullable collection.
+        # A missing field or a GraphQL error is still an incomplete response.
+        if order["invoices"] is None:
+            order["invoices"] = []
+        value = float(order["sum"]["value"])
+        if not math.isfinite(value):
+            raise RuntimeError("Invalid non-finite invoice order amount")
 
-                skipped = len(orders) - len(valid_orders)
-                if skipped > 0:
-                    logger.warning(f"Skipped {skipped} orders with errors in this batch")
-                batch_dates = [pur_date for pur_date in (_order_purchase_date(order) for order in valid_orders) if pur_date]
-                if batch_dates:
-                    logger.info(
-                        "Fetched %s orders (total: %s) covering %s..%s",
-                        len(valid_orders),
-                        len(all_orders),
-                        min(batch_dates),
-                        max(batch_dates),
-                    )
-                    if min(batch_dates) < date_from_str:
-                        logger.info("Reached orders older than requested from-date %s; stopping pagination", date_from_str)
-                        has_next_page = False
-                else:
-                    logger.info(f"Fetched {len(valid_orders)} orders (total: {len(all_orders)})")
+    def fetch_order_for_invoice(self, order_num: Any) -> Dict[str, Any]:
+        requested = str(order_num or "").strip()
+        order = self.execute_read(ORDER_INVOICE_QUERY, {"order_num": requested}).get("getOrder")
+        self._validate_order_for_invoice_read(order)
+        if str(order["order_num"]) != requested:
+            raise RuntimeError("Invoice recheck returned another order")
+        return order
 
-            except Exception as e:
-                error_str = str(e)
-                logger.error(f"Error fetching orders: {e}")
-                logger.error(f"Full error details: {type(e).__name__}: {error_str}")
+    def fetch_order_safety_context(self, order_num: str) -> Dict[str, Any]:
+        from order_status_safety import ORDER_SAFETY_QUERY
 
-                # Check if this is a GraphQL error with partial data
-                # The gql library might have partial results even with errors
-                partial_data = None
-                if hasattr(e, 'data') and e.data:
-                    partial_data = e.data
-                    logger.info("Error contains partial data, attempting to use it...")
-                    try:
-                        orders_data = partial_data.get('getOrderList', {})
-                        orders = orders_data.get('data', [])
+        requested = str(order_num)
+        order = self.execute_read(ORDER_SAFETY_QUERY, {"order_num": requested}).get("getOrder")
+        if not isinstance(order, dict) or str(order.get("order_num") or "") != requested:
+            raise RuntimeError("Order safety recheck returned an invalid order identity")
+        return order
 
-                        # Filter out None values and orders with errors
-                        valid_orders = [o for o in orders if o is not None]
-                        all_orders.extend(valid_orders)
-
-                        page_info = orders_data.get('pageInfo', {})
-                        has_next_page = page_info.get('hasNextPage', False)
-                        cursor = page_info.get('nextCursor')
-
-                        logger.info(f"Retrieved {len(valid_orders)} valid orders from partial response")
-                        skipped = len(orders) - len(valid_orders)
-                        if skipped > 0:
-                            logger.warning(f"Skipped {skipped} problematic orders in this batch")
-
-                        batch_dates = [pur_date for pur_date in (_order_purchase_date(order) for order in valid_orders) if pur_date]
-                        if batch_dates and min(batch_dates) < date_from_str:
-                            logger.info("Reached orders older than requested from-date %s; stopping pagination", date_from_str)
-                            has_next_page = False
-
-                        # Continue to next page
-                        continue
-                    except Exception as parse_error:
-                        logger.error(f"Failed to parse partial data: {parse_error}")
-
-                # If we can't recover from the error, check if we should continue
-                if "Internal server error" in error_str and "price_elements" in error_str:
-                    logger.warning("Encountered server error on price_elements field")
-                    logger.warning("This is a BizniWeb API issue with a specific order's data")
-                    # Skip to next page if we have a cursor
-                    if cursor:
-                        logger.info("Skipping to next page...")
-                        continue
-
-                # Try to get the underlying HTTP response from the GQL exception
-                response = None
-
-                # Check for response in the exception itself
-                if hasattr(e, 'response'):
-                    response = e.response
-                # Check for response in the cause
-                elif hasattr(e, '__cause__'):
-                    cause = e.__cause__
-                    if hasattr(cause, 'response'):
-                        response = cause.response
-                    # For requests.HTTPError, the response is in args
-                    elif hasattr(cause, 'args') and len(cause.args) > 0:
-                        if hasattr(cause.args[0], 'response'):
-                            response = cause.args[0].response
-
-                # Try to extract response from transport layer
-                if not response and hasattr(self.client, 'transport'):
-                    transport = self.client.transport
-                    if hasattr(transport, 'response_headers'):
-                        logger.error(f"Transport response headers: {transport.response_headers}")
-
-                if response:
-                    logger.error(f"HTTP Response Status: {response.status_code if hasattr(response, 'status_code') else 'N/A'}")
-                    logger.error(f"HTTP Response Headers: {dict(response.headers) if hasattr(response, 'headers') else 'N/A'}")
-                    try:
-                        response_body = response.text if hasattr(response, 'text') else str(response.content if hasattr(response, 'content') else 'N/A')
-                        logger.error(f"HTTP Response Body: {response_body}")
-                    except Exception as body_err:
-                        logger.error(f"Could not read response body: {body_err}")
-                else:
-                    logger.error("No HTTP response object found in exception")
-
-                # Try making a raw request to see what we get
-                logger.error("Attempting to make a raw HTTP request to diagnose the issue...")
-                try:
-                    import requests
-                    headers = {'BW-API-Key': f'Token {self.api_token}', 'Content-Type': 'application/json'}
-
-                    # Convert GQL DocumentNode to string properly
-                    query_string = """
-query GetOrders($filter: OrderFilter, $params: OrderParams) {
-  getOrderList(filter: $filter, params: $params) {
-    data {
-      id
-      order_num
-      status {
-        name
-      }
-    }
-    pageInfo {
-      hasNextPage
-    }
-  }
-}
-"""
-                    payload = {
-                        'query': query_string,
-                        'variables': variables
-                    }
-                    logger.error(f"Making raw request to: {self.client.transport.url}")
-                    logger.error(f"With headers: {_redact_headers(headers)}")
-                    raw_response = requests.post(
-                        self.client.transport.url,
-                        json=payload,
-                        headers=headers,
-                        timeout=10
-                    )
-                    logger.error(f"Raw request status: {raw_response.status_code}")
-                    logger.error(f"Raw request headers: {dict(raw_response.headers)}")
-                    logger.error(f"Raw request body: {raw_response.text}")
-                except Exception as raw_err:
-                    logger.error(f"Raw request also failed: {raw_err}")
-
+    def _fetch_order_pages(self, *, status_id: Optional[int] = None,
+                           changed_from: Optional[str] = None,
+                           purchase_window: Optional[Tuple[str, str]] = None) -> List[Dict[str, Any]]:
+        orders: Dict[str, Dict[str, Any]] = {}
+        cursor = None
+        seen_cursors = set()
+        started = time.monotonic()
+        while True:
+            if self.scan_pages >= self.scan_max_pages or time.monotonic() - started > 1200:
+                raise RuntimeError("Invoice scan limit reached before completion")
+            if self.operation_journal and self.scan_pages % 20 == 0:
+                self.operation_journal.assert_owned()
+            params: Dict[str, Any] = {"limit": 30, "order_by": "pur_date", "sort": "DESC"}
+            if cursor is not None:
+                params["cursor"] = cursor
+            variables: Dict[str, Any] = {"params": params}
+            if status_id is not None:
+                variables["status"] = status_id
+            if changed_from is not None:
+                variables["changed_from"] = changed_from
+            result = self.execute_read(ORDER_QUERY, variables)
+            payload = result.get("getOrderList")
+            if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+                raise RuntimeError("Incomplete invoice scan response")
+            page = payload["data"]
+            info = payload.get("pageInfo")
+            if not isinstance(info, dict) or not isinstance(info.get("hasNextPage"), bool):
+                raise RuntimeError("Invoice scan lacks reliable pagination metadata")
+            self.scan_pages += 1
+            for order in page:
+                self._validate_order_for_invoice_read(order)
+                number = str(order["order_num"])
+                # Repeated offset rows can occur during concurrent shop updates.
+                # Fail this pass rather than asserting complete coverage.
+                if number in orders:
+                    raise RuntimeError("Invoice scan repeated an order; restart required")
+                orders[number] = order
+            if not info["hasNextPage"]:
                 break
+            if not page:
+                raise RuntimeError("Invoice scan has an empty non-final page")
+            next_cursor = info.get("nextCursor")
+            if (not isinstance(next_cursor, int) or isinstance(next_cursor, bool)
+                    or next_cursor <= (cursor or 0) or next_cursor in seen_cursors):
+                raise RuntimeError("Invoice scan cursor did not advance")
+            seen_cursors.add(next_cursor)
+            if purchase_window and any(_order_purchase_date(order) < purchase_window[0] for order in page):
+                break
+            cursor = next_cursor
+        result_orders = list(orders.values())
+        if purchase_window:
+            result_orders = [order for order in result_orders
+                             if purchase_window[0] <= _order_purchase_date(order) <= purchase_window[1]]
+        return result_orders
 
-        # Filter orders by date client-side
-        if all_orders:
-            filtered_orders = []
+    def fetch_orders(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
+        """Legacy explicit purchase-window scan, with mandatory complete pages."""
+        return self._fetch_order_pages(purchase_window=(date_from.strftime("%Y-%m-%d"), date_to.strftime("%Y-%m-%d")))
 
-            for order in all_orders:
-                pur_date = _order_purchase_date(order)
+    def fetch_all_eligible_orders(self) -> List[Dict[str, Any]]:
+        """Scan the shipped status across all languages and all purchase dates."""
+        orders: Dict[str, Dict[str, Any]] = {}
+        for status_id in sorted(self.resolve_eligible_status_ids()):
+            for order in self._fetch_order_pages(status_id=status_id):
+                orders[str(order["order_num"])] = order
+        return list(orders.values())
 
-                if date_from_str <= pur_date <= date_to_str:
-                    filtered_orders.append(order)
-
-            logger.info(f"Filtered {len(filtered_orders)} orders within date range {date_from_str} to {date_to_str}")
-            return filtered_orders
-
-        return all_orders
+    def fetch_changed_orders(self, changed_from: str) -> List[Dict[str, Any]]:
+        return self._fetch_order_pages(changed_from=changed_from)
 
     def fetch_latest_invoice_for_order(self, order_num: Any) -> Tuple[Optional[str], Optional[str]]:
         """Read the order again after invoice finalization and return its invoice id/number."""
@@ -1126,6 +1097,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         filtered_orders = []
         stats = {
             "skipped_zero_total_orders": 0,
+            "skipped_blocked_orders": 0,
         }
 
         for order in orders:
@@ -1134,6 +1106,10 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
             invoices = order.get("invoices", []) or []
             has_invoice = len(invoices) > 0
             order_total_value = _coerce_order_total_value(order)
+
+            if order.get("blocked"):
+                stats["skipped_blocked_orders"] += 1
+                continue
 
             if self.exclude_zero_total_orders and order_total_value <= 0:
                 stats["skipped_zero_total_orders"] += 1
@@ -1144,7 +1120,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                 )
                 continue
 
-            if _status_matches_invoice_generation(status_name, self.eligible_statuses) and not has_invoice:
+            if self._status_is_eligible(order) and not has_invoice:
                 filtered_orders.append(order)
                 logger.info(
                     "Order %s matches criteria for invoice generation - Status: %s - Total: %.2f",
@@ -1161,201 +1137,208 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                 )
 
         return filtered_orders, stats
+
+    def _status_is_eligible(self, order: Dict[str, Any]) -> bool:
+        status = order.get("status") or {}
+        if self.eligible_status_ids:
+            return str(status.get("id")) in {str(value) for value in self.eligible_status_ids}
+        return _status_matches_invoice_generation(status.get("name", ""), self.eligible_statuses)
     
+    def _journal_update(self, order_num: str, **fields: Any) -> None:
+        if self.operation_journal:
+            self.operation_journal.update_order(order_num, **fields)
+
+    def _confirm_created_invoice(self, order_num: str, claimed_id: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+        for attempt in range(3):
+            current = self.fetch_order_for_invoice(order_num)
+            invoices = current["invoices"]
+            if invoices:
+                if len(invoices) != 1:
+                    raise RuntimeError("Invoice readback has multiple final documents")
+                invoice = invoices[0]
+                actual_id = str(invoice["id"])
+                if claimed_id and actual_id != str(claimed_id):
+                    raise RuntimeError("Created invoice identity differs from order readback")
+                return actual_id, str(invoice.get("invoice_num") or "") or None
+            if attempt < 2:
+                time.sleep(1)
+        return None, None
+
+    def _send_journaled_email(self, order_num: str, result: InvoiceCreationResult) -> None:
+        held = bool(self.operation_journal and self.operation_journal.get_order(order_num).get("email_policy") == "hold")
+        if held:
+            result.email_required = False
+        if not result.email_required:
+            self._journal_update(order_num, phase="complete", email_state="held" if held else "disabled")
+            return
+        if not result.invoice_id:
+            result.email_error = "missing_invoice_id"
+            return
+        current = self.fetch_order_for_invoice(order_num)
+        if (current["blocked"] or not self._status_is_eligible(current)
+                or not any(str(inv["id"]) == str(result.invoice_id) for inv in current["invoices"])):
+            result.email_error = "eligibility_changed"
+            result.ambiguous = True
+            self._journal_update(order_num, phase="email", email_state="ambiguous")
+            return
+        if self.operation_journal:
+            self.operation_journal.assert_owned()
+        self._journal_update(order_num, phase="email", email_state="sending", invoice_id=result.invoice_id,
+                             invoice_num=result.invoice_num)
+        result.email_sent = self.send_invoice_email(result.invoice_id)
+        result.email_error = "" if result.email_sent else self.last_email_outcome
+        result.ambiguous = self.last_email_outcome == "ambiguous"
+        self._journal_update(order_num, phase="complete" if result.email_sent else "email",
+                             email_state=self.last_email_outcome)
+
     def create_invoice(self, order: Dict[str, Any]) -> InvoiceCreationResult:
-        """Create invoice for the order"""
-        order_num = order.get('order_num')
-        creation_result = InvoiceCreationResult(email_required=self.send_invoice_email_enabled)
-        customer = order.get('customer', {})
-        customer_name = customer.get('company_name', '')
-        if not customer_name:
-            customer_name = f"{customer.get('name', '')} {customer.get('surname', '')}"
-        
-        order_sum = order.get('sum', {}).get('formatted', 'N/A')
-        
-        # Log the order details
-        logger.info(f"Processing order {order_num}:")
-        logger.info(f"  Customer: {customer_name}")
-        logger.info(f"  Amount: {order_sum}")
-        logger.info(f"  Status: {order.get('status', {}).get('name', 'N/A')}")
-        
+        """Fresh eligibility, one finalization attempt, mandatory invoice readback."""
+        order_num = str(order.get("order_num") or "").strip()
+        result = InvoiceCreationResult(email_required=self.send_invoice_email_enabled)
+        if not order_num:
+            return result
+        current = self.fetch_order_for_invoice(order_num)
+        prior = self.operation_journal.get_order(order_num) if self.operation_journal else {}
+        if prior.get("email_policy") == "hold":
+            result.email_required = False
+        if current["invoices"]:
+            if prior.get("phase") not in {"creating", "create_ambiguous"}:
+                result.skipped = True
+                self._journal_update(order_num, phase="complete", reason="invoice_exists")
+                return result
+            result.invoice_id, result.invoice_num = self._confirm_created_invoice(order_num, None)
+            result.created = True
+            result.recovered = True
+            self._journal_update(order_num, phase="email", invoice_id=result.invoice_id,
+                                 invoice_num=result.invoice_num, email_state="pending")
+            self._send_journaled_email(order_num, result)
+            return result
+        if prior.get("phase") in {"creating", "create_ambiguous"}:
+            # No provider idempotency key exists on this web endpoint. A missing
+            # readback is not permission to replay an uncertain mutation.
+            result.ambiguous = True
+            self._journal_update(order_num, phase="create_ambiguous")
+            return result
+        eligible, _ = self.filter_orders_for_invoice([current])
+        if not eligible:
+            result.skipped = True
+            self._journal_update(order_num, phase="complete", reason="eligibility_changed")
+            return result
+        if not self.web_session:
+            raise RuntimeError("Invoice web session is unavailable")
+        if self.operation_journal:
+            self.operation_journal.assert_owned()
+        self._journal_update(order_num, phase="creating", attempted_at=iso_utc(utc_now()))
+        headers = {
+            "X-Requested-With": "XMLHttpRequest",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Referer": f"{self.base_url}/erp/orders/orders/detail/{order_num}",
+        }
+        suffix = f"?arf={self.arf_token}" if self.arf_token else ""
+        claimed_id = None
+        definite_rejection = False
         try:
-            import time
-            timestamp = int(time.time() * 1000)
-
-            order_id = order.get('id')
-            logger.debug(f"Order {order_num} has ID: {order_id}")
-
-            headers = {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json, text/javascript, */*; q=0.01',
-                'Referer': f'{self.base_url}/erp/orders/orders/detail/{order_num}'
-            }
-
-            create_url = self.invoice_create_url.format(order_num=order_num)
-            if self.arf_token:
-                create_url += f"?arf={self.arf_token}&_dc={timestamp}"
-            else:
-                create_url += f"?_dc={timestamp}"
-
-            logger.debug(f"Attempting to create invoice first: {create_url}")
-            create_response = self.web_session.post(create_url, headers=headers)
-
-            if create_response.status_code == 200:
-                try:
-                    create_result = create_response.json()
-                    logger.debug(f"Create response: {create_result}")
-                    if not create_result.get('success'):
-                        logger.debug(f"Create step failed: {create_result.get('errors', {}).get('reason', 'Unknown error')}")
-                except json.JSONDecodeError:
-                    logger.debug(f"Create response not JSON: {create_response.text[:200]}")
-
-            time.sleep(1)
-
-            response = None
-            finalize_url = ""
-            urls_to_try = [('order_num', order_num)]
-            if order_id:
-                urls_to_try.append(('order_id', order_id))
-
-            for url_type, identifier in urls_to_try:
-                finalize_url = self.invoice_finalize_url.format(order_num=identifier)
-                timestamp = int(time.time() * 1000)
-                if self.arf_token:
-                    finalize_url += f"?arf={self.arf_token}&_dc={timestamp}"
-                else:
-                    finalize_url += f"?_dc={timestamp}"
-
-                logger.debug(f"Attempting to finalize invoice via {url_type}: {finalize_url}")
-                response = self.web_session.post(finalize_url, headers=headers)
-
-                if response.status_code == 405:
-                    logger.debug("POST not allowed, trying GET")
-                    response = self.web_session.get(finalize_url, headers=headers)
-
-                if response.status_code == 200:
-                    break
-                if response.status_code == 400:
-                    logger.debug(f"Got 400 error with {url_type}, trying next...")
-                    continue
-
-            if response is None:
-                logger.error("  âś— Invoice creation failed before finalization response")
-                return creation_result
-
-            if response.status_code == 200:
-                logger.debug(f"  Raw response: {response.text[:1000]}")
-                response_payload = None
-                try:
-                    response_payload = response.json()
-                    logger.debug(f"  JSON response: {response_payload}")
-                except json.JSONDecodeError:
-                    response_payload = None
-
-                if isinstance(response_payload, dict):
-                    if not response_payload.get('success'):
-                        error_msg = response_payload.get('message') or response_payload.get('errors', {}).get('reason', 'Unknown error')
-                        logger.error(f"  âś— Invoice creation failed: {error_msg}")
-                        return creation_result
-                    creation_result.created = True
-                    creation_result.invoice_id = _extract_invoice_id_from_payload(response_payload)
-                    creation_result.invoice_num = _extract_invoice_num_from_payload(response_payload)
-                elif 'success' in response.text.lower() or 'invoice' in response.text.lower():
-                    creation_result.created = True
-                    creation_result.invoice_id = _extract_invoice_id_from_text(response.text, response.url)
-                    logger.info("  âś“ Invoice likely created (HTML response)")
-                else:
-                    logger.error("  âś— Invoice creation failed (HTML response)")
-                    logger.debug(f"  âś— HTML response: {response.text[:500]}")
-                    return creation_result
-
-                if not creation_result.invoice_id:
-                    fallback_invoice_id, fallback_invoice_num = self.fetch_latest_invoice_for_order(order_num)
-                    creation_result.invoice_id = fallback_invoice_id
-                    creation_result.invoice_num = creation_result.invoice_num or fallback_invoice_num
-
-                logger.info(f"  âś“ Invoice created: {creation_result.invoice_num or creation_result.invoice_id or 'unknown'}")
-
-                if not self.send_invoice_email_enabled:
-                    logger.info("  Invoice email notification skipped by configuration")
-                    return creation_result
-
-                if not creation_result.invoice_id:
-                    creation_result.email_error = "missing_invoice_id"
-                    logger.error("  âś— Invoice email notification not sent: missing invoice id")
-                    return creation_result
-
-                if self.send_invoice_email(creation_result.invoice_id):
-                    creation_result.email_sent = True
-                    logger.info("  âś“ Invoice email notification sent successfully to customer")
-                else:
-                    creation_result.email_error = "send_failed"
-                    logger.error("  âś— Failed to send invoice email notification")
-                return creation_result
-
-            if response.status_code == 400:
-                logger.error(f"  âś— Bad request (400) - URL: {finalize_url}")
-                try:
-                    error_detail = response.json()
-                    logger.error(f"  âś— Error details: {error_detail}")
-                except Exception:
-                    logger.error(f"  âś— Error response: {response.text[:500]}")
-                return creation_result
-
-            logger.error(f"  âś— Invoice creation failed with status {response.status_code}")
-            logger.error(f"  âś— Response: {response.text[:500]}")
-            return creation_result
-                            
-        except Exception as e:
-            logger.error(f"  âś— Error creating invoice: {e}")
-            return creation_result
-    
-    def send_invoice_email(self, invoice_id: str) -> bool:
-        """Send invoice email notification to customer"""
-        try:
-            import time
-            timestamp = int(time.time() * 1000)
-            
-            send_url = self.invoice_send_url.format(invoice_id=invoice_id)
-            if self.arf_token:
-                send_url += f"?arf={self.arf_token}&_dc={timestamp}"
-            else:
-                send_url += f"?_dc={timestamp}"
-            
-            logger.debug(f"Sending invoice email via: {send_url}")
-            headers = {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json, text/javascript, */*; q=0.01',
-                'Referer': f'{self.base_url}/erp/orders/invoices/detail/{invoice_id}',
-            }
-            response = self.web_session.post(send_url, headers=headers)
-            if response.status_code == 405:
-                logger.debug("Invoice email POST not allowed, trying GET")
-                response = self.web_session.get(send_url, headers=headers)
-            response.raise_for_status()
-            
-            # Check response
+            prepared = self.web_session.post(self.invoice_create_url.format(order_num=order_num) + suffix,
+                                             headers=headers, allow_redirects=False)
+            if prepared.status_code != 200:
+                definite_rejection = prepared.status_code in {400, 401, 403, 404, 405, 429}
+                raise RuntimeError(f"Invoice preparation returned HTTP {prepared.status_code}")
+            # Creation opens the provider's preparation form; it is not evidence
+            # that an accounting document exists. Only finalization + readback is.
+            if self.operation_journal:
+                self.operation_journal.assert_owned()
+            latest = self.fetch_order_for_invoice(order_num)
+            if latest["invoices"] or not self.filter_orders_for_invoice([latest])[0]:
+                result.skipped = True
+                self._journal_update(order_num, phase="complete", reason="changed_before_finalization")
+                return result
+            response = self.web_session.post(self.invoice_finalize_url.format(order_num=order_num) + suffix,
+                                            headers=headers, allow_redirects=False)
+            if response.status_code != 200:
+                definite_rejection = response.status_code in {400, 401, 403, 404, 405, 429}
+                raise RuntimeError(f"Invoice finalization returned HTTP {response.status_code}")
             try:
-                result = response.json()
-                if result.get('success'):
-                    logger.debug(f"Email API response: success")
-                    return True
+                payload = response.json()
+            except (ValueError, json.JSONDecodeError):
+                payload = None
+            if not isinstance(payload, dict) or payload.get("success") is not True:
+                definite_rejection = isinstance(payload, dict) and payload.get("success") is False
+                raise RuntimeError("Invoice finalization did not explicitly confirm success")
+            claimed_id = _extract_invoice_id_from_payload(payload)
+        except AutomationStateError:
+            raise
+        except Exception as exc:
+            logger.warning("Invoice request for order %s needs readback (%s)", order_num, type(exc).__name__)
+            result.recovered = True
+        try:
+            result.invoice_id, result.invoice_num = self._confirm_created_invoice(order_num, claimed_id)
+        except Exception:
+            self._journal_update(order_num, phase="create_ambiguous")
+            result.ambiguous = True
+            return result
+        if not result.invoice_id:
+            result.ambiguous = not definite_rejection
+            self._journal_update(order_num, phase="create_ambiguous" if result.ambiguous else "create_failed")
+            return result
+        result.created = True
+        self._journal_update(order_num, phase="email", invoice_id=result.invoice_id,
+                             invoice_num=result.invoice_num, email_state="pending")
+        self._send_journaled_email(order_num, result)
+        return result
+
+    def send_invoice_email(self, invoice_id: str) -> bool:
+        """A single send attempt; HTTP 200 HTML and timeouts remain ambiguous."""
+        self.last_email_outcome = "ambiguous"
+        suffix = f"?arf={self.arf_token}" if self.arf_token else ""
+        try:
+            response = self.web_session.post(
+                self.invoice_send_url.format(invoice_id=invoice_id) + suffix,
+                headers={"X-Requested-With": "XMLHttpRequest", "Accept": "application/json",
+                         "Referer": f"{self.base_url}/erp/orders/invoices/detail/{invoice_id}"},
+                allow_redirects=False,
+            )
+            if response.status_code in {400, 401, 403, 404, 405, 429}:
+                self.last_email_outcome = "failed"
+                return False
+            if response.status_code != 200:
+                return False
+            payload = response.json()
+            if isinstance(payload, dict) and payload.get("success") is True:
+                self.last_email_outcome = "sent"
+                return True
+            if isinstance(payload, dict) and payload.get("success") is False:
+                self.last_email_outcome = "failed"
+        except Exception as exc:
+            logger.warning("Invoice email result is unconfirmed (%s)", type(exc).__name__)
+        return False
+
+    def retry_pending_invoice_emails(self) -> List[InvoiceCreationResult]:
+        results = []
+        if not self.operation_journal:
+            return results
+        for record in self.operation_journal.pending_orders():
+            if record.get("phase") != "email":
+                continue
+            result = InvoiceCreationResult(email_required=True, invoice_id=record.get("invoice_id"),
+                                           invoice_num=record.get("invoice_num"))
+            order_num = str(record["order_num"])
+            if record.get("email_state") in {"sending", "ambiguous"}:
+                result.ambiguous = True
+                result.email_error = "ambiguous"
+            elif record.get("email_policy") == "hold":
+                self._journal_update(order_num, phase="complete", email_state="held")
+                continue
+            else:
+                current = self.fetch_order_for_invoice(order_num)
+                valid_invoice = any(str(inv["id"]) == str(result.invoice_id) for inv in current["invoices"])
+                if not valid_invoice or current["blocked"] or not self._status_is_eligible(current):
+                    result.email_error = "eligibility_changed"
+                    result.ambiguous = True
                 else:
-                    logger.debug(f"Email API response: {result}")
-                    return False
-            except json.JSONDecodeError:
-                # Check HTML response
-                if 'success' in response.text.lower() or response.status_code == 200:
-                    logger.debug("Email sent (HTML response indicates success)")
-                    return True
-                else:
-                    logger.debug(f"Email send unclear response: {response.status_code}")
-                    return response.status_code == 200
-                
-        except Exception as e:
-            logger.error(f"Error sending invoice email: {e}")
-            return False
-    
+                    self._send_journaled_email(order_num, result)
+            results.append(result)
+        return results
+
     def process_orders(self, date_from: datetime, date_to: datetime, dry_run: bool = False):
         """Main process to generate invoices for matching orders"""
         logger.info(f"Processing orders from {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
@@ -1406,7 +1389,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                 logger.info(f"Would create invoice for order {order.get('order_num')} - {customer_name} - {order.get('sum', {}).get('formatted', 'N/A')}")
             
             logger.info("=" * 60)
-            logger.info(f"DRY RUN Summary:")
+            logger.info("DRY RUN Summary:")
             logger.info(f"  Orders that would be processed: {len(orders_for_invoice)}")
             total = sum(_coerce_order_total_value(order) for order in orders_for_invoice)
             logger.info(f"  Total amount: â‚¬{total:.2f}")
@@ -1449,7 +1432,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
                 failed_count += 1
         
         logger.info("=" * 60)
-        logger.info(f"Invoice processing complete:")
+        logger.info("Invoice processing complete:")
         logger.info(f"  âś“ Invoices created: {success_count}")
         if failed_count > 0:
             logger.info(f"  âś— Failed: {failed_count}")
@@ -1466,149 +1449,185 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
             logger.info("=" * 60)
 
 
+def _record_invoice_result(summary: InvoiceRunSummary, result: InvoiceCreationResult, order: Dict[str, Any]) -> None:
+    if result.skipped:
+        summary.skipped_after_recheck_orders += 1
+        return
+    if result.ambiguous:
+        summary.ambiguous_invoice_operations += 1
+    if result.created:
+        if result.recovered:
+            summary.recovered_invoices += 1
+        else:
+            summary.created_invoices += 1
+        summary.total_amount += _coerce_order_total_value(order)
+        if result.email_required:
+            if result.email_sent:
+                summary.emailed_invoices += 1
+            else:
+                summary.failed_invoice_emails += 1
+                summary.missing_invoice_ids += int(result.email_error == "missing_invoice_id")
+    else:
+        summary.failed_invoices += 1
+
+
 def run_invoice_generation(
-    project_name: str,
-    date_from: Union[str, datetime],
-    date_to: Union[str, datetime],
-    dry_run: bool = False,
-    no_web_login: bool = False,
+    project_name: str, date_from: Union[str, datetime], date_to: Union[str, datetime],
+    dry_run: bool = False, no_web_login: bool = False, *, full_backlog: Optional[bool] = None,
+    state_store: Any = None, creditnote_order_numbers: Optional[set[str]] = None,
 ) -> InvoiceRunSummary:
     project_name = (project_name or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
     os.environ["REPORT_PROJECT"] = project_name
     load_project_env(project_name, logger=logger)
-
     project_settings = load_project_settings(project_name)
-    invoice_settings = resolve_invoice_generation_settings(project_settings)
+    settings = resolve_invoice_generation_settings(project_settings)
     api_url = resolve_biznisweb_api_url(project_name, project_settings)
-    api_token = os.getenv("BIZNISWEB_API_TOKEN")
-    base_url = derive_biznisweb_base_url(api_url)
-    web_username = os.getenv("BIZNISWEB_USERNAME")
-    web_password = os.getenv("BIZNISWEB_PASSWORD")
-
-    if not api_token:
-        raise RuntimeError(f"BIZNISWEB_API_TOKEN not found for project '{project_name}'")
-
+    token = os.getenv("BIZNISWEB_API_TOKEN")
+    if not token:
+        raise RuntimeError("BIZNISWEB_API_TOKEN is required for invoice automation")
     from_dt = date_from if isinstance(date_from, datetime) else datetime.strptime(str(date_from), "%Y-%m-%d")
     to_dt = date_to if isinstance(date_to, datetime) else datetime.strptime(str(date_to), "%Y-%m-%d")
-
     if from_dt > to_dt:
-        raise ValueError(f"from_date ({from_dt:%Y-%m-%d}) cannot be after to_date ({to_dt:%Y-%m-%d})")
+        raise ValueError("Invoice window start cannot follow its end")
+    summary = InvoiceRunSummary(project_name, from_dt.strftime("%Y-%m-%d"), to_dt.strftime("%Y-%m-%d"), dry_run)
+    if state_store is None and settings["safety_state_enabled"]:
+        state_store = build_automation_state_store(project_name, project_settings)
+    if settings["all_age_backlog_enabled"] and not dry_run and state_store is None:
+        raise AutomationStateError("All-age invoice automation requires a durable safety journal")
+    lease = state_store.lease(owner="invoice-generation") if state_store and not dry_run else nullcontext(None)
+    try:
+        with lease as journal:
+            state = journal.snapshot() if journal else state_store.read()[0] if state_store else {"last_scan": {}, "orders": {}}
+            generator = InvoiceGenerator(
+                api_url, token, derive_biznisweb_base_url(api_url),
+                None if no_web_login or dry_run else os.getenv("BIZNISWEB_USERNAME"),
+                None if no_web_login or dry_run else os.getenv("BIZNISWEB_PASSWORD"),
+                exclude_zero_total_orders=settings["exclude_zero_total_orders"],
+                eligible_statuses=settings["eligible_statuses"], send_invoice_email=settings["send_invoice_email"],
+                scan_max_pages=settings["scan_max_pages"], page_delay_seconds=settings["page_delay_seconds"],
+                read_attempts=settings["read_attempts"],
+            )
+            generator.operation_journal = journal
+            if not dry_run and (not generator.web_session or not generator.validate_session()):
+                raise RuntimeError("Invoice automation requires a valid BiznisWeb web session")
+            generator.resolve_eligible_status_ids()
+            started = utc_now()
+            last_scan = state["last_scan"]
+            summary.full_scan_age_hours = (
+                max(0.0, (started - parse_utc(last_scan["full_scan_completed_at"])).total_seconds() / 3600)
+                if last_scan.get("full_scan_completed_at") else -1.0
+            )
+            due = not last_scan.get("full_scan_completed_at") or (
+                started - parse_utc(last_scan["full_scan_completed_at"]) >= timedelta(hours=settings["full_scan_interval_hours"]))
+            do_full = bool(full_backlog) or (full_backlog is None and settings["all_age_backlog_enabled"] and due)
+            summary.invoice_scan_all_ages = do_full
+            if settings["all_age_backlog_enabled"] or full_backlog:
+                full_orders = generator.fetch_all_eligible_orders() if do_full else []
+                watermark = last_scan.get("changed_watermark")
+                changed_at = parse_utc(watermark) - timedelta(minutes=5) if watermark else started - timedelta(days=settings["lookback_days"])
+                zone = ZoneInfo(str(project_settings.get("invoice_generation", {}).get("timezone") or "Europe/Bratislava"))
+                changed_orders = generator.fetch_changed_orders(changed_at.astimezone(zone).strftime("%Y-%m-%d %H:%M:%S"))
+                by_number = {str(row["order_num"]): row for row in full_orders + changed_orders}
+            else:
+                changed_orders = generator.fetch_orders(from_dt, to_dt)
+                by_number = {str(row["order_num"]): row for row in changed_orders}
+            # A failed old creation remains eligible for retry even after the
+            # incremental watermark advances and after its purchase leaves any window.
+            recovered_candidates: List[Dict[str, Any]] = []
+            externally_completed: List[str] = []
+            if journal:
+                changed_by_number = {str(row["order_num"]): row for row in changed_orders}
+                for record in state["orders"].values():
+                    if (record.get("status_review") or {}).get("state") == "open":
+                        row = generator.fetch_order_for_invoice(record["order_num"])
+                        changed_by_number[str(row["order_num"])] = row
+                        by_number[str(row["order_num"])] = row
+                changed_orders = list(changed_by_number.values())
+                for record in journal.pending_orders():
+                    if record.get("phase") in {"pending", "creating", "create_failed", "create_ambiguous"}:
+                        row = generator.fetch_order_for_invoice(record["order_num"])
+                        by_number[str(row["order_num"])] = row
+                        if row["invoices"]:
+                            if record.get("phase") in {"creating", "create_ambiguous"}:
+                                recovered_candidates.append(row)
+                            else:
+                                externally_completed.append(str(row["order_num"]))
+                        else:
+                            # Process persisted attempts even if the current
+                            # status changed: retire safe pending work and keep
+                            # uncertain effects visible instead of dropping them.
+                            recovered_candidates.append(row)
+            orders = list(by_number.values())
+            candidates, stats = generator.filter_orders_for_invoice(orders)
+            candidate_numbers = {str(row["order_num"]) for row in candidates}
+            candidates.extend(row for row in recovered_candidates if str(row["order_num"]) not in candidate_numbers)
+            summary.total_orders_fetched = len(orders)
+            summary.matched_orders = len(candidates)
+            summary.skipped_zero_total_orders = stats["skipped_zero_total_orders"]
+            summary.skipped_blocked_orders = stats["skipped_blocked_orders"]
+            summary.invoice_scan_pages = generator.scan_pages
+            summary.invoice_scan_complete = True
+            if journal:
+                # Persist the entire candidate batch before the first mutation.
+                journal.enqueue_orders(candidates)
+                journal.enqueue_status_reviews([
+                    row for row in changed_orders
+                    if _is_existing_invoice_status_reconciliation_candidate(row, settings["existing_invoice_status_reconciliation"])
+                ])
+                for number in externally_completed:
+                    journal.update_order(number, phase="complete", reason="invoice_created_elsewhere")
+                journal.remember_shipped_orders(orders, generator.eligible_status_ids)
+                scan_update = {"changed_watermark": iso_utc(started), "pages": generator.scan_pages,
+                               "candidate_count": len(candidates), "completed_at": iso_utc(utc_now())}
+                if do_full:
+                    scan_update["full_scan_completed_at"] = iso_utc(utc_now())
+                    summary.full_scan_age_hours = 0.0
+                journal.record_scan(**scan_update)
+            if (creditnote_order_numbers is None and settings["existing_invoice_status_reconciliation"]["enabled"]
+                    and any(_is_existing_invoice_status_reconciliation_candidate(row, settings["existing_invoice_status_reconciliation"])
+                            for row in changed_orders)):
+                from creditnote_export import fetch_creditnote_automation_context
 
-    generator = InvoiceGenerator(
-        api_url,
-        api_token,
-        base_url,
-        None if no_web_login else web_username,
-        None if no_web_login else web_password,
-        exclude_zero_total_orders=invoice_settings["exclude_zero_total_orders"],
-        eligible_statuses=invoice_settings["eligible_statuses"],
-        send_invoice_email=invoice_settings["send_invoice_email"],
-    )
-
-    summary = InvoiceRunSummary(
-        project=project_name,
-        date_from=from_dt.strftime("%Y-%m-%d"),
-        date_to=to_dt.strftime("%Y-%m-%d"),
-        dry_run=dry_run,
-    )
-
-    if not generator.web_session and not dry_run:
-        raise RuntimeError(
-            f"Invoice generation for project '{project_name}' requires BIZNISWEB_USERNAME and BIZNISWEB_PASSWORD"
-        )
-
-    if generator.web_session and not dry_run:
-        logger.info("Validating web session...")
-        if not generator.validate_session():
-            raise RuntimeError(f"BiznisWeb web session validation failed for project '{project_name}'")
-
-    logger.info("Fetching orders from GraphQL API...")
-    orders = generator.fetch_orders(from_dt, to_dt)
-    summary.total_orders_fetched = len(orders)
-    logger.info("Total orders fetched: %s", summary.total_orders_fetched)
-
-    reconciliation = reconcile_existing_invoice_statuses(
-        generator.client,
-        orders,
-        invoice_settings["existing_invoice_status_reconciliation"],
-        dry_run=dry_run,
-    )
-    summary.invoice_status_reconciliation_enabled = bool(reconciliation["enabled"])
-    summary.invoice_status_reconciliation_candidates = int(reconciliation["candidates"])
-    summary.reconciled_invoice_statuses = int(reconciliation["reconciled"])
-    summary.failed_invoice_status_reconciliations = int(reconciliation["failed"])
-    summary.skipped_invoice_status_reconciliations_after_recheck = int(
-        reconciliation["skipped_after_recheck"]
-    )
-    summary.invoice_status_reconciliation_target_name = str(
-        reconciliation["target_status_name"]
-    )
-    summary.invoice_status_reconciliation_target_id = reconciliation["target_status_id"]
-    logger.info(
-        (
-            "Existing-invoice status reconciliation - enabled=%s candidates=%s "
-            "reconciled=%s failed=%s skipped_after_recheck=%s target=%s target_id=%s"
-        ),
-        summary.invoice_status_reconciliation_enabled,
-        summary.invoice_status_reconciliation_candidates,
-        summary.reconciled_invoice_statuses,
-        summary.failed_invoice_status_reconciliations,
-        summary.skipped_invoice_status_reconciliations_after_recheck,
-        summary.invoice_status_reconciliation_target_name,
-        summary.invoice_status_reconciliation_target_id,
-    )
-
-    orders_for_invoice, filter_stats = generator.filter_orders_for_invoice(orders)
-    summary.matched_orders = len(orders_for_invoice)
-    summary.skipped_zero_total_orders = filter_stats.get("skipped_zero_total_orders", 0)
-    logger.info("Orders matching criteria: %s", summary.matched_orders)
-
-    if dry_run:
-        summary.total_amount = sum(_coerce_order_total_value(order) for order in orders_for_invoice)
-        logger.info(
-            "DRY RUN summary - matched=%s total_amount=%.2f skipped_zero_total=%s",
-            summary.matched_orders,
-            summary.total_amount,
-            summary.skipped_zero_total_orders,
-        )
+                creditnote_order_numbers = set(fetch_creditnote_automation_context(
+                    project_name, progress_callback=journal.assert_owned if journal else None,
+                ))
+            reconciliation = reconcile_existing_invoice_statuses(
+                generator.client, changed_orders, settings["existing_invoice_status_reconciliation"], dry_run=dry_run,
+                journal=journal, creditnote_order_numbers=creditnote_order_numbers,
+                read_order=generator.fetch_order_safety_context,
+            )
+            summary.invoice_status_reconciliation_enabled = reconciliation["enabled"]
+            summary.invoice_status_reconciliation_candidates = reconciliation["candidates"]
+            summary.reconciled_invoice_statuses = reconciliation["reconciled"]
+            summary.failed_invoice_status_reconciliations = reconciliation["failed"]
+            summary.skipped_invoice_status_reconciliations_after_recheck = reconciliation["skipped_after_recheck"]
+            summary.invoice_status_reconciliation_target_name = reconciliation["target_status_name"]
+            summary.invoice_status_reconciliation_target_id = reconciliation["target_status_id"]
+            summary.invoice_status_review_required = reconciliation["review_required"]
+            if dry_run:
+                summary.total_amount = sum(_coerce_order_total_value(row) for row in candidates)
+                return summary
+            for email_result in generator.retry_pending_invoice_emails():
+                summary.emailed_invoices += int(email_result.email_sent)
+                summary.failed_invoice_emails += int(not email_result.email_sent)
+                summary.ambiguous_invoice_operations += int(email_result.ambiguous)
+            for order in candidates:
+                result = generator.create_invoice(order)
+                _record_invoice_result(summary, result, order)
+            if journal:
+                pending = journal.pending_orders()
+                summary.pending_invoice_emails = sum(record.get("phase") == "email" for record in pending)
+                summary.pending_invoice_operations = sum(record.get("phase") in {
+                    "pending", "creating", "create_failed", "create_ambiguous", "email"} for record in pending)
+            logger.info("Invoice automation finished: scan_complete=%s full_scan=%s pages=%s matched=%s created=%s failed=%s email_failed=%s ambiguous=%s",
+                        summary.invoice_scan_complete, summary.invoice_scan_all_ages, summary.invoice_scan_pages,
+                        summary.matched_orders, summary.created_invoices, summary.failed_invoices,
+                        summary.failed_invoice_emails, summary.ambiguous_invoice_operations)
+            return summary
+    except AutomationLeaseBusy:
+        summary.skipped_locked = True
+        logger.info("Invoice run skipped because another project automation holds the lease")
         return summary
-
-    for order in orders_for_invoice:
-        result = generator.create_invoice(order)
-        if result.created:
-            summary.created_invoices += 1
-            summary.total_amount += _coerce_order_total_value(order)
-            if result.email_required:
-                if result.email_sent:
-                    summary.emailed_invoices += 1
-                else:
-                    summary.failed_invoice_emails += 1
-                    if result.email_error == "missing_invoice_id":
-                        summary.missing_invoice_ids += 1
-        else:
-            summary.failed_invoices += 1
-
-    logger.info(
-        (
-            "Invoice run summary - project=%s matched=%s created=%s failed=%s "
-            "emailed=%s email_failed=%s missing_invoice_ids=%s skipped_zero_total=%s "
-            "status_reconciliation_candidates=%s status_reconciled=%s "
-            "status_reconciliation_failed=%s total_amount=%.2f"
-        ),
-        summary.project,
-        summary.matched_orders,
-        summary.created_invoices,
-        summary.failed_invoices,
-        summary.emailed_invoices,
-        summary.failed_invoice_emails,
-        summary.missing_invoice_ids,
-        summary.skipped_zero_total_orders,
-        summary.invoice_status_reconciliation_candidates,
-        summary.reconciled_invoice_statuses,
-        summary.failed_invoice_status_reconciliations,
-        summary.total_amount,
-    )
-    return summary
 
 
 def main():

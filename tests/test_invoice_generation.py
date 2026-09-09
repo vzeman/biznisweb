@@ -4,6 +4,8 @@ import os
 import sys
 import tempfile
 import unittest
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -17,7 +19,10 @@ from generate_invoices import (
     reconcile_existing_invoice_statuses,
     resolve_invoice_date_window,
     resolve_invoice_generation_settings,
+    run_invoice_generation,
 )
+from invoice_automation_state import S3AutomationStateStore
+from tests.test_invoice_automation_state import MemoryS3
 from invoice_runner import resolve_invoice_runner_window
 
 
@@ -46,7 +51,7 @@ class _FakeInvoiceWebSession:
         self.post_urls: list[str] = []
         self.get_urls: list[str] = []
 
-    def post(self, url: str, headers: dict | None = None) -> _FakeInvoiceResponse:
+    def post(self, url: str, headers: dict | None = None, **kwargs) -> _FakeInvoiceResponse:
         self.post_urls.append(url)
         if "/erp/orders/invoices/create/" in url:
             return _FakeInvoiceResponse(url, {"success": True})
@@ -64,12 +69,18 @@ class _FakeInvoiceWebSession:
 class _FakeInvoiceClient:
     def __init__(self, invoices: list[dict]) -> None:
         self.invoices = invoices
+        self.calls = 0
 
     def execute(self, query, variable_values=None):
+        self.calls += 1
         return {
             "getOrder": {
                 "order_num": (variable_values or {}).get("order_num"),
-                "invoices": self.invoices,
+                "id": "fixture-order-id",
+                "blocked": False,
+                "status": {"id": 4, "name": "Odoslaná"},
+                "sum": {"value": 12.5, "formatted": "12.50 EUR"},
+                "invoices": self.invoices if self.calls > 2 else [],
             }
         }
 
@@ -282,7 +293,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertIn("Stripe - expired", settings["source_statuses"])
         self.assertNotIn("Odoslaná", settings["source_statuses"])
 
-    def test_existing_invoice_reconciliation_moves_only_unpaid_status_to_paid(self) -> None:
+    def test_existing_invoice_reconciliation_does_not_infer_payment_from_invoice(self) -> None:
         settings = resolve_invoice_generation_settings(
             {
                 "invoice_generation": {
@@ -316,11 +327,12 @@ class InvoiceGenerationTests(unittest.TestCase):
         )
 
         self.assertEqual(1, result["candidates"])
-        self.assertEqual(1, result["reconciled"])
+        self.assertEqual(0, result["reconciled"])
+        self.assertEqual(1, result["review_required"])
         self.assertEqual(0, result["failed"])
         self.assertEqual("Platba online - zaplatené", result["target_status_name"])
         self.assertEqual(55, result["target_status_id"])
-        self.assertEqual([("R-EXPIRED", 55)], client.mutations)
+        self.assertEqual([], client.mutations)
 
     def test_existing_invoice_reconciliation_dry_run_never_mutates(self) -> None:
         settings = resolve_invoice_generation_settings(
@@ -471,8 +483,8 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertEqual("roy-daily-report-email", roy["report_schedule"]["schedule_name"])
         self.assertEqual("vevo-daily-invoice-generation", vevo["invoice_generation"]["schedule_name"])
         self.assertEqual("roy-daily-invoice-generation", roy["invoice_generation"]["schedule_name"])
-        self.assertEqual("cron(0/15 6-23 * * ? *)", vevo["invoice_generation"]["schedule_expression"])
-        self.assertEqual("cron(5/15 6-23 * * ? *)", roy["invoice_generation"]["schedule_expression"])
+        self.assertEqual("cron(0/15 * * * ? *)", vevo["invoice_generation"]["schedule_expression"])
+        self.assertEqual("cron(5/15 * * * ? *)", roy["invoice_generation"]["schedule_expression"])
         self.assertEqual("vevo-same-day-invoice-sweep", vevo["invoice_generation"]["final_sweep_schedule_name"])
         self.assertEqual("roy-same-day-invoice-sweep", roy["invoice_generation"]["final_sweep_schedule_name"])
         self.assertEqual("cron(58 23 * * ? *)", vevo["invoice_generation"]["final_sweep_schedule_expression"])
@@ -557,7 +569,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertTrue(any("/erp/orders/invoices/sendEmail/INV-123" in url for url in generator.web_session.post_urls))
 
     @patch("time.sleep", return_value=None)
-    def test_create_invoice_requires_invoice_id_when_email_enabled(self, _sleep_mock) -> None:
+    def test_create_invoice_requires_verified_invoice_after_finalization(self, _sleep_mock) -> None:
         generator = InvoiceGenerator(
             api_url="https://example.com/api/graphql",
             api_token="token",
@@ -579,9 +591,9 @@ class InvoiceGenerationTests(unittest.TestCase):
         )
 
         self.assertFalse(result)
-        self.assertTrue(result.created)
+        self.assertFalse(result.created)
         self.assertFalse(result.email_sent)
-        self.assertEqual("missing_invoice_id", result.email_error)
+        self.assertTrue(result.ambiguous)
 
     @patch("daily_report_runner.put_metric")
     @patch("daily_report_runner.run_invoice_generation")
@@ -606,6 +618,7 @@ class InvoiceGenerationTests(unittest.TestCase):
             dry_run=True,
             matched_orders=3,
             skipped_zero_total_orders=2,
+            invoice_scan_complete=True,
         )
 
         result = maybe_run_invoice_automation(
@@ -644,6 +657,325 @@ class InvoiceGenerationTests(unittest.TestCase):
             result,
         )
         self.assertEqual(11, put_metric_mock.call_count)
+
+
+def invoice_order(number="fixture-order", **updates):
+    result = {"id": "fixture-id", "order_num": number, "pur_date": "2020-01-01 10:00:00",
+              "last_change": "2020-02-01 10:00:00", "blocked": False,
+              "status": {"id": "4", "name": "Odoslaná"}, "invoices": [],
+              "sum": {"value": 20, "formatted": "20 EUR", "is_net_price": False, "currency": {"code": "EUR"}}}
+    result.update(updates)
+    return result
+
+
+def invoice_page(rows, cursor=None):
+    return {"getOrderList": {"data": rows, "pageInfo": {"hasNextPage": cursor is not None, "nextCursor": cursor}}}
+
+
+class InvoiceApiFake:
+    def __init__(self, order):
+        self.order = order
+        self.calls = []
+        self.page_error = None
+
+    def execute(self, query, variable_values=None):
+        variables = variable_values or {}
+        self.calls.append(deepcopy(variables))
+        if "lang_code" in variables:
+            return {"listOrderStatuses": [{"id": "4", "name": "Odoslaná"},
+                                          {"id": "55", "name": "Platba online - zaplatené"}]}
+        if "order_num" in variables:
+            return {"getOrder": deepcopy(self.order)}
+        if self.page_error:
+            raise self.page_error
+        rows = [deepcopy(self.order)]
+        if "status" in variables and str(self.order["status"]["id"]) != str(variables["status"]):
+            rows = []
+        if variables.get("changed_from", "") > self.order["last_change"]:
+            rows = []
+        return invoice_page(rows)
+
+
+class InvoiceWebFake(_FakeInvoiceWebSession):
+    def __init__(self, api):
+        super().__init__()
+        self.api = api
+        self.email_success = True
+        self.email_timeout = False
+        self.finalize_rejected = False
+        self.finalize_timeout_after_commit = False
+        self.change_status_during_prepare = False
+
+    def post(self, url, headers=None, **kwargs):
+        self.post_urls.append(url)
+        if "/create/" in url:
+            if self.change_status_during_prepare:
+                self.api.order["status"] = {"id": 99, "name": "Storno"}
+            return _FakeInvoiceResponse(url, {"success": True})
+        if "/finalize/" in url:
+            if self.finalize_rejected:
+                return _FakeInvoiceResponse(url, {"success": False}, 429)
+            self.api.order["invoices"] = [{"id": "fixture-invoice", "invoice_num": "fixture-number"}]
+            if self.finalize_timeout_after_commit:
+                raise TimeoutError("simulated response loss after commit")
+            return _FakeInvoiceResponse(url, {"success": True})
+        if "/sendEmail/" in url:
+            if self.email_timeout:
+                raise TimeoutError("simulated uncertain send")
+            return _FakeInvoiceResponse(url, {"success": self.email_success})
+        raise AssertionError("Unexpected invoice web request")
+
+
+class InvoiceSafetyRegressionTests(unittest.TestCase):
+    def setUp(self):
+        self.fixed_now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+        self.s3 = MemoryS3()
+        self.store = S3AutomationStateStore(self.s3, "private", "data/shop/order-automation/state.json", "shop",
+                                           now=lambda: self.fixed_now)
+        self.order = invoice_order()
+        self.api = InvoiceApiFake(self.order)
+        self.generator = InvoiceGenerator("https://example.test/api/graphql", "fixture-token", "https://example.test",
+                                          page_delay_seconds=0, read_attempts=1)
+        self.generator.client = self.api
+        self.web = InvoiceWebFake(self.api)
+        self.generator.web_session = self.web
+        self.generator.validate_session = lambda: True
+        self.settings = {"invoice_generation": {
+            "enabled": True, "lookback_days": 90, "all_age_backlog_enabled": True,
+            "safety_state_enabled": True, "page_delay_seconds": 0,
+        }}
+
+    def run_fixture(self, **kwargs):
+        self.generator.scan_pages = 0
+        with patch("generate_invoices.load_project_env"), \
+             patch("generate_invoices.load_project_settings", return_value=self.settings), \
+             patch("generate_invoices.resolve_biznisweb_api_url", return_value="https://example.test/api/graphql"), \
+             patch("generate_invoices.InvoiceGenerator", return_value=self.generator), \
+             patch("generate_invoices.utc_now", return_value=self.fixed_now), \
+             patch.dict(os.environ, {"BIZNISWEB_API_TOKEN": "fixture-token"}), \
+             patch("generate_invoices.time.sleep"):
+            return run_invoice_generation("shop", "2026-06-09", "2026-06-15", state_store=self.store, **kwargs)
+
+    def test_all_age_scan_includes_purchase_years_before_window(self):
+        rows = self.generator.fetch_all_eligible_orders()
+        self.assertEqual(["fixture-order"], [row["order_num"] for row in rows])
+        request = self.api.calls[-1]
+        self.assertEqual(4, request["status"])
+        self.assertIsInstance(request["status"], int)
+        self.assertNotIn("filter", request)
+        self.assertNotIn("lang_code", request)
+
+    def test_lease_renews_during_fewer_than_twenty_slow_reads(self):
+        elapsed = [0]
+
+        def slow_read(*args, **kwargs):
+            elapsed[0] += 120
+            self.fixed_now += timedelta(seconds=120)
+            return {"getOrder": deepcopy(self.order)}
+
+        self.generator.client = SimpleNamespace(execute=slow_read)
+        with self.store.lease("slow-api-run") as journal:
+            self.generator.operation_journal = journal
+            with patch("generate_invoices.time.monotonic", side_effect=lambda: elapsed[0]):
+                for _ in range(3):
+                    self.generator.fetch_order_for_invoice("fixture-order")
+                self.assertEqual(journal.token, journal.snapshot()["lease"]["token"])
+        self.assertEqual(360, elapsed[0])
+
+    def test_foreign_language_uses_verified_shared_status_id(self):
+        self.order["status"]["name"] = "Versandt"
+        rows = self.generator.fetch_all_eligible_orders()
+        self.assertEqual(1, len(self.generator.filter_orders_for_invoice(rows)[0]))
+        self.order["status"]["id"] = 9
+        self.order["status"]["name"] = "Odoslaná"
+        self.assertEqual([], self.generator.filter_orders_for_invoice([self.order])[0])
+
+    def test_present_null_invoice_collection_is_empty_but_missing_is_not(self):
+        self.order["invoices"] = None
+        self.assertEqual([], self.generator.fetch_order_for_invoice("fixture-order")["invoices"])
+        del self.order["invoices"]
+        with self.assertRaisesRegex(RuntimeError, "Incomplete"):
+            self.generator.fetch_order_for_invoice("fixture-order")
+
+    def test_blocked_order_is_counted_and_never_invoiced(self):
+        self.order["blocked"] = True
+        result = self.run_fixture()
+        self.assertEqual(1, result.skipped_blocked_orders)
+        self.assertEqual([], self.web.post_urls)
+
+    def test_fetch_error_does_not_report_empty_success_or_mutate(self):
+        self.api.page_error = RuntimeError("HTTP 429 fixture")
+        with self.assertRaises(RuntimeError):
+            self.run_fixture()
+        self.assertEqual([], self.web.post_urls)
+        self.assertEqual({}, self.store.read()[0]["last_scan"])
+
+    def test_null_partial_page_and_nonadvancing_cursor_fail(self):
+        for pages in ([invoice_page([None])],
+                      [invoice_page([invoice_order("one")], 30), invoice_page([invoice_order("two")], 30)]):
+            with self.subTest(pages=len(pages)):
+                self.generator.scan_pages = 0
+                self.generator.client = SimpleNamespace(execute=lambda *a, **k: pages.pop(0))
+                with self.assertRaises(RuntimeError):
+                    self.generator._fetch_order_pages()
+
+    def test_partial_graphql_exception_is_not_accepted(self):
+        error = RuntimeError("partial response")
+        error.data = invoice_page([self.order])
+        self.api.page_error = error
+        with self.assertRaises(RuntimeError):
+            self.generator._fetch_order_pages()
+
+    def test_page_limit_does_not_silently_truncate(self):
+        self.generator.scan_max_pages = 1
+        self.generator.client = SimpleNamespace(execute=lambda *a, **k: invoice_page([self.order], 30))
+        with self.assertRaisesRegex(RuntimeError, "limit"):
+            self.generator._fetch_order_pages()
+
+    @patch("generate_invoices.time.sleep")
+    def test_retry_reads_recovers_transient_failure_and_is_bounded(self, _sleep):
+        self.generator.read_attempts = 3
+        attempts = [RuntimeError("429"), invoice_page([self.order])]
+        def execute(*args, **kwargs):
+            result = attempts.pop(0)
+            if isinstance(result, Exception):
+                raise result
+            return result
+        self.generator.client = SimpleNamespace(execute=execute)
+        self.assertEqual(1, len(self.generator._fetch_order_pages()))
+        self.assertEqual([], attempts)
+
+    def test_dry_run_has_no_s3_or_web_writes(self):
+        summary = self.run_fixture(dry_run=True, full_backlog=True)
+        self.assertTrue(summary.invoice_scan_complete)
+        self.assertEqual(1, summary.matched_orders)
+        self.assertEqual([], self.web.post_urls)
+        self.assertEqual([], self.s3.writes)
+
+    def test_existing_invoice_and_status_change_stop_creation(self):
+        self.order["invoices"] = [{"id": "existing", "invoice_num": "existing-number"}]
+        self.assertTrue(self.generator.create_invoice(self.order).skipped)
+        self.assertEqual([], self.web.post_urls)
+        self.order["invoices"] = []
+        self.web.change_status_during_prepare = True
+        self.assertTrue(self.generator.create_invoice(self.order).skipped)
+        self.assertEqual(0, sum("/finalize/" in url for url in self.web.post_urls))
+
+    def test_creation_timeout_reads_back_without_repeating_mutation(self):
+        self.web.finalize_timeout_after_commit = True
+        summary = self.run_fixture()
+        self.assertEqual(1, summary.recovered_invoices)
+        self.assertEqual(0, summary.failed_invoices)
+        self.assertEqual(1, sum("/finalize/" in url for url in self.web.post_urls))
+        self.assertEqual(1, sum("/sendEmail/" in url for url in self.web.post_urls))
+
+    def test_failed_old_creation_remains_in_backlog_after_watermark_moves(self):
+        self.web.finalize_rejected = True
+        first = self.run_fixture()
+        self.assertEqual(1, first.failed_invoices)
+        self.assertEqual(1, first.pending_invoice_operations)
+        self.assertTrue(first.invoice_scan_all_ages)
+        self.web.finalize_rejected = False
+        second = self.run_fixture()
+        self.assertFalse(second.invoice_scan_all_ages)
+        self.assertEqual(1, second.created_invoices)
+        self.assertEqual(0, second.pending_invoice_operations)
+
+    def test_email_failure_is_retried_next_run_without_recreating_invoice(self):
+        self.web.email_success = False
+        first = self.run_fixture()
+        self.assertEqual(1, first.failed_invoice_emails)
+        self.assertEqual(1, first.pending_invoice_emails)
+        self.web.email_success = True
+        second = self.run_fixture()
+        self.assertEqual(1, second.emailed_invoices)
+        self.assertEqual(0, second.pending_invoice_operations)
+        self.assertEqual(1, sum("/finalize/" in url for url in self.web.post_urls))
+
+    def test_historical_email_hold_survives_creation_and_later_runs(self):
+        with self.store.lease("verified-backlog-seed") as journal:
+            journal.update_order("fixture-order", phase="pending", email_policy="hold")
+        first = self.run_fixture()
+        self.assertEqual(1, first.created_invoices)
+        self.assertEqual(0, first.emailed_invoices)
+        self.assertEqual(0, first.failed_invoice_emails)
+        self.assertEqual(0, first.pending_invoice_operations)
+        second = self.run_fixture()
+        self.assertEqual(0, second.emailed_invoices)
+        self.assertEqual(1, sum("/finalize/" in url for url in self.web.post_urls))
+        self.assertEqual(0, sum("/sendEmail/" in url for url in self.web.post_urls))
+        self.assertEqual("held", self.store.read()[0]["orders"]["fixture-order"]["email_state"])
+
+    def test_email_hold_cannot_clear_an_already_ambiguous_send(self):
+        with self.store.lease("prior-run") as journal:
+            journal.update_order("fixture-order", phase="email", email_state="ambiguous",
+                                 invoice_id="fixture-invoice", email_policy="hold")
+        self.order["invoices"] = [{"id": "fixture-invoice", "invoice_num": "fixture-number"}]
+        result = self.run_fixture()
+        self.assertEqual(1, result.ambiguous_invoice_operations)
+        self.assertEqual(1, result.pending_invoice_operations)
+        self.assertEqual([], self.web.post_urls)
+
+    def test_ambiguous_email_is_persistent_and_not_resent(self):
+        self.web.email_timeout = True
+        first = self.run_fixture()
+        self.assertEqual(1, first.ambiguous_invoice_operations)
+        second = self.run_fixture()
+        self.assertEqual(1, second.ambiguous_invoice_operations)
+        self.assertEqual(1, second.pending_invoice_operations)
+        self.assertEqual(1, sum("/sendEmail/" in url for url in self.web.post_urls))
+
+    def test_login_html_cannot_claim_email_success(self):
+        response = _FakeInvoiceResponse("https://example.test/login", None)
+        response.text = "<html><form>Please sign in</form></html>"
+        self.generator.web_session = SimpleNamespace(post=lambda *a, **k: response)
+        self.assertFalse(self.generator.send_invoice_email("fixture-invoice"))
+        self.assertEqual("ambiguous", self.generator.last_email_outcome)
+
+    def test_uncertain_creation_with_no_invoice_is_not_replayed(self):
+        with self.store.lease("prior-run") as journal:
+            journal.update_order("fixture-order", phase="create_ambiguous")
+        summary = self.run_fixture()
+        self.assertEqual(1, summary.ambiguous_invoice_operations)
+        self.assertEqual([], self.web.post_urls)
+
+    def test_uncertain_creation_with_invoice_is_recovered_from_journal(self):
+        self.order["invoices"] = [{"id": "fixture-invoice", "invoice_num": "fixture-number"}]
+        with self.store.lease("prior-run") as journal:
+            journal.update_order("fixture-order", phase="creating")
+        summary = self.run_fixture()
+        self.assertEqual(1, summary.recovered_invoices)
+        self.assertEqual(1, summary.emailed_invoices)
+        self.assertEqual(0, summary.pending_invoice_operations)
+        self.assertEqual(0, sum("/finalize/" in url for url in self.web.post_urls))
+
+    def test_pending_order_cancelled_before_retry_is_retired_without_creation(self):
+        with self.store.lease("prior-run") as journal:
+            journal.update_order("fixture-order", phase="create_failed")
+        self.order["status"] = {"id": 99, "name": "Storno"}
+        result = self.run_fixture()
+        self.assertEqual(1, result.skipped_after_recheck_orders)
+        self.assertEqual(0, result.pending_invoice_operations)
+        self.assertEqual([], self.web.post_urls)
+
+    def test_status_review_survives_creditnote_failure_and_watermark(self):
+        self.settings["invoice_generation"]["existing_invoice_status_reconciliation"] = {"enabled": True}
+        self.order.update(status={"id": 69, "name": "Stripe - expired"},
+                          invoices=[{"id": "fixture-invoice", "invoice_num": "fixture-number"}],
+                          last_change="2026-06-15 10:30:00")
+        with patch("creditnote_export.fetch_creditnote_automation_context", side_effect=RuntimeError("incomplete context")):
+            with self.assertRaises(RuntimeError):
+                self.run_fixture()
+        saved = self.store.read()[0]
+        self.assertEqual("open", saved["orders"]["fixture-order"]["status_review"]["state"])
+        self.assertTrue(saved["last_scan"]["changed_watermark"])
+        with patch("creditnote_export.fetch_creditnote_automation_context", return_value={}) as context:
+            second = self.run_fixture()
+        self.assertEqual("shop", context.call_args.args[0])
+        self.assertTrue(callable(context.call_args.kwargs["progress_callback"]))
+        self.assertFalse(second.invoice_scan_all_ages)
+        self.assertEqual(1, second.invoice_status_review_required)
+        self.assertEqual([], self.web.post_urls)
 
 
 if __name__ == "__main__":
