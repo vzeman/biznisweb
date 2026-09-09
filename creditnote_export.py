@@ -7,6 +7,7 @@ import ast
 import json
 import os
 import re
+import time as time_module
 import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -276,35 +277,93 @@ def _login_admin(project: str):
     return base_url, session, arf
 
 
-def fetch_project_creditnotes(project: str, page_limit: int = DEFAULT_PAGE_LIMIT) -> Tuple[List[Dict[str, Any]], int]:
+def fetch_project_creditnotes(project: str, page_limit: int = DEFAULT_PAGE_LIMIT, *, progress_callback=None) -> Tuple[List[Dict[str, Any]], int]:
+    if not 1 <= page_limit <= 1000:
+        raise ValueError("Invalid creditnote page limit")
     base_url, session, arf = _login_admin(project)
     rows: List[Dict[str, Any]] = []
     reported_total: Optional[int] = None
     start = 0
+    seen_ids: set[str] = set()
 
     while True:
+        if progress_callback is not None:
+            progress_callback()
         response = session.post(
             f"{base_url}/erp/orders/creditnotes/getListJson",
             data={"start": start, "limit": page_limit, "arf": arf},
         )
         response.raise_for_status()
         payload = parse_biznisweb_js_object(response.text)
-        page_rows = payload.get("rows") or []
+        page_rows = payload.get("rows")
         if not isinstance(page_rows, list):
             raise RuntimeError(f"Unexpected creditnote rows payload for project '{project}'")
-        if reported_total is None:
-            try:
-                reported_total = int(payload.get("total") or 0)
-            except (TypeError, ValueError):
-                reported_total = 0
+        raw_total = payload.get("total")
+        if isinstance(raw_total, bool) or not str(raw_total).isdigit():
+            raise RuntimeError("Creditnote scan has no valid total")
+        page_total = int(raw_total)
+        if reported_total is not None and page_total != reported_total:
+            raise RuntimeError("Creditnote collection changed during scan; retry the complete scan")
+        reported_total = page_total
+        for row in page_rows:
+            identity = str(row.get("creditnote_id") or "") if isinstance(row, dict) else ""
+            if not identity or identity in seen_ids:
+                raise RuntimeError("Creditnote scan contains a missing or repeated document identity")
+            seen_ids.add(identity)
         rows.extend(page_rows)
+        if len(rows) > reported_total:
+            raise RuntimeError("Creditnote scan exceeded the reported total")
         if not page_rows:
+            if len(rows) != reported_total:
+                raise RuntimeError("Creditnote scan ended before the reported total")
             break
-        start += page_limit
-        if reported_total is not None and start >= reported_total:
+        start += len(page_rows)
+        if start == reported_total:
             break
+        if start > 500000:
+            raise RuntimeError("Creditnote scan exceeded its safety limit")
+        time_module.sleep(1)
 
     return rows, int(reported_total or len(rows))
+
+
+def fetch_creditnote_automation_context(project: str, *, progress_callback=None) -> Dict[str, List[Dict[str, Any]]]:
+    """Return minimal evidence only after a complete validated creditnote scan.
+
+    An empty mapping is verified absence. Unparseable or unattributed documents
+    make absence unknown and must prevent an automatic recovery decision.
+    """
+    raw_rows, total = fetch_project_creditnotes(project, progress_callback=progress_callback)
+    if len(raw_rows) != total:
+        raise RuntimeError("Incomplete creditnote evidence")
+    return normalize_creditnote_automation_context(raw_rows)
+
+
+def normalize_creditnote_automation_context(raw_rows: Iterable[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    """Normalize rows from a previously verified complete scan, without PII."""
+    context: Dict[str, List[Dict[str, Any]]] = {}
+    seen_ids: set[str] = set()
+    for row in raw_rows:
+        if not isinstance(row, dict):
+            raise RuntimeError("Invalid creditnote row")
+        order_num = str(row.get("order_num") or "").strip()
+        identity = str(row.get("creditnote_id") or "").strip()
+        number = str(row.get("number") or "").strip()
+        amount, _ = parse_money(row.get("taxed_price"))
+        net_amount, _ = parse_money(row.get("price"))
+        currency = first_currency(row.get("taxed_price"), row.get("currencied_price"), row.get("currencied_to_repay"))
+        currency = {"€": "EUR", "Kč": "CZK", "Ft": "HUF", "zł": "PLN", "lei": "RON"}.get(currency, currency.upper())
+        if not order_num or not identity or not number or amount is None or not currency:
+            raise RuntimeError("Creditnote context cannot be safely attributed")
+        if identity in seen_ids:
+            raise RuntimeError("Duplicate creditnote evidence")
+        seen_ids.add(identity)
+        context.setdefault(order_num, []).append({
+            "id": identity, "number": number, "amount": abs(amount), "currency": currency,
+            "invoice_id": str(row.get("inv_id") or ""),
+            "net_amount": abs(net_amount) if net_amount is not None else None,
+        })
+    return context
 
 
 def build_creditnote_export_rows(
@@ -495,7 +554,18 @@ def _status_change_audit_entries(status_change_audit: Any) -> List[Dict[str, Any
     return []
 
 
-def load_creditnote_status_change_audit(project: str, project_settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _validate_status_audit(audit: Any, project: str) -> None:
+    if not isinstance(audit, dict) or audit.get("project") != project or not isinstance(audit.get("orders"), list):
+        raise RuntimeError("Creditnote audit schema or project mismatch")
+    seen: set[str] = set()
+    for row in audit["orders"]:
+        identity = str(row.get("order_num") or "").strip() if isinstance(row, dict) else ""
+        if not identity or identity in seen:
+            raise RuntimeError("Creditnote audit contains invalid or repeated order evidence")
+        seen.add(identity)
+
+
+def load_creditnote_status_change_audit(project: str, project_settings: Optional[Dict[str, Any]] = None, *, strict: bool = False) -> Dict[str, Any]:
     data_dir = project_data_dir(project)
     audit_path = data_dir / STATUS_CHANGE_AUDIT_FILENAME
     merged: Dict[str, Any] = {"project": project, "orders": []}
@@ -503,12 +573,18 @@ def load_creditnote_status_change_audit(project: str, project_settings: Optional
     if audit_path.exists():
         try:
             loaded = json.loads(audit_path.read_text(encoding="utf-8"))
+            if strict:
+                _validate_status_audit(loaded, project)
             if isinstance(loaded, dict):
                 merged.update(loaded)
         except Exception as exc:
+            if strict:
+                raise RuntimeError("Cannot read existing creditnote status audit") from exc
             logger.warning("Could not read local creditnote status audit for %s: %s", project, exc)
 
     bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
+    if strict and not bucket:
+        raise RuntimeError("Durable creditnote audit bucket is required")
     if bucket:
         prefix = os.getenv("REPORT_S3_PREFIX", "").strip().strip("/")
         if not prefix:
@@ -522,6 +598,8 @@ def load_creditnote_status_change_audit(project: str, project_settings: Optional
             region = os.getenv("AWS_REGION", "eu-central-1").strip() or "eu-central-1"
             response = boto3.client("s3", region_name=region).get_object(Bucket=bucket, Key=key)
             loaded = json.loads(response["Body"].read().decode("utf-8"))
+            if strict:
+                _validate_status_audit(loaded, project)
             if isinstance(loaded, dict):
                 local_entries = _status_change_audit_entries(merged)
                 remote_entries = _status_change_audit_entries(loaded)
@@ -535,6 +613,8 @@ def load_creditnote_status_change_audit(project: str, project_settings: Optional
         except Exception as exc:
             error_code = getattr(getattr(exc, "response", None), "get", lambda *_args, **_kwargs: {})("Error", {}).get("Code")
             if error_code not in {"NoSuchKey", "404", "NotFound"}:
+                if strict:
+                    raise RuntimeError("Cannot read durable creditnote status audit") from exc
                 logger.warning("Could not read S3 creditnote status audit s3://%s/%s: %s", bucket, key, exc)
 
     return merged
@@ -544,12 +624,17 @@ def save_creditnote_status_change_audit(
     project: str,
     audit: Dict[str, Any],
     project_settings: Optional[Dict[str, Any]] = None,
+    *, strict: bool = False,
 ) -> Path:
+    if strict:
+        _validate_status_audit(audit, project)
+    bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
+    if strict and not bucket:
+        raise RuntimeError("Durable creditnote audit bucket is required")
     data_dir = project_data_dir(project)
     audit_path = data_dir / STATUS_CHANGE_AUDIT_FILENAME
     audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
-    bucket = os.getenv("REPORT_S3_BUCKET", "").strip()
     if bucket:
         prefix = os.getenv("REPORT_S3_PREFIX", "").strip().strip("/")
         if not prefix:
@@ -568,6 +653,8 @@ def save_creditnote_status_change_audit(
                 ContentType="application/json",
             )
         except Exception as exc:
+            if strict:
+                raise RuntimeError("Cannot persist durable creditnote status audit") from exc
             logger.warning("Could not write S3 creditnote status audit s3://%s/%s: %s", bucket, key, exc)
 
     return audit_path

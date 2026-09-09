@@ -10,8 +10,10 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timedelta, timezone
 import json
+import math
 from pathlib import Path
 import time
+from urllib.parse import urlparse
 
 import boto3
 import requests
@@ -64,6 +66,8 @@ def scan(client, url, token, status_id, *, delay=2, max_pages=5000):
             raise RuntimeError("Collection changed during audit; rerun from the beginning")
         total_pages = page.get("totalPages")
         for row in block["data"]:
+            if not isinstance(row, dict):
+                raise RuntimeError("Audit order row is invalid")
             if "invoices" in row and row["invoices"] is None:
                 row["invoices"] = []
             number = str(row.get("order_num") or "")
@@ -78,7 +82,8 @@ def scan(client, url, token, status_id, *, delay=2, max_pages=5000):
         if not page["hasNextPage"]:
             return list(orders.values()), pages
         next_cursor = page.get("nextCursor")
-        if not block["data"] or next_cursor in (None, "") or str(next_cursor) in cursors:
+        if (not block["data"] or isinstance(next_cursor, bool) or not isinstance(next_cursor, int)
+                or next_cursor <= (cursor or 0) or str(next_cursor) in cursors):
             raise RuntimeError("Audit cursor did not advance")
         cursors.add(str(next_cursor))
         cursor = next_cursor
@@ -98,6 +103,8 @@ def summarize(rows, now):
             result["blocked_without_invoice"] += 1
             continue
         total = float((row.get("sum") or {})["value"])
+        if not math.isfinite(total):
+            raise RuntimeError("Invalid order total")
         if total <= 0:
             result["zero_without_invoice"] += 1
             continue
@@ -124,6 +131,10 @@ def main():
     settings = json.loads((Path(__file__).resolve().parents[1] / "projects" / args.project / "settings.json").read_text(encoding="utf-8"))
     client = requests.Session()
     url, token = secret["BIZNISWEB_API_URL"], secret["BIZNISWEB_API_TOKEN"]
+    parsed = urlparse(url)
+    allowed_hosts = {urlparse(settings["biznisweb_api_url"]).hostname, f"www.{args.project}.sk", f"{args.project}.sk"}
+    if parsed.scheme != "https" or parsed.hostname not in allowed_hosts or parsed.path != "/api/graphql" or parsed.username or parsed.query:
+        raise RuntimeError("Runtime API destination does not match the selected shop")
     response = client.post(url, json={"query": "query($lang:CountryCodeAlpha2!){listOrderStatuses(lang_code:$lang){id name}}",
         "variables": {"lang": "SK"}}, headers={"BW-API-Key": "Token " + token}, timeout=45)
     response.raise_for_status()

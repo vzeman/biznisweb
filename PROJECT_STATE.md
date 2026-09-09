@@ -17,6 +17,9 @@ What changed:
 - Corrected the earlier access conclusion: AWS API works with the existing `codex` profile. The failed default-profile check did not establish absent credentials. Secrets are read in memory from the existing runtime secret; never copied into source or public evidence.
 - Adding complete all-age invoice discovery, durable per-shop S3 operation state/lease, fresh checks before writes, conservative payment/fulfillment decisions, strict creditnote evidence, truthful completion metrics and immutable candidate-gated deployment. Implementation is in progress and has not been promoted.
 - Added a reproducible read-only historical audit script. Its order-level output is generated under ignored `data/<project>/order-automation/`; only aggregate outcomes belong in this public repository.
+- Completed historical read-only scans: ROY 4,309 shipped orders across 144 pages, six positive uninvoiced orders older than seven days, 126 zero-value uninvoiced orders; VEVO 7,612 shipped orders across 254 pages, five positive uninvoiced orders older than seven days, 36 zero-value uninvoiced orders. No blocked uninvoiced orders were found. These are audit-time counts; mutation eligibility must be refreshed.
+- Added strict project/schema validation and complete pagination for creditnote evidence, terminal-only success metrics separated by live/dry-run, 24-hour invoice schedules and a ninety-day cold-start incremental fallback. The daily full eligible-order scan remains unlimited by purchase age. Added [the operations runbook](projects/ORDER_AUTOMATION_OPERATIONS.md), a historical journal seed tool that holds old customer emails, and focused Windows/Linux PR regression coverage.
+- Root verification: 29 focused runner/creditnote/audit tests plus two historical-seed tests pass; focused Ruff passes. Existing unrelated unused-variable warnings in the daily report presentation code were observed and not rewritten. Shared invoice/state milestone `7a6b1713` has 52 passing focused tests; infra milestones `d439d959`/`816ffaf0` have 18. Combined final validation and production deployment remain pending.
 - The first read-only audit request with a 100-row page was rejected: the ordinary API token allows at most 30 rows. Corrected to the verified limit before retrying; no partial report or mutation resulted.
 
 What is verified:
@@ -30,6 +33,7 @@ What is verified:
 Known issues:
 
 - Production still runs the old automation. The native shop payment webhook is outside this repository; a supported way to reject stale payment-attempt downgrades is still being checked.
+- Stripe's seven configured webhook events match current vendor documentation. FLOX exposes unconditional gateway-to-order status mappings; inspected status controls do not expose a conditional stale-payment-attempt guard. Native downgrade prevention remains a provider-side dependency; no Stripe events, gateway mappings or customer-facing settings were changed.
 - Existing invoice tasks use a mutable image tag, schedules lack DLQs, and completion/backlog alarms are absent. No claim of error-free or nonstop operation is made.
 
 Next exact step:
