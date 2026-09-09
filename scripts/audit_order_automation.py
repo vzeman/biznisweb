@@ -28,7 +28,7 @@ query AuditInvoiceBacklog($status: Int!, $params: OrderParams) {
 """
 
 
-def scan(client, url, token, status_id, *, delay=1, max_pages=5000):
+def scan(client, url, token, status_id, *, delay=2, max_pages=5000):
     cursor = None
     cursors = set()
     orders = {}
@@ -48,6 +48,9 @@ def scan(client, url, token, status_id, *, delay=1, max_pages=5000):
                 continue
             response.raise_for_status()
             payload = json.loads(response.content)
+            if payload.get("errors") and attempt < 3:
+                time.sleep(10 * (attempt + 1))
+                continue
             break
         if not isinstance(payload, dict) or payload.get("errors"):
             raise RuntimeError("Audit query failed; no complete result")
