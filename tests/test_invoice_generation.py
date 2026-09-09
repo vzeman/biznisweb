@@ -660,7 +660,7 @@ class InvoiceGenerationTests(unittest.TestCase):
 
 
 def invoice_order(number="fixture-order", **updates):
-    result = {"id": "fixture-id", "order_num": number, "pur_date": "2020-01-01 10:00:00",
+    result = {"id": "1", "order_num": number, "pur_date": "2020-01-01 10:00:00",
               "last_change": "2020-02-01 10:00:00", "blocked": False,
               "status": {"id": "4", "name": "Odoslaná"}, "invoices": [],
               "sum": {"value": 20, "formatted": "20 EUR", "is_net_price": False, "currency": {"code": "EUR"}}}
@@ -668,8 +668,11 @@ def invoice_order(number="fixture-order", **updates):
     return result
 
 
-def invoice_page(rows, cursor=None):
-    return {"getOrderList": {"data": rows, "pageInfo": {"hasNextPage": cursor is not None, "nextCursor": cursor}}}
+def invoice_page(rows, cursor=None, total=None):
+    return {"getOrderList": {"data": rows, "pageInfo": {
+        "hasNextPage": cursor is not None, "nextCursor": cursor,
+        "totalRecords": total if total is not None else len(rows),
+    }}}
 
 
 class InvoiceApiFake:
@@ -677,6 +680,7 @@ class InvoiceApiFake:
         self.order = order
         self.calls = []
         self.page_error = None
+        self.extra_orders = []
 
     def execute(self, query, variable_values=None):
         variables = variable_values or {}
@@ -685,15 +689,18 @@ class InvoiceApiFake:
             return {"listOrderStatuses": [{"id": "4", "name": "Odoslaná"},
                                           {"id": "55", "name": "Platba online - zaplatené"}]}
         if "order_num" in variables:
+            for row in self.extra_orders:
+                if row["order_num"] == variables["order_num"]:
+                    return {"getOrder": deepcopy(row)}
             return {"getOrder": deepcopy(self.order)}
         if self.page_error:
             raise self.page_error
-        rows = [deepcopy(self.order)]
-        if "status" in variables and str(self.order["status"]["id"]) != str(variables["status"]):
-            rows = []
-        if variables.get("changed_from", "") > self.order["last_change"]:
-            rows = []
-        return invoice_page(rows)
+        rows = sorted([deepcopy(self.order)] + deepcopy(self.extra_orders),
+                      key=lambda row: int(row["id"]), reverse=variables["params"]["sort"] == "DESC")
+        rows = [row for row in rows if variables.get("changed_from", "") <= row["last_change"]]
+        offset, limit = variables["params"].get("cursor", 0), variables["params"]["limit"]
+        page = rows[offset:offset + limit]
+        return invoice_page(page, offset + limit if offset + limit < len(rows) else None, len(rows))
 
 
 class InvoiceWebFake(_FakeInvoiceWebSession):
@@ -747,6 +754,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
 
     def run_fixture(self, **kwargs):
         self.generator.scan_pages = 0
+        self.generator._scan_started_at = None
         with patch("generate_invoices.load_project_env"), \
              patch("generate_invoices.load_project_settings", return_value=self.settings), \
              patch("generate_invoices.resolve_biznisweb_api_url", return_value="https://example.test/api/graphql"), \
@@ -760,8 +768,10 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
         rows = self.generator.fetch_all_eligible_orders()
         self.assertEqual(["fixture-order"], [row["order_num"] for row in rows])
         request = self.api.calls[-1]
-        self.assertEqual(4, request["status"])
-        self.assertIsInstance(request["status"], int)
+        self.assertNotIn("status", request)
+        self.assertNotIn("changed_from", request)
+        self.assertEqual("order_id", request["params"]["order_by"])
+        self.assertEqual("ASC", request["params"]["sort"])
         self.assertNotIn("filter", request)
         self.assertNotIn("lang_code", request)
 
@@ -810,6 +820,36 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
         self.assertEqual([], self.web.post_urls)
         self.assertEqual({}, self.store.read()[0]["last_scan"])
 
+    def test_incomplete_later_full_page_cannot_enqueue_or_write(self):
+        api = MutableInvoiceInventory()
+        def truncate(api, variables, result):
+            if len(api.calls) == 3:
+                result["getOrderList"]["pageInfo"]["hasNextPage"] = False
+        api.after_read = truncate
+        self.generator.client = api
+        with self.assertRaisesRegex(RuntimeError, "pagination metadata"):
+            self.run_fixture()
+        saved = self.store.read()[0]
+        self.assertEqual({}, saved["last_scan"])
+        self.assertEqual({}, saved["orders"])
+        self.assertEqual([], self.web.post_urls)
+
+    def test_changed_watermark_is_scan_start_even_when_read_finishes_later(self):
+        initial = self.fixed_now
+        execute = self.api.execute
+        advanced = []
+        def delayed_read(query, variable_values=None):
+            result = execute(query, variable_values=variable_values)
+            if "params" in (variable_values or {}) and not advanced:
+                self.fixed_now += timedelta(minutes=2)
+                advanced.append(True)
+            return result
+        self.api.execute = delayed_read
+        self.run_fixture()
+        watermark = datetime.fromisoformat(self.store.read()[0]["last_scan"]["changed_watermark"].replace("Z", "+00:00"))
+        self.assertEqual(initial, watermark)
+        self.assertLess(watermark, self.fixed_now)
+
     def test_null_partial_page_and_nonadvancing_cursor_fail(self):
         for pages in ([invoice_page([None])],
                       [invoice_page([invoice_order("one")], 30), invoice_page([invoice_order("two")], 30)]):
@@ -828,14 +868,13 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
 
     def test_page_limit_does_not_silently_truncate(self):
         self.generator.scan_max_pages = 1
-        self.generator.client = SimpleNamespace(execute=lambda *a, **k: invoice_page([self.order], 30))
         with self.assertRaisesRegex(RuntimeError, "limit"):
             self.generator._fetch_order_pages()
 
     @patch("generate_invoices.time.sleep")
     def test_retry_reads_recovers_transient_failure_and_is_bounded(self, _sleep):
         self.generator.read_attempts = 3
-        attempts = [RuntimeError("429"), invoice_page([self.order])]
+        attempts = [RuntimeError("429"), invoice_page([self.order]), invoice_page([self.order])]
         def execute(*args, **kwargs):
             result = attempts.pop(0)
             if isinstance(result, Exception):
@@ -979,20 +1018,9 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
 
     def test_creditnote_context_failure_does_not_starve_independent_invoice(self):
         self.settings["invoice_generation"]["existing_invoice_status_reconciliation"] = {"enabled": True}
-        review_order = invoice_order("fixture-review", status={"id": 69, "name": "Stripe - expired"},
+        review_order = invoice_order("fixture-review", id="2", status={"id": 69, "name": "Stripe - expired"},
                                      invoices=[{"id": "prior-invoice"}], last_change="2026-06-15 10:30:00")
-        execute = self.api.execute
-
-        def with_review(query, variable_values=None):
-            variables = variable_values or {}
-            if variables.get("order_num") == "fixture-review":
-                return {"getOrder": deepcopy(review_order)}
-            result = execute(query, variable_values=variables)
-            if "changed_from" in variables:
-                result["getOrderList"]["data"].append(deepcopy(review_order))
-            return result
-
-        self.api.execute = with_review
+        self.api.extra_orders = [review_order]
         with patch("creditnote_export.fetch_creditnote_automation_context", side_effect=RuntimeError("incomplete context")):
             result = self.run_fixture()
         self.assertEqual(1, result.created_invoices)
@@ -1011,6 +1039,219 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
             with self.assertRaises(AutomationStateError):
                 self.run_fixture()
         self.assertEqual([], self.web.post_urls)
+
+
+class MutableInvoiceInventory:
+    """An offset API whose data can change immediately before/after each read."""
+
+    def __init__(self, count=90):
+        self.rows = {identity: invoice_order(f"synthetic-{identity}", id=str(identity))
+                     for identity in range(1, count + 1)}
+        self.calls = []
+        self.before_read = lambda *_: None
+        self.after_read = lambda *_: None
+
+    def execute(self, query, variable_values=None):
+        variables = deepcopy(variable_values or {})
+        if "lang_code" in variables:
+            return {"listOrderStatuses": [{"id": "4", "name": "Odoslaná"}]}
+        if "order_num" in variables:
+            return {"getOrder": next((deepcopy(row) for row in self.rows.values()
+                                     if row["order_num"] == variables["order_num"]), None)}
+        self.calls.append(variables)
+        self.before_read(self, variables)
+        params = variables["params"]
+        rows = sorted((deepcopy(row) for row in self.rows.values()
+                       if row["last_change"] >= variables.get("changed_from", "")),
+                      key=lambda row: int(row["id"]), reverse=params["sort"] == "DESC")
+        offset, limit = params["cursor"], params["limit"]
+        result = invoice_page(rows[offset:offset + limit],
+                              offset + limit if offset + limit < len(rows) else None, len(rows))
+        self.after_read(self, variables, result)
+        return result
+
+
+class StableInvoicePaginationTests(unittest.TestCase):
+    def setUp(self):
+        self.generator = InvoiceGenerator("https://example.test/api/graphql", "fixture-token", "https://example.test",
+                                          page_delay_seconds=0, read_attempts=1)
+        self.api = MutableInvoiceInventory()
+        self.generator.client = self.api
+
+    def scan_ids(self, **kwargs):
+        return [int(row["id"]) for row in self.generator._fetch_order_pages(**kwargs)]
+
+    def test_identical_purchase_timestamps_use_unique_id_and_proven_overlap(self):
+        self.assertEqual(list(range(1, 91)), self.scan_ids())
+        self.assertEqual([0, 0, 29, 58, 87], [call["params"]["cursor"] for call in self.api.calls])
+        self.assertEqual("DESC", self.api.calls[0]["params"]["sort"])
+        self.assertEqual(1, self.api.calls[0]["params"]["limit"])
+        for call in self.api.calls:
+            self.assertEqual("order_id", call["params"]["order_by"])
+            self.assertNotIn("status", call)
+            self.assertNotIn("changed_from", call)
+
+    def test_new_orders_above_initial_upper_id_are_deferred(self):
+        def append_orders(api, variables):
+            if len(api.calls) == 3:
+                api.rows.update({i: invoice_order(f"synthetic-{i}", id=i) for i in range(91, 130)})
+        self.api.before_read = append_orders
+        self.assertEqual(list(range(1, 91)), self.scan_ids())
+
+    def test_status_changes_do_not_change_full_scan_membership(self):
+        def change_statuses(api, variables):
+            if len(api.calls) == 3:
+                for identity in (1, 30, 31, 60, 90):
+                    api.rows[identity]["status"] = {"id": "99", "name": "Storno"}
+        self.api.before_read = change_statuses
+        rows = self.generator.fetch_all_eligible_orders()
+        self.assertEqual(list(range(1, 91)), [int(row["id"]) for row in rows])
+        self.assertNotIn(60, [int(row["id"]) for row in self.generator.filter_orders_for_invoice(rows)[0]])
+
+    def test_deleting_before_cursor_or_previous_id_preserves_every_surviving_successor(self):
+        for deleted in ({1}, {30}, set(range(1, 31)), {1, 2, 3, 30, 50}):
+            with self.subTest(deleted=sorted(deleted)):
+                self.setUp()
+                def remove(api, variables):
+                    if len(api.calls) == 3:
+                        for identity in deleted:
+                            api.rows.pop(identity)
+                self.api.before_read = remove
+                result = self.scan_ids()
+                expected = [i for i in range(1, 91) if i <= 30 or i not in deleted]
+                self.assertEqual(expected, result)
+                self.assertTrue(any(call["params"]["limit"] == 1 for call in self.api.calls[1:]))
+
+    def test_deleted_upper_anchor_and_empty_tail_complete_at_real_end(self):
+        for deleted in ({90}, set(range(31, 91)), set(range(1, 91))):
+            with self.subTest(deleted_count=len(deleted)):
+                self.setUp()
+                def remove(api, variables):
+                    if len(api.calls) == 3:
+                        for identity in deleted:
+                            api.rows.pop(identity)
+                self.api.before_read = remove
+                self.assertEqual([i for i in range(1, 91) if i <= 30 or i not in deleted], self.scan_ids())
+
+    def test_repair_consumes_same_response_that_proves_boundary(self):
+        captured = []
+        def remove_before(api, variables):
+            if len(api.calls) == 3:
+                api.rows.pop(1)
+        def remove_after_verified_page(api, variables, result):
+            page = result["getOrderList"]["data"]
+            if variables["params"]["limit"] == 30 and page and int(page[0]["id"]) == 30:
+                captured.append(variables["params"]["cursor"])
+                # The fetched response contains 31. Refetching the same offset
+                # after this deletion would lose that already verified successor.
+                api.rows.pop(31)
+        self.api.before_read = remove_before
+        self.api.after_read = remove_after_verified_page
+        self.assertEqual(list(range(1, 91)), self.scan_ids())
+        self.assertEqual([28], captured)
+
+    def test_legacy_purchase_filter_does_not_stop_at_an_older_id(self):
+        self.api.rows[60]["pur_date"] = "2026-06-15 10:00:00"
+        rows = self.generator.fetch_orders(datetime(2026, 6, 15), datetime(2026, 6, 15))
+        self.assertEqual([60], [int(row["id"]) for row in rows])
+
+    def test_explicit_null_unrelated_status_is_scanned_but_never_mutation_evidence(self):
+        self.api.rows[60]["status"] = None
+        rows = self.generator.fetch_all_eligible_orders()
+        self.assertEqual(90, len(rows))
+        self.assertNotIn(60, [int(row["id"]) for row in self.generator.filter_orders_for_invoice(rows)[0]])
+        with self.assertRaisesRegex(RuntimeError, "Incomplete"):
+            self.generator.fetch_order_for_invoice("synthetic-60")
+        del self.api.rows[60]["status"]
+        with self.assertRaisesRegex(RuntimeError, "Incomplete"):
+            self.scan_ids()
+
+    def test_changed_filter_membership_gain_behind_cursor_is_found_by_overlapping_next_pass(self):
+        old = "2026-06-14 00:00:00"
+        start = "2026-06-15 10:00:00"
+        for row in self.api.rows.values():
+            row["last_change"] = start
+        self.api.rows[1]["last_change"] = old
+        def late_change(api, variables):
+            if len(api.calls) == 3:
+                api.rows[1]["last_change"] = "2026-06-15 10:02:00"
+        self.api.before_read = late_change
+        first = self.scan_ids(changed_from=start)
+        self.assertEqual(list(range(2, 91)), first)
+        second = self.scan_ids(changed_from="2026-06-15 09:55:00")
+        self.assertEqual(list(range(1, 91)), second)
+        self.assertNotIn("changed_from", self.api.calls[0])
+
+    def test_malformed_ids_duplicate_ids_and_wrong_order_fail(self):
+        for mutate in (lambda rows: rows[1].update(id=True),
+                       lambda rows: rows[1].update(id="1.0"),
+                       lambda rows: rows[2].update(id=1)):
+            with self.subTest(mutate=mutate):
+                self.setUp()
+                mutate(self.api.rows)
+                with self.assertRaises((RuntimeError, ValueError)):
+                    self.scan_ids()
+        self.setUp()
+        def unsort(api, variables, result):
+            if variables["params"]["sort"] == "ASC":
+                result["getOrderList"]["data"].reverse()
+        self.api.after_read = unsort
+        with self.assertRaisesRegex(RuntimeError, "strictly sorted"):
+            self.scan_ids()
+
+    def test_inconsistent_final_empty_and_short_page_metadata_never_claims_complete(self):
+        variants = [invoice_page([], total=90),
+                    invoice_page([invoice_order()], total=90),
+                    invoice_page([invoice_order()], cursor=1, total=90),
+                    invoice_page([invoice_order()], total=0)]
+        for response in variants:
+            with self.subTest(response=response):
+                self.setUp()
+                def inconsistent(api, variables, result):
+                    if len(api.calls) == 2:
+                        result.update(deepcopy(response))
+                self.api.after_read = inconsistent
+                with self.assertRaisesRegex(RuntimeError, "pagination metadata"):
+                    self.scan_ids()
+        self.setUp()
+        self.generator.client = SimpleNamespace(execute=lambda *a, **k: invoice_page([], total=90))
+        with self.assertRaisesRegex(RuntimeError, "pagination metadata"):
+            self.scan_ids()
+
+    def test_unprovable_repeated_boundary_repair_is_bounded(self):
+        # Simulate a provider that persistently shifts full pages beyond the
+        # predecessor established by its one-row probes. Never hide that gap.
+        def shift(api, variables, result):
+            params = variables["params"]
+            if params["limit"] == 30 and params["cursor"] > 0:
+                offset = params["cursor"] + 1
+                rows = [deepcopy(api.rows[i]) for i in sorted(api.rows)][offset:offset + 30]
+                result.update(invoice_page(rows, params["cursor"] + len(rows), 100))
+        self.api.after_read = shift
+        with self.assertRaisesRegex(RuntimeError, "boundary repair limit"):
+            self.scan_ids()
+        self.assertLess(len(self.api.calls), 100)
+
+    def test_shared_deadline_covers_full_and_changed_scans_and_read_backoff(self):
+        self.api = MutableInvoiceInventory(1)
+        self.generator.client = self.api
+        elapsed = [0.0]
+        def advance(api, variables):
+            elapsed[0] += 350
+        self.api.before_read = advance
+        with patch("generate_invoices.time.monotonic", side_effect=lambda: elapsed[0]):
+            self.assertEqual([1], self.scan_ids())  # 700s elapsed in full scan.
+            with self.assertRaisesRegex(RuntimeError, "time limit"):
+                self.scan_ids(changed_from="2020-01-01 00:00:00")
+        self.assertIsNone(self.generator._scan_read_deadline)
+        self.setUp()
+        self.generator._scan_started_at = 0
+        self.generator.read_attempts = 4
+        self.generator.client = SimpleNamespace(execute=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("429")))
+        with patch("generate_invoices.time.monotonic", return_value=1195), patch("generate_invoices.time.sleep") as sleep:
+            with self.assertRaisesRegex(RuntimeError, "time limit"):
+                self.scan_ids()
+        sleep.assert_not_called()
 
 
 if __name__ == "__main__":
