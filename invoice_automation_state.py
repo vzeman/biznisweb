@@ -214,7 +214,7 @@ class AutomationJournal:
         for order in orders:
             number = str(order["order_num"])
             existing = state["orders"].get(number) or {}
-            if existing.get("phase") not in {"creating", "create_ambiguous", "email"}:
+            if existing.get("phase") not in {"preparing", "prepare_ambiguous", "creating", "create_ambiguous", "email"}:
                 state["orders"][number] = {**existing, "order_num": number, "phase": "pending"}
         self.store.put(state, etag)
 

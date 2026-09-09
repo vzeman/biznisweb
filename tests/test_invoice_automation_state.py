@@ -150,6 +150,18 @@ class InvoiceAutomationStateTests(unittest.TestCase):
             self.assertEqual({}, journal.get_order("blocked"))
             self.assertEqual({}, journal.get_order("invoice-only"))
 
+    def test_new_scan_cannot_reset_uncertain_preinvoice_attempts(self):
+        for phase in ("preparing", "prepare_ambiguous"):
+            with self.subTest(phase=phase):
+                with self.store.lease("preinvoice-attempt") as journal:
+                    journal.update_order("fixture-preinvoice", phase=phase, email_policy="hold")
+                with self.store.lease("next-scan") as journal:
+                    journal.enqueue_orders([{"order_num": "fixture-preinvoice"}])
+                    record = journal.get_order("fixture-preinvoice")
+                    self.assertEqual(phase, record["phase"])
+                    self.assertEqual("hold", record["email_policy"])
+                    self.assertEqual([record], journal.pending_orders())
+
     def test_all_mutations_use_encryption_and_conditional_put(self):
         with self.store.lease("invoice") as journal:
             journal.record_scan(changed_watermark=self.clock.isoformat())

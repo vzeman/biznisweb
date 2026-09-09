@@ -83,7 +83,15 @@ def scan_order_inventory(
         if len(page) > limit:
             raise RuntimeError(f"{label} exceeded the requested page size")
         end = offset + len(page)
-        if (info["hasNextPage"] != (end < info["totalRecords"])
+        has_remaining = end < info["totalRecords"]
+        # FLOX can advertise a next page when this terminal page is exactly
+        # full, including a nextCursor equal to totalRecords. Validate that
+        # narrow convention before deriving logical remaining rows. A short,
+        # missing or contradictory page must never be accepted as complete.
+        full_terminal_hint = (
+            info["hasNextPage"] and len(page) == limit and end == info["totalRecords"]
+        )
+        if ((info["hasNextPage"] != has_remaining and not full_terminal_hint)
                 or (page and end > info["totalRecords"])
                 or (not page and offset < info["totalRecords"])
                 or (info["hasNextPage"] and len(page) != limit)):
@@ -102,7 +110,9 @@ def scan_order_inventory(
             if (not isinstance(next_cursor, int) or isinstance(next_cursor, bool)
                     or next_cursor != offset + len(page)):
                 raise RuntimeError(f"{label} cursor did not advance reliably at offset {offset}")
-        return page, info
+        # Preserve the response's raw metadata for callers and diagnostics.
+        # Continuity repair and termination use only this validated logical view.
+        return page, {**info, "hasNextPage": has_remaining}
 
     def boundary_is_proven(page: list[dict[str, Any]], info: dict[str, Any],
                            offset: int, previous_id: int) -> bool:
