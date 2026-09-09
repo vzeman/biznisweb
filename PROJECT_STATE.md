@@ -14,6 +14,7 @@ Branch: `codex/order-automation-final-verification-20260909`
 What changed:
 
 - PR #543 merged as `8b4b7ce4c30bc067c8b3c4036f074d5dcb69a252` after all six exact-head checks passed on `a879a0a70187f7448857f7b8800ee991e7174c28`, including Windows/Linux regression and security checks. Build `34369981850` is preparing its exact immutable image. This verification branch starts from synchronized merged main.
+- Build `34369981850` completed successfully, including the full regression and reporting smoke. Independent ECR readback for `git-8b4b7ce4c30bc067c8b3c4036f074d5dcb69a252` verifies immutable digest `5ae96eea29e63045ea234e95db0c95be8d8e63e7ab60898ed9d762e94cb3c6ab`. This image has not yet been dispatched or promoted; current first-release live invoice verification remains the next gate.
 
 What is verified:
 
