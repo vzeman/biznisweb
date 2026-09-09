@@ -159,6 +159,19 @@ class RecoveryPolicyTests(unittest.TestCase):
         value = order(paid=True, shipments=[{"shipment_number": "TRACK-1", "status": "returned"}])
         self.assertEqual("review", self.decide(value, verified_previous_status="Odoslaná").action)
 
+    def test_later_returned_shipment_cannot_hide_behind_earlier_pending_shipment(self):
+        value = order(paid=True, shipments=[{"shipment_number": "A", "status": "pickup_order"},
+                                          {"shipment_number": "B", "status": "returned"}])
+        self.assertEqual("exception", assess_fulfillment_evidence(value).state)
+        self.assertEqual("review", self.decide(value, verified_previous_status="Odoslaná").action)
+
+    def test_prior_dispatch_cannot_override_missing_or_malformed_current_shipment_context(self):
+        value = order(paid=True)
+        value.pop("shipments")
+        self.assertEqual("review", self.decide(value, verified_previous_status="Odoslaná").action)
+        value["shipments"] = [{}]
+        self.assertEqual("review", self.decide(value, verified_previous_status="Odoslaná").action)
+
     def test_all_reported_shipments_must_be_delivered(self):
         value = order(paid=True, shipments=[{"shipment_number": "A", "status": "delivered"},
                                           {"shipment_number": "B", "status": "inventory"}])

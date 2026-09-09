@@ -8,23 +8,23 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
-from gql import Client
-
 from creditnote_export import (
     _creditnote_order_nums,
     build_creditnote_export_rows,
     creditnote_shipped_statuses,
-    fetch_creditnote_orders_by_number,
+    fetch_creditnote_automation_context,
     fetch_project_creditnotes,
     load_creditnote_status_change_audit,
     normalize_order_num,
     normalize_status_name,
+    normalize_creditnote_automation_context,
     parse_date,
     save_creditnote_status_change_audit,
 )
 from logger_config import get_logger
+from order_status_safety import creditnote_coverage_reason, fetch_order_safety_context, status_write_block_reason
 from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_settings, resolve_biznisweb_api_url
-from unpaid_order_cancellation import change_order_status, normalize_text, resolve_target_status_id
+from unpaid_order_cancellation import build_client, change_order_status, normalize_text, resolve_target_status_id
 
 
 logger = get_logger("creditnote_storno_guard")
@@ -81,6 +81,8 @@ class CreditnoteStornoSummary:
     eligible_orders: int = 0
     updated_orders: int = 0
     failed_orders: int = 0
+    review_required_orders: int = 0
+    partial_creditnote_orders: int = 0
     skipped_by_reason: Dict[str, int] = field(default_factory=dict)
     eligible_order_nums: List[str] = field(default_factory=list)
     updated_order_nums: List[str] = field(default_factory=list)
@@ -156,6 +158,8 @@ def _eligibility_reason(
         return "already_target_status"
     if status_norm in settings.normalized_final_statuses:
         return "already_final_status"
+    if order.get("blocked") is not False:
+        return "order_blocked_or_block_flag_missing"
     if settings.only_if_in_realized_revenue and not bool((decision or {}).get("included")):
         return "not_in_realized_revenue"
     return "eligible"
@@ -168,13 +172,17 @@ def _build_exporter(project: str, project_settings: Dict[str, Any]) -> Any:
     api_token = os.getenv("BIZNISWEB_API_TOKEN", "").strip()
     if not api_token:
         raise RuntimeError(f"BIZNISWEB_API_TOKEN missing for project '{project}'")
-    return BizniWebExporter(
+    exporter = BizniWebExporter(
         api_url=api_url,
         api_token=api_token,
         project_name=project,
         output_tag="creditnote_storno_guard",
         enable_period_bundle=False,
     )
+    # This runner makes writes. Transport-level retries must never replay them;
+    # shared explicit read helpers provide retries only for query operations.
+    exporter.client = build_client(project, project_settings)
+    return exporter
 
 
 def _utc_now_iso() -> str:
@@ -232,6 +240,7 @@ def run_creditnote_storno_guard(
     exporter: Optional[Any] = None,
     raw_creditnote_rows: Optional[Sequence[Dict[str, Any]]] = None,
     project_settings: Optional[Dict[str, Any]] = None,
+    automation_state_store: Optional[Any] = None,
 ) -> CreditnoteStornoSummary:
     project = (project_name or BASE_DEFAULT_PROJECT).strip().lower() or BASE_DEFAULT_PROJECT
     os.environ["REPORT_PROJECT"] = project
@@ -261,6 +270,9 @@ def run_creditnote_storno_guard(
     else:
         raw_rows = list(raw_creditnote_rows)
         summary.fetched_creditnotes = len(raw_rows)
+    if len(raw_rows) != summary.fetched_creditnotes:
+        raise RuntimeError("Creditnote guard refuses an incomplete source scan")
+    creditnote_context = normalize_creditnote_automation_context(raw_rows)
 
     creditnote_rows = build_creditnote_export_rows(project, raw_rows, start, end)
     summary.exported_creditnotes = len(creditnote_rows)
@@ -278,24 +290,41 @@ def run_creditnote_storno_guard(
     summary.target_status_id = target_status_id
     shipped_statuses = creditnote_shipped_statuses(project_settings)
 
-    orders, decisions, errors = fetch_creditnote_orders_by_number(exporter, order_nums)
-    summary.audit_errors = dict(sorted(errors.items()))
-    order_map = {str(order.get("order_num") or "").strip(): order for order in orders if str(order.get("order_num") or "").strip()}
-
     eligible_orders: List[Dict[str, Any]] = []
-    skipped: Dict[str, int] = {}
-    for order_num in order_nums:
-        order = order_map.get(order_num)
-        decision = decisions.get(order_num)
-        reason = _eligibility_reason(order, decision, settings)
+
+    def record_failure(order_num: str, reason: str) -> None:
+        if order_num not in summary.failed_order_nums:
+            summary.failed_orders += 1
+            summary.review_required_orders += 1
+            summary.failed_order_nums.append(order_num)
+        summary.audit_errors[order_num] = reason
+
+    def inspect(order_num: str, context: Dict[str, List[Dict[str, Any]]]) -> Tuple[Dict[str, Any], str]:
+        order = fetch_order_safety_context(exporter.client, order_num)
+        included, revenue_reason = exporter._realized_revenue_decision(order)
+        reason = _eligibility_reason(order, {"included": included, "reason": revenue_reason}, settings)
         if reason == "eligible":
-            eligible_orders.append(order or {"order_num": order_num})
+            coverage = creditnote_coverage_reason(order, context.get(order_num, []))
+            reason = "eligible" if coverage == "full_creditnote" else coverage
+        return order, reason
+
+    normal_skips = {"already_target_status", "already_final_status", "not_in_realized_revenue", "partial_creditnote"}
+    for order_num in order_nums:
+        try:
+            order, reason = inspect(order_num, creditnote_context)
+        except Exception:
+            record_failure(order_num, "creditnote_order_inspection_failed")
+            continue
+        if reason == "eligible":
+            eligible_orders.append(order)
         else:
-            skipped[reason] = skipped.get(reason, 0) + 1
+            summary.skipped_by_reason[reason] = summary.skipped_by_reason.get(reason, 0) + 1
+            summary.partial_creditnote_orders += int(reason == "partial_creditnote")
+            if reason not in normal_skips:
+                record_failure(order_num, reason)
 
     summary.checked_orders = len(order_nums)
     summary.eligible_orders = len(eligible_orders)
-    summary.skipped_by_reason = dict(sorted(skipped.items()))
     summary.eligible_order_nums = [str(order.get("order_num") or "") for order in eligible_orders]
     summary.eligible_order_statuses = [
         _status_audit_entry(project, order, settings, target_status_id, shipped_statuses)
@@ -310,30 +339,73 @@ def run_creditnote_storno_guard(
         dry_run,
     )
 
-    if dry_run:
+    if dry_run or not eligible_orders:
         return summary
+    if automation_state_store is None:
+        from invoice_automation_state import build_automation_state_store
 
-    status_audit = load_creditnote_status_change_audit(project, project_settings)
-    for order in eligible_orders:
-        order_num = str(order.get("order_num") or "").strip()
-        if not order_num:
-            summary.failed_orders += 1
-            summary.failed_order_nums.append("")
-            continue
-        audit_entry = _status_audit_entry(project, order, settings, target_status_id, shipped_statuses)
-        try:
-            change_order_status(exporter.client, order_num, target_status_id)
+        automation_state_store = build_automation_state_store(project, project_settings)
+    with automation_state_store.lease(owner="creditnote-storno") as journal:
+        journal.assert_owned()
+        status_audit = load_creditnote_status_change_audit(project, project_settings, strict=True)
+        for order in eligible_orders:
+            journal.assert_owned()
+            order_num = str(order["order_num"])
+            prior = journal.get_order(order_num)
+            blocked_reason = status_write_block_reason(
+                prior, next_reason="full_creditnote", next_target_status_name=settings.target_status_name
+            )
+            if blocked_reason:
+                record_failure(order_num, blocked_reason)
+                journal.update_order(order_num, status_review_reason=blocked_reason)
+                continue
+            journal.assert_owned()
+            try:
+                # Re-read the complete creditnote context and current order before
+                # each write. Explicit injected rows are immutable test evidence.
+                fresh_context = creditnote_context if raw_creditnote_rows is not None else fetch_creditnote_automation_context(project, progress_callback=journal.assert_owned)
+                live_order, reason = inspect(order_num, fresh_context)
+                journal.assert_owned()
+            except Exception:
+                record_failure(order_num, "creditnote_pre_mutation_recheck_failed")
+                continue
+            if reason != "eligible":
+                summary.skipped_by_reason[reason] = summary.skipped_by_reason.get(reason, 0) + 1
+                summary.partial_creditnote_orders += int(reason == "partial_creditnote")
+                if reason not in normal_skips:
+                    record_failure(order_num, reason)
+                continue
+            audit_entry = _status_audit_entry(project, live_order, settings, target_status_id, shipped_statuses)
+            audit_entry.update(changed_at=_utc_now_iso(), change_result="pending")
+            status_audit = _merge_status_audit(project, status_audit, audit_entry)
+            # Preserve actual pre-change fulfillment durably before the write;
+            # inability to save it must prevent cancellation, not lose history.
+            summary.status_audit_path = str(save_creditnote_status_change_audit(project, status_audit, project_settings, strict=True))
+            journal.assert_owned()
+            mutation_record = {
+                "state": "pending", "source_status": live_order.get("status"),
+                "source_last_change": live_order.get("last_change"),
+                "target_status_id": target_status_id, "target_status_name": settings.target_status_name,
+                "reason": "full_creditnote", "creditnote_ids": [row["id"] for row in fresh_context[order_num]],
+            }
+            journal.update_order(order_num, status_mutation=mutation_record)
+            journal.assert_owned()
+            try:
+                change_order_status(exporter.client, order_num, target_status_id, settings.target_status_name, silent=True)
+            except Exception:
+                journal.update_order(order_num, status_mutation={**mutation_record, "state": "uncertain"})
+                record_failure(order_num, "creditnote_status_mutation_unverified")
+                continue
+            journal.update_order(order_num, status_mutation={**mutation_record, "state": "verified"}, status_review_reason=None)
             summary.updated_orders += 1
             summary.updated_order_nums.append(order_num)
-            audit_entry["changed_at"] = _utc_now_iso()
-            audit_entry["change_result"] = "updated"
+            audit_entry.update(changed_at=_utc_now_iso(), change_result="updated")
             summary.updated_order_statuses.append(audit_entry)
             status_audit = _merge_status_audit(project, status_audit, audit_entry)
-            summary.status_audit_path = str(save_creditnote_status_change_audit(project, status_audit, project_settings))
+            try:
+                summary.status_audit_path = str(save_creditnote_status_change_audit(project, status_audit, project_settings, strict=True))
+            except Exception:
+                record_failure(order_num, "creditnote_verified_write_audit_save_failed")
             logger.info("Changed creditnoted order %s to status_id=%s", order_num, target_status_id)
-        except Exception as exc:  # pragma: no cover - API failure path
-            summary.failed_orders += 1
-            summary.failed_order_nums.append(order_num)
-            logger.error("Failed to change creditnoted order %s to Storno: %s", order_num, exc)
 
     return summary

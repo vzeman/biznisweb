@@ -180,6 +180,7 @@ def assess_fulfillment_evidence(order: Mapping[str, Any]) -> Evidence:
     if not shipments:
         return Evidence("none", "no_shipment_report")
     statuses: list[str] = []
+    incomplete = False
     for shipment in shipments:
         if not isinstance(shipment, Mapping) or "status" not in shipment or "shipment_number" not in shipment:
             return Evidence("unknown", "invalid_shipment_context")
@@ -193,8 +194,8 @@ def assess_fulfillment_evidence(order: Mapping[str, Any]) -> Evidence:
         if status in {"returned", "not_delivered"}:
             return Evidence("exception", "shipment_return_or_delivery_exception")
         if status != "delivered" or not number:
-            return Evidence("unknown", "shipment_not_proven_delivered")
-    if statuses and all(status == "delivered" for status in statuses):
+            incomplete = True
+    if statuses and not incomplete:
         return Evidence("fulfilled", "all_reported_shipments_delivered")
     if not statuses:
         return Evidence("none", "no_shipment_report")
@@ -272,6 +273,8 @@ def decide_recovery(
     if fulfillment.state == "fulfilled":
         return RecoveryDecision("shipped", fulfillment.reason, shipped_target)
     if fulfillment.state == "exception":
+        return RecoveryDecision("review", fulfillment.reason)
+    if fulfillment.reason in {"missing_shipment_context", "invalid_shipment_context"}:
         return RecoveryDecision("review", fulfillment.reason)
     # Absence of a shipment report is not absence of a previous dispatch: some
     # integrations only record tracking in history, which this API cannot read.
