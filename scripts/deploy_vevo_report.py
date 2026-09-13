@@ -691,14 +691,17 @@ class Deployment:
             current_main(self.commit)
             desired = schedule_request(self.original)
             desired["Target"]["EcsParameters"]["TaskDefinitionArn"] = self.production_definition["taskDefinitionArn"]
+            # Validate the complete published contract before enabling its task.
+            record = self.binding.build_promotion_record(self.previous, desired, self.production_definition,
+                release_id=self.release_id, source_commit=self.commit, image=image, workflow_run_id=os.environ["GITHUB_RUN_ID"],
+                build_run_id=build_id, protected_sha256=self.binding.sha256(self.protected), candidate_proof=proof,
+                candidate_task_definition=self.probe_definition, verified_at=now().isoformat())
             self.event("candidate-verified", proof=proof, desired=desired)
             self.update({**desired, "State": "DISABLED"})
             self.update(desired)
             self.checkpoint()
-            record = self.binding.build_promotion_record(self.previous, self.schedule(), self.production_definition,
-                release_id=self.release_id, source_commit=self.commit, image=image, workflow_run_id=os.environ["GITHUB_RUN_ID"],
-                build_run_id=build_id, protected_sha256=self.binding.sha256(self.protected), candidate_proof=proof,
-                candidate_task_definition=self.probe_definition, verified_at=now().isoformat())
+            self.binding.validate_runtime({"record": record, "record_sha256": self.binding.sha256(record)},
+                                          self.schedule(), self.definition(self.production_definition["taskDefinitionArn"]))
             current = self.binding.publish_verified_binding(self.s3, record, expected_pointer_etag=self.previous["pointer_etag"], lease=self.lease)
             self.binding.validate_runtime(current, self.schedule(), self.definition(self.production_definition["taskDefinitionArn"]))
             self.checkpoint()
@@ -710,7 +713,10 @@ class Deployment:
                 if touched:
                     self.rollback()
                 self.cleanup_role()
-                self.lease.release()
+                if touched:
+                    self.release_verified(self.binding.load_current_binding(self.s3, lease=self.lease))
+                else:
+                    self.lease.release()
             except Exception:
                 try:
                     if touched:
@@ -719,9 +725,6 @@ class Deployment:
                     self.lease.retain_uncertain()
                 raise RuntimeError("report-recovery-unconfirmed-retained-lease") from None
             raise
-        finally:
-            if self.owned_task:
-                self.cleanup_task()
 
 
 def main():

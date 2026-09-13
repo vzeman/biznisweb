@@ -22,18 +22,20 @@ What changed:
 
 What is verified:
 
+- Hardened shared authority `10f52607` integrated via `0262fcdf`; only additive owned workflow/memory conflicts were resolved, preserving both review and reporting modules. All 64 combined shared authority, independent authority review, host and transaction tests pass. Bootstrap uses the shared exact command constructor and actual CloudWatch marker validator. The complete promotion contract is validated before enabling; successful promotion and verified rollback both check the released lease generation and current runtime, with no fallible task cleanup after terminal release.
+
 - 24 own focused offline tests pass, including real run/update/rollback failure scenarios, stale image/main after final drain, foreign schedule drift, uncertain release, late old tasks, lost role-create acknowledgement, recovered exact-page reads versus unresolved errors and pagination caps. Required full shared-API integration and final independent review remain open; no live call or dispatch.
 
 - Initial 16 focused offline tests pass for host identity/handshake, output isolation/quality, actual financial/email/GraphQL boundaries, task ownership, restricted role and known-state schedule updates. Ruff passes. This is an implementation checkpoint, not release signoff.
 
 Known issues:
 
-- Shared binding/bootstrap API integration, baseline identity orchestration, managed workflow, full transaction/failure regressions and independent review remain required. Primary order release and both standalone guards must be independently verified before readiness can authorize promotion.
+- Full integrated image/automation suites, final independent source review and operational readiness publication remain required. Primary order release and both standalone guards must be independently verified before readiness can authorize promotion. No runtime state or future verified release pin is inferred from this source.
 - Future natural invoice tasks may overlap a long probe even after initial scan/deployment exclusion; preserve their schedules, record observed overlap and fail promotion for incomplete reports. Do not claim a global provider-read lock.
 
 Next exact step:
 
-- Commit/push this reproducible checkpoint, merge the clean shared API `aa0ce967`, finish the bootstrap/workflow and adversarial tests, then request independent source review. No AWS/provider writes, deployment or main merge without the separately managed release gates.
+- Complete the managed runbook and full offline suites while parent reviews the stable integrated source. Parent controls main freeze and primary/guard releases. No AWS/provider writes, deployment or main merge from this implementation task.
 
 ## 2026-09-13 - Reporting role adaptation passes offline regression
 
