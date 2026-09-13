@@ -144,7 +144,7 @@ def main():
     clients = {name: session.client(name, config=Config(retries={'max_attempts': 0}, connect_timeout=10, read_timeout=30)) for name in ['sts', 'apprunner', 'ecs', 'ecr', 'scheduler', 'logs', 'ssm']}
     assert clients['sts'].get_caller_identity()['Account'] == ACCOUNT
     app, ecs = clients['apprunner'], clients['ecs']
-    digest = clients['ecr'].describe_images(repositoryName='vevo-reporting', imageIds=[{'imageTag': args.source_sha}])['imageDetails'][0]['imageDigest']
+    digest = clients['ecr'].describe_images(repositoryName='vevo-reporting', imageIds=[{'imageTag': 'git-' + args.source_sha}])['imageDetails'][0]['imageDigest']
     image, previous = REPOSITORY + '@' + digest, REPOSITORY + '@' + args.expected_current_digest
     current = app.describe_service(ServiceArn=SERVICE_ARN)['Service']
     check_service(current, previous)
