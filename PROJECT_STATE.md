@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Fixed one-shot closure helper, intentionally not live
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/reviewed-uncollected-closure-20260913`
+
+What changed:
+
+- Added `scripts/close_reviewed_uncollected_obligation.py`, a fixed-scope preview/apply tool with exact private confirmation/receipt-contract hashes, owned shared lease, fresh API/native zero-document/payment gates, unique status catalog target and at most one silent status request after durable intent. Any consumed intent permits readback reconciliation only; original preparation ambiguity and every financial projection field are preserved.
+- The native per-order cash-receipt response is the observed exact `{rows: []}` shape, with no fabricated total or JSON content-type requirement. Its private contract is pinned by SHA `2104d03fe34ccaac3dd3a3c280a0e807179a959b12c9198ab1e17471613c75db`. Nonempty/unknown responses, document/payment/scope drift, delivered or malformed shipment evidence, changed catalog, lease/storage failure and old release all stop the helper. Read responses/transports and cached bounded AWS clients close on every exit.
+- The helper checks actual immutable release receipt, all five schedule/task pins, ECR provenance and active writer identities before apply and again immediately before its one status request. Separate release pins remain empty, deliberately blocking CLI apply before any credentials/provider call. The runbook is `projects/ORDER_AUTOMATION_REVIEWED_NONCOLLECTION.md`.
+
+What is verified:
+
+- Independent helper review and 76 focused helper/pure/runtime/backfill tests pass; the helper's 28 tests include before/after-intent drift, committed/lost status responses, no replay, S3 failure, exact native receipt requests, scoped review closure and resource cleanup. The prior runtime build suite passed all 754 tests plus reporting smoke. No helper preview/apply or business write has been executed during implementation.
+
+Known issues:
+
+- A separately observed API localization mismatch (`Shipped` versus the same-shop Slovak catalog label) also affects this helper's current strict label comparison and closure readback. Merge/deploy/apply are held until the shared canonical status catalog correction is integrated and tested. Do not loosen proof names or hardcode status IDs.
+- Compatible runtime has not been promoted; helper release pins must stay empty until independently verified promotion. Parent also supplied read-only verifier resource-cleanup fix `6a245117` for integration.
+
+Next exact step:
+
+- Integrate the verifier startup fix and shared canonical status binding, rerun complete checks, then hand the clean pushed branch to the parent for combined PR review. The eventual release must precede the fixed closure preview/apply and subsequent VEVO original-backfill/all-age audits.
+
 ## 2026-09-13 — Reviewed noncollection closes only the invoice obligation
 
 Date: 2026-09-13

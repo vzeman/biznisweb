@@ -20,6 +20,7 @@ on:
       - 'scripts/verify_invoice_post_recovery.py'
       - 'scripts/retry_seeded_invoice.py'
       - 'scripts/reconcile_reviewed_invoice_outcomes.py'
+      - 'scripts/close_reviewed_uncollected_obligation.py'
       - 'tests/**'
       - '.github/workflows/order-automation-tests.yml'
       - '.github/workflows/deploy-order-automations.yml'
@@ -43,7 +44,7 @@ jobs:
       - name: Verify invoice, status and deployment failure boundaries
         run: >-
           python -m unittest
-          tests.test_invoice_generation tests.test_invoice_automation_state tests.test_reviewed_invoice_obligations tests.test_reviewed_invoice_runtime
+          tests.test_invoice_generation tests.test_invoice_automation_state tests.test_reviewed_invoice_obligations tests.test_reviewed_invoice_runtime tests.test_reviewed_uncollected_closure
           tests.test_order_status_safety tests.test_unpaid_order_cancellation
           tests.test_order_inventory
           tests.test_api_read_backoff
