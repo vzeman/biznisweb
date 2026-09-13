@@ -5,6 +5,33 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 - Reporting definition comparison accepts verified environment ordering
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-deploy-20260913`
+
+What changed:
+
+- Windows correction `e2002eff` passed all six own GitHub checks, including Windows regression and security-baseline. The next separately authorized source correction handles the actual AWS definition readback: only explicitly present, unique environment name/value entries are sorted in a copied definition snapshot. Exact row keys and string types are required; duplicate names reject. Absent environment remains distinct from explicit empty. Commands, secrets, volumes, mount points and container order remain exact.
+- Readiness applies that same comparison to the requested and actual task definition while retaining rejection of unexpected request fields or a supplied definition ARN. The managed report registration guard already calls the shared snapshot on both sides; its source and actual host gates are unchanged. Existing evidence files, byte hashes and schema are untouched.
+- Added nine independent regressions to the build, automation and managed pre-AWS test collections. Production current-binding comparisons accept reordered environment only; malformed/value/missing/other-field changes still reject. The real managed transaction reaches its probe on equivalent registration results and restores the known prior configuration before any probe on drift.
+
+What is verified:
+
+- Final local build collection: **1,067 tests PASS**; automation collection: **805 PASS**; the full formerly failing security A/A group: **318 PASS**. Smoke, repository security checks, scoped Ruff and whitespace checks pass. Independent combined authority/host/deployer/readiness suite: **99 PASS**, including nine new environment tests and 21 altered actual-proof variants that must reject.
+- Offline conformance directly verified the exact independent primary proof bytes (SHA `ada17707d7885aa68b684633f9e0ee9ef4695734fe2b53dc5649b4eec649fb50`). Its complete `managed_latest` is the parsed receipt whose raw SHA `40ba6e2debaf3286948cb248ce0538f9e236d91c7813a709f771e933e47a5c7c` was verified by the independent AWS observer. This task did not repeat that S3 read or claim a separate local raw receipt. All three actual/request definition pairs now match, with 8/8/9 unique environment rows, and all input objects/private bytes remain unchanged.
+- Independent reviewed source SHA-256: binding `5fe4841f129e1ace68763fb91e3571b2dcf9ee54feefdcebc98a3371aae6ef1d`; readiness `cc55b6e22859c87553c4f2064f1818b75cee8f613b3d0f3537a15913f94c2c20`; new tests `749a2ad501f83fdaf5fb93e1857350b008f56ea08e66f51620a34ef6ce8831f9`. No provider/AWS query, runtime mutation, main merge or deployment.
+
+Known issues:
+
+- The environment comparison change requires six own checks on its new exact PR 556 head, separately from `e2002eff` acceptance. Parent owns the distinct standalone-guard comparison correction and subsequent integration; do not silently copy that worktree or change its source here.
+- Report readiness/promotion remains dependent on reviewed closure, VEVO historical verification and independently completed standalone migration. No future runtime state is inferred from these offline tests.
+
+Next exact step:
+
+- Commit/push this reviewed comparison/CI/documentation change, require all six own checks on that head and hand off PR 556. Parent controls branch integration, merge and the documented bootstrap/readiness/report promotion sequence. No report release is dispatched by this task.
+
 ## 2026-09-13 - Integrated report PR 556; narrow CI test correction
 
 Date: 2026-09-13

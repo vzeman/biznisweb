@@ -100,7 +100,17 @@ def schedule_snapshot(schedule):
 
 def definition_snapshot(definition):
     require(isinstance(definition, dict), "runtime-definition-not-object")
-    return normalized({k: v for k, v in definition.items() if k in TASK_FIELDS})
+    result = normalized({k: v for k, v in definition.items() if k in TASK_FIELDS})
+    containers = result.get("containerDefinitions", [])
+    require(isinstance(containers, list), "runtime-containers-invalid")
+    for container in containers:
+        require(isinstance(container, dict), "runtime-container-invalid")
+        if "environment" in container:
+            # ECS may reorder this unique named map. Preserve every other list,
+            # including commands, secrets, volumes and container order.
+            environment = unique_environment(container["environment"])
+            container["environment"] = [{"name": name, "value": environment[name]} for name in sorted(environment)]
+    return result
 
 
 def unique_environment(rows):

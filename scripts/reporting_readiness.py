@@ -188,9 +188,13 @@ def report_skip_only(original):
 def verify_definition(protected, arn, expected):
     require(arn.startswith(f"arn:aws:ecs:{REGION}:{ACCOUNT}:task-definition/") and arn in protected["definitions"],
             "readiness-definition-unbound")
-    actual = copy.deepcopy(protected["definitions"][arn])
+    source = protected["definitions"][arn]
+    require(isinstance(source, dict) and set(source) <= binding.TASK_FIELDS
+            and isinstance(expected, dict) and set(expected) <= binding.TASK_FIELDS - {"taskDefinitionArn"},
+            "readiness-definition-fields")
+    actual = binding.definition_snapshot(source)
     actual.pop("taskDefinitionArn", None)
-    require(actual == binding.normalized(expected), "readiness-definition-drift")
+    require(actual == binding.definition_snapshot(expected), "readiness-definition-drift")
     containers = actual.get("containerDefinitions", [])
     require(len(containers) == 1 and containers[0].get("name") == "reporting", "readiness-container-count")
     image = containers[0].get("image", "")
