@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Combined safety release merged; deployment freeze active
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- All six PR #550 checks passed on exact head `a7f1bdd9`, including Linux/Windows automation regression and both secret/security checks. PR #550 merged at 08:15:19 UTC as `b417caa736cfbd1f97b20821cacc39b144e1e460`. Main is frozen on this source until managed order deployment is independently verified or restored; image build `34747227117` is running.
+- Applied the separately verified manual bank-settlement provenance through the shared leased recorder. The exact private proof SHA is `c4b63939914d2e38b0ab0f589cc723b3b6b7e109686a9f8aaa79d8079e164016`; its content-addressed key is under `data/vevo/order-automation/manual-settlements/`. The recorder returned successful journal readback and zero provider writes. It did not create a receipt, mark an invoice paid, change status or send mail.
+
+What is verified:
+
+- Both live previews passed before apply: the manual bank record and the one fixed uncollected closure. The latter remains unconsumed, with zero status, financial and email requests. The old deployed journal implementation preserves additive record fields, so it retains the settlement proof while the compatible consumer is deployed.
+- Source `b417caa7` includes the independently reviewed 844 build tests, 582 automation tests and smoke checks. Standalone guard draft PR #552 is separately prepared at `3463efb5` with 901 build/639 automation tests; it is not merged or deployed.
+
+Known issues:
+
+- Production still runs `47c3da77` / `c3842dda...`; the new settlement protection must not be claimed active until the new image is promoted. Closure release pins remain empty and its original preparation outcome stays unknown. Protected reporting task pins remain ROY :71 and VEVO :33; their separate name-based reporting regression is being repaired on its own branch.
+
+Next exact step:
+
+- Verify exact merge-image build, dispatch the managed order deployment and independently verify actual hosts, localhost markers, drains, five schedule pins and protected reporting snapshots. Pin the fixed closure helper only to that verified release, close the uncollected obligation once, and run VEVO seeded plus all-age verification. Then complete the separate standalone guard migration. Do not merge another PR during the deployment freeze. No local persistent processes remain.
+
 ## 2026-09-13 — Live settlement preview passed; exact checksum scan exception
 
 Date: 2026-09-13
