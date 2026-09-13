@@ -5,6 +5,25 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Discovery/native-response correction merged; exact release pending
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-contract-production-verification-20260913`
+
+What changed:
+
+- PR #547 merged as `ccf25c799c56bfa3dea1f3a77456f3fabf079732` after all six required checks passed on exact head `a561b185ab18ec628de9bc1d12074a13b3727833`. The release contains stable cancellation discovery and strict native response compatibility, with all fresh financial and no-replay gates retained.
+- Exact main image build `34737947355` is running. This verification branch is clean/pushed from the merge and owns the subsequent runtime handoff. No new deployment has been dispatched yet; the five schedules still use the older failing image.
+
+What is verified:
+
+- 627 full build regression tests, independent cancellation/parser reviews, Linux/Windows checks, security, observability, reporting smoke, Ruff and diff checks pass. The actual merge source is synchronized locally without modifying main.
+
+Next exact step:
+
+- Verify successful exact build and independent ECR digest, recheck current main and no active release, then dispatch one managed deployment on this merge. Freeze main until verified promotion or restoration. Independently verify every host marker, drain and schedule/policy result before invoice reconciliation. Do not merge the helper or guard during the active release.
+
 ## 2026-09-13 — Native response compatibility validated before release
 
 Date: 2026-09-13
