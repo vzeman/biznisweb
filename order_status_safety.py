@@ -286,6 +286,8 @@ def creditnote_coverage_reason(order: Mapping[str, Any], creditnotes: list[dict[
                 or document.get("invoice_number") not in invoice_numbers):
             return "creditnote_identity_or_invoice_mismatch"
         seen.add(identity)
+        if document.get("state") != "issued":
+            return "creditnote_not_issued"
         if document.get("currency") != total.currency:
             return "creditnote_currency_mismatch"
         raw_amount = document.get("amount")

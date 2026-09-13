@@ -340,6 +340,17 @@ def fetch_creditnote_automation_context(project: str, *, progress_callback=None)
     return normalize_creditnote_automation_context(raw_rows)
 
 
+def _native_creditnote_flag(value: Any) -> Optional[bool]:
+    """Decode only the native grid's verified boolean representations."""
+    if type(value) is bool:
+        return value
+    if type(value) is int and value in (0, 1):
+        return bool(value)
+    if type(value) is str and value in ("0", "1"):
+        return value == "1"
+    return None
+
+
 def normalize_creditnote_automation_context(raw_rows: Iterable[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
     """Normalize rows from a previously verified complete scan, without PII."""
     context: Dict[str, List[Dict[str, Any]]] = {}
@@ -363,14 +374,19 @@ def normalize_creditnote_automation_context(raw_rows: Iterable[Dict[str, Any]]) 
         # an ID and order link but no final number. Retain their presence for
         # that order, without treating an unfinished document as refund proof.
         numbered = bool(number)
+        opened = _native_creditnote_flag(row.get("open"))
+        voided = _native_creditnote_flag(row.get("storno"))
+        state = ("voided" if voided is True else "open" if opened is True
+                 else "issued" if numbered and opened is False and voided is False else "unknown")
+        issued = state == "issued"
         context.setdefault(order_num, []).append({
-            "id": identity, "number": number, "amount": abs(amount) if numbered else None, "currency": currency,
+            "id": identity, "number": number, "amount": abs(amount) if issued else None, "currency": currency,
             # The native creditnote grid's inv_id is the final invoice number.
             # GraphQL invoices[].id is a parent-order association, not this key.
             "invoice_number": str(row.get("inv_id") or ""),
             "order_id": str(row.get("order_id") or ""), "order_num": order_num,
-            "net_amount": abs(net_amount) if numbered and net_amount is not None else None,
-            "numbered": numbered,
+            "net_amount": abs(net_amount) if issued and net_amount is not None else None,
+            "numbered": numbered, "state": state,
         })
     return context
 
