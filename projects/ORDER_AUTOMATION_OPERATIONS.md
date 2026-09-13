@@ -192,16 +192,22 @@ outcomes remain blocked for review. Invoice existence alone is never shipment pr
 1. Verify repository, clean branch, fetched/pulled upstream and PROJECT_STATE.
    Record current ECS task identity, private IP, exact image, service and `/app`
    runner path before infrastructure changes.
-2. Before merging code that triggers the shared image build, run the committed
-   `scripts/deploy_order_automations.py --pin-current --commit <pushed-branch-SHA>
-   --current-image-digest <independently-verified-digest> --profile codex`.
-   It preserves current behavior and changes only the four invoice schedule task
-   references after two finite dry-run hosts pass actual curl localhost markers.
+2. Before a shared image build, verify all current invoice definitions use an
+   immutable digest. Only if they still use the mutable `latest` tag, run the
+   committed `scripts/deploy_order_automations.py --pin-current --commit
+   <pushed-branch-SHA> --current-image-digest <independently-verified-digest>
+   --profile codex`. This preserves current behavior after two finite dry-run
+   hosts pass actual curl localhost markers. Already immutable definitions need
+   only independent readback; do not use pin mode to undo an incident pause.
 3. Complete regressions and PR checks, merge through the PR, wait for the exact
    `git-<merge-SHA>` ECR build. Never deploy `latest`.
 4. Seed reviewed historical records, then dispatch **Deploy Order Automations**
-   on current main. The deployer first pauses the five schedules and requires
-   existing jobs to finish plus two continuously quiet minutes. This prevents
+   on current main. For the reviewed four-invoice incident pause, provide both
+   workflow inputs `paused_incident_key` and `paused_incident_sha256`; ordinary
+   releases leave both empty. The manifest must be private, encrypted, at most
+   24 hours old, hash-matched, and equal to current source and protected schedules.
+   The deployer first pauses the five schedules and requires existing jobs to
+   finish plus two continuously quiet minutes. This prevents
    expensive full candidate scans from competing with our natural jobs for the
    shop's shared API quota. Three identified candidate hosts must pass the runners
    in dry-run mode and a localhost marker before any schedule promotion. The

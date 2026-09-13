@@ -5,7 +5,7 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
-## 2026-09-13 — Native document key proved; correction in preparation
+## 2026-09-13 — Native identity and paused-deployment correction validated
 
 Date: 2026-09-13
 Repo: `vzeman/biznisweb`
@@ -14,11 +14,16 @@ Branch: `codex/native-preinvoice-identity-20260913`
 What changed:
 
 - Read-only native ERP/API comparison proved the finalization identity mismatch. The served invoice store uses `pre_inv_id`; GraphQL nested document IDs identify the parent-order association. A filtered native POST with the served `o#` order search binds `order_id` and `order_num` to the correct row. A raw GET ignored the filter and returned a large unfiltered response; it was not accepted as identity proof. No financial request was made in this investigation.
-- Corrected the runbook's previously unproven API/native-ID equivalence. Runtime implementation and regression fixtures are being updated on this dedicated branch, with separate API association and native route keys, fresh rebinding, ARF requirement and native/API final-number confirmation. A reviewed optional incident manifest will allow deployment directly from the exact paused state, retaining the pause on rollback.
+- Corrected the runbook's previously unproven API/native-ID equivalence. Runtime implementation and regression fixtures now separate API association and native route keys, rebind before the once-only financial request, require ARF before financial intents, and confirm native/API final-number agreement. A reviewed optional incident manifest permits deployment directly from the exact paused state and retains that pause on rollback.
 
 What is verified:
 
 - Private four-case cross-shop proof is published at `data/roy/order-automation/audits/2026-09-13/native-document-key-contract-20260913.json`, SHA-256 `a0fa9c3391e13baf0527a64c05ea8bb9e0b9451681dfc60d93618082f4fcff36`. ROY has a missing-final preinvoice and a completed document; VEVO has an order with no prepared document and a completed document. Both completed cases retain the native preinvoice key and their native final number equals fresh API `invoice_num`. Current runtime login provides ARF; a separate ROY page read confirms the token matches the served native page token.
+- All 652 tests in the exact three build commands, reporting smoke, focused Ruff and diff checks pass. The Windows test wrapper initially failed while decoding default child-process output as UTF-8; rerunning with explicit UTF-8 child encoding completed all checks. This was a local output-decoding issue, not a failed business test.
+- New native lookup implementation passed a four-case read-only runtime check (three bound document rows, one safely rejected unprepared context), with zero financial requests. Evidence: `data/roy/order-automation/audits/2026-09-13/native-binding-implementation-readback-20260913.json`, SHA-256 `f9bed187dae9783edda7b9adb0c3e7c0996c04364a7e6b99ac48c182998da617`. The native function remains unchanged after the subsequent email-only guard correction.
+- Independent review found and corrected an email state-boundary defect: direct calls with missing ARF could downgrade consumed/uncertain email states to retryable failure. `sent`, `sending` and `ambiguous` are now preserved before hold/token logic, with a direct-call matrix proving no API, web or journal writes even after ARF returns. Native key drift and native readback failure also remain ambiguous over repeated runs, with one total financial request and no email.
+- The 54 deployment tests cover malformed/stale/untrusted manifests, complete/partial promotion and rollback from four disabled invoices plus enabled cancellation, protected-report drift, closed bounded S3 reads, and literal workflow input handling. Root independently exercised the actual incident manifest validator against AWS read-only; all source/protected checks passed with no mutations.
+- Fresh fixed six-case evidence is published at `data/roy/order-automation/audits/2026-09-13/reviewed-native-six-case-evidence-20260913.json`, SHA-256 `ce520d23ca3f3ac1b55208f838f644f81356745ae451cb494bc22911ccca9af3`: two completed native/API final-number matches and four unique pending native preinvoices. No financial or journal request occurred. This supplies corrected native identities for the later separately reviewed helper; it does not itself clear old uncertainty or authorize an unreviewed replay.
 - The first VEVO sample-selection attempts found no completed journal record with an invoice ID; a bounded native twenty-row read supplied an existing completed example instead. The unprepared VEVO example correctly has no API documents and zero native invoice rows; do not misclassify every VEVO failure as an existing-preinvoice route-key rejection.
 - Independent incident proof at `data/roy/order-automation/audits/2026-09-13/independent-incident-pause-be732225-20260913.json`, SHA-256 `35494c751fe751e307d9326cc1e480b56682ff9181f83ff9e0c51e42c89d169c`, confirms exact four disabled invoice schedules, unchanged enabled cancellation/reports, and no unfinished or late invoice tasks across the three regional clusters at 05:21:38 UTC.
 - Fresh read-only UI inspection shows the original suspicious order is shipped with a final invoice. Ten historical transitions remain visible, most recently 10 September; blank actor fields alone cannot establish automation attribution. The owned temporary audit tab was closed without business changes.
@@ -29,7 +34,7 @@ Known issues:
 
 Next exact step:
 
-- Complete narrow native-binding and incident-aware deployment tests, independently review both, run exact full build checks, then commit/push and merge through required CI. Verify the exact built image, deploy with the reviewed incident key/hash, and independently verify host/promotion gates before financial recovery. Finish fresh native-bound six-case reconciliation and the full historical business audit afterward.
+- Complete the independent email-guard recheck, commit/push these tested changes and merge only after exact-head required CI. Verify the exact merge image, dispatch the managed release with the reviewed incident key/hash, freeze main through independently verified host/drain/promotion or pause-preserving rollback. Then finish native-bound six-case reconciliation, actual invoices and the full historical business audit, followed by the separate guard migration.
 
 ## 2026-09-13 — Infrastructure promoted; invoice provider rejection contained
 

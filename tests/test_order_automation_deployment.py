@@ -1,12 +1,19 @@
 import copy
+from datetime import datetime, timedelta, timezone
+import hashlib
+import io
 import json
+import os
 from pathlib import Path
+import sys
 import unittest
 from unittest.mock import Mock, patch
 
 from scripts.deploy_order_automations import (
     Deployment, SCHEDULES, SERVICES, candidate_definition, command_for,
     desired_schedule, established_alarm_route, promote_schedules, schedule_request,
+    INVOICE_SCHEDULES, PAUSE_MANIFEST_LIMIT, PAUSE_MANIFEST_PHASE, PROTECTED_REPORTS,
+    evidence_schedule, main as deployment_main, pause_incident_arguments,
 )
 from scripts.order_automation_host_gate import main as run_host_gate, verify_summary
 
@@ -724,6 +731,322 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
         self.assertNotIn("configure-aws-credentials", legacy)
         self.assertNotIn("\n  push:", legacy)
         self.assertNotIn("aws ecs", legacy)
+
+
+class PausedIncidentDeploymentTests(unittest.TestCase):
+    def fixture(self):
+        deployment = OrderAutomationDeploymentTests().drain_deployment()
+        now = datetime.now(timezone.utc)
+        original = copy.deepcopy(deployment.scheduler.values)
+        for name in INVOICE_SCHEDULES:
+            deployment.scheduler.values[name]["State"] = "DISABLED"
+        for name in PROTECTED_REPORTS:
+            project = name.split("-", 1)[0]
+            report = snapshot(f"{project}-daily-invoice-generation")
+            report.update(Name=name, Arn=f"arn:aws:scheduler:eu-central-1:{ACCOUNT}:schedule/default/{name}")
+            report["Target"]["EcsParameters"]["TaskDefinitionArn"] = f"arn:aws:ecs:eu-central-1:{ACCOUNT}:task-definition/{project}-reporting-daily:71"
+            deployment.scheduler.values[name] = report
+        current = {name: copy.deepcopy(deployment.scheduler.values[name]) for name in SCHEDULES}
+        manifest = {
+            "schema": 1, "incident": "a" * 32, "phase": PAUSE_MANIFEST_PHASE,
+            "created_at": (now - timedelta(minutes=5)).isoformat(),
+            "verified_at": (now - timedelta(minutes=4)).isoformat(), "source_commit": "b" * 40,
+            "original_schedules": {name: original[name] for name in INVOICE_SCHEDULES},
+            "paused_schedules": {name: copy.deepcopy(current[name]) for name in INVOICE_SCHEDULES},
+            "protected_schedules": {name: copy.deepcopy(deployment.scheduler.values[name])
+                                    for name in PROTECTED_REPORTS | {"roy-unpaid-order-cancellation"}},
+        }
+        deployment.paused_incident_key = f"data/roy/order-automation/incidents/{now:%Y-%m-%d}/" + "a" * 32 + ".json"
+        deployment.evidence_bucket = f"biznisweb-reporting-artifacts-{ACCOUNT}-eu-central-1"
+        deployment.session = Mock()
+        client = deployment.session.client.return_value
+        client.get_bucket_location.return_value = {"LocationConstraint": "eu-central-1"}
+        client.get_public_access_block.return_value = {"PublicAccessBlockConfiguration": {
+            key: True for key in ("BlockPublicAcls", "IgnorePublicAcls", "BlockPublicPolicy", "RestrictPublicBuckets")}}
+        self.bind_manifest(deployment, manifest)
+        return deployment, manifest, current
+
+    def bind_manifest(self, deployment, manifest, *, raw=None, encryption="AES256", declared_length=None):
+        raw = raw if raw is not None else json.dumps(manifest, sort_keys=True).encode()
+        deployment.paused_incident_sha256 = hashlib.sha256(raw).hexdigest()
+        deployment.fixture_bodies = []
+
+        class Body(io.BytesIO):
+            def read(self, size=-1):
+                self.requested_size = size
+                return super().read(size)
+
+        def get_object(**kwargs):
+            self.assertEqual(deployment.account, kwargs["ExpectedBucketOwner"])
+            self.assertEqual(deployment.evidence_bucket, kwargs["Bucket"])
+            self.assertEqual(deployment.paused_incident_key, kwargs["Key"])
+            body = Body(raw)
+            deployment.fixture_bodies.append(body)
+            return {"Body": body, "ContentLength": len(raw) if declared_length is None else declared_length,
+                    "ServerSideEncryption": encryption}
+        deployment.session.client.return_value.get_object.side_effect = get_object
+
+    def validate(self, deployment, current):
+        deployment.validate_pause_manifest(deployment.evidence_bucket, current)
+        deployment.validate_snapshots(current)
+
+    def test_valid_private_manifest_authorizes_only_the_observed_mixed_originals(self):
+        deployment, manifest, current = self.fixture()
+        self.validate(deployment, current)
+        self.assertEqual(manifest["paused_schedules"], deployment.validated_paused_sources)
+        self.assertEqual(PROTECTED_REPORTS, set(deployment.protected_report_schedules))
+        self.assertTrue(all(current[name]["State"] == "DISABLED" for name in INVOICE_SCHEDULES))
+        self.assertEqual("ENABLED", current["roy-unpaid-order-cancellation"]["State"])
+        self.assertEqual(deployment.paused_incident_sha256, deployment.evidence["paused_source_incident"]["sha256"])
+        self.assertEqual([], deployment.scheduler.writes)
+        self.assertTrue(all(body.closed and body.requested_size == PAUSE_MANIFEST_LIMIT + 1 for body in deployment.fixture_bodies))
+
+    def test_four_paused_schedules_without_a_validated_manifest_are_rejected(self):
+        deployment, _, current = self.fixture()
+        with self.assertRaisesRegex(RuntimeError, "source-schedule-state-drift"):
+            deployment.validate_snapshots(current)
+        self.assertEqual([], deployment.scheduler.writes)
+
+    def test_input_pairs_and_scope_are_strict(self):
+        deployment, _, _ = self.fixture()
+        key, digest = deployment.paused_incident_key, deployment.paused_incident_sha256
+        pause_incident_arguments(None, None)
+        pause_incident_arguments("", "")
+        for values in ((key, None), (None, digest), (key, "f" * 63), (key, "F" * 64),
+                       ("../" + key, digest), (key.replace("data/roy/", "data/vevo/"), digest),
+                       (key + "\n", digest)):
+            with self.subTest(values=values), self.assertRaises(RuntimeError):
+                pause_incident_arguments(*values)
+
+    def test_pin_mode_rejects_incident_inputs_before_creating_an_aws_session(self):
+        deployment, _, _ = self.fixture()
+        fake_boto = Mock()
+        argv = ["deploy", "--commit", "a" * 40, "--pin-current", "--paused-incident-key", deployment.paused_incident_key,
+                "--paused-incident-sha256", deployment.paused_incident_sha256]
+        with patch.object(sys, "argv", argv), patch.dict(sys.modules, {"boto3": fake_boto}), \
+                self.assertRaisesRegex(RuntimeError, "pin-current-paused-incident-rejected"):
+            deployment_main()
+        fake_boto.Session.assert_not_called()
+        with self.assertRaisesRegex(RuntimeError, "pin-current-paused-incident-rejected"):
+            deployment.pin_current("sha256:" + "a" * 64)
+
+    def test_manifest_size_encryption_hash_and_stream_closure(self):
+        for fault in ("oversize", "short", "wrong-length", "encryption", "digest", "invalid-json", "duplicate", "constant"):
+            with self.subTest(fault=fault):
+                deployment, manifest, current = self.fixture()
+                if fault == "oversize":
+                    self.bind_manifest(deployment, manifest, raw=b" " * (PAUSE_MANIFEST_LIMIT + 1))
+                if fault == "short":
+                    self.bind_manifest(deployment, manifest, declared_length=1)
+                if fault == "wrong-length":
+                    self.bind_manifest(deployment, manifest, declared_length=PAUSE_MANIFEST_LIMIT)
+                if fault == "encryption":
+                    self.bind_manifest(deployment, manifest, encryption="aws:kms")
+                if fault == "digest":
+                    deployment.paused_incident_sha256 = "0" * 64
+                if fault == "invalid-json":
+                    self.bind_manifest(deployment, manifest, raw=b"{broken")
+                if fault == "duplicate":
+                    self.bind_manifest(deployment, manifest, raw=b'{"schema":1,"schema":1}')
+                if fault == "constant":
+                    self.bind_manifest(deployment, manifest, raw=b'{"schema":NaN}')
+                with self.assertRaises((RuntimeError, ValueError)):
+                    self.validate(deployment, current)
+                self.assertTrue(all(body.closed for body in deployment.fixture_bodies))
+                self.assertEqual([], deployment.scheduler.writes)
+                self.assertFalse(hasattr(deployment, "validated_paused_sources"))
+
+    def test_bucket_region_and_privacy_fail_before_object_read(self):
+        for fault in ("bucket", "region", "privacy"):
+            with self.subTest(fault=fault):
+                deployment, _, current = self.fixture()
+                client = deployment.session.client.return_value
+                if fault == "bucket":
+                    deployment.evidence_bucket = "unrelated-private-bucket"
+                if fault == "region":
+                    client.get_bucket_location.return_value = {"LocationConstraint": "us-east-1"}
+                if fault == "privacy":
+                    client.get_public_access_block.return_value = {"PublicAccessBlockConfiguration": {}}
+                with self.assertRaises(RuntimeError):
+                    self.validate(deployment, current)
+                client.get_object.assert_not_called()
+                self.assertEqual([], deployment.scheduler.writes)
+
+    def test_manifest_state_scope_freshness_and_original_config_are_strict(self):
+        for fault in ("phase", "schema", "identity", "missing", "extra", "protected", "original-state", "paused-state",
+                      "original-target", "stale", "future", "naive", "source"):
+            with self.subTest(fault=fault):
+                deployment, manifest, current = self.fixture()
+                name = "roy-daily-invoice-generation"
+                if fault == "phase":
+                    manifest["phase"] = "intent-only"
+                if fault == "schema":
+                    manifest["schema"] = True
+                if fault == "identity":
+                    manifest["incident"] = "b" * 32
+                if fault == "missing":
+                    del manifest["paused_schedules"][name]
+                if fault == "extra":
+                    manifest["paused_schedules"]["unrelated"] = {}
+                if fault == "protected":
+                    del manifest["protected_schedules"]["vevo-daily-report-email"]
+                if fault == "original-state":
+                    manifest["original_schedules"][name]["State"] = "DISABLED"
+                if fault == "paused-state":
+                    manifest["paused_schedules"][name]["State"] = "ENABLED"
+                if fault == "original-target":
+                    manifest["paused_schedules"][name]["Description"] = "different settings"
+                if fault == "stale":
+                    manifest["created_at"] = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+                if fault == "future":
+                    manifest["verified_at"] = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+                if fault == "naive":
+                    manifest["created_at"] = "2026-01-01T00:00:00"
+                if fault == "source":
+                    manifest["source_commit"] = None
+                self.bind_manifest(deployment, manifest)
+                with self.assertRaises(RuntimeError):
+                    self.validate(deployment, current)
+                self.assertEqual([], deployment.scheduler.writes)
+
+    def test_each_current_invoice_and_protected_schedule_is_checked_fresh(self):
+        for name in set(SCHEDULES) | PROTECTED_REPORTS:
+            with self.subTest(name=name):
+                deployment, _, current = self.fixture()
+                deployment.scheduler.values[name]["Description"] = "concurrent change"
+                with self.assertRaisesRegex(RuntimeError, "drift"):
+                    self.validate(deployment, current)
+                self.assertEqual([], deployment.scheduler.writes)
+
+    def test_schedule_date_comparison_preserves_the_same_instant_across_timezones(self):
+        first = snapshot("roy-daily-invoice-generation")
+        second = copy.deepcopy(first)
+        first["StartDate"] = datetime(2026, 1, 1, 10, tzinfo=timezone.utc)
+        second["StartDate"] = "2026-01-01T12:00:00+02:00"
+        self.assertEqual(evidence_schedule(first), evidence_schedule(second))
+        second["StartDate"] = "2026-01-01T12:00:00"
+        with self.assertRaisesRegex(RuntimeError, "date-invalid"):
+            evidence_schedule(second)
+
+    def test_protected_report_drift_blocks_initial_pause_and_host_launch(self):
+        deployment, _, current = self.fixture()
+        self.validate(deployment, current)
+        deployment.scheduler.values["roy-daily-report-email"]["State"] = "DISABLED"
+        with self.assertRaisesRegex(RuntimeError, "protected-report-schedule-drift"):
+            deployment.pause_drain_and_promote(current, prepare=Mock())
+        with self.assertRaisesRegex(RuntimeError, "protected-report-schedule-drift"):
+            deployment.host_gate("roy-invoice-daily", "candidate", current["roy-daily-invoice-generation"], "sha256:" + "a" * 64,
+                                 paused_schedules={n: {**schedule_request(row), "State": "DISABLED"} for n, row in current.items()})
+        self.assertEqual([], deployment.scheduler.writes)
+        deployment.ecs.run_task.assert_not_called()
+
+    def test_mixed_state_transaction_success_failures_and_no_early_invoice_enable(self):
+        for scenario in ("success", "drain-failure", "candidate-failure", "partial-promotion", "manifest-changed", "report-changed"):
+            with self.subTest(scenario=scenario):
+                deployment, manifest, current = self.fixture()
+                self.validate(deployment, current)
+                protected = {name: copy.deepcopy(deployment.scheduler.values[name]) for name in PROTECTED_REPORTS}
+                desired = {name: {**schedule_request(row), "State": "ENABLED"} for name, row in current.items()}
+                for row in desired.values():
+                    row["Target"]["EcsParameters"]["TaskDefinitionArn"] += "9"
+                if scenario == "partial-promotion":
+                    deployment.scheduler.fail_call, deployment.scheduler.ambiguous = 3, True
+                events, drains = [], []
+                original_update = deployment.scheduler.update_schedule
+                def update(**kwargs):
+                    events.append((kwargs["Name"], kwargs["State"], len(drains)))
+                    return original_update(**kwargs)
+                deployment.scheduler.update_schedule = update
+                def drain(paused):
+                    self.assertTrue(all(deployment.scheduler.values[n]["State"] == "DISABLED" for n in SCHEDULES))
+                    drains.append(True)
+                    if scenario == "drain-failure":
+                        raise RuntimeError("synthetic-timeout")
+                def prepare():
+                    self.assertEqual(1, len(drains))
+                    if scenario == "candidate-failure":
+                        raise RuntimeError("synthetic-candidate-failure")
+                    if scenario == "manifest-changed":
+                        reviewed_sha = deployment.paused_incident_sha256
+                        manifest["phase"] = "incident-changed-after-candidates"
+                        self.bind_manifest(deployment, manifest)
+                        deployment.paused_incident_sha256 = reviewed_sha
+                    if scenario == "report-changed":
+                        deployment.scheduler.values["roy-daily-report-email"]["Description"] = "operator"
+                    return desired
+                deployment.wait_for_drain = Mock(side_effect=drain)
+                deployment.restore_state_policies = Mock()
+                if scenario == "success":
+                    deployment.pause_drain_and_promote(current, prepare=prepare)
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "originals-restored"):
+                        deployment.pause_drain_and_promote(current, prepare=prepare)
+                actual = {name: schedule_request(deployment.scheduler.values[name]) for name in SCHEDULES}
+                self.assertEqual(desired if scenario == "success" else {name: schedule_request(row) for name, row in current.items()}, actual)
+                self.assertTrue(all(count >= 2 for name, state, count in events if name in INVOICE_SCHEDULES and state == "ENABLED"))
+                if scenario not in ("success", "partial-promotion"):
+                    self.assertFalse(any(name in INVOICE_SCHEDULES and state == "ENABLED" for name, state, _ in events))
+                self.assertFalse(any(name in PROTECTED_REPORTS for name, _, _ in events))
+                if scenario != "report-changed":
+                    self.assertEqual(protected, {name: deployment.scheduler.values[name] for name in PROTECTED_REPORTS})
+                deployment.ecs.stop_task.assert_not_called()
+
+    def test_report_drift_during_rollback_drain_leaves_tasks_paused_without_overwrites(self):
+        deployment, _, current = self.fixture()
+        self.validate(deployment, current)
+        deployment.wait_for_drain = Mock(side_effect=deployment.verify_paused_schedules)
+        deployment.restore_state_policies = Mock()
+
+        def prepare():
+            deployment.scheduler.values["roy-daily-report-email"]["Description"] = "operator change"
+            raise RuntimeError("synthetic-candidate-failure")
+
+        with self.assertRaisesRegex(RuntimeError, "requires-operator"):
+            deployment.pause_drain_and_promote(current, prepare=prepare)
+        self.assertTrue(all(deployment.scheduler.values[name]["State"] == "DISABLED" for name in SCHEDULES))
+        self.assertEqual("operator change", deployment.scheduler.values["roy-daily-report-email"]["Description"])
+        self.assertFalse(any(name in PROTECTED_REPORTS for name in deployment.scheduler.writes))
+        deployment.restore_state_policies.assert_not_called()
+        deployment.ecs.stop_task.assert_not_called()
+
+    def test_run_rejects_unverified_paused_source_before_any_aws_write(self):
+        deployment, manifest, _ = self.fixture()
+        deployment.commit = "a" * 40
+        deployment.evidence = {"hosts": []}
+        client = deployment.session.client.return_value
+        client.describe_images.return_value = {"imageDetails": [{"imageDigest": "sha256:" + "a" * 64}]}
+        deployment.bucket = Mock(return_value=deployment.evidence_bucket)
+        deployment.ecs.describe_task_definition.side_effect = [
+            {"taskDefinition": {"family": family, "networkMode": "awsvpc", "taskRoleArn": "role/test",
+                                "containerDefinitions": [{"name": "reporting", "command": command_for(family)}]}}
+            for family in SERVICES
+        ]
+        deployment.prepare_state = Mock()
+        deployment.provision_monitoring = Mock()
+        manifest["phase"] = "not-verified"
+        self.bind_manifest(deployment, manifest)
+        with self.assertRaisesRegex(RuntimeError, "paused-incident-phase-invalid"):
+            deployment.run()
+        deployment.save_private.assert_not_called()
+        deployment.prepare_state.assert_not_called()
+        deployment.provision_monitoring.assert_not_called()
+        deployment.ecs.register_task_definition.assert_not_called()
+        deployment.ecs.run_task.assert_not_called()
+        client.put_object.assert_not_called()
+        self.assertEqual([], deployment.scheduler.writes)
+
+    def test_workflow_passes_inputs_as_literal_argument_values(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/deploy-order-automations.yml").read_text(encoding="utf-8")
+        raw = workflow.split("python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        code = "\n".join(line[10:] for line in raw.splitlines())
+        self.assertNotIn("${{", code)
+        key, digest = "literal $(not-executed) ' ; value", "literal `not-executed`"
+        with patch.dict(os.environ, {"GITHUB_SHA": "a" * 40, "PAUSED_INCIDENT_KEY": key, "PAUSED_INCIDENT_SHA256": digest}), \
+                patch("subprocess.run") as run:
+            exec(compile(code, "reviewed-workflow-wrapper", "exec"), {})
+        self.assertEqual(["--paused-incident-key", key, "--paused-incident-sha256", digest], run.call_args.args[0][-4:])
+        self.assertEqual({"check": True}, run.call_args.kwargs)
 
 
 if __name__ == "__main__":
