@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Explicit ROY target release merged; new deployment freeze
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-paid-target-release-20260913`
+
+What changed:
+
+- Corrective PR #555 merged exact reviewed head `8569a6eb03cf039259b363b302a5d17f80fc7f0c` as `fda36b49e7610d289d6dcb1d0affe892d1ba5ce7`. All six checks on PR #555 itself passed. MAIN FREEZE is active on this new merge until independent promotion/restoration verification; no other branch may merge meanwhile.
+- PR #554 was closed after GitHub repeatedly failed its draft-to-ready operation. Replacement #555 used a new pushed branch at the identical reviewed commit. Ambiguous API responses were read back before retries; only one corrective PR was active for merge. The original three startup-failed workflows passed after one controlled rerun each; no global incident or billing cause was established.
+- Exact merged-source image build `34749045171` passed. Direct AWS account/ECR read binds the source to `sha256:29c0c8e4106438f204b0afaee097e90fab887a82e71327653e508a20574b90c0`. Managed order deployment `34749213122` was dispatched once against verified current main. Independent monitoring is assigned; actual candidate host gates and promotion remain pending.
+
+What is verified:
+
+- Root worktree was fetched, pulled with rebase, fast-forwarded to the actual main merge and pushed on its codex branch. Repository/account identities match `vzeman/biznisweb` and AWS `919341186960`. Previously verified status catalogue/Stripe map and two zero-write live resolver checks still support explicit ROY target 67.
+- Shared current-report binding is separately committed/pushed at `10f5260771867d4182f9f62eadd21c6f84a96ebb`; independent review and 105 focused / 899 build / 637 automation tests pass. It remains offline and must be integrated with the managed reporting identity probe/deployer. Standalone guard #552 and report correction #553 remain unmerged dependencies after this order deployment.
+
+Known issues:
+
+- Failed `b417` deployment was restored and is not a live release. Original order image `c3842dda...` remains the last independently verified production authority until the new transaction passes. Closure release pins remain empty; no closure was applied to user-confirmed returned/uncollected VEVO order 2502000712. Its original uncertain financial attempt must remain unchanged.
+- VEVO stale scan/missing completion and separate old reporting status-name handling remain unresolved. Manual bank provenance is recorded, but compatible-consumer runtime proof is still pending. No local persistent processes were started.
+
+Next exact step:
+
+- Independently verify run `34749213122`: exact source/digest, three actual host/IP/service/path and curl markers, drains, five promoted schedule pins or exact restoration, six IAM policies, seventeen alarm configurations, three queues and both protected report definitions. Only verified promotion permits pinning/applying the single noncollection closure and VEVO seeded/all-age verification. Keep main frozen until that result.
+
 ## 2026-09-13 — Candidate rejected; original runtime restored; explicit ROY target correction
 
 Date: 2026-09-13
