@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Cancellation resolver failure; release restored, no promotion
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-rate-production-verification-20260913`
+
+What changed:
+
+- Managed release `34735770705` finished with failure and verified restoration. New image `8d06b6c7985b6a25024964653fb292db9c73a9b5eb5dbc0938665fcbc3166e7b` was not promoted. Private receipt `data/roy/order-automation/deployments/a97d974f4d86ac7c1d3fcb3ec7ff5d094245bb3c/4e184a615f7f46c78714fa385580a12f.json` reached `deployment-failed-check-rollback` / `original-schedules-and-state-policies-restored`, SHA-256 `548ac13936024633369fe5711e8528fa7c1aea863e90b45bd9baccd89bdcdb79`.
+- Both invoice candidates passed actual full-backlog localhost gates and stopped with exit zero: ROY task `6bec25ae00b149bc8d368a7ec3b1a54f`, IP `172.31.28.159`, `roy-invoice-daily:7`; VEVO task `50365dc52de740cc8d5909079eb2e308`, IP `172.31.25.185`, `vevo-invoice-daily:6`. Both exact new image, `/app`, Fargate instance ID not applicable; dry summaries matched 17/16 with zero creation/email/failure.
+- Cancellation candidate task `c07ccee062a74de498b7af2af6155c3a`, IP `172.31.18.39`, `roy-unpaid-order-cancellation:39`, same exact image and `/app`, stopped with exit one before any summary or marker. The actual GraphQL error is `Internal server error` at `getOrderList.data[4].price_elements`, during complete inventory. This is a row resolver failure, not an observed HTTP 429 or proof of a scan timeout.
+
+What is verified:
+
+- Independent AWS reads verify all five schedules exactly restored, enabled on old invoice `:5` and cancellation `:38` pins; all three previous state policies match IAM readback. All three diagnostic tasks are stopped. Both drain receipts prove 120 quiet seconds and zero unfinished tasks. The failed-release main freeze has ended.
+- Independent private verification artifact SHA-256 `6850dcbac49c84f9aab4027c924df124265fbb682b251e869893645622af9c69` records the outcome and direct IAM checks. No invoice, email or status mutation occurred in these dry candidates.
+- Reconciliation helper PR #546 at `f8d50117` passed all six checks and 649 local tests, but remains unmerged/unapplied: its fixed release gate intentionally rejects this unpromoted image. Standalone guard preparation `9eb0f033` is pushed with 669 integrated tests and independently corrected native credentials/report-command/source gates; it is not deployed.
+
+Known issues:
+
+- The cancellation inventory unnecessarily loads financial price fields for every historical order. A new narrow correction is being implemented in `codex/unpaid-inventory-discovery-fields-20260913`: complete discovery will use stable identity/status/date/block fields, with all financial checks retained in fresh candidate detail reads before writes. Never accept partial GraphQL data or treat missing payment fields as unpaid.
+
+Next exact step:
+
+- Verify the bounded live read-only reproduction, review/test the coarse discovery correction and fresh detail guards, commit/push through required PR checks, and build/deploy a new exact release. Do not run the financial helper until its allowlist is deliberately updated to an actually promoted reviewed release. Finish real invoices, all-age verification and the separate guard migration afterward. Production remains on the older failing invoice implementation; do not claim remediation complete.
+
 ## 2026-09-13 — API cooldown correction merged; exact release pending
 
 Date: 2026-09-13
