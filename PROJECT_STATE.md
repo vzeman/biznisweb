@@ -5,6 +5,34 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 - Independent release and first natural recovery verification
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/explicit-target-review-20260913`
+
+What changed:
+
+- Independently verified managed deployment `34749213122`, source `fda36b49e7610d289d6dcb1d0affe892d1ba5ce7`, immutable image `sha256:29c0c8e4106438f204b0afaee097e90fab887a82e71327653e508a20574b90c0`. Private release proof `data/roy/order-automation/audits/2026-09-13/independent-deploy-fda36b49-20260913.json`, SHA `ada17707d7885aa68b684633f9e0ee9ef4695734fe2b53dc5649b4eec649fb50`, binds the full managed receipt, three actual stopped hosts and localhost markers, both 120-second drains, five promoted schedule targets, six IAM policies, 17 alarms, three encrypted empty DLQs and unchanged ROY 71 / VEVO 33 reports. Root accepted promotion and ended that deployment freeze.
+- Published the independent natural-run and reviewed-closure checkpoint: `data/roy/order-automation/audits/2026-09-13/independent-natural-fda36b49-20260913.json`, SHA `96ab80252a8adcc9ae2b8b1d026db3aab94915ee6deade13e6b399ecb808b9d6`. This is a bounded observation, not an all-age verification or claim that every alarm is clear.
+- Investigated the separate remaining payment review with one exact API query and native order history. Published `data/vevo/order-automation/audits/2026-09-13/independent-status-review-20260913.json`, SHA `6eeba15c2e838352f7670266b84b4c693cf3e38601f83ef839b97260c9214d4d`. Earlier two-case evidence did not match this order and was not reused. Following the user's subsequent explicit full bank-payment confirmation, published the separate validated content-addressed proof `data/vevo/order-automation/manual-settlements/6049e628898509a7f3b0f613e5df7570b16bddf1a4388ae07f81ee1c9c7d870f.json`, matching its SHA. Confirmation time records the user's statement; no bank transaction date or API receipt was invented. Root owns any journal apply and status correction.
+
+What is verified:
+
+- ROY's first natural run stopped successfully. VEVO's first natural run failed on the already retained preparation ambiguity; after root's reviewed non-billable obligation closure, the next natural VEVO task `11ae7c0f2cbe4f6990bd8224a30fc866` stopped at 10:31:18 UTC with exit 0 on the exact deployed image. Its complete incremental two-page scan reported matched, created, failed and ambiguous all zero. The separate status-review candidate remained unchanged.
+- The sealed original uncertain financial projection is byte-equivalent in content to the immutable confirmation. Its phase remains `prepare_ambiguous`, its financial outcome remains unknown, and the separate obligation is validly closed. Recorded status readback is raw ID 17 / Cancelled, canonical Storno. The earlier confirmed bank-proof object remains identical across natural runs. Both journals have zero active invoice operations and active ambiguities; VEVO retains one separate open payment review at the checkpoint.
+- Actual CloudWatch metrics and 17 alarm states were read. Latest checkpoint has 15 OK and two VEVO ALARM states: pending backlog (historical window) and the separate payment review. All private evidence publications used verified account/region, public-access blocks, owner-only ACL, AES256, create-only writes and exact readback. Closure/manual validation source matches the deployed commit.
+- No provider, journal, financial, email or production infrastructure mutation was made by this observer. The one temporary native browser editor was cancelled without saving, its owned tab was closed and closure was verified. No persistent local process was started.
+
+Known issues:
+
+- The all-age VEVO audit and any provider page failure are separate root-owned work; natural incremental success does not establish all-age completeness. The newly confirmed bank case still needs root's controlled proof application and subsequent natural recovery verification. Standalone guard and reporting migrations remain separate unreleased work.
+- This branch remains a review fixture and evidence handoff, not the current production source. Do not deploy it or rerun historical release finalizers.
+
+Next exact step:
+
+- Independently observe the next natural run after root records the newly confirmed bank proof, verify one guarded status correction and preserved provenance, and publish a new immutable checkpoint. Then verify any separately dispatched standalone guard migration against actual runtime evidence. Root controls all applies, merges and deployments.
+
 ## 2026-09-13 - Independent explicit target regression fixture
 
 Date: 2026-09-13
