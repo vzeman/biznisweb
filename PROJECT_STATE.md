@@ -15,6 +15,7 @@ What changed:
 
 - Added a standalone entry point for the corrected creditnote rules, aggregate live/dry metrics, mandatory durable state and complete-summary checks. A separate managed deployer provisions isolated roles/tasks, verifies the two unchanged report hosts and both new dry-run hosts, and requires both live guard completions before switching off inline guards. It preserves report images, commands and times, and all five invoice/cancellation schedules.
 - Migration pauses/drains existing writers before probes, uses private CAS receipts and drift-aware restoration, and leaves reports paused after any uncertain live attempt. It is an initial migration, not a blind retry/adoption mechanism. The dedicated workflow shares the production automation concurrency group and has a 300-minute bound with restoration headroom.
+- Added `projects/CREDITNOTE_AUTOMATION_OPERATIONS.md` with exact migration, failure/recovery and monitoring boundaries, including the future report dependency limitation.
 - Capture exclusion now inspects active GitHub source/A/A workflows and all ECS clusters in this account/region. Only genuine unmodified collector service tasks are exempt. Current main and schedule/source snapshots are rechecked before each live guard launch.
 
 What is verified:
