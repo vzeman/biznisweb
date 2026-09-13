@@ -76,6 +76,32 @@ Known issues:
 Next exact step:
 
 - Commit/push this documentation checkpoint, then integrate the reviewed status identity dependency and implement the smallest exporter/creditnote classification correction with same-ID rename parity and cross-shop/foreign-ID regressions. Keep provider calls, runtime writes and PR merge out of this branch's current work. Root coordinates the primary order release, separate guard migration and later managed reporting release.
+## 2026-09-13 — Live settlement preview passed; exact checksum scan exception
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- PR #550 now describes the combined payment, creditnote, reviewed noncollection and status identity changes and is ready for review. The exact source `10d705ee` integrates documentation-only main `4d504980`.
+- Gitleaks identified one false positive: the SHA-256 of the existing API audit proof in `order_status_identity.py`, not a credential. Added only the exact commit/file/rule/line fingerprint to `.gitleaksignore`; no detector, rule or file-wide exclusion changed.
+- The secret scan passed with that exact exception. The separate baseline intentionally allowed only the previous single metric exception, so its exact-set assertion now permits these two reviewed fingerprints and still rejects any additional entry.
+- Local baseline and Ruff pass; negative checks reject both an added exception and a missing reviewed exception. Independent review confirmed the original immutable source line is the published audit checksum and that no wildcard or general suppression was added.
+
+What is verified:
+
+- The live VEVO manual settlement recorder preview passed with stable journal readback and zero provider writes. No settlement provenance has been applied and no status was changed. One earlier read-only invocation completed without captured terminal output; process absence was verified before the successful captured preview.
+- The fixed uncollected-obligation preview also passed with zero status, financial or email requests and no consumed intent. Its API/native document and receipt checks agree with the sealed confirmation. The finite preview commands have completed.
+- The tested source retains 844 build tests, 582 automation tests and reporting smoke success. Linux PR regression passed; remaining exact-head checks must finish again after this narrowly scoped scan correction.
+
+Known issues:
+
+- Production remains the prior `47c3da77` order release. The closure helper's compatible-release pins remain empty, and its preview is being checked separately. No native gateway or protected report configuration was changed.
+
+Next exact step:
+
+- Commit/push the exact false-positive exception, require all PR checks, and merge only the reviewed current head. Verify the exact merge image and managed order deployment before applying the fixed closure and manual settlement record. Then complete VEVO historical checks and the separate standalone guard migration. No local persistent process was started.
 
 ## 2026-09-13 — Reviewed VEVO status identities integrated
 
