@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Infrastructure promoted; invoice provider rejection contained
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-contract-production-verification-20260913`
+
+What changed:
+
+- Managed deployment `34738085098` succeeded at exact main `ccf25c799c56bfa3dea1f3a77456f3fabf079732`, immutable image `sha256:e8e4830c19bfb0e166519d412cfa1e3e8c690f042a6cbc72a88e52369ccdecc5`. All three actual localhost markers, two 120-second drains, five schedule pins, six IAM policies and protected reporting configurations passed independent checks. Cancellation scanned 4,849 orders / 169 pages to API exhaustion, rechecked 15 and made no status writes. All candidates stopped with exit zero. Main freeze ended after independent terminal verification.
+- The first natural ROY task on the release (`3c8f2c4ac9c8491b92b7cd4192108813`, Fargate instance ID N/A, private IP `172.31.30.209`, service `roy-invoice-daily:8`, path `/app`, same immutable image) then stopped after all 13 unambiguous finalization attempts returned HTTP 200 with an explicit false result and no final invoice on fresh readback. Infrastructure success is not business remediation. No invoice or email was created by this recovery attempt.
+- Deliberately disabled only the four invoice schedules, preserving their exact promoted configurations and leaving cancellation plus both reporting schedules unchanged. The CAS-backed private incident manifest records originals, paused configurations, protected schedules and per-write readback: `data/roy/order-automation/incidents/2026-09-13/be7322255d3b4464907ccb8348425457.json`, SHA-256 `b5765ba648a1ca5ddb9b1cdfc382c90c36dbc1982c93e4f2580868d4371dda46`. Do not restore or overwrite configuration drift. The existing deployer expects enabled source schedules; a subsequent release must explicitly account for this incident pause.
+
+What is verified:
+
+- Private independent deployment proof: `data/roy/order-automation/audits/2026-09-13/independent-deploy-ccf25c79-20260913.json`, SHA-256 `ac028d87fd872910d5a6d292377256fbd1ccbcdfdb4666b4c6a6e54eade8c78d`. Provider failure proof: `data/roy/order-automation/audits/2026-09-13/post-deploy-finalization-rejection-20260913.json`, SHA-256 `af608f0e85f36135f4d36ab82c127f3a29d4f18c57589eae3d69f70088467a4a`. Evidence remains private, encrypted and hash-verified.
+- Native served code finalizes using the ERP row field `pre_inv_id`; all inspected GraphQL nested document IDs equal the parent order ID, including completed examples. Earlier annotations equating these IDs with the native key are unproven and must not authorize recovery. The native UI opens a rejected preinvoice using a number-shaped key; an unrelated final invoice shares that displayed number, so number matching alone cannot establish identity.
+- The four old ambiguous creation records and two already-sent ambiguous email records remain untouched. Helper PR #546 intentionally still rejects its old failed release. The new read-only post-recovery verifier is pushed at `f0668eaf` with 681 regression tests passing; its document binding assumptions require review alongside this newly observed identity mismatch. Standalone guard remains prepared, undeployed. No local server, watcher or tunnel was started.
+
+Known issues:
+
+- Actual invoice creation is still broken and all four invoice schedules are intentionally paused. Native document identity, runtime CSRF token and permissions need direct read-only verification before a corrected financial attempt. Native stale Stripe status overwrites remain an external provider dependency. Original eleven historical seeds have nine unresolved cases, with additional open creation work outside that seed batch.
+
+Next exact step:
+
+- Independently verify the four paused schedules, protected jobs and any late tasks. Under runtime credentials, inspect the served invoice module and its documented read-only native row endpoint to prove the exact native preinvoice key and order association. Correct the runtime and dependent reconciliation assumptions on a clean pushed branch with tests and independent review. Keep financial operations paused until a reviewed exact release passes host gates; then recover actual invoices and finish all-age verification, followed by the separate guard migration.
+
 ## 2026-09-13 — Discovery/native-response correction merged; exact release pending
 
 Date: 2026-09-13
