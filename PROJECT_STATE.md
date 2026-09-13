@@ -19,6 +19,7 @@ What changed:
 What is verified:
 
 - 627 full build regression tests, independent cancellation/parser reviews, Linux/Windows checks, security, observability, reporting smoke, Ruff and diff checks pass. The actual merge source is synchronized locally without modifying main.
+- Added a sanitized, unsent vendor handoff in `projects/FLOX_STRIPE_STATUS_GUARD_HANDOFF.md`: required protection against older unsuccessful attempts and duplicate/out-of-order events, with primary Stripe/BiznisWeb references. No webhook event, mapping, payment or message was changed. Native prevention remains an external dependency; a later AWS repair is not prevention.
 
 Next exact step:
 
