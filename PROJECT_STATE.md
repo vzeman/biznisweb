@@ -14,7 +14,7 @@ Branch: `codex/order-contract-production-verification-20260913`
 What changed:
 
 - PR #547 merged as `ccf25c799c56bfa3dea1f3a77456f3fabf079732` after all six required checks passed on exact head `a561b185ab18ec628de9bc1d12074a13b3727833`. The release contains stable cancellation discovery and strict native response compatibility, with all fresh financial and no-replay gates retained.
-- Exact main image build `34737947355` is running. This verification branch is clean/pushed from the merge and owns the subsequent runtime handoff. No new deployment has been dispatched yet; the five schedules still use the older failing image.
+- Exact build `34737947355` succeeded. Independent ECR readback verifies `git-ccf25c799c56bfa3dea1f3a77456f3fabf079732` at `sha256:e8e4830c19bfb0e166519d412cfa1e3e8c690f042a6cbc72a88e52369ccdecc5`. After fresh unchanged-main and no-active-release checks, managed deployment `34738085098` was dispatched once at 04:31 UTC. Main is frozen until independently verified promotion or restoration; no helper/guard PR may merge during this run. Production is not yet claimed upgraded.
 
 What is verified:
 
@@ -22,7 +22,7 @@ What is verified:
 
 Next exact step:
 
-- Verify successful exact build and independent ECR digest, recheck current main and no active release, then dispatch one managed deployment on this merge. Freeze main until verified promotion or restoration. Independently verify every host marker, drain and schedule/policy result before invoice reconciliation. Do not merge the helper or guard during the active release.
+- Observe managed deployment `34738085098` without overlapping provider scans. Independently verify every actual host marker, both drains, five schedule pins and policy result before invoice reconciliation. On failure verify complete restoration. Retain the main freeze through that outcome; helper/guard source integration may proceed on their own pushed branches, but no merge or apply is allowed during this release.
 
 ## 2026-09-13 — Native response compatibility validated before release
 
