@@ -12,8 +12,8 @@ from order_status_safety import creditnote_coverage_reason
 
 
 def document(**extra):
-    return {"creditnote_id": "1", "number": "CN-1", "order_num": "ORDER-A",
-            "taxed_price": "12,30 €", "price": "10,00", "inv_id": "INV-1", **extra}
+    return {"creditnote_id": "1", "number": "CN-1", "order_num": "ORDER-A", "order_id": "123",
+            "taxed_price": "12,30 €", "price": "10,00", "inv_id": "INV-1", "open": "0", "storno": "0", **extra}
 
 
 class CreditnoteAutomationContextTests(unittest.TestCase):
@@ -23,7 +23,11 @@ class CreditnoteAutomationContextTests(unittest.TestCase):
         self.assertEqual(row["currency"], "EUR")
         self.assertEqual(row["amount"], 12.3)
         self.assertEqual(row["net_amount"], 10)
-        self.assertEqual(row["invoice_id"], "INV-1")
+        self.assertEqual(row["invoice_number"], "INV-1")
+        self.assertEqual(row["order_id"], "123")
+        self.assertEqual(row["order_num"], "ORDER-A")
+        self.assertNotIn("invoice_id", row)
+        self.assertEqual("issued", row["state"])
         self.assertNotIn("customer", row)
         self.assertNotIn("email", row)
 
@@ -32,6 +36,46 @@ class CreditnoteAutomationContextTests(unittest.TestCase):
                      [document(taxed_price="invalid")]):
             with self.subTest(rows=rows), self.assertRaises(RuntimeError):
                 normalize_creditnote_automation_context(rows)
+
+    def test_native_number_binds_credit_to_parent_order_despite_api_id_alias(self):
+        order = {"id": "123", "order_num": "ORDER-A",
+                 "sum": {"value": 12.3, "currency": {"code": "EUR"}, "is_net_price": True},
+                 "vat_summary": [{"tax_rate": 23, "tax_base": 10, "amount": 2.3}],
+                 "invoices": [{"id": "123", "invoice_num": "INV-1"}]}
+        context = normalize_creditnote_automation_context([document()])
+        self.assertEqual("full_creditnote", creditnote_coverage_reason(order, context["ORDER-A"]))
+        partial = normalize_creditnote_automation_context([document(taxed_price="1,23 €", price="1,00")])
+        self.assertEqual("partial_creditnote", creditnote_coverage_reason(order, partial["ORDER-A"]))
+        for changes in ({"inv_id": "123"}, {"order_id": "456"}, {"order_id": None},
+                        {"order_num": "ORDER-B"}):
+            with self.subTest(changes=changes):
+                rows = normalize_creditnote_automation_context([document(**changes)])
+                self.assertEqual("creditnote_identity_or_invoice_mismatch",
+                                 creditnote_coverage_reason(order, next(iter(rows.values()))))
+
+    def test_missing_duplicate_or_unbound_api_final_number_cannot_authorize_storno(self):
+        order = {"id": "123", "order_num": "ORDER-A",
+                 "sum": {"value": 12.3, "currency": {"code": "EUR"}, "is_net_price": True},
+                 "vat_summary": [{"tax_rate": 23, "tax_base": 10, "amount": 2.3}]}
+        context = normalize_creditnote_automation_context([document()])["ORDER-A"]
+        for invoices in ([{"id": "123"}], [{"id": "456", "invoice_num": "INV-1"}],
+                         [{"id": "123", "invoice_num": "INV-1"}] * 2,
+                         [{"id": "123", "invoice_num": []}],
+                         [{"id": "123", "invoice_num": " "}],
+                         [{"id": True, "invoice_num": "INV-1"}]):
+            with self.subTest(invoices=invoices):
+                self.assertEqual("creditnote_invoice_identity_unknown",
+                                 creditnote_coverage_reason({**order, "invoices": invoices}, context))
+
+    def test_distinct_final_numbers_may_share_the_api_parent_alias(self):
+        order = {"id": "123", "order_num": "ORDER-A",
+                 "sum": {"value": 24.6, "currency": {"code": "EUR"}, "is_net_price": True},
+                 "vat_summary": [{"tax_rate": 23, "tax_base": 20, "amount": 4.6}],
+                 "invoices": [{"id": "123", "invoice_num": "INV-1"},
+                              {"id": "123", "invoice_num": "INV-2"}]}
+        context = normalize_creditnote_automation_context([
+            document(), document(creditnote_id="2", number="CN-2", inv_id="INV-2")])
+        self.assertEqual("full_creditnote", creditnote_coverage_reason(order, context["ORDER-A"]))
 
     def test_open_unnumbered_zero_document_is_attributed_but_cannot_prove_refund(self):
         context = normalize_creditnote_automation_context([
@@ -44,10 +88,11 @@ class CreditnoteAutomationContextTests(unittest.TestCase):
         self.assertIsNone(pending["amount"])
         self.assertIsNone(pending["net_amount"])
         self.assertEqual(12.3, context["ORDER-B"][0]["amount"])
-        order = {"sum": {"value": 12.3, "currency": {"code": "EUR"}, "is_net_price": False},
+        order = {"id": "123", "order_num": "ORDER-A",
+                 "sum": {"value": 12.3, "currency": {"code": "EUR"}, "is_net_price": False},
                  "vat_summary": [{"tax_rate": 23, "tax_base": 10, "amount": 2.3}],
-                 "invoices": [{"id": "INV-1"}]}
-        self.assertEqual("creditnote_amount_unknown", creditnote_coverage_reason(order, context["ORDER-A"]))
+                 "invoices": [{"id": "123", "invoice_num": "INV-1"}]}
+        self.assertEqual("creditnote_not_issued", creditnote_coverage_reason(order, context["ORDER-A"]))
 
     def test_unnumbered_positive_document_cannot_prove_refund_either(self):
         row = normalize_creditnote_automation_context([document(number="")])["ORDER-A"][0]
@@ -60,6 +105,30 @@ class CreditnoteAutomationContextTests(unittest.TestCase):
             document(taxed_price=0, price=0, currencied_price="0 €")
         ])["ORDER-A"][0]
         self.assertEqual(0.0, row["amount"])
+
+    def test_only_exact_closed_nonvoided_flags_prove_an_issued_document(self):
+        for opened in (False, 0, "0"):
+            for voided in (False, 0, "0"):
+                with self.subTest(opened=opened, voided=voided):
+                    row = normalize_creditnote_automation_context([document(open=opened, storno=voided)])["ORDER-A"][0]
+                    self.assertEqual("issued", row["state"])
+                    self.assertEqual(12.3, row["amount"])
+        for field in ("open", "storno"):
+            for value in (True, 1, "1", None, "", "false", "true", 0.0, -1, 2, [], {}):
+                with self.subTest(field=field, value=value):
+                    row = normalize_creditnote_automation_context([document(**{field: value})])["ORDER-A"][0]
+                    self.assertNotEqual("issued", row["state"])
+                    self.assertIsNone(row["amount"])
+                    self.assertIsNone(row["net_amount"])
+
+    def test_voided_and_open_documents_stay_present_without_refund_authority(self):
+        rows = normalize_creditnote_automation_context([
+            document(storno="1"),
+            document(creditnote_id="2", number="CN-2", open="1"),
+        ])["ORDER-A"]
+        self.assertEqual(["voided", "open"], [row["state"] for row in rows])
+        self.assertTrue(all(row["numbered"] for row in rows))
+        self.assertTrue(all(row["amount"] is None for row in rows))
 
     def test_page_total_and_identity_must_be_complete(self):
         for pages in ([{"total": 2, "rows": [document()]}, {"total": 2, "rows": []}],

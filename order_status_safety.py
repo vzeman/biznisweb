@@ -248,8 +248,18 @@ def creditnote_coverage_reason(order: Mapping[str, Any], creditnotes: list[dict[
     invoices = api_collection(order, "invoices")
     if total is None or total.amount <= 0 or not invoices:
         return "creditnote_order_amount_or_invoice_unknown"
-    invoice_ids = {str(row.get("id") or "") for row in invoices if isinstance(row, Mapping)}
-    if "" in invoice_ids or len(invoice_ids) != len(invoices):
+    order_id, order_number = order.get("id"), order.get("order_num")
+    if (isinstance(order_id, bool) or not isinstance(order_id, (str, int)) or not str(order_id).strip()
+            or not isinstance(order_number, str) or not order_number.strip()):
+        return "creditnote_order_identity_unknown"
+    invoice_numbers: set[str] = set()
+    for invoice in invoices:
+        if (not isinstance(invoice, Mapping) or isinstance(invoice.get("id"), bool)
+                or str(invoice.get("id") or "") != str(order_id)
+                or not isinstance(invoice.get("invoice_num"), str) or not invoice["invoice_num"].strip()):
+            return "creditnote_invoice_identity_unknown"
+        invoice_numbers.add(invoice["invoice_num"])
+    if len(invoice_numbers) != len(invoices):
         return "creditnote_invoice_identity_unknown"
     credited = Decimal(0)
     seen: set[str] = set()
@@ -284,9 +294,18 @@ def creditnote_coverage_reason(order: Mapping[str, Any], creditnotes: list[dict[
         if not isinstance(document, Mapping):
             return "creditnote_document_invalid"
         identity = str(document.get("id") or "")
-        if not identity or identity in seen or str(document.get("invoice_id") or "") not in invoice_ids:
+        # Native inv_id is a final invoice number, while the API document ID
+        # binds the parent order. Require both order identities as well: invoice
+        # numbers alone can collide across series/orders.
+        if (not identity or identity in seen or isinstance(document.get("order_id"), bool)
+                or str(document.get("order_id") or "") != str(order_id)
+                or document.get("order_num") != order_number
+                or not isinstance(document.get("invoice_number"), str)
+                or document.get("invoice_number") not in invoice_numbers):
             return "creditnote_identity_or_invoice_mismatch"
         seen.add(identity)
+        if document.get("state") != "issued":
+            return "creditnote_not_issued"
         if document.get("currency") != total.currency:
             return "creditnote_currency_mismatch"
         raw_amount = document.get("amount")

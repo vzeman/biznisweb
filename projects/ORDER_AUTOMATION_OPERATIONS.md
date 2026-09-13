@@ -92,6 +92,22 @@ and used only with fresh settlement/creditnote evidence. Insufficient history an
 uncertain previous writes remain visible in a durable review queue. Corrections
 suppress customer status emails. Partial creditnotes do not cancel whole orders.
 
+Native creditnote `inv_id` is the final invoice number, not the GraphQL nested
+invoice ID. Whole-order credit coverage requires that exact `invoice_num` and
+both native/API order identities. A creditnote must have a final number and
+explicitly closed (`open=false`) and nonvoided (`storno=false`) native flags.
+Only verified boolean / integer 0 or 1 / string "0" or "1" flag representations
+are accepted. Missing, malformed, open or voided documents cannot authorize
+Storno; their presence still blocks a paid/shipped restoration. Complete same-
+currency gross coverage and consistent VAT remain required, so a partial return
+never cancels the entire order.
+
+A separately confirmed external bank transfer can be recorded as private,
+hash-bound provenance through the [manual-settlement procedure](MANUAL_SETTLEMENT_PROTECTION.md).
+Changing the payment method or historical paid status is not proof of payment.
+Native receipts remain primary; protected returns, creditnotes and uncertainty
+still take precedence over automatic status repair, regardless of Stripe/GoPay.
+
 ## Unpaid-order discovery
 
 The nightly ROY cancellation run uses the same bounded inventory scanner before
