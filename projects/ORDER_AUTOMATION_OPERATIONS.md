@@ -4,21 +4,31 @@ The source of truth is the GitHub repository for code, ECS/Scheduler for runtime
 and each shop's private S3 automation journal for durable operations. Never copy
 credentials, customer data or order-level evidence into this public repository.
 
-## Current invoice incident
+## Current invoice runtime
 
-On 2026-09-13 the exact `ccf25c79` infrastructure release passed its host and
-promotion checks, but the first natural ROY run received explicit provider
-rejections for all thirteen ordinary finalization attempts. The four invoice
-schedules are intentionally disabled; cancellation and both report schedules
-remain enabled. Infrastructure promotion alone did not repair invoice creation.
+Managed release `34741354275` promoted source
+`47c3da775ff7018a1cf8950024c867310b91ae8a` at image
+`sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`.
+Independent host, stopped-task, drain, schedule and policy verification completed
+on 2026-09-13. All five order-automation schedules are enabled; protected reporting
+configuration remains unchanged. Subsequent natural ROY/VEVO runs created
+28 invoices with independently matched native/API document identities.
 
-The reviewed pause manifest and latest outcome are recorded in `PROJECT_STATE.md`.
-Keep its exact paused configurations as rollback originals. A corrected managed
-release may opt in with the manifest's private key and SHA-256 only after exact
-source/protected-configuration and freshness checks. Failed preparation restores
-the incident pause; successful full host/drain/promotion gates enable the corrected
-schedule definitions. Do not briefly enable the broken old invoices to satisfy a
-deployment precondition, overwrite drift, or replay ambiguous financial operations.
+Four historical uncertain creation cases remain under the fixed once-only
+reconciliation procedure until its final readback is confirmed. A separate
+user-confirmed uncollected-order case retains an unknown preparation outcome;
+its obligation closure is being prepared independently. Neither group is claimed
+resolved here, and no uncertain financial intent may be reset or replayed.
+Manual-settlement protection and the corrected creditnote identity/lifecycle
+rules in this branch still require their own reviewed release.
+
+Earlier on the same date, source `ccf25c79` passed infrastructure gates but its
+first natural ROY run received thirteen explicit finalization refusals. That
+incident's four-invoice pause and private manifest remain historical audit and
+rollback evidence for the incident-aware `47c3da77` release. Future deployments
+must capture their own freshly verified source/protected configurations and
+use the managed host/drain/promotion gates. Current release proof and private
+receipt hashes are recorded in `PROJECT_STATE.md`.
 
 ## Invoice behavior
 

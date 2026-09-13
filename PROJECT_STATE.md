@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Combined status-protection draft prepared
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- Preparing one combined draft PR for manual external-bank settlement protection and independently reviewed native creditnote identity/lifecycle correction. PR #549's exact correction is included; its supersession will be linked after the combined draft exists. No PR/main merge or deployment is part of this step.
+- Updated the operations runbook to the verified `47c3da77` / `c3842dda` runtime, five enabled order-automation schedules and 28 confirmed natural invoices. Four historical helper cases and the separate uncollected preparation uncertainty remain pending until root confirms their outcomes.
+- Incorporated only the already-pushed vendor handoff from `3bf3d150`, without replaying historical project memory. Added the current user-confirmed gateway direction (ROY Stripe; VEVO actively GoPay-to-Stripe migration) and exact closed/nonvoided creditnote acceptance criteria. The handoff remains unsent; gateway settings and webhook mappings remain unchanged.
+
+What is verified:
+
+- Runtime, helper and test sources remain unchanged from integrated `7a395595`; only documentation is added after its 754 build tests, 492-test automation suite, reporting smoke, Ruff and diff checks passed. Root reviewed the combined code and reran 78 focused tests without a blocker. The manual-payment runbook explicitly retains generic review for repeated native-only payment regressions.
+
+Known issues:
+
+- This is a draft for review, not a release. Native stale-event prevention remains a vendor requirement. The separate uncollected-order obligation closure is still outside this branch; its agent has been notified of the future status-gate merge boundary.
+
+Next exact step:
+
+- Commit/push this documentation, create and verify the combined draft PR, link the contained PR #549 as superseded, and return its URL to root. Preserve the uncollected-order agent's separate files and wait for its explicit reviewed-source handoff before integration.
+
 ## 2026-09-13 — Creditnote identity and lifecycle integrated with settlement protection
 
 Date: 2026-09-13

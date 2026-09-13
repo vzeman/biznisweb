@@ -41,4 +41,6 @@ Invoice and unpaid-cancellation runtimes consume the same leased journal proof. 
 
 Repeated gateway regression is eligible only with the same verified proof/order and a strictly newer `last_change` than the previous verified correction. The target must remain the same, except for a one-way advance from paid to shipped with newly proven delivered fulfillment or the trusted same-order shipped observation. Shipped can never regress to paid. Pending/uncertain status, invoice or email operations still block. Every new pending status intent atomically archives the previous verified intent; ambiguous provider effects are never replayed. Recovery requires fresh complete payment/fulfillment detail immediately before the single status request and independent status readback afterward.
 
+Without a bound manual-settlement proof, a repeated native-payment-only regression retains the existing review guard; this change does not promise automatic repeated recovery for every native receipt or paid invoice.
+
 This mechanism supplies durable payment provenance and guarded eventual repair. It cannot prevent a native FLOX gateway handler from writing its own unconditional status mapping. Conditional gateway-side protection remains a separate provider issue; do not disable legitimate successful-payment handling or delete payment history as a workaround.
