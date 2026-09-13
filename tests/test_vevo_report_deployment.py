@@ -26,6 +26,7 @@ class DeploymentTests(unittest.TestCase):
             obj = object.__new__(deploy.Deployment)
             obj.release_id = 'b' * 32
             obj.role_created = obj.role_attempted = False
+            obj.sleep = Mock()
             obj.cleanup_task = Mock()
             state = {}
             def get(**_):
@@ -40,10 +41,15 @@ class DeploymentTests(unittest.TestCase):
             obj.iam = SimpleNamespace(get_role=get, create_role=Mock(side_effect=create),
                 list_role_policies=lambda **_: {'PolicyNames': []}, list_attached_role_policies=lambda **_: {'AttachedPolicies': []},
                 delete_role=Mock(side_effect=lambda **_: state.clear()))
-            with self.subTest(acknowledgement=acknowledgement), self.assertRaisesRegex(RuntimeError, 'response lost'):
+            with self.subTest(acknowledgement=acknowledgement), self.assertRaises(RuntimeError):
                 obj.create_role()
             self.assertEqual(acknowledgement == 'lost-after', obj.role_created)
-            obj.cleanup_role()
+            if acknowledgement == 'lost-before':
+                with self.assertRaisesRegex(RuntimeError, 'create-unconfirmed'):
+                    obj.cleanup_role()
+                self.assertTrue(obj.role_attempted)
+            else:
+                obj.cleanup_role()
             self.assertEqual({}, state)
             obj.iam.create_role.assert_called_once()
             self.assertEqual(acknowledgement == 'lost-after', obj.iam.delete_role.called)

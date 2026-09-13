@@ -288,23 +288,16 @@ class Deployment:
             raise
 
     def readiness(self):
+        from scripts.reporting_readiness import validate_readiness
         require(re.fullmatch(r"data/vevo/reporting/runtime/readiness/[a-zA-Z0-9_-]+\.json", self.readiness_key or "")
                 and re.fullmatch(r"[a-f0-9]{64}", self.readiness_sha or ""), "report-reviewed-readiness-required")
-        raw = read_private(self.s3, self.readiness_key)
+        raw = read_private(self.s3, self.readiness_key, self.binding.LIMIT)
         require(sha(raw) == self.readiness_sha, "report-readiness-hash-invalid")
         receipt = self.binding.decode_json(raw)
-        require(set(receipt) == {"schema_version", "phase", "account", "region", "verified_at", "protected", "primary_release",
-                                "standalone_guards"}, "report-readiness-schema-invalid")
-        age = (now() - self.binding.stamp(receipt["verified_at"])).total_seconds()
-        require(receipt["schema_version"] == 1 and receipt["phase"] == "order-and-standalone-guards-independently-verified"
-                and receipt["account"] == ACCOUNT and receipt["region"] == REGION and 0 <= age <= 86400,
-                "report-readiness-stale-or-unverified")
-        for key in ("primary_release", "standalone_guards"):
-            proof = receipt[key]
-            require(set(proof) == {"key", "sha256"} and re.fullmatch(r"[a-f0-9]{64}", proof["sha256"])
-                    and sha(read_private(self.s3, proof["key"])) == proof["sha256"], "report-readiness-proof-missing")
-        require(receipt["protected"] == self.snapshot_protected(), "report-readiness-runtime-drift")
-        self.protected = receipt["protected"]
+        protected = self.snapshot_protected()
+        validate_readiness(receipt, s3=self.s3, ecs=self.ecs, ecr=self.session.client("ecr"), protected=protected,
+                           vevo_schedule=self.schedule())
+        self.protected = protected
 
     def exclusion(self):
         own = os.environ["GITHUB_RUN_ID"]
@@ -453,12 +446,8 @@ class Deployment:
                                  Tags=[{"Key": "ManagedReportProbe", "Value": self.release_id}])
         finally:
             # Reconcile a committed create with a lost acknowledgement; never
-            # repeat creation or claim cleanup from the HTTP result alone.
-            role = self.probe_role()
-            if role is not None:
-                self.validate_probe_role(role)
-                self.role_created = True
-            self.role_attempted = False
+            # interpret eventually consistent not-found as confirmed absence.
+            self.resolve_attempted_role()
         require(self.role_created, "report-probe-role-not-created")
         policy = diagnostic_policy(self.release_id)
         self.iam.put_role_policy(RoleName=name, PolicyName="IsolatedProbe", PolicyDocument=json.dumps(policy))
@@ -479,6 +468,18 @@ class Deployment:
                 and {r["Key"]: r["Value"] for r in role.get("Tags", [])} == {"ManagedReportProbe": self.release_id}
                 and role.get("AssumeRolePolicyDocument") == self.role_trust,
                 "report-probe-role-ownership-invalid")
+
+    def resolve_attempted_role(self):
+        for attempt in range(31):
+            role = self.probe_role()
+            if role is not None:
+                self.validate_probe_role(role)
+                self.role_created, self.role_attempted = True, False
+                return role
+            if attempt < 30:
+                self.sleep(2)
+        # A retained unknown create must never be released as a clean rollback.
+        raise RuntimeError("report-probe-role-create-unconfirmed")
 
     def task(self):
         result = self.ecs.describe_tasks(cluster=CLUSTER, tasks=[self.owned_task])
@@ -507,10 +508,7 @@ class Deployment:
             return
         self.cleanup_task()
         name = "VevoReportProbe-" + self.release_id
-        role = self.probe_role()
-        if role is None:
-            self.role_created = self.role_attempted = False
-            return
+        role = self.resolve_attempted_role()
         self.validate_probe_role(role)
         policies = self.iam.list_role_policies(RoleName=name)["PolicyNames"]
         require(self.iam.list_attached_role_policies(RoleName=name)["AttachedPolicies"] == []

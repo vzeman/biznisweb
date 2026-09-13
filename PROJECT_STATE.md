@@ -13,6 +13,10 @@ Branch: `codex/vevo-report-managed-deploy-20260913`
 
 What changed:
 
+- Parent and independent review corrections are complete: `reporting_readiness.py` is a reproducible producer and the deployer's shared semantic validator. It binds independent audit verdict/full managed receipt/source/run/image crosslinks, primary five pins/three full-scan hosts/drains, standalone nine schedules/six host outcomes/two complete live summaries, and fresh AWS readbacks. Primary pre-guard report definitions and the sole post-guard inline-skip Input delta are checked separately. Hash-valid arbitrary or contradictory proofs reject before mutation.
+- IAM create/cleanup now tolerate bounded delayed visibility while preserving uncertainty: no second create, no absent/clean conclusion from a first or later `NoSuchEntity`. Independent tests reproduce lost acknowledgement, missing-before-visible, missing-after-visible and foreign ownership. Added exact publisher preview/create-only encrypted-byte-readback regression and the operational runbook with official retention/propagation references.
+- Five CURRENT workflows have explicit maintenance behavior: infra02:15/03:15UTC; AA/CTA02:30/03:30UTC; CTA-safety hourly:05; final snapshot manual only. Coordinate integrated merge/bootstrap outside02–04UTC and after:05; active migration may span an hour and read gates intentionally fail closed. No missing-pointer fallback, changed invoice/guard schedules or stopped collector.
+
 - Second offline checkpoint adds separate bootstrap-only workflow and a stdlib-only old-image identity/localhost probe. Promotion requires a previous completed successful bootstrap, exact final source/build after the quiet drain, and terminal binding/lease-generation readback. The diagnostic reader role is confined to VEVO report inputs and its own probe prefix. Private live-output metadata is compared before/after the candidate. Observed active provider tasks block dispatch; subsequent natural overlaps are recorded without changing their schedules.
 - Lost role-creation acknowledgement is reconciled by exact name/ARN/tag/trust before cleanup. Lost pointer acknowledgement restores the previous verified record only after schedule restoration; foreign drift is never overwritten. Unresolved terminal release pauses only a still-owned VEVO target and retains the incident lease. The 360-minute workflow budget includes rollback/cleanup headroom.
 - Protected snapshots now include installed guard/order/report/reconciler definitions, inline/attached/boundary role policies, collector ECS configuration and CloudFormation configuration/templates. Polling full protection/provenance checks is bounded to once a minute, with forced checks at mutation boundaries.
@@ -22,6 +26,8 @@ What changed:
 
 What is verified:
 
+- Before final frozen-main integration: 946 image-build tests, 684 automation tests and reporting smoke passed. The final local safety collection after semantic/IAM fixes has 83 tests, including 15 frozen independent regressions and the producer test. Scoped Ruff/whitespace checks pass. Root reviewed all four original managed workflow/probe files; both concrete blockers were addressed and independently retested. No live AWS/provider call or runtime change.
+
 - Hardened shared authority `10f52607` integrated via `0262fcdf`; only additive owned workflow/memory conflicts were resolved, preserving both review and reporting modules. All 64 combined shared authority, independent authority review, host and transaction tests pass. Bootstrap uses the shared exact command constructor and actual CloudWatch marker validator. The complete promotion contract is validated before enabling; successful promotion and verified rollback both check the released lease generation and current runtime, with no fallible task cleanup after terminal release.
 
 - 24 own focused offline tests pass, including real run/update/rollback failure scenarios, stale image/main after final drain, foreign schedule drift, uncertain release, late old tasks, lost role-create acknowledgement, recovered exact-page reads versus unresolved errors and pagination caps. Required full shared-API integration and final independent review remain open; no live call or dispatch.
@@ -30,12 +36,12 @@ What is verified:
 
 Known issues:
 
-- Full integrated image/automation suites, final independent source review and operational readiness publication remain required. Primary order release and both standalone guards must be independently verified before readiness can authorize promotion. No runtime state or future verified release pin is inferred from this source.
+- Final integration of exact frozen main `fda36b49` and repeated image/automation suites remain before handoff. Operational readiness publication is intentionally not run: primary order release and both standalone guards must be independently verified first. No runtime state or future verified release pin is inferred from source.
 - Future natural invoice tasks may overlap a long probe even after initial scan/deployment exclusion; preserve their schedules, record observed overlap and fail promotion for incomplete reports. Do not claim a global provider-read lock.
 
 Next exact step:
 
-- Complete the managed runbook and full offline suites while parent reviews the stable integrated source. Parent controls main freeze and primary/guard releases. No AWS/provider writes, deployment or main merge from this implementation task.
+- Commit/push the reviewed fixes, integrate exact `fda36b49` into this owned branch preserving both histories and the six primary correction files, then rerun final suites and hand off one report-only diff. Parent controls main/PR/runtime actions and the active production freeze.
 
 ## 2026-09-13 - Reporting role adaptation passes offline regression
 
