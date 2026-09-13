@@ -194,13 +194,14 @@ class ReportStatusIdentityTests(unittest.TestCase):
         self.assertFalse(exp._realized_revenue_decision(order())[0])
         self.assertEqual([], exp.client.calls)
 
-    def test_new_stripe_paid_role_is_not_invented_from_label_only(self):
+    def test_current_stripe_paid_mapping_and_unused_label_remain_distinct(self):
         exp = exporter()
         exp.prepare_reporting_status_identity()
         self.assertEqual(
             (False, "non_realized_status"),
             exp._realized_revenue_decision(order("70", "Stripe - paid", "6")),
-        )  # Release remains blocked until this new event/role is independently bound.
+        )  # Current native Stripe PAID is mapped to reviewed ID 31, not ID 70.
+        self.assertTrue(exp._realized_revenue_decision(order("31", "Payment online - paid", "6"))[0])
 
     def test_frozen_facts_only_path_remains_without_client_or_catalogue(self):
         exp = BizniWebExporter("https://vevo.flox.sk/api/graphql", "", project_name="vevo", order_facts_only=True)

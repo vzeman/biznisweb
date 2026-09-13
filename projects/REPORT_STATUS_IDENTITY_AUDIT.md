@@ -16,6 +16,8 @@ Private evidence is under `data/vevo/order-automation/audits/2026-09-13/` in the
 | `gopay-native-status-guard-inspection-20260913.json` | `4c28ff3ace67ae583249ef85a5f01aeef9c5128608b79a6d8e67ea70d00499bc` | Native events PAID→31, TIMEOUTED→33, CANCELED→34. Labels are explicitly transliterated; 34 was described as rejected payment, not proof of the literal label “cancelled”. |
 | `current-native-status-catalogue-20260913.json` | `879d05d452b7a29842fca578278b841b63f9340a4ffc8d8bcbac195fcaf0952b` | Current same-shop catalogue has 4 `Shipped`, 17 `Cancelled`, 31 `Payment online - paid`, and both 33/34 `Payment online - expired`. New Stripe states use distinct IDs 69–73. |
 
+Fresh native Stripe settings proof `current-stripe-status-map-ui-20260913.json`, SHA-256 `250a22f46db21b120611adf473ddfaba0d651b813800b688497715a0c4f68b2f`, was captured read-only at 08:24:30 UTC under the same private prefix. Its visible table binds PAID to ID 31, CANCELLED to 34, EXPIRED to 33, REFUNDED to 73 and UNPAID to 69. This is the current same-shop mapping, superseding earlier planned Stripe IDs; it does not prove a successful callback or transaction.
+
 Unchanged order/status IDs with changed labels and matching current API/native catalogues support a shop status rename, not a client-language transport defect. No VEVO role is inferred from a ROY ID. Duplicate labels on 33/34 must not merge their roles. This audit did not independently prove the old ID 1 label.
 
 ## Regressions in immutable source e55ccd14
@@ -41,7 +43,7 @@ Realized revenue, failed-payment segmentation and shipped-creditnote decisions s
 
 The `Stripe - unpaid` presentation correction uses a separate `_report_lifecycle_bucket` wrapper. The original `_classify_lifecycle_bucket` and the `order_facts_only=True` no-client path remain unchanged because frozen GrowthBook acquisition consumes them. This branch does not retroactively reinterpret that measurement evidence. Live report role classification and frozen experiment facts therefore remain explicit separate contracts; any future measurement correction needs its own reviewed version.
 
-**Release blocker: the new Stripe paid role is separate from these renames.** Current catalogue evidence proves ID 70 has label `Stripe - paid`, but this audit has no same-shop Stripe PAID event binding for that ID. Existing realized-revenue settings still exclude it. A regression records this limitation rather than inventing settlement semantics from the label. Obtain the authoritative mapping proof and add the narrowly bound reporting role before claiming VEVO Stripe compatibility or releasing a report that must include those orders. No gateway setting is changed by this branch.
+Current Stripe PAID is mapped to the already reviewed ID 31, so the repaired report classification covers that configured paid path. The new ID 70 `Stripe - paid` appears in the catalogue but is unused by the observed current mapping; it stays excluded instead of gaining a paid role from its label. No supported historical event mapping for ID 70 was established by this audit. Tests distinguish the configured 31 path from 70. Successful gateway callback processing and actual transaction delivery remain unverified; no gateway setting or payment is changed here.
 
 A code change needs a separate immutable reporting image and managed release after the primary order fix and separate guard migration are verified. No report schedule, GrowthBook pin or production board is changed here.
 
