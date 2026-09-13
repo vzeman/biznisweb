@@ -29,6 +29,8 @@ from order_status_safety import (
     status_write_block_reason,
 )
 from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_settings, resolve_biznisweb_api_url
+from order_status_identity import bind_status_identity, bind_catalogue, canonical_order, unique_target, status_audit_fields, invalidate_catalogue
+from order_status_safety import refresh_status_catalogue, ensure_status_catalogue
 
 
 logger = get_logger("unpaid_order_cancellation")
@@ -318,7 +320,9 @@ def build_client(project: str, project_settings: Dict[str, Any]) -> Client:
         retries=0,
         timeout=timeout,
     )
-    return Client(transport=transport, fetch_schema_from_transport=False)
+    client = Client(transport=transport, fetch_schema_from_transport=False)
+    bind_status_identity(client, project, project_settings)
+    return client
 
 
 def parse_reference_date(value: Union[str, date, datetime, None]) -> date:
@@ -481,8 +485,9 @@ def is_order_eligible_for_cancellation(
 
 
 def list_order_statuses(client: Client, settings: UnpaidCancellationSettings) -> List[Dict[str, Any]]:
+    invalidate_catalogue(client)
     result = execute_read(client, LIST_ORDER_STATUSES_QUERY, variable_values={"lang_code": settings.lang_code})
-    return [row for row in (result.get("listOrderStatuses") or []) if row]
+    return bind_catalogue(client, result.get("listOrderStatuses"))
 
 
 def _resolve_status_id(
@@ -490,20 +495,7 @@ def _resolve_status_id(
     target_status_name: str,
     configured_status_id: Optional[int],
 ) -> int:
-    target_norm = normalize_text(target_status_name)
-    for row in statuses:
-        row_id = int(row.get("id") or 0)
-        row_name_norm = normalize_text(row.get("name"))
-        if configured_status_id and row_id == configured_status_id:
-            if row_name_norm != target_norm:
-                raise RuntimeError(
-                    f"Configured status_id={configured_status_id} resolves to "
-                    f"'{row.get('name')}', expected '{target_status_name}'."
-                )
-            return row_id
-        if not configured_status_id and row_name_norm == target_norm:
-            return row_id
-    raise RuntimeError(f"Target status '{target_status_name}' not found in BizniWeb.")
+    return unique_target(list(statuses), target_status_name, configured_status_id)
 
 
 def resolve_target_status_id(client: Client, settings: UnpaidCancellationSettings) -> int:
@@ -600,6 +592,8 @@ def fetch_orders_for_cancellation(
         read, validate_order, budget=budget, page_limit=settings.page_limit,
         label="Unpaid cancellation scan", logger=logger,
     )
+    ensure_status_catalogue(client)
+    inventory = [canonical_order(client, order, inventory=True) for order in inventory]
     expected = {str(status_id) for status_id in status_ids}
     orders = [order for order in inventory if str((order.get("status") or {}).get("id")) in expected]
     dates = [purchased.isoformat() for order in orders if (purchased := order_purchase_date(order))]
@@ -819,7 +813,9 @@ def run_unpaid_order_cancellation(
                 continue
             # Resolve again from the same verified shop status catalogue. A
             # shipped recovery never reuses the configured paid target ID.
-            action_status_id = _resolve_status_id(statuses, target_name, None)
+            fresh_catalogue = refresh_status_catalogue(client, progress_callback=journal.assert_owned)
+            action_status_id = _resolve_status_id(fresh_catalogue if fresh_catalogue is not None else statuses, target_name, None)
+            live_order = canonical_order(client, live_order)
             if manual_digest:
                 blocked_reason = status_write_block_reason(prior, next_target_status_name=target_name,
                     manual_settlement_sha256=manual_digest, current_order=live_order, project=project,
@@ -835,6 +831,7 @@ def run_unpaid_order_cancellation(
                 "target_status_id": action_status_id, "target_status_name": target_name,
                 "reason": reason,
             }
+            mutation_record.update(status_audit_fields(client, live_order, action_status_id))
             from manual_settlement import status_attempt_fields
             if manual_digest:
                 mutation_record.update(manual_settlement_sha256=manual_digest,
@@ -848,6 +845,8 @@ def run_unpaid_order_cancellation(
                 journal.update_order(order_num, status_mutation={**mutation_record, "state": "uncertain"})
                 record_failure(order_num, live_action == "recover")
                 continue
+            if "raw_status" in (verified_order or {}):
+                mutation_record["verified_raw_status"] = verified_order["raw_status"]
             journal.update_order(order_num, status_mutation={**mutation_record, "state": "verified",
                                  "verified_last_change": (verified_order or {}).get("last_change")}, status_review_reason=None)
             if live_action == "recover":

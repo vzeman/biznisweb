@@ -7,7 +7,7 @@ It never marks an invoice paid, creates a receipt, sends mail or changes status.
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, closing, ExitStack
 import hashlib
 import json
 import logging
@@ -181,25 +181,27 @@ def main(argv=None) -> int:
     from unpaid_order_cancellation import build_client
     session = boto3.Session(profile_name=args.profile, region_name=REGION)
     config = Config(connect_timeout=10, read_timeout=30, retries={"total_max_attempts": 1})
-    if session.client("sts", config=config).get_caller_identity()["Account"] != ACCOUNT:
-        raise ValueError("manual_settlement_aws_account_changed")
-    s3 = session.client("s3", config=config)
-    require_private_bucket(s3)
-    reference = load_reference(s3, args.project, args.proof_sha256)
-    secret = json.loads(session.client("secretsmanager", config=config).get_secret_value(
-        SecretId=f"{args.project}/reporting/runtime-env")["SecretString"])
-    settings = json.loads((root / "projects" / args.project / "settings.json").read_text(encoding="utf-8"))
-    location = resolve_automation_state_location(args.project, settings, secret)
-    if location != (BUCKET, f"data/{args.project}/order-automation/state.json"):
-        raise ValueError("manual_settlement_journal_destination_changed")
-    store = S3AutomationStateStore(s3, *location, args.project)
-    with api_environment(args.project, secret, settings):
-        client = build_client(args.project, settings)
-        try:
-            report = record_proof(store=store, reference=reference, project=args.project, apply=args.apply,
-                                  read_order=lambda number, **kwargs: fetch_order_safety_context(client, number, **kwargs))
-        finally:
-            client.transport.close()
+    with ExitStack() as stack:
+        sts = stack.enter_context(closing(session.client("sts", config=config)))
+        if sts.get_caller_identity()["Account"] != ACCOUNT:
+            raise ValueError("manual_settlement_aws_account_changed")
+        s3 = stack.enter_context(closing(session.client("s3", config=config)))
+        require_private_bucket(s3)
+        reference = load_reference(s3, args.project, args.proof_sha256)
+        secrets = stack.enter_context(closing(session.client("secretsmanager", config=config)))
+        secret = json.loads(secrets.get_secret_value(SecretId=f"{args.project}/reporting/runtime-env")["SecretString"])
+        settings = json.loads((root / "projects" / args.project / "settings.json").read_text(encoding="utf-8"))
+        location = resolve_automation_state_location(args.project, settings, secret)
+        if location != (BUCKET, f"data/{args.project}/order-automation/state.json"):
+            raise ValueError("manual_settlement_journal_destination_changed")
+        store = S3AutomationStateStore(s3, *location, args.project)
+        with api_environment(args.project, secret, settings):
+            client = build_client(args.project, settings)
+            try:
+                report = record_proof(store=store, reference=reference, project=args.project, apply=args.apply,
+                                      read_order=lambda number, **kwargs: fetch_order_safety_context(client, number, **kwargs))
+            finally:
+                client.transport.close()
     print(json.dumps(report, sort_keys=True), flush=True)
     return 0
 

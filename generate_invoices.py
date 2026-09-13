@@ -15,14 +15,18 @@ import time
 import math
 from contextlib import nullcontext
 from zoneinfo import ZoneInfo
+from urllib.parse import urlparse
 
 from order_inventory import InventoryScanBudget, scan_order_inventory
+from reviewed_invoice_obligations import closure_decision, has_reviewed_closure
+from order_status_identity import bind_status_identity, bind_catalogue, canonical_order, identity_for, unique_target, status_audit_fields, invalidate_catalogue
 from api_read_backoff import (
     READ_BUDGET_SECONDS, check_read_deadline, check_read_response_status, prepare_query_read, read_retry_delay, wait_before_read,
 )
 
 from invoice_automation_state import (
     AutomationLeaseBusy,
+    AutomationJournal,
     AutomationStateError,
     build_automation_state_store,
     iso_utc,
@@ -212,6 +216,8 @@ class InvoiceRunSummary:
     invoice_status_review_required: int = 0
     pending_invoice_operations: int = 0
     full_scan_age_hours: float = 0.0
+    reviewed_closed_invoice_obligations: int = 0
+    reviewed_invoice_obligation_reviews: int = 0
 
 
 @dataclass
@@ -381,27 +387,13 @@ def _resolve_existing_invoice_target_status_id(
         or DEFAULT_EXISTING_INVOICE_TARGET_STATUS_NAME
     )
     configured_id = reconciliation_settings.get("target_status_id")
-    result = client.execute(
+    from order_status_safety import execute_read
+    invalidate_catalogue(client)
+    result = execute_read(client,
         LIST_ORDER_STATUSES_QUERY,
         variable_values={"lang_code": str(reconciliation_settings.get("lang_code") or "SK")},
     )
-    target_normalized = _normalize_status_text(target_name)
-    for row in (result.get("listOrderStatuses") or []):
-        if not row:
-            continue
-        row_id = int(row.get("id") or 0)
-        row_name = str(row.get("name") or "")
-        row_name_normalized = _normalize_status_text(row_name)
-        if configured_id and row_id == int(configured_id):
-            if row_name_normalized != target_normalized:
-                raise RuntimeError(
-                    f"Configured invoice reconciliation status_id={configured_id} resolves to "
-                    f"'{row_name}', expected '{target_name}'."
-                )
-            return row_id
-        if configured_id is None and row_name_normalized == target_normalized:
-            return row_id
-    raise RuntimeError(f"Invoice reconciliation target status '{target_name}' not found in BiznisWeb.")
+    return unique_target(bind_catalogue(client, result.get("listOrderStatuses")), target_name, configured_id)
 
 
 def reconcile_existing_invoice_statuses(
@@ -411,7 +403,7 @@ def reconcile_existing_invoice_statuses(
     project: Optional[str] = None, records: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     from order_status_safety import (
-        change_status_verified, decide_recovery, fetch_order_safety_context, status_write_block_reason,
+        change_status_verified, decide_recovery, fetch_order_safety_context, status_write_block_reason, refresh_status_catalogue,
     )
 
     from manual_settlement import status_attempt_fields
@@ -494,10 +486,15 @@ def reconcile_existing_invoice_statuses(
             if journal is None:
                 raise AutomationStateError("Status correction requires the shared durable lease")
             journal.assert_owned()
+            fresh_catalogue = refresh_status_catalogue(client, progress_callback=journal.assert_owned)
+            if fresh_catalogue is not None:
+                unique_target(fresh_catalogue, actual_target, actual_id)
+                refreshed = canonical_order(client, refreshed)
             operation = {"state": "pending", "source_status_id": refreshed["status"]["id"],
                          "source_status_name": refreshed["status"]["name"],
                          "last_change": refreshed.get("last_change"), "target_status_id": actual_id,
                          "target_status_name": actual_target, "reason": decision.reason}
+            operation.update(status_audit_fields(client, refreshed, actual_id))
             if decision.manual_settlement_sha256:
                 operation.update(manual_settlement_sha256=decision.manual_settlement_sha256,
                                  order_id=str(refreshed["id"]), order_num=order_num,
@@ -509,6 +506,8 @@ def reconcile_existing_invoice_statuses(
             except Exception:
                 journal.update_order(order_num, status_mutation={**operation, "state": "uncertain"})
                 raise
+            if "raw_status" in (verified_order or {}):
+                operation["verified_raw_status"] = verified_order["raw_status"]
             journal.update_order(order_num, status_mutation={**operation, "state": "verified",
                                  "verified_last_change": (verified_order or {}).get("last_change")},
                                  status_review={"state": "closed", "reason": "verified_correction"})
@@ -698,6 +697,7 @@ class InvoiceGenerator:
         scan_max_pages: int = 5000,
         page_delay_seconds: float = 1.0,
         read_attempts: int = 4,
+        project: Optional[str] = None,
     ):
         """Initialize the invoice generator with API credentials"""
         transport = RequestsHTTPTransport(
@@ -708,6 +708,12 @@ class InvoiceGenerator:
             timeout=GRAPHQL_TIMEOUT_SEC,
         )
         self.client = Client(transport=transport, fetch_schema_from_transport=False)
+        if project is None:
+            host = urlparse(api_url).hostname
+            project = next((name for name in ("roy", "vevo") if host in {
+                f"{name}.flox.sk", f"{name}.sk", f"www.{name}.sk"}), None)
+        if project is not None:
+            bind_status_identity(self.client, project)
         self.api_token = api_token
         self.base_url = base_url.rstrip("/")
         self.login_url = f"{self.base_url}/admin/login/authenticate/"
@@ -1051,19 +1057,30 @@ class InvoiceGenerator:
         raise RuntimeError("Invoice read retries exhausted")
 
     def resolve_eligible_status_ids(self) -> set[int]:
+        invalidate_catalogue(self.client)
         result = self.execute_read(LIST_ORDER_STATUSES_QUERY, {"lang_code": "SK"})
-        rows = result.get("listOrderStatuses")
-        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
-            raise RuntimeError("Incomplete invoice status catalog")
+        rows = bind_catalogue(self.client, result.get("listOrderStatuses"))
         found: set[int] = set()
         for requested in self.eligible_statuses:
-            matches = [int(row["id"]) for row in rows
-                       if _normalize_status_text(row.get("name", "")) == _normalize_status_text(requested)]
-            if len(matches) != 1 or matches[0] <= 0:
-                raise RuntimeError("Invoice eligible status is missing or ambiguous")
-            found.add(matches[0])
+            found.add(unique_target(rows, requested))
         self.eligible_status_ids = found
         return found
+
+    def refresh_status_identity(self) -> None:
+        """Refresh the reviewed catalogue before consuming a business intent."""
+        from order_status_safety import refresh_status_catalogue
+        if getattr(getattr(self.client, "transport", None), "url", None) is not None and identity_for(self.client) is None:
+            raise AutomationStateError("Invoice operation requires explicit project identity")
+        rows = refresh_status_catalogue(self.client, progress_callback=(
+            self.operation_journal.assert_owned if self.operation_journal else None))
+        if rows is not None:
+            self.eligible_status_ids = {unique_target(rows, name) for name in self.eligible_statuses}
+
+    def _canonical_order(self, order: Any) -> Dict[str, Any]:
+        from order_status_safety import ensure_status_catalogue
+        ensure_status_catalogue(self.client, progress_callback=(
+            self.operation_journal.assert_owned if self.operation_journal else None))
+        return canonical_order(self.client, order)
 
     @staticmethod
     def _validate_order_for_invoice_read(order: Any, *, allow_null_status: bool = False) -> None:
@@ -1092,7 +1109,7 @@ class InvoiceGenerator:
         self._validate_order_for_invoice_read(order)
         if str(order["order_num"]) != requested:
             raise RuntimeError("Invoice recheck returned another order")
-        return order
+        return self._canonical_order(order)
 
     def fetch_order_safety_context(self, order_num: str) -> Dict[str, Any]:
         from order_status_safety import ORDER_SAFETY_QUERY
@@ -1101,7 +1118,7 @@ class InvoiceGenerator:
         order = self.execute_read(ORDER_SAFETY_QUERY, {"order_num": requested}).get("getOrder")
         if not isinstance(order, dict) or str(order.get("order_num") or "") != requested:
             raise RuntimeError("Order safety recheck returned an invalid order identity")
-        return order
+        return self._canonical_order(order)
 
     def _fetch_order_pages(self, *, changed_from: Optional[str] = None,
                            purchase_window: Optional[Tuple[str, str]] = None) -> List[Dict[str, Any]]:
@@ -1127,6 +1144,10 @@ class InvoiceGenerator:
         finally:
             self.scan_pages = budget.pages
             self._scan_started_at = budget.started_at
+        from order_status_safety import ensure_status_catalogue
+        ensure_status_catalogue(self.client, progress_callback=(
+            self.operation_journal.assert_owned if self.operation_journal else None))
+        result_orders = [canonical_order(self.client, order, inventory=True) for order in result_orders]
         if purchase_window:
             result_orders = [order for order in result_orders
                              if purchase_window[0] <= _order_purchase_date(order) <= purchase_window[1]]
@@ -1224,6 +1245,13 @@ class InvoiceGenerator:
         return filtered_orders, stats
 
     def _status_is_eligible(self, order: Dict[str, Any]) -> bool:
+        if order.get("status_identity_unbound"):
+            return False
+        order = self._canonical_order(order)
+        policy = identity_for(self.client)
+        if policy is not None and policy.renamed and not self.eligible_status_ids:
+            rows = bind_catalogue(self.client, list(policy.catalogue.values()))
+            self.eligible_status_ids = {unique_target(rows, name) for name in self.eligible_statuses}
         status = order.get("status") or {}
         if self.eligible_status_ids:
             return str(status.get("id")) in {str(value) for value in self.eligible_status_ids}
@@ -1367,6 +1395,9 @@ class InvoiceGenerator:
     def _prepare_invoice(self, current: Dict[str, Any], order_id: str,
                          result: InvoiceCreationResult) -> Optional[Dict[str, Any]]:
         order_num = str(current["order_num"])
+        if self._reviewed_financial_block(order_num, result):
+            return None
+        self.refresh_status_identity()
         latest = self.fetch_order_for_invoice(order_num)
         if latest["invoices"] or not self.filter_orders_for_invoice([latest])[0]:
             result.skipped = True
@@ -1390,7 +1421,8 @@ class InvoiceGenerator:
             self.operation_journal.assert_owned()
         self._journal_update(order_num, phase="preparing", attempted_at=iso_utc(utc_now()),
                              order_id=order_id, preinvoice_id=None, claimed_preinvoice_id=None,
-                             last_creation_failure=None)
+                             last_creation_failure=None, **({"preparation_status_identity":
+                                 status_audit_fields(self.client, latest)} if "raw_status" in latest else {}))
         claimed = None
         failure = {"stage": "preparation", "http_status": None, "kind": "preinvoice_readback_missing"}
         try:
@@ -1436,7 +1468,29 @@ class InvoiceGenerator:
             raise RuntimeError("Native final invoice lacks complete API readback")
         return None, None
 
+    def _financial_journal(self):
+        """Every financial entrypoint requires the owned, project-bound journal."""
+        journal = self.operation_journal
+        if not isinstance(journal, AutomationJournal) or not journal.store.project:
+            raise AutomationStateError("Financial writes require an owned project journal")
+        journal.assert_owned()
+        return journal
+
+    def _reviewed_financial_block(self, order_num: str, result: InvoiceCreationResult) -> bool:
+        journal = self._financial_journal()
+        decision = closure_decision(journal.get_order(order_num), project=journal.store.project, order_num=order_num)
+        if not decision.present:
+            return False
+        result.skipped = decision.closed
+        result.ambiguous = not decision.closed
+        result.email_error = decision.reason
+        result.email_required = False
+        self.last_email_outcome = decision.reason
+        return True
+
     def _send_journaled_email(self, order_num: str, result: InvoiceCreationResult) -> None:
+        if self._reviewed_financial_block(order_num, result):
+            return
         prior = self.operation_journal.get_order(order_num) if self.operation_journal else {}
         if prior.get("email_state") in {"sending", "ambiguous", "sent"}:
             # A missing token or later hold must never turn a consumed send
@@ -1462,6 +1516,7 @@ class InvoiceGenerator:
             self.last_email_outcome = "failed"
             self._journal_update(order_num, phase="email", email_state="failed")
             return
+        self.refresh_status_identity()
         current = self.fetch_order_for_invoice(order_num)
         if (current["blocked"] or not self._status_is_eligible(current)
                 or len(current["invoices"]) != 1
@@ -1481,7 +1536,9 @@ class InvoiceGenerator:
         if self.operation_journal:
             self.operation_journal.assert_owned()
         self._journal_update(order_num, phase="email", email_state="sending", invoice_id=result.invoice_id,
-                             invoice_num=result.invoice_num)
+                             invoice_num=result.invoice_num, order_id=order_id, **({"email_status_identity":
+                                 status_audit_fields(self.client, current)} if "raw_status" in current else {}))
+        self._active_email_intent = (self.operation_journal.token, order_num, order_id)
         result.email_sent = self.send_invoice_email(order_id)
         result.email_error = "" if result.email_sent else self.last_email_outcome
         result.ambiguous = self.last_email_outcome == "ambiguous"
@@ -1494,8 +1551,11 @@ class InvoiceGenerator:
         result = InvoiceCreationResult(email_required=self.send_invoice_email_enabled)
         if not order_num:
             return result
+        if self._reviewed_financial_block(order_num, result):
+            return result
+        self.refresh_status_identity()
         current = self.fetch_order_for_invoice(order_num)
-        prior = self.operation_journal.get_order(order_num) if self.operation_journal else {}
+        prior = self.operation_journal.get_order(order_num)
         if prior.get("email_policy") == "hold":
             result.email_required = False
         uncertain_phase = prior.get("phase") in {"preparing", "prepare_ambiguous", "creating", "create_ambiguous"}
@@ -1589,6 +1649,7 @@ class InvoiceGenerator:
             self._creation_preflight_failed(order_num, str(exc))
             return result
         # Bind the native ERP key independently; the API ID is only an association.
+        self.refresh_status_identity()
         latest = self.fetch_order_for_invoice(order_num)
         if latest["invoices"] or not self.filter_orders_for_invoice([latest])[0]:
             result.skipped = True
@@ -1611,7 +1672,8 @@ class InvoiceGenerator:
         self._journal_update(order_num, phase="creating", attempted_at=iso_utc(utc_now()),
                              preinvoice_id=preinvoice_id, order_id=order_id,
                              native_preinvoice_key=native["preinvoice_key"],
-                             last_creation_failure=None)
+                             last_creation_failure=None, **({"finalization_status_identity":
+                                 status_audit_fields(self.client, latest)} if "raw_status" in latest else {}))
         headers = {
             "X-Requested-With": "XMLHttpRequest",
             "Accept": "application/json, text/javascript, */*; q=0.01",
@@ -1672,7 +1734,17 @@ class InvoiceGenerator:
         return result
 
     def send_invoice_email(self, order_id: str) -> bool:
-        """A single send attempt; HTTP 200 HTML and timeouts remain ambiguous."""
+        """A single journal-intended send; HTTP 200 HTML/timeouts stay ambiguous."""
+        journal = self._financial_journal()
+        identity = self._positive_internal_id(order_id)
+        authorization = getattr(self, "_active_email_intent", None)
+        self._active_email_intent = None
+        records = [record for record in journal.snapshot()["orders"].values()
+                   if str(record.get("order_id")) == identity]
+        if (len(records) != 1 or has_reviewed_closure(records[0])
+                or records[0].get("phase") != "email" or records[0].get("email_state") != "sending"
+                or authorization != (journal.token, records[0].get("order_num"), identity)):
+            raise AutomationStateError("Invoice email requires one newly authorized unclosed durable send intent")
         try:
             self._require_native_token()
         except ValueError:
@@ -1708,6 +1780,8 @@ class InvoiceGenerator:
         if not self.operation_journal:
             return results
         for record in self.operation_journal.pending_orders():
+            if has_reviewed_closure(record):
+                continue
             if record.get("phase") != "email":
                 continue
             result = InvoiceCreationResult(email_required=True, invoice_id=record.get("invoice_id"),
@@ -1731,6 +1805,8 @@ class InvoiceGenerator:
 
     def process_orders(self, date_from: datetime, date_to: datetime, dry_run: bool = False):
         """Main process to generate invoices for matching orders"""
+        if not dry_run:
+            self._financial_journal()
         logger.info(f"Processing orders from {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
         
         # Check if we have web session for invoice creation
@@ -1896,6 +1972,7 @@ def run_invoice_generation(
                 eligible_statuses=settings["eligible_statuses"], send_invoice_email=settings["send_invoice_email"],
                 scan_max_pages=settings["scan_max_pages"], page_delay_seconds=settings["page_delay_seconds"],
                 read_attempts=settings["read_attempts"],
+                project=project_name,
             )
             generator.operation_journal = journal
             if not dry_run and (not generator.web_session or not generator.validate_session()):
@@ -1928,12 +2005,16 @@ def run_invoice_generation(
             if journal:
                 changed_by_number = {str(row["order_num"]): row for row in changed_orders}
                 for record in state["orders"].values():
+                    if has_reviewed_closure(record):
+                        continue
                     if (record.get("status_review") or {}).get("state") == "open":
                         row = generator.fetch_order_for_invoice(record["order_num"])
                         changed_by_number[str(row["order_num"])] = row
                         by_number[str(row["order_num"])] = row
                 changed_orders = list(changed_by_number.values())
                 for record in journal.pending_orders():
+                    if has_reviewed_closure(record):
+                        continue
                     if record.get("phase") in {"pending", "preparing", "prepare_ambiguous",
                                                "creating", "create_failed", "create_ambiguous"}:
                         row = generator.fetch_order_for_invoice(record["order_num"])
@@ -1952,6 +2033,29 @@ def run_invoice_generation(
             candidates, stats = generator.filter_orders_for_invoice(orders)
             candidate_numbers = {str(row["order_num"]) for row in candidates}
             candidates.extend(row for row in recovered_candidates if str(row["order_num"]) not in candidate_numbers)
+            # Closed obligations remain separately visible, without reactivating the
+            # preserved financial uncertainty. Invalid/pending closures stay review.
+            closure_records = {number: record for number, record in state["orders"].items()
+                               if has_reviewed_closure(record)}
+            candidates = [row for row in candidates if str(row["order_num"]) not in closure_records]
+            for number, record in closure_records.items():
+                decision = closure_decision(record, project=project_name, order_num=number)
+                if decision.closed:
+                    current = generator.fetch_order_for_invoice(number)
+                    decision = closure_decision(record, project=project_name, order_num=number, current_order=current)
+                prior_review = record.get("status_review") or {}
+                malformed_review = not isinstance(prior_review, dict)
+                previous_reason = prior_review.get("reason") if not malformed_review else None
+                retained_review = malformed_review or (
+                    prior_review.get("state") == "open" and isinstance(previous_reason, str)
+                    and previous_reason.startswith("reviewed_closure"))
+                needs_review = not decision.closed or decision.regression or retained_review
+                summary.reviewed_closed_invoice_obligations += int(decision.closed)
+                summary.reviewed_invoice_obligation_reviews += int(needs_review)
+                if journal and needs_review:
+                    reason = decision.reason if not decision.closed or decision.regression else (
+                        "reviewed_closure_review_invalid" if malformed_review else previous_reason)
+                    journal.update_order(number, status_review={"state": "open", "reason": reason})
             summary.total_orders_fetched = len(orders)
             summary.matched_orders = len(candidates)
             summary.skipped_zero_total_orders = stats["skipped_zero_total_orders"]
@@ -2005,7 +2109,7 @@ def run_invoice_generation(
             summary.skipped_invoice_status_reconciliations_after_recheck = reconciliation["skipped_after_recheck"]
             summary.invoice_status_reconciliation_target_name = reconciliation["target_status_name"]
             summary.invoice_status_reconciliation_target_id = reconciliation["target_status_id"]
-            summary.invoice_status_review_required = reconciliation["review_required"]
+            summary.invoice_status_review_required = reconciliation["review_required"] + summary.reviewed_invoice_obligation_reviews
             if dry_run:
                 summary.total_amount = sum(_coerce_order_total_value(row) for row in candidates)
                 return summary
@@ -2021,7 +2125,7 @@ def run_invoice_generation(
                 summary.pending_invoice_emails = sum(record.get("phase") == "email" for record in pending)
                 summary.pending_invoice_operations = sum(record.get("phase") in {
                     "pending", "preparing", "prepare_ambiguous", "creating", "create_failed",
-                    "create_ambiguous", "email"} for record in pending)
+                    "create_ambiguous", "email"} or has_reviewed_closure(record) for record in pending)
             logger.info("Invoice automation finished: scan_complete=%s full_scan=%s pages=%s matched=%s created=%s failed=%s email_failed=%s ambiguous=%s",
                         summary.invoice_scan_complete, summary.invoice_scan_all_ages, summary.invoice_scan_pages,
                         summary.matched_orders, summary.created_invoices, summary.failed_invoices,

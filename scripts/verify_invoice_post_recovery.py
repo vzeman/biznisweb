@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from contextlib import closing
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -168,10 +169,10 @@ def main(argv=None):
     from botocore.config import Config
     session = boto3.Session(profile_name=args.profile, region_name=REGION)
     config = Config(connect_timeout=10, read_timeout=30, retries={"total_max_attempts": 1})
-    with session.client("sts", config=config) as sts:
+    with closing(session.client("sts", config=config)) as sts:
         if sts.get_caller_identity()["Account"] != ACCOUNT:
             raise ValueError("Unexpected AWS account")
-    with session.client("s3", config=config) as s3, session.client("secretsmanager", config=config) as secrets:
+    with closing(session.client("s3", config=config)) as s3, closing(session.client("secretsmanager", config=config)) as secrets:
         verify_bucket(s3)
         settings = json.loads((root / "projects" / args.project / "settings.json").read_text(encoding="utf-8"))
         secret = json.loads(secrets.get_secret_value(SecretId=f"{args.project}/reporting/runtime-env")["SecretString"])
@@ -185,7 +186,7 @@ def main(argv=None):
             url = secret["BIZNISWEB_API_URL"]
             generator = InvoiceGenerator(
                 url, secret["BIZNISWEB_API_TOKEN"], derive_biznisweb_base_url(url),
-                username=None, password=None, send_invoice_email=False,
+                username=None, password=None, send_invoice_email=False, project=args.project,
                 **{key: configured[key] for key in (
                     "eligible_statuses", "exclude_zero_total_orders", "scan_max_pages",
                     "page_delay_seconds", "read_attempts")})

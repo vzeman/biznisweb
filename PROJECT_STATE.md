@@ -5,6 +5,84 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 - Standalone guard includes reviewed status identities and noncollection closure
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+What changed:
+
+- Integrated clean pushed combined source `10d705eeb3d9549dd0383f9460468fa51fe6041d` (runtime source `584d04e4`, plus documentation-only main handoff) into guard `4c0e408f`. Only two documentation conflicts required resolution: both project histories are retained, and the operations runbook uses the newer completed recovery evidence. Executable files and both workflow unions merged automatically.
+- The shared guard now inherits the reviewed project/ID status contract, exact manual-settlement protection and closure-first status gate. A reviewed noncollection marker still preserves the original unknown financial outcome, blocks automatic reinvoicing/restoration, and keeps future status regressions visible. The one-shot helper's release pins remain empty in this source.
+- The six reviewed ROY outcomes and original six-order audit are complete; the recorded ROY all-age verification found zero eligible candidates across 4,851 orders/169 pages. These are earlier independently published receipts retained in the operations runbook, not new scans performed by this integration.
+
+What is verified:
+
+- Eight guard-owned runner/deployer/probe/workflow/test/runbook files are unchanged from `4c0e408f`; all 28 imported source/test/document files match `10d705ee`. The closure presence gate still precedes the manual-payment status gate. Build and automation workflows retain exact test-module unions (43 and 28 respectively), no duplicate modules, and all preceding path triggers.
+- All 901 exact build-workflow tests and 639 automation-workflow tests pass, with reporting smoke, scoped Ruff and whitespace checks. The standalone runner passes its explicit project to the guarded exporter, whose no-retry client binds the shared status contract; the refreshed catalogue precedes status intent, and the closure-first gate remains active. A Windows output-wrapper encoding error was resolved by rerunning with explicit UTF-8; the test result is confirmed, with no source workaround. No provider/AWS calls, financial/status/journal/schedule writes, helper apply, PR/main merge or production deployment occurred from this worktree.
+
+Known issues:
+
+- Standalone guard migration remains a separate later release after root verifies the primary order-automation release and VEVO recovery. Its fresh deployment inventory must preserve all five then-current invoice/cancellation task/image pins. The existing two report image/command/time pins and live-completion, host, drain, lease, rollback and capture-exclusion gates remain unchanged.
+- Moving the inline report guard does not fix status-name filtering inside the protected older reporting images. Root/current-runtime are preparing that reporting correction separately; this integration does not claim it is deployed.
+
+Next exact step:
+
+- Keep this tested integration committed/pushed for root review and incorporate the subsequent documentation-only preview/secret-scanner fingerprint handoff. Wait for the verified preceding release, refresh the guard source/runtime handoff from authoritative receipts, and only then prepare the separate guard PR/deployment. All finite checks ended; no local server, worker, watcher or tunnel was started.
+
+## 2026-09-13 — Reviewed VEVO status identities integrated
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- Added a pure project/client/transport-bound status contract for only the five proven VEVO renames: shipped, Storno, paid, timeout and rejected payment. IDs 33/34 retain separate canonical roles despite their identical current English label. Historical transliteration is accepted only under the exact reviewed ID; ID 1 is not guessed. ROY retains its own labels. The contract and five evidence hashes are documented in `projects/ORDER_STATUS_IDENTITY_CONTRACT.md`.
+- Wired the catalogue binding into invoice discovery and fresh readers, shared safety reads, cancellation/recovery targets, native creditnote guard, acknowledgement/readback and fixed closure/helper verification. Catalogue reads occur once for scans and freshly before intents, using bounded backoff and lease callbacks. Missing/duplicate identities, canonical-role collisions, unknown mapped labels, cross-project drift and failed refreshes block authority. Unrelated inactive/unlisted inventory statuses remain unbound rows in the complete scan and cannot qualify for a write by name.
+- Canonical copies retain raw provider status and contract metadata. New status/financial intents retain raw binding evidence; available status readback retains the raw verified target. Earlier sealed proofs and consumed intents are unchanged. The manual proof recorder now closes every created AWS client and its API transport on success and failure; it still performs no provider mutation.
+- Updated operational evidence: ROY all-age verification scanned 4,851 orders/169 pages with zero eligible invoice backlog, receipt SHA `d889c1d01166bc6e78f42af1c018900912bb9b0a74112b2c5bdd2bc01efa93ac`. Two later completed natural ROY runs and seven OK alarms are bound by SHA `c35091f30b8f5c8057c3f2c9f4a3e0dc54032e529f5924bbaefe67b685349b0f`; the separately timestamped active task is not claimed completed. The original two ROY cases were rechecked in the live admin on 2026-09-13: shipped with invoices present, without UI writes. Private paths are recorded in the operations runbook; no customer IDs were added to Git.
+
+What is verified:
+
+- All 844 exact build-workflow tests (72 + 20 + 26 + 726), the separate 582-test order-automation workflow and reporting smoke pass. The 26 new tests include 19 independently authored integration tests for actual helper CAS, duplicate visible labels, role collisions, project/transport/catalogue drift and single-attempt acknowledgement/readback. Scoped Ruff and diff checks pass. A pre-existing helper's public exception boundary was preserved after the full suite detected the new catalogue exception leaking through it.
+- This was offline code/test preparation only. No provider scan, payment/invoice/email/status request, journal/schedule write, protected report change, PR/main merge or deployment was made from this worktree. No persistent local process was started.
+
+Known issues:
+
+- The actual English names are proven in both VEVO catalogues; confirmation of the user's naming plan remains optional context, not a reason to guess additional mappings. The source is not deployed and the fixed closure release pins remain empty. Root must verify the exact source with read-only previews, CI and managed deployment gates before recording proof or applying closure.
+- Protected ROY reporting task 71 / VEVO reporting task 33 retain older images. They do not inherit this contract from a standalone guard migration; the independent reporting author is correcting their name-based revenue/segmentation filters separately. No gateway/native callback settings were changed.
+
+Next exact step:
+
+- Source `584d04e4` is committed/pushed and documentation-only main `4d5049805f1a8eabd5f7c642ccee7ca6867d3c08` is integrated with both project histories retained. Runtime, tests and workflow files remain byte-identical to the fully tested source. Hand the clean pushed merge head to root and the reporting author. Root owns live preview, PR review/merge, runtime promotion and later fixed closure/provenance operations; this branch must not deploy or apply them independently.
+
+## 2026-09-13 — Closure integrated into the combined safety draft
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- Integrated exact reviewed closure head `367c4762` into draft PR #550's clean `dbb207b5` baseline, including verifier startup fix `6a245117` via its `77e47f4a` cherry-pick. Resolved exactly four known conflicts: additive project memory, both workflow test lists and the shared status gate. The closure presence check runs first, before the preserved manual-payment logic; no status-label/locale rules changed.
+- Both CI test collections are exact unions without duplicates. The manual settlement module/recorder/tests, issued-creditnote normalization, all other shared safety functions, manual reconciliation, closure generator, pure validator, fixed helper and backfill verifiers retain their reviewed implementations. A combined regression explicitly proves closure priority even when manual-settlement recovery arguments are present.
+- Updated the operations runbook to the completed six-case ROY reconciliation: two existing sends confirmed without resending; four final-document outcomes verified through three new once-only requests and one readback of an already-existing document. The original ROY six-order audit passed (four verified invoices, two externally invoiced cases); no creator is inferred for the existing document. Independent final six-case receipt: `data/roy/order-automation/audits/2026-09-13/independent-reviewed-six-case-journal-20260913.json`, SHA `ca8547aae179f834de51e45f97fa22835d969e59f0e482afff36225791debc16`; all six complete records were stable across two snapshots, original attempts preserved, with no provider/journal/email writes by that audit.
+
+What is verified:
+
+- Sixteen independent AST/content/test-union preservation checks and 105 focused cross-feature tests passed. The final combined build workflow passed all 818 tests across 39 modules; the separate automation workflow passed all 556 tests across 24 modules. Reporting smoke passed. No provider calls, business/journal/schedule writes, PR/main merge or deployment were performed during this integration. Root's ignored private evidence files were preserved.
+
+Known issues:
+
+- Current API and native VEVO catalogs both return `Shipped` for the status observed as `Odoslaná` in earlier 06:14 evidence. The runtime secret is unchanged since April, and even `listOrderStatuses(lang_code: SK)` returns the current English label. ROY's current API/native catalogs agree on `Odoslaná`; this is not established as a shared client/header translation mechanism. Root found a concurrent user request to translate order statuses into English, so this may be an intentional rename; it is not established as an API translation bug. Confirmation of the planned naming is pending. Current VEVO native catalog proof: `data/vevo/order-automation/audits/2026-09-13/current-native-status-catalogue-20260913.json`, SHA `879d05d452b7a29842fca578278b841b63f9340a4ffc8d8bcbac195fcaf0952b`. Zero-write previews stopped on the exact-label mismatch.
+- This combined draft remains undeployed. The uncollected closure helper's release pins remain empty, so CLI apply is blocked before credentials/provider calls. Preserve the original unknown preparation outcome; no status correction or invoice obligation marker is yet applied. Native callback behavior remains a separate vendor limitation.
+
+Next exact step:
+
+- Root reviews the clean pushed integration and resolves the current VEVO status naming/language question using observed evidence and user intent. Do not guess aliases or deploy a speculative canonicalizer. After the supported correction is reviewed and integrated, require exact-head CI, promote the combined runtime with all existing host/drain/pin gates, bind the one-shot helper to that exact release, then verify VEVO's original five cases and all-age backlog. The standalone creditnote migration remains a separate later release. No local server, watcher, tunnel or persistent process was started.
+
 ## 2026-09-13 — Standalone guard integrated with combined status protection
 
 Date: 2026-09-13
@@ -175,6 +253,110 @@ Known issues:
 Next exact step:
 
 - Integrate root's separately reviewed native creditnote correction after its push, resolve only known owned documentation hunks and rerun combined checks. Release and the already-published private confirmation require separately verified root execution; do not run the helper from this branch before that gate.
+
+## 2026-09-13 — Fixed one-shot closure helper, intentionally not live
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/reviewed-uncollected-closure-20260913`
+
+What changed:
+
+- Added `scripts/close_reviewed_uncollected_obligation.py`, a fixed-scope preview/apply tool with exact private confirmation/receipt-contract hashes, owned shared lease, fresh API/native zero-document/payment gates, unique status catalog target and at most one silent status request after durable intent. Any consumed intent permits readback reconciliation only; original preparation ambiguity and every financial projection field are preserved.
+- The native per-order cash-receipt response is the observed exact `{rows: []}` shape, with no fabricated total or JSON content-type requirement. Its private contract is pinned by SHA `2104d03fe34ccaac3dd3a3c280a0e807179a959b12c9198ab1e17471613c75db`. Nonempty/unknown responses, document/payment/scope drift, delivered or malformed shipment evidence, changed catalog, lease/storage failure and old release all stop the helper. Read responses/transports and cached bounded AWS clients close on every exit.
+- The helper checks actual immutable release receipt, all five schedule/task pins, ECR provenance and active writer identities before apply and again immediately before its one status request. Separate release pins remain empty, deliberately blocking CLI apply before any credentials/provider call. The runbook is `projects/ORDER_AUTOMATION_REVIEWED_NONCOLLECTION.md`.
+
+What is verified:
+
+- Independent helper review and 76 focused helper/pure/runtime/backfill tests pass; the helper's 28 tests include before/after-intent drift, committed/lost status responses, no replay, S3 failure, exact native receipt requests, scoped review closure and resource cleanup. The completed 37-module build suite, including helper and integrated verifier correction, passed all 784 tests plus reporting smoke; scoped Ruff and whitespace checks passed. No helper preview/apply or business write has been executed during implementation.
+
+Known issues:
+
+- A separately observed API localization mismatch (`Shipped` versus earlier `Odoslaná`) also affects this helper's current strict label comparison and closure readback. Even `listOrderStatuses(lang_code: SK)` now returns the English label, so that argument alone is not an established translation authority. Offline client comparison found the same explicit API-key header and query/variables; native web cookies are not copied into the GraphQL client. Merge/deploy/apply are held while the parent investigates the observed locale change. Do not guess translation aliases, loosen proof names or hardcode status IDs.
+- Compatible runtime has not been promoted; helper release pins must stay empty until independently verified promotion. Read-only verifier resource-cleanup fix `6a245117` is integrated as `77e47f4a`; the only documentation insertion conflict preserved both handoffs.
+
+Next exact step:
+
+- The branch is clean and pushed with reviewed closure code, helper and verifier startup fix. Await the parent's proven status-language/identity correction, integrate it with exact failure tests, then hand the final branch to the parent for combined PR review. The eventual release must precede the fixed closure preview/apply and subsequent VEVO original-backfill/all-age audits.
+
+## 2026-09-13 — Reviewed noncollection closes only the invoice obligation
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/reviewed-uncollected-closure-20260913`
+
+What changed:
+
+- Added a pure validator for the fixed private user-confirmed noncollection. It binds the complete embedded confirmation to pinned raw/canonical SHA `5b6ea4ae7b557003a58d7848b880120169c893f5d7e027a3be581ed813e6a8d0`, exact project/order scope, unchanged original financial projection, and a verified silent status correction. No real order/customer details are in public source or fixtures.
+- Every automatic financial entrypoint now requires an owned project journal. Marker presence blocks preparation/finalization/email and all automatic status repair; only a strictly validated final closure leaves active backlog. Full and incremental candidates, enqueue, remembered fulfillment and external-completion paths preserve the original financial uncertainty. The journal also rejects subsequent financial-field overwrites.
+- Each run independently rechecks the fixed closure's current order status, amount and absence of prepared/final documents. Drift opens a persistent review without reopening the invoice obligation. Closed obligations and closure reviews have separate summary/CloudWatch metrics. The original seeded-backfill audit accepts only the same sealed closure with fresh matching context and still reports the original financial outcome as `unknown`.
+- Direct `send_invoice_email` requires a fresh single-use authorization from the journaled send path; a stored consumed `sending` intent cannot be replayed. Legacy no-journal financial callers now stop with `AutomationStateError`; read-only API/native lookup and dry audits remain usable without a journal. Existing fixture financial calls now use actual owned in-memory S3 journals.
+
+What is verified:
+
+- Existing invoice/state/status checks and new runtime/pure/backfill cases pass (217 focused tests), followed by all 754 tests from the exact build workflow and reporting smoke. A further regression test verifies a closure review stays open across later matching readbacks; the fresh outcome must not overwrite its retained review reason. Private confirmation raw hash, canonical hash and strict scope validation were replayed locally without provider calls. Tests cover full/incremental/dry selection, status/document/amount regressions, malformed/pending markers, original-field preservation, direct financial calls, stale send intent and legacy read-only use.
+
+Known issues:
+
+- This branch is code only and has not been merged, deployed or applied. The once-only fixed status correction helper is being implemented independently in this same worktree with separate owned files. Its live apply must remain disabled until a compatible exact runtime has been promoted and verified. The original `prepare_ambiguous` operation must never be reset or replayed.
+- The manual-settlement/creditnote branch remains separate; later integration must preserve this early shared status-write blocker before restoration logic. Current production runtime predates the closure and must not receive the marker first.
+
+Next exact step:
+
+- Complete the fixed helper's native zero-document/payment gates, durable status intent and readback-only crash recovery; run synthetic failure tests and independent review. Publish small commits, integrate reviewed branches through a PR, promote the compatible runtime with all existing hard gates, then bind the helper to the exact release before its fresh preview/apply. No provider writes are authorized as part of this code-only implementation step.
+
+## 2026-09-13 — Six reviewed invoice outcomes reconciled; verifier client compatibility fixed
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Merged PR #546 was executed from clean pushed source against independently promoted `47c3da77` / `c3842dda...`. Two already-sent invoice emails were confirmed in the journal without sending. Four older finalization cases now have native/API-bound final documents and held emails: three once-only native requests and one readback-only completion of an already-existing document. No creator is inferred for that preexisting document. Original attempts and evidence remain preserved.
+- One initial helper invocation blocked before any durable intent; a subsequent read proved all four original records unchanged and the lease free. Fresh release/native preflight passed before the first actual finalization. No consumed financial intent was replayed.
+- The all-age post-recovery CLI stopped before provider access because actual botocore clients have `close()` but no context-manager protocol. Wrapped those clients in `contextlib.closing`; changed the CLI fixture to ordinary mocks and verified closure on account-gate failure and failed scans. No discovery or financial rule changed.
+
+What is verified:
+
+- The original ROY six-order historical audit passed: six checked, zero failed, four verified invoices and two externally invoiced cases, with private reports published. All four reviewed helper results succeeded; independent six-case S3 evidence verification is running separately.
+- All 18 post-recovery verifier tests, scoped Ruff and whitespace checks pass. Actual local boto3/botocore `1.42.63` confirms no `__enter__` and a supported `close()` method. Both failed all-age startup attempts made no provider scan or business mutation.
+- The user definitively confirmed the remaining VEVO COD case as uncollected/returned. Its private immutable confirmation is `data/vevo/order-automation/audits/2026-09-13/reviewed-uncollected-confirmation-20260913.json`, SHA `5b6ea4ae7b557003a58d7848b880120169c893f5d7e027a3be581ed813e6a8d0`. Do not invoice it or retry its unknown preparation. Exact native empty-receipt readback is separately published at `data/vevo/order-automation/audits/2026-09-13/uncollected-native-zero-receipts-contract-20260913.json`, SHA `2104d03fe34ccaac3dd3a3c280a0e807179a959b12c9198ab1e17471613c75db`. Its actual pseudo-JSON contains only empty `rows`; no total field was inferred. Earlier strict JSON/content-type/total assumptions were rejected before publication, with zero business writes.
+
+Known issues:
+
+- Production remains five enabled order schedules on `47c3da77`, with 28 natural-run invoice creations already verified. Manual bank protection, correct issued-creditnote binding and the reviewed noncollection closure are prepared on isolated branches but are not deployed. Native gateway callback prevention remains an external FLOX integration limitation; ROY uses Stripe and VEVO is migrating GoPay to Stripe.
+
+Next exact step:
+
+- Commit/push this verifier-only correction and integrate it into the combined safety PR before merge. Run the corrected all-age ROY audit, then finish reviewed closure/helper integration, exact-head CI and managed order deployment. Apply the compatible one-shot noncollection closure and verify original VEVO five cases plus its all-age backlog. Complete the separately reviewed standalone creditnote migration afterward. No local server, watcher or tunnel was started; finite commands have ended.
+## 2026-09-13 — VEVO infra healthy; original historical proof cannot complete unchanged
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-history-proof-20260913`
+
+What changed:
+
+- Synchronized the exact clean main worktree with fetch/prune and pull/rebase to `95e4421303a4d8cb3b517a020a93e8af75139f7c`. Other order-automation changes and their runtime were not touched. PR #539 is independently confirmed merged as `c66b0cab05629bd9a28825b1aee87c4c216c8992` at `2026-09-09T07:17:16Z`; its exact-head 316-test Linux execution and all four checks are recorded in the PR verification comment, not pending work to repeat.
+- Rechecked the monitor inventory immediately before one authorized manual fallback: no September 13 run or active earlier monitor existed. Dispatched only the existing result-blind health workflow with `confirm_health=true`. No local AWS client or credential was used.
+- Completed a read-only historical-proof assessment with independent review. The known malformed message in the required receipt context cannot pass the unchanged strict reducer. Re-reading it, waiting for more traffic or fixing future emission cannot make the old proof valid without a separately reviewed change to evidence/acceptance. This is an evidence-contract blocker, not demonstrated data loss, wrong orders or an A/A FAIL. See the September 13 quality-source audit for the configuration-only diagnostic proposal and decision boundary.
+
+What is verified:
+
+- Health run `34744300456` / job `103689226401` succeeded on original main `95e4421303a4d8cb3b517a020a93e8af75139f7c`. Actual marker/parity, evidence, cleanup/revalidation and upload steps passed. Two independent in-memory downloads verified sole artifact `10313755209`, GitHub ZIP SHA-256 `aad0ef5f3c08337df9ba5d0653f61d28b54c192fcf17aa8636419ce35d07f649`, single canonical JSON SHA-256 `4d6a61e9d524d894d02c2056b7a0dc1f3a1dda408a92087d68f94d634c6e115e`, original run/main ownership, original-Git deployment-bound offline validation and latest-due/freshness. Observation `2026-09-13T07:04:24Z` verifies today's 03:45 Bratislava reconciliation. No local artifact/raw file exists. This readback must remain bound to its original main, not this later documentation commit.
+- The actual receipt acquisition begins at the UTC day of the verified-empty foundation (`context_from_utc`), before the A/A start, and filters the receipt marker without selecting an experiment or eligible cohort. The known framing category therefore does not reveal the malformed message's date or cohort. Four-field receipts and unique S3 writes do not independently reconstruct every duplicate attempt or each constituent receipt's time.
+- Current source-run metadata still lists exactly the five historical terminal attempts, with no sixth acquisition. No parser, collector, workflow, evidence manifest, frozen window, source binding or external control changed. Daily infrastructure health is not historical receipt quality or A/A PASS.
+- This documentation-only change passes the full 316-test source/lifecycle suite locally (313 passed, three existing Windows symlink skips), workspace/window/activation/security validators and `git diff --check`. Independent documentation review found no blocking issue and passed all 13 framing/reducer tests. Exact-head Linux CI and actual regression execution are still required before merge; the delivery PR will retain that verification.
+
+Known issues:
+
+- `SOURCE_RECEIPT_CONCATENATED_MARKER_FRAMING` remains closed. With the known retained input and original contract, the historical source is not evaluable; do not label it statistical FAIL/PASS or silently change a manifest to resolve it. GTM compatibility and Clarity privacy are separate unresolved manual-QA gates. A/A was not stopped and Preview was not woken.
+- A new start/end alone is not a repair: the source still includes its older foundation context. A replacement measurement protocol needs explicit owner direction and a separately reviewed evidence/context-generation design that preserves old history, plus prevention and runtime verification. No restart, deletion, retention change or paid action is authorized by this assessment.
+
+Next exact step:
+
+- Finish this documentation-only PR with independent review, exact-head CI and clean-main synchronization. Ask the owner for direction on preparing a replacement A/A protocol after a verified prevention fix; do not infer permission from the daily heartbeat. Until that direction and the relevant reviewed gates exist, continue only the established daily health monitor. The proposed metadata-only deployed-framing readback is not implemented or dispatched. Do not retry source collection, split/skip/recover malformed history, relax parity, query outcomes, change the frozen window, stop/start GrowthBook, wake Preview or open Pro/CTA. No local application service or persistent worker was started; finite checks must finish before handoff.
 
 ## 2026-09-13 — Fixed helper bound to independently promoted native correction
 

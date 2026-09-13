@@ -183,6 +183,8 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
     )
     put_metric("InvoiceStandaloneScanComplete", int(getattr(summary, "invoice_scan_complete", True)), project, reporting_defaults)
     put_metric("InvoiceStandaloneScanPages", getattr(summary, "invoice_scan_pages", 0), project, reporting_defaults)
+    put_metric("InvoiceStandaloneReviewedClosed", getattr(summary, "reviewed_closed_invoice_obligations", 0), project, reporting_defaults)
+    put_metric("InvoiceStandaloneReviewedClosureReview", getattr(summary, "reviewed_invoice_obligation_reviews", 0), project, reporting_defaults)
     put_metric("InvoiceStandaloneBacklogPending", getattr(summary, "pending_invoice_operations", 0), project, reporting_defaults)
     put_metric("InvoiceStandaloneAmbiguousOperations", getattr(summary, "ambiguous_invoice_operations", 0), project, reporting_defaults)
     put_metric("InvoiceStandaloneFullScanAgeHours", getattr(summary, "full_scan_age_hours", 0), project, reporting_defaults)
@@ -252,6 +254,8 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         "pending_invoice_emails": getattr(summary, "pending_invoice_emails", 0),
         "ambiguous_invoice_operations": getattr(summary, "ambiguous_invoice_operations", 0),
         "pending_invoice_operations": getattr(summary, "pending_invoice_operations", 0),
+        "reviewed_closed_invoice_obligations": getattr(summary, "reviewed_closed_invoice_obligations", 0),
+        "reviewed_invoice_obligation_reviews": getattr(summary, "reviewed_invoice_obligation_reviews", 0),
         "full_scan_age_hours": getattr(summary, "full_scan_age_hours", 0),
     }
 
