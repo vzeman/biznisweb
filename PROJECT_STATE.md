@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Stable cancellation discovery; fresh financial gates retained
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/unpaid-inventory-discovery-fields-20260913`
+
+What changed:
+
+- Removed unused financial resolvers from the complete cancellation inventory. Discovery now requests identity, purchase/change timestamps, block flag and status only. Its provisional predicate selects possible cases by date/status/blocking; all invoice, payment-method, receipt, shipment and creditnote decisions remain fresh detail checks under the shared lease, including the final recheck before a single status write and readback.
+- Missing or malformed payment-method fields in a selected candidate now remain unknown/review, never an unsupported-method skip or evidence of nonpayment. Incomplete discovery and GraphQL errors still fail without partial-data acceptance or watermark advancement.
+- Integrated the preceding release/rollback handoff without altering other draft branches. All code is on a dedicated branch; no production image or schedule was changed here.
+
+What is verified:
+
+- All 618 full build regression tests, reporting smoke, focused Ruff and whitespace checks pass. Independent review and 116 focused tests pass, including projected discovery responses, missing financial detail, payments, shipments, creditnotes, lease and final-write checks. A separate 896-context comparison found identical full eligibility and no old eligible case excluded by the new discovery predicate. The complete inventory implementation and full safety query are unchanged.
+- Four bounded read-only provider requests compared original/minimal discovery at the descending anchor and first ascending page. Both returned the same identities and metadata (4,849 total records); the observed resolver error did not recur on those pages. Later pages were not probed and successful full runtime discovery is not yet claimed.
+- Private reproduction receipt is published encrypted with exact-byte readback at `data/roy/order-automation/audits/2026-09-13/cancellation-resolver-firstpage-20260913.json`, SHA-256 `9ab84e2e7acc661876db36acc3c7a468784ada26c80f02132d96148cfb363617`.
+
+Known issues:
+
+- Production remains on the old failing invoice image. Reconciliation PR #546 still points to the unpromoted failed release and must reject execution until deliberately updated to the next verified successful release. Historical invoice completion and the separate creditnote guard migration remain outstanding.
+
+Next exact step:
+
+- Complete the full build regression and smoke checks, commit/push this narrow correction and merge only after required CI. Verify the exact merge build/digest, dispatch one managed deployment, freeze main and independently verify host/drain/promotion evidence. Only after actual promotion may financial reconciliation and live backfill verification proceed.
+
 ## 2026-09-13 — Cancellation resolver failure; release restored, no promotion
 
 Date: 2026-09-13

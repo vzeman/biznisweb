@@ -190,6 +190,15 @@ The managed workflow has a four-hour bound, including an hour of headroom beyond
 the combined drain/probe bounds for setup and rollback. Normal deployment is
 expected to be substantially shorter. Main is checked again before any pause.
 
+Cancellation inventory requests only stable identity, date, status and block fields.
+It does not request each historical order's nested price resolver: an unrelated
+resolver failure must not prevent discovering possible candidates. Date/status/block
+filtering is only discovery. Every selected candidate still requires complete fresh
+financial and fulfillment detail, complete creditnotes, a shared lease and a final
+recheck before any silent status write. Missing payment detail means unknown/review;
+it is never evidence that the order is unpaid. Any incomplete inventory or candidate
+GraphQL error remains a failure, with no partial-data success.
+
 API throttling uses operating cost, including nested entity loads, rather than
 HTTP request count. Read-only retries honor fresh `Retry-After` headers and use a
 minute-window cooldown for HTTP 429 when no valid server delay is provided.

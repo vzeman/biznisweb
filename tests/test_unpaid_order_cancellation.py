@@ -7,17 +7,21 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from gql import gql
 from gql.transport.exceptions import TransportQueryError, TransportServerError
+from graphql import print_ast
 
 from tests.test_order_status_safety import MemoryAutomationStore, money, receipt
 
 from unpaid_order_cancellation import (
     cancellation_eligibility_reason,
+    cancellation_discovery_reason,
     recovery_eligibility_reason,
     resolve_unpaid_cancellation_settings,
     run_unpaid_order_cancellation,
     fetch_orders_for_cancellation,
     UnpaidCancellationSummary,
+    UNPAID_ORDER_QUERY,
 )
 from unpaid_order_cancellation_runner import run_unpaid_cancellation_runner
 
@@ -90,6 +94,7 @@ class FakeBizniswebClient:
         self.detail_sequences = {key: list(value) for key, value in (detail_sequences or {}).items()}
         self.page_calls = 0
         self.page_requests = []
+        self.detail_requests = []
         self.before_page_read = lambda *_: None
         self.after_page_read = lambda *_: None
         self.mutations = []
@@ -122,6 +127,7 @@ class FakeBizniswebClient:
             }
         if "order_num" in variables:
             order_num = str(variables["order_num"])
+            self.detail_requests.append((order_num, print_ast(getattr(query, "document", query))))
             if order_num in self.detail_sequences:
                 sequence = self.detail_sequences[order_num]
                 if len(sequence) > 1:
@@ -143,6 +149,13 @@ class FakeBizniswebClient:
                           key=lambda row: int(row["id"]), reverse=params["sort"] == "DESC")
             offset, limit = params.get("cursor", 0), params["limit"]
             data = rows[offset:offset + limit]
+            document = getattr(query, "document", query)
+            root = document.definitions[0].selection_set.selections[0]
+            selection = next(field for field in root.selection_set.selections if field.name.value == "data")
+            fields = {field.name.value for field in selection.selection_set.selections}
+            # A real GraphQL inventory returns only the requested fields. Keep
+            # rich payment/document data available exclusively to detail reads.
+            data = [{key: value for key, value in row.items() if key in fields} for row in data]
             has_next = offset + limit < len(rows)
             result = {
                 "getOrderList": {
@@ -283,6 +296,20 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
         for order, expected_reason in cases:
             with self.subTest(order=order["order_num"]):
                 self.assertEqual(expected_reason, cancellation_eligibility_reason(order, settings, cutoff))
+
+    def test_discovery_uses_coarse_fields_without_treating_omitted_payment_as_empty(self):
+        settings, cutoff = self.make_settings(), date(2026, 5, 13)
+        value = make_order("R-1", "Čaká na úhradu", "Dobierkou", "7", "2026-05-01")
+        discovered = {key: value[key] for key in ("id", "order_num", "pur_date", "last_change", "blocked", "status")}
+        self.assertEqual("eligible", cancellation_discovery_reason(discovered, settings, cutoff))
+        self.assertEqual("payment_evidence_unknown", cancellation_eligibility_reason(discovered, settings, cutoff))
+        for fields, reason in (({"pur_date": "2026-05-14"}, "not_old_enough"),
+                               ({"pur_date": None}, "missing_purchase_date"),
+                               ({"blocked": True}, "order_blocked"),
+                               ({"blocked": None}, "order_block_flag_missing"),
+                               ({"status": {"id": 4, "name": "Odoslaná"}}, "excluded_status")):
+            with self.subTest(fields=fields):
+                self.assertEqual(reason, cancellation_discovery_reason({**discovered, **fields}, settings, cutoff))
 
     def test_recovery_requires_payment_and_fulfillment_evidence(self) -> None:
         settings = self.make_settings()
@@ -536,6 +563,106 @@ class CancellationSafetyRegressionTests(unittest.TestCase):
             project_settings=settings or self.settings(), automation_state_store=store or MemoryAutomationStore(), **kwargs,
         )
 
+    def test_irrelevant_old_price_resolver_cannot_poison_complete_discovery(self):
+        unrelated = make_order("OLD-CLOSED", "Odoslaná", "unresolvable old method", "obsolete", "2001-01-01")
+        client, store = FakeBizniswebClient([[unrelated, self.order()]]), MemoryAutomationStore()
+        original = client.execute
+        def price_resolver_failure(query, variable_values=None):
+            variables = variable_values or {}
+            text = print_ast(getattr(query, "document", query))
+            if "params" in variables and "price_elements" in text:
+                raise TransportQueryError("Internal server error", errors=[{
+                    "message": "Internal server error", "path": ["getOrderList", "data", 0, "price_elements"]}])
+            if "order_num" in variables:
+                self.assertTrue(store.owned)
+                self.assertNotEqual("OLD-CLOSED", variables["order_num"])
+                if "status_id" not in variables:
+                    for field in ("price_elements", "invoices", "preinvoices", "shipments", "sum"):
+                        self.assertIn(field, text)
+            return original(query, variable_values)
+        legacy = gql(print_ast(getattr(UNPAID_ORDER_QUERY, "document", UNPAID_ORDER_QUERY)).replace("blocked", "blocked price_elements { type }"))
+        with patch.object(client, "execute", side_effect=price_resolver_failure):
+            with self.assertRaises(TransportQueryError):
+                client.execute(legacy, variable_values={"params": {"limit": 2}})
+            summary = self.run_case(client, store=store)
+        self.assertEqual(2, summary.total_orders_scanned)
+        self.assertEqual("api_exhausted", summary.scan_stop_reason)
+        self.assertEqual(0, summary.failed_orders)
+        self.assertEqual([("R-1", 74)], client.mutations)
+        self.assertFalse(store.owned)
+
+    def test_matching_payment_is_decided_from_fresh_detail_only(self):
+        for fresh_matches in (True, False):
+            with self.subTest(fresh_matches=fresh_matches):
+                listed = self.order()
+                detail = self.order()
+                unsupported = [price_element("payment", "Dobierkou", "7")]
+                if fresh_matches:
+                    listed["price_elements"] = unsupported
+                else:
+                    detail["price_elements"] = unsupported
+                client = FakeBizniswebClient([[listed]], detail_overrides={"R-1": detail})
+                summary = self.run_case(client, dry_run=True)
+                self.assertEqual(int(fresh_matches), summary.eligible_orders)
+                self.assertEqual(1, summary.rechecked_orders)
+                if not fresh_matches:
+                    self.assertEqual(1, summary.skipped_by_reason["payment_not_matched"])
+                self.assertEqual([], client.mutations)
+
+    def test_missing_or_malformed_candidate_payment_detail_requires_review(self):
+        for dry_run in (True, False):
+            for defect in ("omitted", "not-list", "incomplete-element"):
+                with self.subTest(dry_run=dry_run, defect=defect):
+                    detail = self.order()
+                    if defect == "omitted":
+                        detail.pop("price_elements")
+                    else:
+                        detail["price_elements"] = "invalid" if defect == "not-list" else [{"type": "payment"}]
+                    client = FakeBizniswebClient([[self.order()]], detail_overrides={"R-1": detail})
+                    summary = self.run_case(client, dry_run=dry_run)
+                    self.assertEqual(1, summary.failed_orders)
+                    self.assertEqual(1, summary.review_required_orders)
+                    self.assertEqual(1, summary.skipped_by_reason["payment_evidence_unknown"])
+                    self.assertNotIn("payment_not_matched", summary.skipped_by_reason)
+                    self.assertEqual([], client.mutations)
+
+    def test_candidate_price_resolver_error_with_partial_detail_remains_failure(self):
+        client = FakeBizniswebClient([[self.order()]])
+        original, attempts = client.execute, []
+        def broken_detail(query, variable_values=None):
+            if "order_num" in (variable_values or {}):
+                attempts.append(variable_values["order_num"])
+                raise TransportQueryError("Internal server error", errors=[{
+                    "message": "Internal server error", "path": ["getOrder", "price_elements"]}],
+                    data={"getOrder": self.order()})
+            return original(query, variable_values)
+        with patch.object(client, "execute", side_effect=broken_detail):
+            summary = self.run_case(client)
+        self.assertEqual("api_exhausted", summary.scan_stop_reason)
+        self.assertEqual(1, summary.failed_orders)
+        self.assertEqual(["R-1"], attempts)
+        self.assertEqual([], client.mutations)
+
+    def test_each_fresh_guard_still_blocks_write_after_coarse_discovery(self):
+        changes = [
+            ({"price_elements": [price_element("payment", "Dobierkou", "7")]}, "payment_not_matched"),
+            ({"blocked": True}, "order_blocked"),
+            ({"pur_date": "2026-05-26"}, "not_old_enough"),
+            ({"status": {"id": 4, "name": "Odoslaná"}}, "excluded_status"),
+            ({"invoices": [make_invoice()]}, "final_invoice_present"),
+            ({"shipments": [{"status": "delivered", "shipment_number": "synthetic-shipment"}]}, "shipment_present"),
+        ]
+        for fields, reason in changes:
+            with self.subTest(reason=reason):
+                listed, fresh = self.order(), self.order()
+                fresh.update(fields)
+                client = FakeBizniswebClient([[listed]], detail_sequences={"R-1": [listed, fresh]})
+                summary = self.run_case(client)
+                self.assertEqual(1, summary.eligible_orders)
+                self.assertEqual(2, summary.rechecked_orders)
+                self.assertEqual(1, summary.recheck_skipped_by_reason[reason])
+                self.assertEqual([], client.mutations)
+
     def test_page_budget_exhaustion_prevents_all_writes(self):
         client = FakeBizniswebClient([[self.order()], [self.order("R-2")]])
         with self.assertRaisesRegex(RuntimeError, "scan limit"):
@@ -714,7 +841,7 @@ class CancellationInventoryTests(unittest.TestCase):
         self.assertTrue(all("status" not in call for call in client.page_requests))
         self.assertEqual([], client.mutations)
 
-    def test_local_status_selection_keeps_payment_fields_and_ignores_null_unrelated_status(self):
+    def test_local_status_selection_uses_only_discovery_fields_and_ignores_null_unrelated_status(self):
         client = self.client()
         client.pages[0][1]["status"] = {"id": 4, "name": "Odoslaná"}
         client.pages[0][2]["status"] = None
@@ -722,18 +849,16 @@ class CancellationInventoryTests(unittest.TestCase):
         orders, info = self.scan(client)
         self.assertEqual(["synthetic-1", "synthetic-4"], [row["order_num"] for row in orders])
         self.assertEqual(4, info["inventory_orders_scanned"])
-        self.assertEqual("6", orders[0]["price_elements"][0]["reference_id"])
-        self.assertIsNone(orders[1]["price_elements"])
-        from graphql import print_ast
-        from unpaid_order_cancellation import UNPAID_ORDER_QUERY
+        for order in orders:
+            self.assertEqual({"id", "order_num", "pur_date", "last_change", "blocked", "status"}, set(order))
         query = print_ast(getattr(UNPAID_ORDER_QUERY, "document", UNPAID_ORDER_QUERY))
-        self.assertIn("price_elements", query)
-        self.assertIn("reference_id", query)
+        for unrelated_field in ("price_elements", "reference_id", "sum", "invoices", "shipments"):
+            self.assertNotIn(unrelated_field, query)
         self.assertIn("include_blocking: true", query)
         self.assertNotIn("$status", query)
 
-    def test_missing_payment_or_status_field_is_incomplete_not_an_unsupported_payment_skip(self):
-        for field in ("price_elements", "status"):
+    def test_missing_discovery_field_is_incomplete(self):
+        for field in ("status", "blocked", "pur_date", "last_change"):
             with self.subTest(field=field):
                 client = self.client()
                 client.pages[0][2].pop(field)
