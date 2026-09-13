@@ -515,6 +515,82 @@ def _redact_headers(headers: Dict[str, Any]) -> Dict[str, Any]:
     return sanitized
 
 
+def _parse_native_response_object(text: str) -> Dict[str, Any]:
+    """Decode bounded JSON/native object literals without executing code.
+
+    The served UI uses Ext.decode, but old operation response bodies were not
+    retained. Support only bare keys and quoted literal strings beyond JSON;
+    unknown syntax must keep the operation ambiguous.
+    """
+    if (not isinstance(text, str) or not text or len(text) > 65536
+            or len(text.encode("utf-8")) > 65536):
+        raise ValueError("Native response size is invalid")
+    tokens = re.compile(
+        r'''\s+|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[A-Za-z_][A-Za-z_0-9]*'''
+        r'|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|[{}\[\]:,]', re.ASCII,
+    )
+    normalized, position, depth = [], 0, 0
+    while position < len(text):
+        match = tokens.match(text, position)
+        if match is None:
+            raise ValueError("Unsupported native response syntax")
+        token, position = match.group(), match.end()
+        if token[0] == '"':
+            normalized.append(token)
+        elif token[0] == "'":
+            # Normalize delimiters/escaped apostrophes only, never words within
+            # strings (e.g. the success string 'true' must remain lowercase).
+            body, converted, index = token[1:-1], ['"'], 0
+            while index < len(body):
+                char = body[index]
+                if char == "\\":
+                    index += 1
+                    escaped = body[index]
+                    converted.append("'" if escaped == "'" else "\\" + escaped)
+                else:
+                    converted.append('\\"' if char == '"' else char)
+                index += 1
+            normalized.append("".join(converted) + '"')
+        elif token[0].isalpha() or token[0] == "_":
+            if text[position:].lstrip().startswith(":"):
+                normalized.append(json.dumps(token))
+            elif token in {"true", "false", "null"}:
+                normalized.append(token)
+            else:
+                raise ValueError("Unsupported native response value")
+        else:
+            if token in {"{", "["}:
+                depth += 1
+                if depth > 32:
+                    raise ValueError("Native response nesting is too deep")
+            elif token in {"}", "]"}:
+                depth -= 1
+                if depth < 0:
+                    raise ValueError("Native response structure is invalid")
+            normalized.append(token)
+
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("Native response has duplicate keys")
+            result[key] = value
+        return result
+
+    def finite_number(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("Native response number is not finite")
+        return number
+
+    if depth != 0:
+        raise ValueError("Native response structure is incomplete")
+    payload = json.loads("".join(normalized), object_pairs_hook=unique_object, parse_float=finite_number)
+    if not isinstance(payload, dict):
+        raise ValueError("Native response is not an object")
+    return payload
+
+
 def _extract_invoice_id_from_payload(payload: Any) -> Optional[str]:
     if not isinstance(payload, dict):
         return None
@@ -1443,7 +1519,7 @@ class InvoiceGenerator:
                 definite_rejection = response.status_code in {400, 401, 403, 404, 405, 429}
                 raise RuntimeError(f"Invoice finalization returned HTTP {response.status_code}")
             try:
-                payload = response.json()
+                payload = _parse_native_response_object(response.text)
             except (ValueError, json.JSONDecodeError):
                 payload = None
             if not isinstance(payload, dict) or not (payload.get("success") is True or payload.get("success") == "true"):
@@ -1502,7 +1578,7 @@ class InvoiceGenerator:
                 return False
             if response.status_code != 200:
                 return False
-            payload = response.json()
+            payload = _parse_native_response_object(response.text)
             if isinstance(payload, dict) and (payload.get("success") is True or payload.get("success") == "true"):
                 self.last_email_outcome = "sent"
                 return True
