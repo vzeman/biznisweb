@@ -559,6 +559,8 @@ class InvoiceGenerationTests(unittest.TestCase):
         generator.client = _FakeInvoiceClient([{"id": "INV-123", "invoice_num": "FV-123"}])
         generator.web_session.api = generator.client
         generator.arf_token = "arf123"
+        store = S3AutomationStateStore(MemoryS3(), "private", "data/shop/order-automation/state.json", "shop")
+        generator.operation_journal = self.enterContext(store.lease("direct-financial-test"))
 
         result = generator.create_invoice(
             {
@@ -591,6 +593,8 @@ class InvoiceGenerationTests(unittest.TestCase):
         generator.client = _FakeInvoiceClient([])
         generator.web_session.api = generator.client
         generator.arf_token = "arf123"
+        store = S3AutomationStateStore(MemoryS3(), "private", "data/shop/order-automation/state.json", "shop")
+        generator.operation_journal = self.enterContext(store.lease("direct-financial-test"))
 
         result = generator.create_invoice(
             {
@@ -845,6 +849,23 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
             "safety_state_enabled": True, "page_delay_seconds": 0,
         }}
 
+    def create_with_journal(self, order):
+        state, _ = self.store.read()
+        if state.get("lease"):
+            return self.generator.create_invoice(order)
+        with self.store.lease("direct-financial-test") as journal:
+            self.generator.operation_journal = journal
+            return self.generator.create_invoice(order)
+
+    def send_with_journal(self, order_id):
+        with self.store.lease("direct-email-test") as journal:
+            self.generator.operation_journal = journal
+            self.order["invoices"] = [{"id": "fixture-invoice", "invoice_num": "fixture-number"}]
+            journal.update_order(self.order["order_num"], order_id=str(order_id), phase="email", email_state="pending")
+            result = InvoiceCreationResult(email_required=True, invoice_id="fixture-invoice", invoice_num="fixture-number")
+            self.generator._send_journaled_email(self.order["order_num"], result)
+            return result.email_sent
+
     def run_fixture(self, **kwargs):
         self.generator.scan_pages = 0
         self.generator._scan_started_at = None
@@ -855,7 +876,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
              patch("generate_invoices.utc_now", return_value=self.fixed_now), \
              patch.dict(os.environ, {"BIZNISWEB_API_TOKEN": "fixture-token"}), \
              patch("generate_invoices.time.sleep"):
-            return run_invoice_generation("shop", "2026-06-09", "2026-06-15", state_store=self.store, **kwargs)
+            return run_invoice_generation(kwargs.pop("project", "shop"), "2026-06-09", "2026-06-15", state_store=self.store, **kwargs)
 
     def test_all_age_scan_includes_purchase_years_before_window(self):
         rows = self.generator.fetch_all_eligible_orders()
@@ -876,7 +897,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
             self.generator.operation_journal = journal
             with patch.object(self.web, "get", return_value=rejected) as get, \
                  patch("generate_invoices.time.sleep"), self.assertLogs("generate_invoices", level="WARNING") as logs:
-                result = self.generator.create_invoice(self.order)
+                result = self.create_with_journal(self.order)
             self.assertFalse(result.created)
             self.assertFalse(result.ambiguous)
             get.assert_called_once()
@@ -1077,14 +1098,14 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
 
     def test_existing_invoice_and_status_change_stop_creation(self):
         self.order["invoices"] = [{"id": "existing", "invoice_num": "existing-number"}]
-        self.assertTrue(self.generator.create_invoice(self.order).skipped)
+        self.assertTrue(self.create_with_journal(self.order).skipped)
         self.assertEqual([], self.web.get_urls)
         self.order["invoices"] = []
         initial = deepcopy(self.order)
         changed = deepcopy(self.order)
         changed["status"] = {"id": 99, "name": "Storno"}
         with patch.object(self.generator, "fetch_order_for_invoice", side_effect=[initial, changed]):
-            self.assertTrue(self.generator.create_invoice(self.order).skipped)
+            self.assertTrue(self.create_with_journal(self.order).skipped)
         self.assertEqual(0, sum("/finalize/" in url for url in self.web.get_urls))
 
     def test_native_get_contract_uses_distinct_preinvoice_and_order_ids_without_redirects(self):
@@ -1141,7 +1162,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
             with self.subTest(payload=payload), patch.object(
                 self.web, "post", return_value=_FakeInvoiceResponse("fixture", payload)
             ) as post:
-                self.assertFalse(self.generator.create_invoice(self.order).created)
+                self.assertFalse(self.create_with_journal(self.order).created)
                 post.assert_called_once()
         self.assertEqual([], self.web.get_urls)
         self.assertEqual([], self.api.preparation_calls)
@@ -1155,7 +1176,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
             with self.subTest(status=status, body_length=len(body)), patch.object(self.web, "post", return_value=response) as post:
                 with self.store.lease("test") as journal:
                     self.generator.operation_journal = journal
-                    result = self.generator.create_invoice(self.order)
+                    result = self.create_with_journal(self.order)
                     record = journal.get_order("fixture-order")
                 self.assertFalse(result.created)
                 self.assertEqual("native_invoice_context_unverified", record["last_creation_failure"]["kind"])
@@ -1168,7 +1189,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
         for token in (None, "", True, 123, "contains-space ", "a" * 129):
             with self.subTest(token=token):
                 self.generator.arf_token = token
-                self.assertFalse(self.generator.create_invoice(self.order).created)
+                self.assertFalse(self.create_with_journal(self.order).created)
         self.assertEqual([], self.api.preparation_calls)
         self.assertEqual([], self.web.post_urls)
         self.assertEqual([], self.web.get_urls)
@@ -1197,7 +1218,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
     def test_direct_email_send_requires_token_without_classifying_no_request_as_uncertain(self):
         for token in (None, "", True, "invalid token"):
             self.generator.arf_token = token
-            self.assertFalse(self.generator.send_invoice_email("1"))
+            self.assertFalse(self.send_with_journal("1"))
             self.assertEqual("failed", self.generator.last_email_outcome)
         self.assertEqual([], self.web.get_urls)
 
@@ -1233,7 +1254,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
             replies = [_FakeInvoiceResponse("fixture", {"total": "1", "rows": [row]}),
                        _FakeInvoiceResponse("fixture", {"total": "1", "rows": [{**row, **change}]})]
             with self.subTest(change=change), patch.object(self.web, "post", side_effect=replies) as post:
-                self.assertFalse(self.generator.create_invoice(self.order).created)
+                self.assertFalse(self.create_with_journal(self.order).created)
                 self.assertEqual(2, post.call_count)
         self.assertEqual([], self.web.get_urls)
 
@@ -1319,7 +1340,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
                 response = _FakeInvoiceResponse("https://example.test/native", None)
                 response.text = body
                 with patch.object(self.web, "get", return_value=response) as request:
-                    self.assertEqual(expected, self.generator.send_invoice_email("1"))
+                    self.assertEqual(expected, self.send_with_journal("1"))
                 self.assertEqual(1, request.call_count)
                 self.assertEqual(outcome, self.generator.last_email_outcome)
 
@@ -1367,7 +1388,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
             with self.subTest(value=value):
                 response = _FakeInvoiceResponse("https://example.test/native", {"success": value})
                 with patch.object(self.web, "get", return_value=response):
-                    self.assertFalse(self.generator.send_invoice_email("1"))
+                    self.assertFalse(self.send_with_journal("1"))
                 self.assertEqual("ambiguous", self.generator.last_email_outcome)
 
     def test_native_misleading_truthy_finalization_requires_recovery_readback(self):
@@ -1475,11 +1496,11 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
                       [{"id": "bad"}], [{"id": "701"}, {"id": "702"}]):
             with self.subTest(value=value):
                 self.order["preinvoices"] = value
-                result = self.generator.create_invoice(self.order)
+                result = self.create_with_journal(self.order)
                 self.assertFalse(result.created)
                 self.assertFalse(result.ambiguous)
         del self.order["preinvoices"]
-        self.assertFalse(self.generator.create_invoice(self.order).created)
+        self.assertFalse(self.create_with_journal(self.order).created)
         self.assertEqual([], self.api.preparation_calls)
         self.assertEqual([], self.web.get_urls)
 
@@ -1499,7 +1520,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
                 changed = deepcopy(self.order)
                 changed.update(updates)
                 with patch.object(self.generator, "fetch_order_for_invoice", side_effect=[deepcopy(self.order), changed]):
-                    self.assertFalse(self.generator.create_invoice(self.order).created)
+                    self.assertFalse(self.create_with_journal(self.order).created)
         self.assertEqual([], self.api.preparation_calls)
         self.assertEqual([], self.web.get_urls)
 
@@ -1513,7 +1534,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
                 return original_get(*args, **kwargs)
             with patch.object(self.web, "get", side_effect=check_intent), \
                  patch.object(self.generator, "_confirm_created_invoice", side_effect=RuntimeError("private body")):
-                result = self.generator.create_invoice(self.order)
+                result = self.create_with_journal(self.order)
             self.assertTrue(result.ambiguous)
             self.assertEqual({"stage": "readback", "http_status": 200, "kind": "readback_failed", "exception": "RuntimeError"},
                              journal.get_order("fixture-order")["last_creation_failure"])
@@ -1524,7 +1545,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
             self.generator.operation_journal = journal
             journal.update_order("fixture-order", phase="creating", order_id="1", email_policy="hold")
             with patch.object(self.generator, "_confirm_created_invoice", return_value=(None, None)):
-                result = self.generator.create_invoice(self.order)
+                result = self.create_with_journal(self.order)
             self.assertFalse(result.created)
             self.assertTrue(result.ambiguous)
             self.assertEqual("create_ambiguous", journal.get_order("fixture-order")["phase"])
@@ -1598,7 +1619,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
         response = _FakeInvoiceResponse("https://example.test/login", None)
         response.text = "<html><form>Please sign in</form></html>"
         self.generator.web_session = SimpleNamespace(get=lambda *a, **k: response)
-        self.assertFalse(self.generator.send_invoice_email("1"))
+        self.assertFalse(self.send_with_journal("1"))
         self.assertEqual("ambiguous", self.generator.last_email_outcome)
 
     def test_uncertain_creation_with_no_invoice_is_not_replayed(self):

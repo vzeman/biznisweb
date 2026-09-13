@@ -18,8 +18,10 @@ def creditnote_row(number: str, order_num: str) -> dict:
         "inv_id": "invoice-" + order_num,
         "created": "2026-05-12 10:00:00",
         "order_num": order_num,
+        "order_id": order_num,
         "price": "10,00 €",
         "taxed_price": "12,30 €",
+        "open": "0", "storno": "0",
     }
 
 
@@ -32,7 +34,7 @@ def order_row(order_num: str, status_name: str) -> dict:
         "price_elements": [],
         "blocked": False, "sum": money(12.30),
         "vat_summary": [{"tax_rate": 23, "tax_base": 10, "amount": 2.30}],
-        "invoices": [{"id": "invoice-" + order_num}],
+        "invoices": [{"id": order_num, "invoice_num": "invoice-" + order_num}],
     }
 
 
@@ -185,6 +187,19 @@ class CreditnoteStornoGuardTests(unittest.TestCase):
         self.assertEqual(1, summary.partial_creditnote_orders)
         self.assertEqual(0, summary.failed_orders)
         self.assertEqual([], exporter.client.mutations)
+
+    def test_voided_open_or_unknown_creditnote_never_cancels_an_order(self):
+        for flags in ({"storno": "1"}, {"open": "1"}, {"storno": None},
+                      {"open": None}, {"open": "false"}, {"storno": 0.0}):
+            with self.subTest(flags=flags):
+                exporter = FakeExporter([order_row("R-1", "Odoslana")])
+                store = MemoryAutomationStore()
+                summary = self.run_case(exporter, rows=[{**creditnote_row("D-1", "R-1"), **flags}], store=store)
+                self.assertEqual(0, summary.updated_orders)
+                self.assertEqual(1, summary.review_required_orders)
+                self.assertEqual("creditnote_not_issued", summary.audit_errors["R-1"])
+                self.assertEqual([], exporter.client.mutations)
+                self.assertEqual({}, store.orders)
 
     def test_malformed_or_duplicate_creditnote_scan_stops_before_any_write(self):
         for rows in ([creditnote_row("D-1", "R-1")] * 2, [{**creditnote_row("D-1", "R-1"), "creditnote_id": None}]):

@@ -4,21 +4,65 @@ The source of truth is the GitHub repository for code, ECS/Scheduler for runtime
 and each shop's private S3 automation journal for durable operations. Never copy
 credentials, customer data or order-level evidence into this public repository.
 
-## Current invoice incident
+## Current invoice runtime
 
-On 2026-09-13 the exact `ccf25c79` infrastructure release passed its host and
-promotion checks, but the first natural ROY run received explicit provider
-rejections for all thirteen ordinary finalization attempts. The four invoice
-schedules are intentionally disabled; cancellation and both report schedules
-remain enabled. Infrastructure promotion alone did not repair invoice creation.
+Managed release `34741354275` promoted source
+`47c3da775ff7018a1cf8950024c867310b91ae8a` at image
+`sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`.
+Independent host, stopped-task, drain, schedule and policy verification completed
+on 2026-09-13. All five order-automation schedules are enabled; protected reporting
+configuration remains unchanged. Subsequent natural ROY/VEVO runs created
+28 invoices with independently matched native/API document identities.
 
-The reviewed pause manifest and latest outcome are recorded in `PROJECT_STATE.md`.
-Keep its exact paused configurations as rollback originals. A corrected managed
-release may opt in with the manifest's private key and SHA-256 only after exact
-source/protected-configuration and freshness checks. Failed preparation restores
-the incident pause; successful full host/drain/promotion gates enable the corrected
-schedule definitions. Do not briefly enable the broken old invoices to satisfy a
-deployment precondition, overwrite drift, or replay ambiguous financial operations.
+The fixed six-case ROY reconciliation is complete: two already-sent emails were
+confirmed in the journal without resending; four final-document outcomes were
+verified with three new once-only finalization requests and one readback-only
+completion of an existing document. The creator of that existing document is
+not inferred. The original ROY six-order backfill audit passed with four verified
+invoices and two externally invoiced cases. The independent final six-case
+journal receipt is `data/roy/order-automation/audits/2026-09-13/independent-reviewed-six-case-journal-20260913.json`,
+SHA `ca8547aae179f834de51e45f97fa22835d969e59f0e482afff36225791debc16`.
+
+The final ROY all-age verification scanned 4,851 orders across 169 pages and found
+zero remaining eligible invoice candidates. Private receipt:
+`data/roy/order-automation/verification/invoice-discovery-20260913T073758Z-f0d0fd5be501449685dbda75ff67ef45.json`,
+SHA `d889c1d01166bc6e78f42af1c018900912bb9b0a74112b2c5bdd2bc01efa93ac`.
+Two subsequent completed natural ROY runs exited successfully with no failures,
+pending invoices or status reviews, and seven alarms were OK; a later active task
+is separately timestamped, not claimed completed. Receipt:
+`data/roy/order-automation/audits/2026-09-13/independent-roy-natural-post-recovery-20260913T074854Z.json`,
+SHA `c35091f30b8f5c8057c3f2c9f4a3e0dc54032e529f5924bbaefe67b685349b0f`.
+On 2026-09-13 the original two ROY cases were also rechecked in the live admin:
+both were shipped with invoices present. No order was edited in that UI check.
+
+The user-confirmed uncollected VEVO case still retains its unknown preparation
+outcome. This combined branch now includes the reviewed closure runtime/helper,
+manual-settlement protection and corrected creditnote identity/lifecycle rules.
+They require their own verified release; the closure helper's release pins are
+empty and no closure marker has been applied. See the
+[reviewed noncollection runbook](ORDER_AUTOMATION_REVIEWED_NONCOLLECTION.md).
+
+The current release blocker is a verified VEVO status-name change: API and native
+catalogs now both show `Shipped` for the ID previously observed as `Odoslaná`.
+Even the explicit SK API catalog argument returns the current English label;
+ROY's current catalogs still agree on the Slovak label. The API secret is unchanged
+since April. A concurrent user request to translate statuses into English was
+identified, so intentional renaming is being checked; this is not established
+as an API translation bug. The combined source now includes a narrowly reviewed
+[project/ID status contract](ORDER_STATUS_IDENTITY_CONTRACT.md) for the five proven
+VEVO renames. It preserves raw labels and distinguishes the two identically named
+gateway failure statuses by ID. The source correction is not yet deployed;
+diagnostic preview failures have made zero business writes. Protected older
+reporting images need their separate status-filter correction and do not gain
+this contract merely by moving their inline guard to a standalone schedule.
+
+Earlier on the same date, source `ccf25c79` passed infrastructure gates but its
+first natural ROY run received thirteen explicit finalization refusals. That
+incident's four-invoice pause and private manifest remain historical audit and
+rollback evidence for the incident-aware `47c3da77` release. Future deployments
+must capture their own freshly verified source/protected configurations and
+use the managed host/drain/promotion gates. Current release proof and private
+receipt hashes are recorded in `PROJECT_STATE.md`.
 
 ## Invoice behavior
 
@@ -91,6 +135,22 @@ alone cannot promote an order to paid. Known shipment status is retained private
 and used only with fresh settlement/creditnote evidence. Insufficient history and
 uncertain previous writes remain visible in a durable review queue. Corrections
 suppress customer status emails. Partial creditnotes do not cancel whole orders.
+
+Native creditnote `inv_id` is the final invoice number, not the GraphQL nested
+invoice ID. Whole-order credit coverage requires that exact `invoice_num` and
+both native/API order identities. A creditnote must have a final number and
+explicitly closed (`open=false`) and nonvoided (`storno=false`) native flags.
+Only verified boolean / integer 0 or 1 / string "0" or "1" flag representations
+are accepted. Missing, malformed, open or voided documents cannot authorize
+Storno; their presence still blocks a paid/shipped restoration. Complete same-
+currency gross coverage and consistent VAT remain required, so a partial return
+never cancels the entire order.
+
+A separately confirmed external bank transfer can be recorded as private,
+hash-bound provenance through the [manual-settlement procedure](MANUAL_SETTLEMENT_PROTECTION.md).
+Changing the payment method or historical paid status is not proof of payment.
+Native receipts remain primary; protected returns, creditnotes and uncertainty
+still take precedence over automatic status repair, regardless of Stripe/GoPay.
 
 ## Unpaid-order discovery
 
@@ -241,9 +301,12 @@ Managed deployment `34741354275` passed all actual hosts, drains and promotion
 readbacks; both shops' subsequent natural tasks created native/API-confirmed
 invoices. Its private receipt is
 `data/roy/order-automation/deployments/47c3da775ff7018a1cf8950024c867310b91ae8a/4b88d8c4d91943ef871b54b7b19031e3.json`.
-This source change still requires review before apply. One separate VEVO
-preparation uncertainty is outside the fixed six-case ROY scope and cannot be
-reset or replayed by this helper. Failed earlier releases remain disallowed.
+This reviewed migration has completed with final journal/native/API evidence
+and the original ROY backfill audit passing; its fixed helper is not a general
+retry queue. One separate VEVO preparation uncertainty is outside this scope
+and cannot be reset or replayed. Its business obligation uses the separately
+reviewed noncollection closure after a compatible release. Failed earlier
+releases remain disallowed.
 
 ## Release sequence and rollback
 

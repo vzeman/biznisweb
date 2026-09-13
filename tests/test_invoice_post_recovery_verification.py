@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 from gql.transport.exceptions import TransportQueryError, TransportServerError
 
@@ -264,9 +264,8 @@ class PostRecoveryVerificationTests(unittest.TestCase):
         generator.client.scan_error = RuntimeError("private-fixture")
         secret = {"BIZNISWEB_API_URL": "https://roy.flox.sk/api/graphql", "BIZNISWEB_API_TOKEN": "fixture-token",
                   "BIZNISWEB_USERNAME": "fixture-user", "BIZNISWEB_PASSWORD": "fixture-password"}
-        clients = {name: MagicMock() for name in ("sts", "s3", "secretsmanager")}
-        for client in clients.values():
-            client.__enter__.return_value = client
+        # Botocore clients expose close(), but no context-manager protocol.
+        clients = {name: Mock() for name in ("sts", "s3", "secretsmanager")}
         clients["sts"].get_caller_identity.return_value = {"Account": verifier.ACCOUNT}
         clients["secretsmanager"].get_secret_value.return_value = {"SecretString": json.dumps(secret)}
         with tempfile.TemporaryDirectory() as folder:
@@ -298,6 +297,21 @@ class PostRecoveryVerificationTests(unittest.TestCase):
             self.assertNotIn("FIXTURE-1", output.getvalue())
             self.assertNotIn("private-fixture", output.getvalue())
             clients["secretsmanager"].get_secret_value.assert_called_once_with(SecretId="roy/reporting/runtime-env")
+            for client in clients.values():
+                client.close.assert_called_once_with()
+
+    def test_cli_closes_plain_sts_client_when_account_gate_fails(self):
+        client = Mock()
+        client.get_caller_identity.return_value = {"Account": "wrong-fixture-account"}
+        with patch.object(verifier.subprocess, "run"), \
+             patch.object(verifier, "require_pushed_source", return_value="a" * 40), \
+             patch("boto3.Session") as session, patch.object(verifier, "InvoiceGenerator") as generator:
+            session.return_value.client.return_value = client
+            with self.assertRaisesRegex(ValueError, "Unexpected AWS account"):
+                verifier.main(["--project", "roy"])
+            self.assertEqual(1, session.return_value.client.call_count)
+            client.close.assert_called_once_with()
+            generator.assert_not_called()
 
 
 if __name__ == "__main__":

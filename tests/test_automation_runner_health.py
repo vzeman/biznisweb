@@ -61,6 +61,17 @@ class AutomationRunnerHealthTests(unittest.TestCase):
         self.assertEqual(values["InvoiceStandaloneBacklogPending"], 2)
         self.assertEqual(values["InvoiceStandaloneReviewRequired"], 3)
 
+    def test_reviewed_closure_is_distinct_from_active_backlog_and_failure(self):
+        returned, error, calls = self.run_summary(summary(reviewed_closed_invoice_obligations=1,
+                                                         reviewed_invoice_obligation_reviews=0))
+        self.assertIsNone(error)
+        values = {c.args[0]: c.args[1] for c in calls}
+        self.assertEqual(1, values["InvoiceStandaloneReviewedClosed"])
+        self.assertEqual(0, values["InvoiceStandaloneBacklogPending"])
+        self.assertEqual(0, values["InvoiceStandaloneReviewedClosureReview"])
+        self.assertEqual(1, returned["reviewed_closed_invoice_obligations"])
+        self.assertEqual(0, returned["reviewed_invoice_obligation_reviews"])
+
     @patch("boto3.client")
     def test_diagnostic_metrics_cannot_satisfy_live_alarm(self, client):
         defaults = {"cloudwatch_namespace": "Test"}

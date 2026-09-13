@@ -349,6 +349,7 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
             reference_date="2026-05-27",
             dry_run=True,
             client=client,
+            automation_state_store=MemoryAutomationStore(),
             project_settings=project_settings,
         )
 

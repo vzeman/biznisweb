@@ -7,6 +7,9 @@ on:
       - '*creditnote*.py'
       - 'unpaid_order_cancellation*.py'
       - 'order_status_safety.py'
+      - 'order_status_identity.py'
+      - 'manual_settlement.py'
+      - 'scripts/record_verified_manual_settlement.py'
       - 'order_inventory.py'
       - 'api_read_backoff.py'
       - 'daily_report_runner.py'
@@ -20,6 +23,7 @@ on:
       - 'scripts/verify_invoice_post_recovery.py'
       - 'scripts/retry_seeded_invoice.py'
       - 'scripts/reconcile_reviewed_invoice_outcomes.py'
+      - 'scripts/close_reviewed_uncollected_obligation.py'
       - 'tests/**'
       - '.github/workflows/order-automation-tests.yml'
       - '.github/workflows/deploy-order-automations.yml'
@@ -43,8 +47,9 @@ jobs:
       - name: Verify invoice, status and deployment failure boundaries
         run: >-
           python -m unittest
-          tests.test_invoice_generation tests.test_invoice_automation_state
+          tests.test_invoice_generation tests.test_invoice_automation_state tests.test_manual_settlement tests.test_manual_settlement_recovery tests.test_reviewed_invoice_obligations tests.test_reviewed_invoice_runtime tests.test_reviewed_uncollected_closure
           tests.test_order_status_safety tests.test_unpaid_order_cancellation
+          tests.test_order_status_identity tests.test_status_identity_integration
           tests.test_order_inventory
           tests.test_api_read_backoff
           tests.test_seeded_invoice_retry tests.test_reviewed_invoice_reconciliation

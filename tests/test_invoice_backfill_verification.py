@@ -181,3 +181,64 @@ class InvoiceBackfillVerificationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewedClosureBackfillTests(unittest.TestCase):
+    def setUp(self):
+        import reviewed_invoice_obligations as obligations
+        from tests.test_reviewed_invoice_obligations import confirmation_fixture, closure_fixture
+        self.obligations = obligations
+        self.document = confirmation_fixture()
+        self.key, self.sha = "data/vevo/order-automation/audits/fixture.json", "e" * 64
+        self.enterContext(patch.multiple(obligations, CONFIRMATION_KEY=self.key, CONFIRMATION_SHA256=self.sha,
+                          CONFIRMATION_CANONICAL_SHA256=obligations.canonical_sha256(self.document)))
+        self.record = closure_fixture(self.document, self.key, self.sha)
+        self.record["source"] = SOURCE
+        self.current = {"id": self.document["order_id"], "order_num": self.document["order_num"], "blocked": False,
+                        "status": deepcopy(self.record[obligations.CLOSURE_FIELD]["status_mutation"]["target_status"]),
+                        "invoices": None, "preinvoices": None,
+                        "sum": {"value": self.document["total"]["value"], "currency": {"code": "EUR"}}}
+
+    def verify(self, project="vevo"):
+        store = ReadOnlyStore({self.document["order_num"]: self.record})
+        store.state["project"] = project
+        before = deepcopy(store.state)
+        result = verify_backfill(store=store, project=project, expected_count=1,
+                                 read_order=lambda _: self.current, shipped_status_ids={4})
+        self.assertEqual(before, store.state)
+        return result
+
+    def test_confirmed_noncollection_closes_obligation_while_original_preparation_stays_unknown(self):
+        result = self.verify()
+        self.assertTrue(result["ok"])
+        row = result["orders"][0]
+        self.assertEqual("reviewed_uncollected_obligation_closed", row["outcome"])
+        self.assertEqual("prepare_ambiguous", row["journal"]["phase"])
+        self.assertEqual("unknown", row["financial_outcome"])
+        self.assertEqual("closed", row["invoice_obligation"])
+
+    def test_arbitrary_uncertainty_invalid_marker_and_wrong_project_cannot_pass(self):
+        self.assertFalse(self.verify(project="roy")["ok"])
+        for marker in (None, True, {}, {**self.record[self.obligations.CLOSURE_FIELD], "state": "uncertain"}):
+            self.record[self.obligations.CLOSURE_FIELD] = marker
+            self.assertFalse(self.verify()["ok"])
+
+    def test_fresh_status_identity_document_or_missing_detail_is_not_an_accepted_closure(self):
+        baseline = deepcopy(self.current)
+        for updates in ({"id": "999"}, {"order_num": "999"}, {"status": {"id": "4", "name": "Odoslaná"}},
+                        {"invoices": [{"id": "901"}]}, {"preinvoices": [{"id": "902"}]}, {"blocked": True}):
+            self.current = {**baseline, **updates}
+            self.assertFalse(self.verify()["ok"])
+        for field in baseline:
+            self.current = deepcopy(baseline)
+            self.current.pop(field)
+            self.assertFalse(self.verify()["ok"])
+        self.current = None
+        self.assertFalse(self.verify()["ok"])
+
+    def test_changed_financial_projection_and_open_review_remain_unresolved(self):
+        self.record["status_review"] = {"state": "open", "reason": "reviewed_closure_regression"}
+        self.assertFalse(self.verify()["ok"])
+        self.record.pop("status_review")
+        self.record["phase"] = "complete"
+        self.assertFalse(self.verify()["ok"])
