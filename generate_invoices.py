@@ -1216,6 +1216,7 @@ class InvoiceGenerator:
         return str(value)
 
     def _preinvoice_id(self, order: Dict[str, Any]) -> str:
+        """API association reference; this is not the native ERP document key."""
         if "preinvoices" not in order:
             raise ValueError("preinvoice_malformed")
         rows = order.get("preinvoices")
@@ -1229,6 +1230,56 @@ class InvoiceGenerator:
             return self._positive_internal_id(rows[0].get("id"))
         except ValueError:
             raise ValueError("preinvoice_malformed") from None
+
+    def _require_native_token(self) -> None:
+        if not self.web_session or not isinstance(self.arf_token, str) or not re.fullmatch(r"[A-Za-z0-9]{1,128}", self.arf_token):
+            raise ValueError("native_session_token_missing")
+
+    def fetch_native_invoice_context(self, order_num: str, expected_order_id: str) -> Dict[str, str]:
+        """Read one identity-bound ERP row; POST is the served grid's read contract.
+
+        API nested document IDs can equal the parent order ID. Only the native
+        row's pre_inv_id is a finalization key; inv_id is its final number.
+        Never retry this request or retain the row's customer/address fields.
+        """
+        self._require_native_token()
+        requested = str(order_num or "")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", requested):
+            raise ValueError("native_order_search_identity_invalid")
+        order_id = self._positive_internal_id(expected_order_id)
+        try:
+            response = self.web_session.post(
+                f"{self.base_url}/erp/orders/invoices/getListJson",
+                data={"find": f"o#{requested}", "start": 0, "limit": 20, "arf": self.arf_token},
+                headers={"X-Requested-With": "XMLHttpRequest", "Accept": "application/json",
+                         "Referer": f"{self.base_url}/erp/main/orders"},
+                allow_redirects=False, timeout=WEB_TIMEOUT)
+            if response.status_code != 200:
+                raise ValueError("native_invoice_lookup_http_failure")
+            payload = _parse_native_response_object(response.text)
+            if ("success" in payload and not (payload["success"] is True or payload["success"] == "true")) or payload.get("errors"):
+                raise ValueError("native_invoice_lookup_rejected")
+            rows = payload.get("rows")
+            if self._positive_internal_id(payload.get("total")) != "1" or not isinstance(rows, list) or len(rows) != 1:
+                raise ValueError("native_invoice_lookup_not_unique")
+            row = rows[0]
+            if (not isinstance(row, dict) or self._positive_internal_id(row.get("order_id")) != order_id
+                    or row.get("order_num") != requested):
+                raise ValueError("native_invoice_order_identity_changed")
+            preinvoice_key, invoice_number = row.get("pre_inv_id"), row.get("inv_id")
+            if preinvoice_key != "":
+                preinvoice_key = self._positive_internal_id(preinvoice_key)
+            if (not isinstance(invoice_number, str) or len(invoice_number) > 100
+                    or invoice_number != invoice_number.strip()
+                    or any(ord(char) < 32 for char in invoice_number)):
+                raise ValueError("native_invoice_number_invalid")
+            return {"order_id": order_id, "order_num": requested,
+                    "preinvoice_key": preinvoice_key, "invoice_number": invoice_number}
+        except AutomationStateError:
+            raise
+        except Exception as exc:
+            # Request errors and malformed native rows may contain private data.
+            raise ValueError("native_invoice_context_unverified") from exc
 
     def _creation_preflight_failed(self, order_num: str, kind: str) -> None:
         logger.warning("Invoice preflight failed: kind=%s", kind)
@@ -1332,11 +1383,17 @@ class InvoiceGenerator:
         return self._preparation_readback(order_num, order_id, claimed, failure, result)
 
     def _confirm_created_invoice(self, order_num: str, claimed_id: Optional[str],
-                                 expected_order_id: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
+                                 expected_order_id: Optional[str] = None,
+                                 native_preinvoice_key: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
+        native_number_seen = False
         for attempt in range(3):
             current = self.fetch_order_for_invoice(order_num)
             if expected_order_id is not None and self._positive_internal_id(current.get("id")) != expected_order_id:
                 raise RuntimeError("Invoice readback changed order identity")
+            native = self.fetch_native_invoice_context(order_num, self._positive_internal_id(current.get("id")))
+            if native_preinvoice_key is not None and native["preinvoice_key"] != native_preinvoice_key:
+                raise RuntimeError("Native preinvoice binding changed during readback")
+            native_number_seen = native_number_seen or bool(native["invoice_number"])
             invoices = current["invoices"]
             if invoices:
                 if len(invoices) != 1:
@@ -1345,13 +1402,27 @@ class InvoiceGenerator:
                 actual_id = str(invoice["id"])
                 if claimed_id and actual_id != str(claimed_id):
                     raise RuntimeError("Created invoice identity differs from order readback")
-                return actual_id, str(invoice.get("invoice_num") or "") or None
+                number = invoice.get("invoice_num")
+                if not isinstance(number, str) or not number.strip() or native["invoice_number"] != number:
+                    raise RuntimeError("Native and API final invoice numbers differ")
+                return actual_id, number
             if attempt < 2:
                 time.sleep(1)
+        if native_number_seen:
+            raise RuntimeError("Native final invoice lacks complete API readback")
         return None, None
 
     def _send_journaled_email(self, order_num: str, result: InvoiceCreationResult) -> None:
-        held = bool(self.operation_journal and self.operation_journal.get_order(order_num).get("email_policy") == "hold")
+        prior = self.operation_journal.get_order(order_num) if self.operation_journal else {}
+        if prior.get("email_state") in {"sending", "ambiguous", "sent"}:
+            # A missing token or later hold must never turn a consumed send
+            # into a retryable failure, including direct calls to this method.
+            result.email_sent = prior["email_state"] == "sent"
+            result.ambiguous = not result.email_sent
+            result.email_error = "" if result.email_sent else "ambiguous"
+            self.last_email_outcome = "sent" if result.email_sent else "ambiguous"
+            return
+        held = prior.get("email_policy") == "hold"
         if held:
             result.email_required = False
         if not result.email_required:
@@ -1360,7 +1431,9 @@ class InvoiceGenerator:
         if not result.invoice_id:
             result.email_error = "missing_invoice_id"
             return
-        if not self.web_session:
+        try:
+            self._require_native_token()
+        except ValueError:
             result.email_error = "failed"
             self.last_email_outcome = "failed"
             self._journal_update(order_num, phase="email", email_state="failed")
@@ -1368,7 +1441,8 @@ class InvoiceGenerator:
         current = self.fetch_order_for_invoice(order_num)
         if (current["blocked"] or not self._status_is_eligible(current)
                 or len(current["invoices"]) != 1
-                or str(current["invoices"][0]["id"]) != str(result.invoice_id)):
+                or str(current["invoices"][0]["id"]) != str(result.invoice_id)
+                or current["invoices"][0].get("invoice_num") != result.invoice_num):
             result.email_error = "eligibility_changed"
             result.ambiguous = True
             self._journal_update(order_num, phase="email", email_state="ambiguous")
@@ -1425,7 +1499,7 @@ class InvoiceGenerator:
                 return result
             try:
                 result.invoice_id, result.invoice_num = self._confirm_created_invoice(
-                    order_num, None, order_id)
+                    order_num, None, order_id, prior.get("native_preinvoice_key"))
             except AutomationStateError:
                 raise
             except Exception as exc:
@@ -1469,6 +1543,11 @@ class InvoiceGenerator:
             self._creation_preflight_failed(order_num, "web_session_unavailable")
             return result
         try:
+            self._require_native_token()
+        except ValueError as exc:
+            self._creation_preflight_failed(order_num, str(exc))
+            return result
+        try:
             preinvoice_id = self._preinvoice_id(current)
         except ValueError as exc:
             if str(exc) != "preinvoice_missing":
@@ -1478,8 +1557,14 @@ class InvoiceGenerator:
             if current is None:
                 return result
             preinvoice_id = self._preinvoice_id(current)
-        # Native FLOX finalizes an existing preinvoice by its own internal ID.
-        # Neither the public order number nor the final invoice ID is that key.
+        try:
+            native = self.fetch_native_invoice_context(order_num, order_id)
+            if not native["preinvoice_key"] or native["invoice_number"]:
+                raise ValueError("native_preinvoice_not_pending")
+        except ValueError as exc:
+            self._creation_preflight_failed(order_num, str(exc))
+            return result
+        # Bind the native ERP key independently; the API ID is only an association.
         latest = self.fetch_order_for_invoice(order_num)
         if latest["invoices"] or not self.filter_orders_for_invoice([latest])[0]:
             result.skipped = True
@@ -1492,6 +1577,8 @@ class InvoiceGenerator:
                 raise ValueError("status_changed")
             if self._preinvoice_id(latest) != preinvoice_id:
                 raise ValueError("preinvoice_changed")
+            if self.fetch_native_invoice_context(order_num, order_id) != native:
+                raise ValueError("native_preinvoice_changed")
         except ValueError as exc:
             self._creation_preflight_failed(order_num, str(exc))
             return result
@@ -1499,6 +1586,7 @@ class InvoiceGenerator:
             self.operation_journal.assert_owned()
         self._journal_update(order_num, phase="creating", attempted_at=iso_utc(utc_now()),
                              preinvoice_id=preinvoice_id, order_id=order_id,
+                             native_preinvoice_key=native["preinvoice_key"],
                              last_creation_failure=None)
         headers = {
             "X-Requested-With": "XMLHttpRequest",
@@ -1512,7 +1600,7 @@ class InvoiceGenerator:
         request_status = None
         failure_kind = ""
         try:
-            response = self.web_session.get(self.invoice_finalize_url.format(preinvoice_id=preinvoice_id) + suffix,
+            response = self.web_session.get(self.invoice_finalize_url.format(preinvoice_id=native["preinvoice_key"]) + suffix,
                                            headers=headers, allow_redirects=False)
             request_status = response.status_code
             if response.status_code != 200:
@@ -1537,7 +1625,8 @@ class InvoiceGenerator:
                            order_num, request_stage, request_status, failure_kind, type(exc).__name__)
             result.recovered = True
         try:
-            result.invoice_id, result.invoice_num = self._confirm_created_invoice(order_num, claimed_id, order_id)
+            result.invoice_id, result.invoice_num = self._confirm_created_invoice(
+                order_num, claimed_id, order_id, native["preinvoice_key"])
         except AutomationStateError:
             raise
         except Exception as exc:
@@ -1560,7 +1649,9 @@ class InvoiceGenerator:
 
     def send_invoice_email(self, order_id: str) -> bool:
         """A single send attempt; HTTP 200 HTML and timeouts remain ambiguous."""
-        if not self.web_session:
+        try:
+            self._require_native_token()
+        except ValueError:
             self.last_email_outcome = "failed"
             return False
         self.last_email_outcome = "ambiguous"
@@ -1598,9 +1689,8 @@ class InvoiceGenerator:
             result = InvoiceCreationResult(email_required=True, invoice_id=record.get("invoice_id"),
                                            invoice_num=record.get("invoice_num"))
             order_num = str(record["order_num"])
-            if record.get("email_state") in {"sending", "ambiguous"}:
-                result.ambiguous = True
-                result.email_error = "ambiguous"
+            if record.get("email_state") in {"sending", "ambiguous", "sent"}:
+                self._send_journaled_email(order_num, result)
             elif record.get("email_policy") == "hold":
                 self._journal_update(order_num, phase="complete", email_state="held")
                 continue

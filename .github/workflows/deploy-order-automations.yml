@@ -2,6 +2,17 @@ name: Deploy Order Automations
 
 on:
   workflow_dispatch:
+    inputs:
+      paused_incident_key:
+        description: Reviewed private incident key for the exact four paused invoice schedules
+        required: false
+        default: ""
+        type: string
+      paused_incident_sha256:
+        description: SHA-256 of the reviewed incident object bytes; required together with its key
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -41,4 +52,19 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Verify candidates and promote exact image
-        run: python scripts/deploy_order_automations.py --commit "$GITHUB_SHA"
+        env:
+          PAUSED_INCIDENT_KEY: ${{ inputs.paused_incident_key }}
+          PAUSED_INCIDENT_SHA256: ${{ inputs.paused_incident_sha256 }}
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+
+          command = [sys.executable, "scripts/deploy_order_automations.py", "--commit", os.environ["GITHUB_SHA"]]
+          key = os.environ.get("PAUSED_INCIDENT_KEY", "")
+          digest = os.environ.get("PAUSED_INCIDENT_SHA256", "")
+          if key or digest:
+              command += ["--paused-incident-key", key, "--paused-incident-sha256", digest]
+          subprocess.run(command, check=True)
+          PY

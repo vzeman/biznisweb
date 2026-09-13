@@ -11,7 +11,8 @@ from __future__ import annotations
 
 import argparse
 import copy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -52,6 +53,10 @@ SECRET_NAMES = {
     "REPORT_S3_BUCKET", "REPORT_S3_PREFIX",
 }
 MARKER = "ORDER_AUTOMATION_HOST_OK"
+INVOICE_SCHEDULES = {name for name, family in SCHEDULES.items() if SERVICES[family][1] == "invoice"}
+PROTECTED_REPORTS = {"roy-daily-report-email", "vevo-daily-report-email"}
+PAUSE_MANIFEST_LIMIT = 256 * 1024
+PAUSE_MANIFEST_PHASE = "four-invoice-schedules-paused-protected-schedules-unchanged"
 
 
 def require(condition: bool, code: str) -> None:
@@ -61,6 +66,26 @@ def require(condition: bool, code: str) -> None:
 
 def schedule_request(schedule: dict) -> dict:
     return {key: copy.deepcopy(schedule[key]) for key in SCHEDULE_FIELDS if key in schedule}
+
+
+def pause_incident_arguments(key: str | None, digest: str | None) -> None:
+    require(bool(key) == bool(digest), "paused-incident-inputs-incomplete")
+    if key:
+        require(re.fullmatch(r"data/roy/order-automation/incidents/\d{4}-\d{2}-\d{2}/[a-f0-9]{32}\.json", key) is not None,
+                "paused-incident-key-invalid")
+        require(re.fullmatch(r"[a-f0-9]{64}", digest or "") is not None, "paused-incident-sha256-invalid")
+
+
+def evidence_schedule(schedule: dict) -> dict:
+    """Compare stored schedule timestamps across host time zones."""
+    result = schedule_request(schedule)
+    for key in ("StartDate", "EndDate"):
+        if key in result:
+            stamp = result[key]
+            stamp = datetime.fromisoformat(stamp) if isinstance(stamp, str) else stamp
+            require(isinstance(stamp, datetime) and stamp.tzinfo is not None, "paused-incident-schedule-date-invalid")
+            result[key] = stamp.astimezone(timezone.utc).isoformat()
+    return result
 
 
 def command_for(family: str) -> list[str]:
@@ -192,14 +217,108 @@ def promote_schedules(scheduler, originals: dict, desired: dict) -> None:
 
 
 class Deployment:
-    def __init__(self, session, commit: str):
+    def __init__(self, session, commit: str, *, paused_incident_key: str | None = None,
+                 paused_incident_sha256: str | None = None):
+        pause_incident_arguments(paused_incident_key, paused_incident_sha256)
         self.session, self.commit = session, commit
+        self.paused_incident_key, self.paused_incident_sha256 = paused_incident_key, paused_incident_sha256
         self.ecs = session.client("ecs")
         self.scheduler = session.client("scheduler")
         self.logs = session.client("logs")
         self.account = session.client("sts").get_caller_identity()["Account"]
         self.evidence = {"schema": 1, "commit": commit, "hosts": [], "created_at": datetime.now(timezone.utc).isoformat()}
         self.snapshot_key = f"data/roy/order-automation/deployments/{commit}/{uuid.uuid4().hex}.json"
+
+    def read_pause_manifest(self, bucket: str) -> dict:
+        require(bucket == f"biznisweb-reporting-artifacts-{self.account}-eu-central-1", "paused-incident-bucket-mismatch")
+        pause_incident_arguments(self.paused_incident_key, self.paused_incident_sha256)
+        require(bool(self.paused_incident_key), "paused-incident-inputs-required")
+        s3 = self.session.client("s3")
+        s3.head_bucket(Bucket=bucket, ExpectedBucketOwner=self.account)
+        require(s3.get_bucket_location(Bucket=bucket, ExpectedBucketOwner=self.account).get("LocationConstraint") == "eu-central-1",
+                "paused-incident-region-mismatch")
+        block = s3.get_public_access_block(Bucket=bucket, ExpectedBucketOwner=self.account)["PublicAccessBlockConfiguration"]
+        require(all(block.get(key) is True for key in (
+            "BlockPublicAcls", "IgnorePublicAcls", "BlockPublicPolicy", "RestrictPublicBuckets",
+        )), "paused-incident-privacy-unverified")
+        response = s3.get_object(Bucket=bucket, Key=self.paused_incident_key, ExpectedBucketOwner=self.account)
+        body = response["Body"]
+        try:
+            require(response.get("ServerSideEncryption") == "AES256", "paused-incident-encryption-mismatch")
+            length = response.get("ContentLength")
+            require(type(length) is int and 0 < length <= PAUSE_MANIFEST_LIMIT, "paused-incident-size-invalid")
+            raw = body.read(PAUSE_MANIFEST_LIMIT + 1)
+            require(len(raw) == length and len(raw) <= PAUSE_MANIFEST_LIMIT, "paused-incident-size-invalid")
+        finally:
+            body.close()
+        require(hashlib.sha256(raw).hexdigest() == self.paused_incident_sha256, "paused-incident-sha256-mismatch")
+
+        def unique_object(pairs):
+            result = {}
+            for key, value in pairs:
+                require(key not in result, "paused-incident-duplicate-key")
+                result[key] = value
+            return result
+
+        def reject_constant(_value):
+            raise RuntimeError("paused-incident-json-constant-invalid")
+
+        manifest = json.loads(raw, object_pairs_hook=unique_object, parse_constant=reject_constant)
+        require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1,
+                "paused-incident-schema-invalid")
+        require(manifest.get("phase") == PAUSE_MANIFEST_PHASE, "paused-incident-phase-invalid")
+        require(manifest.get("incident") == Path(self.paused_incident_key).stem, "paused-incident-identity-mismatch")
+        now = datetime.now(timezone.utc)
+        try:
+            created = datetime.fromisoformat(manifest["created_at"])
+            verified = datetime.fromisoformat(manifest["verified_at"])
+        except (KeyError, TypeError, ValueError):
+            raise RuntimeError("paused-incident-date-invalid") from None
+        require(created.tzinfo is not None and verified.tzinfo is not None
+                and now - timedelta(hours=24) <= created <= verified <= now, "paused-incident-stale-or-future")
+        require(isinstance(manifest.get("source_commit"), str)
+                and re.fullmatch(r"[a-f0-9]{40}", manifest["source_commit"]) is not None, "paused-incident-source-invalid")
+        return manifest
+
+    def validate_pause_manifest(self, bucket: str, snapshots: dict) -> None:
+        manifest = self.read_pause_manifest(bucket)
+        require(isinstance(manifest.get("original_schedules"), dict) and set(manifest["original_schedules"]) == INVOICE_SCHEDULES
+                and isinstance(manifest.get("paused_schedules"), dict) and set(manifest["paused_schedules"]) == INVOICE_SCHEDULES,
+                "paused-incident-scope-invalid")
+        protected = PROTECTED_REPORTS | {"roy-unpaid-order-cancellation"}
+        require(isinstance(manifest.get("protected_schedules"), dict) and set(manifest["protected_schedules"]) == protected,
+                "paused-incident-protected-scope-invalid")
+        for name in INVOICE_SCHEDULES:
+            original, paused = manifest["original_schedules"][name], manifest["paused_schedules"][name]
+            require(original.get("Name") == name and original.get("State") == "ENABLED"
+                    and paused.get("Name") == name and paused.get("State") == "DISABLED", "paused-incident-state-invalid")
+            require(evidence_schedule(paused) == {**evidence_schedule(original), "State": "DISABLED"},
+                    "paused-incident-original-drift")
+            current = self.scheduler.get_schedule(Name=name)
+            require(evidence_schedule(current) == evidence_schedule(paused) == evidence_schedule(snapshots[name]),
+                    "paused-incident-current-drift")
+        reports = {}
+        for name in protected:
+            expected = manifest["protected_schedules"][name]
+            current = self.scheduler.get_schedule(Name=name)
+            require(expected.get("Name") == name and expected.get("State") == "ENABLED"
+                    and evidence_schedule(current) == evidence_schedule(expected), "paused-incident-protected-drift")
+            if name in snapshots:
+                require(evidence_schedule(current) == evidence_schedule(snapshots[name]), "paused-incident-current-drift")
+            else:
+                reports[name] = schedule_request(current)
+        # These are the observed 4D + cancellationE originals, never the old 4E
+        # incident snapshot. The existing transaction restores their exact state.
+        self.validated_paused_sources = copy.deepcopy(manifest["paused_schedules"])
+        self.protected_report_schedules = reports
+        self.evidence["paused_source_incident"] = {"key": self.paused_incident_key, "sha256": self.paused_incident_sha256,
+            "incident": manifest["incident"], "verified_at": manifest["verified_at"], "source_commit": manifest["source_commit"]}
+        self.evidence["protected_report_schedules"] = copy.deepcopy(reports)
+
+    def verify_protected_reports(self) -> None:
+        for name, expected in getattr(self, "protected_report_schedules", {}).items():
+            require(evidence_schedule(self.scheduler.get_schedule(Name=name)) == evidence_schedule(expected),
+                    "protected-report-schedule-drift")
 
     def source_bucket(self, definition: dict) -> str:
         container = definition["containerDefinitions"][0]
@@ -412,6 +531,8 @@ class Deployment:
 
     def pin_current(self, digest: str) -> None:
         """Freeze current behavior before a shared :latest build can replace it."""
+        require(not getattr(self, "paused_incident_key", None) and not getattr(self, "paused_incident_sha256", None),
+                "pin-current-paused-incident-rejected")
         ecr = self.session.client("ecr")
         image = ecr.describe_images(repositoryName="vevo-reporting", imageIds=[{"imageTag": "latest"}])["imageDetails"]
         require(len(image) == 1 and image[0]["imageDigest"] == digest, "current-image-changed-before-pin")
@@ -457,8 +578,18 @@ class Deployment:
         print("ORDER_AUTOMATION_CURRENT_IMAGE_PIN_OK:invoice-services=2:schedules=4:behavior-preserved", flush=True)
 
     def validate_snapshots(self, snapshots: dict) -> None:
+        self.validate_snapshot_targets(snapshots)
+        paused = getattr(self, "validated_paused_sources", {})
         for name, schedule in snapshots.items():
-            require(schedule["State"] == "ENABLED" and schedule.get("GroupName", "default") == "default", "source-schedule-state-drift")
+            expected = "DISABLED" if name in paused else "ENABLED"
+            require(schedule["State"] == expected, "source-schedule-state-drift")
+            if name in paused:
+                require(evidence_schedule(schedule) == evidence_schedule(paused[name]), "paused-incident-current-drift")
+
+    def validate_snapshot_targets(self, snapshots: dict) -> None:
+        require(set(snapshots) == set(SCHEDULES), "source-schedule-set-drift")
+        for name, schedule in snapshots.items():
+            require(schedule.get("Name") == name and schedule.get("GroupName", "default") == "default", "source-schedule-state-drift")
             target = schedule["Target"]
             require(target["Arn"] == f"arn:aws:ecs:eu-central-1:{self.account}:cluster/vevo-reporting-cluster", "source-cluster-drift")
             require(f":task-definition/{SCHEDULES[name]}:" in target["EcsParameters"]["TaskDefinitionArn"], "source-family-drift")
@@ -512,6 +643,7 @@ class Deployment:
         return unfinished
 
     def verify_paused_schedules(self, paused: dict) -> None:
+        self.verify_protected_reports()
         for name, expected in paused.items():
             current = schedule_request(self.scheduler.get_schedule(Name=name))
             require(current == schedule_request(expected) and current["State"] == "DISABLED",
@@ -548,6 +680,7 @@ class Deployment:
         paused = {name: {**schedule_request(row), "State": "DISABLED"} for name, row in originals.items()}
         # The existing transactional updater handles partial/ambiguous pauses and
         # restores their original states without overwriting concurrent edits.
+        self.verify_protected_reports()
         promote_schedules(self.scheduler, originals, paused)
         promotion_started = False
         preparation_started = False
@@ -570,6 +703,9 @@ class Deployment:
                 self.require_current_main()
             self.evidence["phase"] = "drain-verified-before-promotion"
             self.save_private(self.evidence_bucket)
+            if getattr(self, "paused_incident_key", None):
+                self.read_pause_manifest(self.evidence_bucket)
+            self.verify_protected_reports()
             promotion_started = True
             promote_schedules(self.scheduler, paused, desired)
         except Exception:
@@ -648,7 +784,9 @@ class Deployment:
         digest = image[0]["imageDigest"]
         image_uri = f"{self.account}.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@{digest}"
         snapshots = {name: self.scheduler.get_schedule(Name=name) for name in SCHEDULES}
-        self.validate_snapshots(snapshots)
+        self.validate_snapshot_targets(snapshots)
+        if not getattr(self, "paused_incident_key", None):
+            self.validate_snapshots(snapshots)
         definitions, candidates, buckets = {}, {}, {}
         for family, (project, _, schedule_name) in SERVICES.items():
             source = self.ecs.describe_task_definition(taskDefinition=snapshots[schedule_name]["Target"]["EcsParameters"]["TaskDefinitionArn"])["taskDefinition"]
@@ -658,6 +796,9 @@ class Deployment:
             _, prefix = resolve_report_s3_location(project, settings, environ={})
             definitions[family] = candidate_definition(source, family, image_uri, (buckets[family], prefix))
         require(buckets["roy-invoice-daily"] == buckets["roy-unpaid-order-cancellation"], "roy-state-bucket-mismatch")
+        if getattr(self, "paused_incident_key", None):
+            self.validate_pause_manifest(buckets["roy-invoice-daily"], snapshots)
+        self.validate_snapshots(snapshots)
         self.evidence.update(original_schedules=snapshots, candidate_task_definitions=definitions,
                              image_digest=digest, phase="before-candidates")
         evidence_bucket = buckets["roy-invoice-daily"]
@@ -713,10 +854,14 @@ def main() -> None:
     parser.add_argument("--pin-current", action="store_true", help="Pin existing invoice behavior before publishing a new shared image")
     parser.add_argument("--current-image-digest", help="Independently verified current image digest; required for --pin-current")
     parser.add_argument("--profile", help="Local AWS profile, allowed only for --pin-current")
+    parser.add_argument("--paused-incident-key", help="Reviewed private incident authorizing the exact four paused invoice schedules")
+    parser.add_argument("--paused-incident-sha256", help="SHA-256 of the reviewed incident object bytes")
     args = parser.parse_args()
     require(re.fullmatch(r"[a-f0-9]{40}", args.commit) is not None, "commit-invalid")
+    pause_incident_arguments(args.paused_incident_key, args.paused_incident_sha256)
     import boto3
     if args.pin_current:
+        require(not args.paused_incident_key and not args.paused_incident_sha256, "pin-current-paused-incident-rejected")
         require(re.fullmatch(r"sha256:[a-f0-9]{64}", args.current_image_digest or "") is not None, "pin-current-digest-required")
         head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         require(head == args.commit, "pin-helper-commit-mismatch")
@@ -735,7 +880,8 @@ def main() -> None:
         require(os.environ.get("GITHUB_REF") == "refs/heads/main" and os.environ.get("GITHUB_SHA") == args.commit
                 and os.environ.get("GITHUB_ACTIONS") == "true", "managed-main-only")
         require(os.environ.get("AWS_REGION") == "eu-central-1", "region-mismatch")
-        Deployment(boto3.Session(region_name="eu-central-1"), args.commit).run()
+        Deployment(boto3.Session(region_name="eu-central-1"), args.commit,
+                   paused_incident_key=args.paused_incident_key, paused_incident_sha256=args.paused_incident_sha256).run()
 
 
 if __name__ == "__main__":

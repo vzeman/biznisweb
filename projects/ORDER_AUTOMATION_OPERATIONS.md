@@ -4,6 +4,22 @@ The source of truth is the GitHub repository for code, ECS/Scheduler for runtime
 and each shop's private S3 automation journal for durable operations. Never copy
 credentials, customer data or order-level evidence into this public repository.
 
+## Current invoice incident
+
+On 2026-09-13 the exact `ccf25c79` infrastructure release passed its host and
+promotion checks, but the first natural ROY run received explicit provider
+rejections for all thirteen ordinary finalization attempts. The four invoice
+schedules are intentionally disabled; cancellation and both report schedules
+remain enabled. Infrastructure promotion alone did not repair invoice creation.
+
+The reviewed pause manifest and latest outcome are recorded in `PROJECT_STATE.md`.
+Keep its exact paused configurations as rollback originals. A corrected managed
+release may opt in with the manifest's private key and SHA-256 only after exact
+source/protected-configuration and freshness checks. Failed preparation restores
+the incident pause; successful full host/drain/promotion gates enable the corrected
+schedule definitions. Do not briefly enable the broken old invoices to satisfy a
+deployment precondition, overwrite drift, or replay ambiguous financial operations.
+
 ## Invoice behavior
 
 ROY and VEVO invoice runs operate every fifteen minutes, staggered by five minutes,
@@ -36,11 +52,28 @@ Document preparation and finalization are separate journaled phases. Reuse the
 unique preinvoice currently associated with the order. If none exists, call
 `preinvoiceOrder` once, selecting only its ID and explicitly setting customer,
 admin and salesperson notification conditions to `NONE`. Then reread the order's
-associated preinvoice before the native single GET finalization by preinvoice ID.
+associated preinvoice before native finalization. The nested GraphQL document
+`id` is an API association reference; it is not the native route key. Both shops'
+ERP invoice stores use `pre_inv_id` as the row key and preserve `order_id`,
+`order_num` and `inv_id` as separate fields. Resolve the native row with a bounded
+read-only POST to `/erp/orders/invoices/getListJson`, using the served order-only
+search `find=o#<order_num>`, `start=0`, `limit=20` and the current session ARF token.
+GET query parameters do not provide the same filtered lookup.
+
+Require one complete row with both order identities matching fresh API data.
+Record the native preinvoice key separately from the API association, rebind it
+before the single GET to `/erp/orders/invoices/finalize/<native_preinvoice_key>`,
+and require ARF before creating an operation intent. Never infer this key from
+an order number, its shape, or an equal nested API ID. Identical displayed
+numbers can belong to unrelated document types or orders.
+
+Finalization requires fresh same-order API and native readback: native `inv_id`
+must match the API final `invoice_num`, with the native preinvoice key retained.
 The live installations expose broken preinvoice-number and nested-order API
-resolvers, so neither field is used or inferred. Finalization must be confirmed
-by a fresh final invoice on the same order. Transport failures never trigger an
-alternate endpoint or an automatic repeat of an uncertain financial operation.
+resolvers, so those API fields are neither used nor inferred. A missing or
+changed native binding blocks the write; an uncertain outcome remains durable.
+Transport failures never trigger an alternate endpoint or an automatic repeat
+of an uncertain financial operation.
 The vendor documents the suppression condition in
 [NotificationCondition](https://www.biznisweb.sk/api/docs/notificationcondition.doc.html);
 an empty notification list is not used as an undocumented substitute.
@@ -210,16 +243,22 @@ outcomes remain blocked for review. Invoice existence alone is never shipment pr
 1. Verify repository, clean branch, fetched/pulled upstream and PROJECT_STATE.
    Record current ECS task identity, private IP, exact image, service and `/app`
    runner path before infrastructure changes.
-2. Before merging code that triggers the shared image build, run the committed
-   `scripts/deploy_order_automations.py --pin-current --commit <pushed-branch-SHA>
-   --current-image-digest <independently-verified-digest> --profile codex`.
-   It preserves current behavior and changes only the four invoice schedule task
-   references after two finite dry-run hosts pass actual curl localhost markers.
+2. Before a shared image build, verify all current invoice definitions use an
+   immutable digest. Only if they still use the mutable `latest` tag, run the
+   committed `scripts/deploy_order_automations.py --pin-current --commit
+   <pushed-branch-SHA> --current-image-digest <independently-verified-digest>
+   --profile codex`. This preserves current behavior after two finite dry-run
+   hosts pass actual curl localhost markers. Already immutable definitions need
+   only independent readback; do not use pin mode to undo an incident pause.
 3. Complete regressions and PR checks, merge through the PR, wait for the exact
    `git-<merge-SHA>` ECR build. Never deploy `latest`.
 4. Seed reviewed historical records, then dispatch **Deploy Order Automations**
-   on current main. The deployer first pauses the five schedules and requires
-   existing jobs to finish plus two continuously quiet minutes. This prevents
+   on current main. For the reviewed four-invoice incident pause, provide both
+   workflow inputs `paused_incident_key` and `paused_incident_sha256`; ordinary
+   releases leave both empty. The manifest must be private, encrypted, at most
+   24 hours old, hash-matched, and equal to current source and protected schedules.
+   The deployer first pauses the five schedules and requires existing jobs to
+   finish plus two continuously quiet minutes. This prevents
    expensive full candidate scans from competing with our natural jobs for the
    shop's shared API quota. Three identified candidate hosts must pass the runners
    in dry-run mode and a localhost marker before any schedule promotion. The
