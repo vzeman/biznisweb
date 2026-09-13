@@ -19,6 +19,8 @@ What changed:
 What is verified:
 
 - 627 full build regression tests, independent cancellation/parser reviews, Linux/Windows checks, security, observability, reporting smoke, Ruff and diff checks pass. The actual merge source is synchronized locally without modifying main.
+- Initial paused drain completed at 04:36:28 UTC with 120 quiet seconds and zero unfinished tasks. Managed private receipt is `data/roy/order-automation/deployments/ccf25c799c56bfa3dea1f3a77456f3fabf079732/4c6fab76ddc541c1ae6d2d7fbb2a1e7a.json`.
+- ROY exact-image candidate passed and stopped with exit zero: task `b6886ac031e24976bd93b88a8ef0d944`, private IP `172.31.40.147`, service `roy-invoice-daily:8`, `/app`, Fargate instance ID not applicable. Actual localhost marker confirms ROY invoice dry-run/full-backlog; summary matched 17 with zero document/email/status writes or failures. VEVO candidate `cdaa95f36f964ba3a320a78af4f907ab`, IP `172.31.26.233`, `vevo-invoice-daily:7`, exact same image and `/app`, is running; it has not yet passed. All five old schedules remain disabled and main remains frozen. No production success is claimed.
 - Added a sanitized, unsent vendor handoff in `projects/FLOX_STRIPE_STATUS_GUARD_HANDOFF.md`: required protection against older unsuccessful attempts and duplicate/out-of-order events, with primary Stripe/BiznisWeb references. No webhook event, mapping, payment or message was changed. Native prevention remains an external dependency; a later AWS repair is not prevention.
 
 Next exact step:
