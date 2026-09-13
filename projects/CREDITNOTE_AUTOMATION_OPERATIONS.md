@@ -4,7 +4,10 @@ This is a separate release from invoice generation and unpaid-order cancellation
 The reusable guard only permits whole-order cancellation when finalized creditnotes
 fully cover the current order in the same currency and tax basis. Partial credits,
 missing evidence and unresolved earlier writes cannot authorize whole-order Storno.
-Business writes use the shared project lease and fresh order rechecks.
+Business writes use the shared project lease and fresh order rechecks. Native
+creditnotes must bind both order identities and the final invoice number, and
+be explicitly numbered, closed and nonvoided; open or ambiguous lifecycle
+records remain review evidence and cannot authorize cancellation.
 
 ## Runtime and source boundary
 
@@ -29,9 +32,14 @@ images have no bundled cache, mounted cache or S3 order-cache restoration.
 
 ## Initial managed migration
 
-1. Finish invoice recovery and verify the current production receipt. Synchronize
-   the clean branch and PROJECT_STATE, complete regression and required PR checks,
-   then build the exact merged source image. Never select `latest`.
+1. Finish invoice recovery and verify the current production receipt. Integrate
+   the independently reviewed uncollected-obligation closure before release. The
+   order-automation deployment containing manual/closure protection must finish
+   first; refresh all five invoice/cancellation task-definition and exact image
+   pins from that verified runtime. The standalone migration must preserve those
+   five captured pins on both success and rollback. Synchronize the clean branch
+   and PROJECT_STATE, complete regression and required PR checks, then build the
+   exact merged source image. Never select `latest`.
 2. A read-only inspection is available from committed source:
    `python scripts/deploy_creditnote_automations.py --commit <source-SHA> --profile codex`.
    It validates both report pins, all protected schedules, private storage and

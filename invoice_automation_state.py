@@ -105,12 +105,16 @@ class S3AutomationStateStore:
             if _error_code(exc) in {"NoSuchKey", "404"}:
                 return self.empty_state(), ""
             raise AutomationStateError("Cannot read the automation safety journal") from exc
+        stream = response.get("Body")
         try:
             body = response["Body"].read()
             state = json.loads(body)
             etag = str(response["ETag"])
         except (KeyError, TypeError, ValueError) as exc:
             raise AutomationStateError("Malformed automation safety journal") from exc
+        finally:
+            if stream is not None:
+                stream.close()
         if (
             not isinstance(state, dict)
             or state.get("schema_version") != 1
@@ -208,6 +212,19 @@ class AutomationJournal:
     def pending_orders(self) -> list[dict[str, Any]]:
         state, _ = self._owned()
         return [deepcopy(record) for record in state["orders"].values() if record.get("phase") != "complete"]
+
+    def record_manual_settlement(self, order: dict[str, Any], reference: dict[str, Any]) -> None:
+        """Only provenance changes; retain every invoice/email/status field."""
+        from manual_settlement import updated_record
+        state, etag = self._owned()
+        number = str(order["order_num"])
+        record = state["orders"].setdefault(number, {"order_num": number, "phase": "complete"})
+        if str(record.get("order_num")) != number:
+            raise AutomationStateError("Manual settlement journal identity differs")
+        record["manual_settlement"] = updated_record(record.get("manual_settlement"), reference,
+                                                     project=self.store.project, order=order)
+        record["updated_at"] = iso_utc(self.store.now())
+        self.store.put(state, etag)
 
     def enqueue_orders(self, orders: list[dict[str, Any]]) -> None:
         state, etag = self._owned()

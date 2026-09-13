@@ -4,21 +4,33 @@ The source of truth is the GitHub repository for code, ECS/Scheduler for runtime
 and each shop's private S3 automation journal for durable operations. Never copy
 credentials, customer data or order-level evidence into this public repository.
 
-## Current invoice incident
+## Current invoice runtime
 
-On 2026-09-13 the exact `ccf25c79` infrastructure release passed its host and
-promotion checks, but the first natural ROY run received explicit provider
-rejections for all thirteen ordinary finalization attempts. The four invoice
-schedules are intentionally disabled; cancellation and both report schedules
-remain enabled. Infrastructure promotion alone did not repair invoice creation.
+Managed release `34741354275` promoted source
+`47c3da775ff7018a1cf8950024c867310b91ae8a` at image
+`sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`.
+Independent host, stopped-task, drain, schedule and policy verification completed
+on 2026-09-13. All five order-automation schedules are enabled; protected reporting
+configuration remains unchanged. Subsequent natural ROY/VEVO runs created
+28 invoices with independently matched native/API document identities.
 
-The reviewed pause manifest and latest outcome are recorded in `PROJECT_STATE.md`.
-Keep its exact paused configurations as rollback originals. A corrected managed
-release may opt in with the manifest's private key and SHA-256 only after exact
-source/protected-configuration and freshness checks. Failed preparation restores
-the incident pause; successful full host/drain/promotion gates enable the corrected
-schedule definitions. Do not briefly enable the broken old invoices to satisfy a
-deployment precondition, overwrite drift, or replay ambiguous financial operations.
+The first two of four historical uncertain creation cases have been resolved by
+the fixed helper: one used a single financial request, while the other completed
+by readback only. Two cases remain pending final confirmation. Both previously
+sent ambiguous email outcomes are now confirmed in the journal without another
+email. A separate user-confirmed uncollected-order case retains an unknown
+preparation outcome; its obligation closure is being prepared independently.
+No uncertain financial intent may be reset or replayed.
+Manual-settlement protection and the corrected creditnote identity/lifecycle
+rules in this branch still require their own reviewed release.
+
+Earlier on the same date, source `ccf25c79` passed infrastructure gates but its
+first natural ROY run received thirteen explicit finalization refusals. That
+incident's four-invoice pause and private manifest remain historical audit and
+rollback evidence for the incident-aware `47c3da77` release. Future deployments
+must capture their own freshly verified source/protected configurations and
+use the managed host/drain/promotion gates. Current release proof and private
+receipt hashes are recorded in `PROJECT_STATE.md`.
 
 ## Invoice behavior
 
@@ -91,6 +103,22 @@ alone cannot promote an order to paid. Known shipment status is retained private
 and used only with fresh settlement/creditnote evidence. Insufficient history and
 uncertain previous writes remain visible in a durable review queue. Corrections
 suppress customer status emails. Partial creditnotes do not cancel whole orders.
+
+Native creditnote `inv_id` is the final invoice number, not the GraphQL nested
+invoice ID. Whole-order credit coverage requires that exact `invoice_num` and
+both native/API order identities. A creditnote must have a final number and
+explicitly closed (`open=false`) and nonvoided (`storno=false`) native flags.
+Only verified boolean / integer 0 or 1 / string "0" or "1" flag representations
+are accepted. Missing, malformed, open or voided documents cannot authorize
+Storno; their presence still blocks a paid/shipped restoration. Complete same-
+currency gross coverage and consistent VAT remain required, so a partial return
+never cancels the entire order.
+
+A separately confirmed external bank transfer can be recorded as private,
+hash-bound provenance through the [manual-settlement procedure](MANUAL_SETTLEMENT_PROTECTION.md).
+Changing the payment method or historical paid status is not proof of payment.
+Native receipts remain primary; protected returns, creditnotes and uncertainty
+still take precedence over automatic status repair, regardless of Stripe/GoPay.
 
 ## Unpaid-order discovery
 
@@ -177,6 +205,73 @@ The helper checks each fresh order and the stable private journal, never changes
 business data, and fails incomplete or uncertain outcomes. It writes ignored
 JSON/Markdown evidence; the optional flag also saves immutable encrypted copies
 under the same private bucket's project verification prefix.
+
+## Fixed incident reconciliation
+
+After recovery, use the separate [final all-age and original-eleven verification
+procedure](ORDER_AUTOMATION_POST_RECOVERY.md). It uses current anchored discovery
+without an old audit baseline and keeps the original eleven-record journal check
+independent. Run only after verified promotion/recovery and coordinated scan drain.
+
+`scripts/reconcile_reviewed_invoice_outcomes.py` is restricted to the six reviewed
+ROY outcomes in three fixed, hash-verified private evidence objects: the original
+history/outcome proof, the cross-shop native contract, and the fresh six-case
+native mapping. The obsolete API-ID-equivalence proof is not accepted. It does not
+relax the ordinary generator or accept arbitrary orders, evidence or endpoints.
+The `confirm-emails` action records two provider-confirmed sends without email
+transmission. Both actions, including previews, log in solely for bounded native
+read-only POST lookups through the generator's strict `o#` grid query. This proves
+provider sending, not recipient delivery or
+exactly-once sending; each original provider history contains two send events.
+
+The `finalize-one` action handles one deterministic unfinished case from the four
+reviewed creation ambiguities. It can only assign a final number to the existing
+bound preinvoice. It never prepares another document, changes status or sends an
+email. It preserves the original attempt and journals a permanent one-attempt
+intent plus an email hold before the request. The intent stores the reviewed
+native preinvoice key separately from the API association reference, together
+with the new mapping and contract hashes. Repeated fresh API/native reads must
+confirm internal/public order identity, shipped/unblocked/positive eligibility
+and the same native preinvoice key. Finalization uses only that native key.
+A unique API final document with the reviewed order association must have a
+nonempty `invoice_num` equal to the same native row's `inv_id`. Matching API IDs
+or a displayed number belonging to another order do not prove native identity.
+A final document already present is reconciled by readback only. An uncertain
+intent cannot be replayed, including after a crash before transmission.
+Legacy or changed intent schemas are blocked, never reset or silently migrated.
+Native read failures and disagreement after transmission preserve uncertainty.
+
+Both actions default to read-only previews from clean, pushed source:
+
+```powershell
+python scripts/reconcile_reviewed_invoice_outcomes.py confirm-emails --profile codex
+python scripts/reconcile_reviewed_invoice_outcomes.py finalize-one --profile codex
+```
+
+Apply additionally requires `--apply`, `--expected-image-digest`,
+`--expected-source-commit` and `--deployment-evidence-key` for the exact reviewed
+release. The helper rechecks three actual host markers, both complete drains,
+all five current schedule pins and ECR source identity, rejects old/unverified
+active writers and holds the shared ROY lease. A retained lease after storage
+failure must expire normally; never clear it to force progress. Preview checks
+stable journal evidence and reports consumed intents or lease contention.
+
+The fixed release allowlist is intentional. A future release or changed incident
+requires a reviewed source change and new evidence; do not broaden the CLI or clear
+journal phases as a shortcut. The native identity contract supports the existing-
+document operation, but does not establish backend replay/idempotency guarantees.
+Final independent business verification is still required after the helper runs.
+
+The reviewed allowlist now binds the independently promoted native correction
+`47c3da775ff7018a1cf8950024c867310b91ae8a` /
+`sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`.
+Managed deployment `34741354275` passed all actual hosts, drains and promotion
+readbacks; both shops' subsequent natural tasks created native/API-confirmed
+invoices. Its private receipt is
+`data/roy/order-automation/deployments/47c3da775ff7018a1cf8950024c867310b91ae8a/4b88d8c4d91943ef871b54b7b19031e3.json`.
+This source change still requires review before apply. One separate VEVO
+preparation uncertainty is outside the fixed six-case ROY scope and cannot be
+reset or replayed by this helper. Failed earlier releases remain disallowed.
 
 ## Release sequence and rollback
 

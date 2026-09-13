@@ -361,9 +361,9 @@ def _has_final_invoice(order: Dict[str, Any]) -> bool:
 
 def _is_existing_invoice_status_reconciliation_candidate(
     order: Dict[str, Any],
-    reconciliation_settings: Dict[str, Any],
+    reconciliation_settings: Dict[str, Any], manual_settlement: Any = None,
 ) -> bool:
-    if not reconciliation_settings.get("enabled") or not _has_final_invoice(order):
+    if not reconciliation_settings.get("enabled") or not (_has_final_invoice(order) or manual_settlement is not None):
         return False
     status_name = str((order.get("status") or {}).get("name") or "")
     source_statuses = _normalized_invoice_statuses(
@@ -408,11 +408,15 @@ def reconcile_existing_invoice_statuses(
     client: Client, orders: List[Dict[str, Any]], reconciliation_settings: Dict[str, Any], *,
     dry_run: bool, journal: Any = None, creditnote_order_numbers: Optional[set[str]] = None,
     read_order: Optional[Callable[[str], Dict[str, Any]]] = None,
+    project: Optional[str] = None, records: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     from order_status_safety import (
         change_status_verified, decide_recovery, fetch_order_safety_context, status_write_block_reason,
     )
 
+    from manual_settlement import status_attempt_fields
+
+    records = journal.snapshot()["orders"] if journal else (records or {})
     enabled = bool(reconciliation_settings.get("enabled"))
     result = {"enabled": enabled, "candidates": 0, "reconciled": 0, "failed": 0,
               "skipped_after_recheck": 0, "review_required": 0,
@@ -423,7 +427,8 @@ def reconcile_existing_invoice_statuses(
     target_id = _resolve_existing_invoice_target_status_id(client, reconciliation_settings)
     result.update(target_status_name=target_name, target_status_id=target_id)
     candidates = [order for order in orders
-                  if _is_existing_invoice_status_reconciliation_candidate(order, reconciliation_settings)]
+                  if _is_existing_invoice_status_reconciliation_candidate(
+                      order, reconciliation_settings, records.get(str(order.get("order_num")), {}).get("manual_settlement"))]
     result["candidates"] = len(candidates)
     if journal:
         records = journal.snapshot()["orders"]
@@ -440,16 +445,17 @@ def reconcile_existing_invoice_statuses(
                 journal.assert_owned()
             refreshed = read_order(order_num) if read_order else fetch_order_safety_context(
                 client, order_num, progress_callback=journal.assert_owned if journal else None)
-            if not _is_existing_invoice_status_reconciliation_candidate(refreshed, reconciliation_settings):
+            record = journal.get_order(order_num) if journal else records.get(order_num, {})
+            if not _is_existing_invoice_status_reconciliation_candidate(refreshed, reconciliation_settings, record.get("manual_settlement")):
                 result["skipped_after_recheck"] += 1
                 continue
-            record = journal.get_order(order_num) if journal else {}
             creditnote_status = ("unknown" if creditnote_order_numbers is None
                                  else "present" if order_num in creditnote_order_numbers else "clear")
             decision = decide_recovery(
                 refreshed, reconciliation_settings.get("source_statuses") or DEFAULT_EXISTING_INVOICE_SOURCE_STATUSES,
                 paid_target=target_name, creditnote_status=creditnote_status,
                 verified_previous_status=record.get("verified_fulfillment_status"),
+                project=project, manual_settlement=record.get("manual_settlement"),
             )
             if decision.action == "review":
                 result["review_required"] += 1
@@ -460,33 +466,51 @@ def reconcile_existing_invoice_statuses(
             if decision.action == "skip":
                 result["skipped_after_recheck"] += 1
                 continue
-            block_reason = status_write_block_reason(record)
+            block_reason = status_write_block_reason(
+                record, next_target_status_name=decision.target_status_name,
+                manual_settlement_sha256=decision.manual_settlement_sha256, current_order=refreshed, project=project,
+                source_statuses=reconciliation_settings.get("source_statuses") or DEFAULT_EXISTING_INVOICE_SOURCE_STATUSES)
             if block_reason:
                 result["review_required"] += 1
                 if journal:
                     journal.update_order(order_num, status_review={"state": "open", "reason": block_reason})
                 logger.warning("Repeated or uncertain status correction requires review: order=%s", order_num)
                 continue
+            actual_target = decision.target_status_name
+            actual_id = target_id if actual_target == target_name else _resolve_existing_invoice_target_status_id(
+                client, {"target_status_name": actual_target, "lang_code": reconciliation_settings.get("lang_code", "SK")})
+            if decision.manual_settlement_sha256:
+                proof_target = record["manual_settlement"]["proof"]["recovery_status"]
+                if actual_target == proof_target["name"] and str(actual_id) != proof_target["id"]:
+                    raise AutomationStateError("Manual settlement target catalogue changed")
+                # Resolve the target first, then recheck the complete candidate
+                # under the lease immediately before consuming another intent.
+                refreshed_again = read_order(order_num) if read_order else fetch_order_safety_context(
+                    client, order_num, progress_callback=journal.assert_owned if journal else None)
+                if refreshed_again != refreshed:
+                    raise AutomationStateError("Manual settlement context changed before status intent")
             if dry_run:
                 continue
             if journal is None:
                 raise AutomationStateError("Status correction requires the shared durable lease")
-            actual_target = decision.target_status_name
-            actual_id = target_id if actual_target == target_name else _resolve_existing_invoice_target_status_id(
-                client, {"target_status_name": actual_target, "lang_code": reconciliation_settings.get("lang_code", "SK")})
             journal.assert_owned()
             operation = {"state": "pending", "source_status_id": refreshed["status"]["id"],
                          "source_status_name": refreshed["status"]["name"],
                          "last_change": refreshed.get("last_change"), "target_status_id": actual_id,
                          "target_status_name": actual_target, "reason": decision.reason}
-            journal.update_order(order_num, status_mutation=operation)
+            if decision.manual_settlement_sha256:
+                operation.update(manual_settlement_sha256=decision.manual_settlement_sha256,
+                                 order_id=str(refreshed["id"]), order_num=order_num,
+                                 source_last_change=refreshed.get("last_change"))
+            journal.update_order(order_num, **status_attempt_fields(record, operation))
             try:
-                change_status_verified(client, order_num, actual_id, actual_target, silent=True,
+                verified_order = change_status_verified(client, order_num, actual_id, actual_target, silent=True,
                                        progress_callback=journal.assert_owned)
             except Exception:
                 journal.update_order(order_num, status_mutation={**operation, "state": "uncertain"})
                 raise
-            journal.update_order(order_num, status_mutation={**operation, "state": "verified"},
+            journal.update_order(order_num, status_mutation={**operation, "state": "verified",
+                                 "verified_last_change": (verified_order or {}).get("last_change")},
                                  status_review={"state": "closed", "reason": "verified_correction"})
             result["reconciled"] += 1
         except Exception as exc:
@@ -1939,7 +1963,8 @@ def run_invoice_generation(
                 journal.enqueue_orders(candidates)
                 journal.enqueue_status_reviews([
                     row for row in changed_orders
-                    if _is_existing_invoice_status_reconciliation_candidate(row, settings["existing_invoice_status_reconciliation"])
+                    if _is_existing_invoice_status_reconciliation_candidate(row, settings["existing_invoice_status_reconciliation"],
+                        state["orders"].get(str(row.get("order_num")), {}).get("manual_settlement"))
                 ])
                 for number in externally_completed:
                     journal.update_order(number, phase="complete", reason="invoice_created_elsewhere")
@@ -1952,7 +1977,8 @@ def run_invoice_generation(
                 journal.record_scan(**scan_update)
             creditnote_context_failed = False
             if (creditnote_order_numbers is None and settings["existing_invoice_status_reconciliation"]["enabled"]
-                    and any(_is_existing_invoice_status_reconciliation_candidate(row, settings["existing_invoice_status_reconciliation"])
+                    and any(_is_existing_invoice_status_reconciliation_candidate(row, settings["existing_invoice_status_reconciliation"],
+                            state["orders"].get(str(row.get("order_num")), {}).get("manual_settlement"))
                             for row in changed_orders)):
                 from creditnote_export import fetch_creditnote_automation_context
 
@@ -1970,7 +1996,7 @@ def run_invoice_generation(
             reconciliation = reconcile_existing_invoice_statuses(
                 generator.client, changed_orders, settings["existing_invoice_status_reconciliation"], dry_run=dry_run,
                 journal=journal, creditnote_order_numbers=creditnote_order_numbers,
-                read_order=generator.fetch_order_safety_context,
+                read_order=generator.fetch_order_safety_context, project=project_name, records=state["orders"],
             )
             summary.invoice_status_reconciliation_enabled = reconciliation["enabled"]
             summary.invoice_status_reconciliation_candidates = reconciliation["candidates"]
