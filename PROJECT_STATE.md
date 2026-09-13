@@ -19,6 +19,10 @@ What changed:
 What is verified:
 
 - 652 exact build tests, smoke, Ruff and independent code reviews pass. Fresh pre-release AWS checks at 05:47:32 UTC retain the four disabled invoice schedules on ROY `:8` / VEVO `:7`; cancellation `:40` and reporting ROY `:71` / VEVO `:33` remain enabled and unchanged. Both shops' leases are free. No actual invoice, email or order-status mutation is claimed for this correction yet.
+- Managed private receipt is `data/roy/order-automation/deployments/47c3da775ff7018a1cf8950024c867310b91ae8a/4b88d8c4d91943ef871b54b7b19031e3.json`. Initial drain completed at 05:55:03.496490 UTC with 120 quiet seconds and zero unfinished tasks. All five automation schedules are paused during candidate checks; reports remain unchanged. ROY candidate `8afe06f235534ce7b920b7498bb5e2b4`, Fargate instance N/A, private IP `172.31.29.98`, service `roy-invoice-daily:9`, `/app`, exact `c3842dda` image, is running the full-backlog dry host gate; no marker or business outcome is yet claimed.
+- Offline guard source integration is committed/pushed at `e131b789` on `codex/isolated-creditnote-guard-20260909`: reviewed main `47c3da77` is merged, all 709 exact build tests and smoke/Ruff/diff pass, and guard-specific source remains byte-identical to `8e540c7b`. No guard PR, merge to main, AWS/provider access or deployment occurred. Its full migration still follows invoice business recovery.
+- Fixed six-case helper native-binding review passes independently, including 51 focused tests, and its full branch build passes 720 tests. Its old failed-release allowlist is intentionally retained until actual promotion is verified; no preview/apply occurred. The two older VEVO payment reviews are being checked in GoPay per the user's correction; a Stripe search cannot establish their payment state.
+
 
 Next exact step:
 
