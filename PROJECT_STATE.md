@@ -19,16 +19,16 @@ What changed:
 
 What is verified:
 
-- Independent helper review and 76 focused helper/pure/runtime/backfill tests pass; the helper's 28 tests include before/after-intent drift, committed/lost status responses, no replay, S3 failure, exact native receipt requests, scoped review closure and resource cleanup. The prior runtime build suite passed all 754 tests plus reporting smoke. No helper preview/apply or business write has been executed during implementation.
+- Independent helper review and 76 focused helper/pure/runtime/backfill tests pass; the helper's 28 tests include before/after-intent drift, committed/lost status responses, no replay, S3 failure, exact native receipt requests, scoped review closure and resource cleanup. The completed 37-module build suite, including helper and integrated verifier correction, passed all 784 tests plus reporting smoke; scoped Ruff and whitespace checks passed. No helper preview/apply or business write has been executed during implementation.
 
 Known issues:
 
-- A separately observed API localization mismatch (`Shipped` versus the same-shop Slovak catalog label) also affects this helper's current strict label comparison and closure readback. Merge/deploy/apply are held until the shared canonical status catalog correction is integrated and tested. Do not loosen proof names or hardcode status IDs.
-- Compatible runtime has not been promoted; helper release pins must stay empty until independently verified promotion. Parent also supplied read-only verifier resource-cleanup fix `6a245117` for integration.
+- A separately observed API localization mismatch (`Shipped` versus earlier `Odoslaná`) also affects this helper's current strict label comparison and closure readback. Even `listOrderStatuses(lang_code: SK)` now returns the English label, so that argument alone is not an established translation authority. Offline client comparison found the same explicit API-key header and query/variables; native web cookies are not copied into the GraphQL client. Merge/deploy/apply are held while the parent investigates the observed locale change. Do not guess translation aliases, loosen proof names or hardcode status IDs.
+- Compatible runtime has not been promoted; helper release pins must stay empty until independently verified promotion. Read-only verifier resource-cleanup fix `6a245117` is integrated as `77e47f4a`; the only documentation insertion conflict preserved both handoffs.
 
 Next exact step:
 
-- Integrate the verifier startup fix and shared canonical status binding, rerun complete checks, then hand the clean pushed branch to the parent for combined PR review. The eventual release must precede the fixed closure preview/apply and subsequent VEVO original-backfill/all-age audits.
+- The branch is clean and pushed with reviewed closure code, helper and verifier startup fix. Await the parent's proven status-language/identity correction, integrate it with exact failure tests, then hand the final branch to the parent for combined PR review. The eventual release must precede the fixed closure preview/apply and subsequent VEVO original-backfill/all-age audits.
 
 ## 2026-09-13 — Reviewed noncollection closes only the invoice obligation
 
