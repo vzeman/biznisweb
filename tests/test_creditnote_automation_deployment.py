@@ -129,6 +129,53 @@ class CreditnoteSummaryAndProbeTests(unittest.TestCase):
 
 
 class CreditnoteDefinitionTests(unittest.TestCase):
+    def test_named_environment_order_is_semantic_and_original_evidence_unchanged(self):
+        original = deploy.guard_definition(source_definition(), "roy", IMAGE, "role", "bucket", "prefix")
+        observed = copy.deepcopy(original)
+        observed["containerDefinitions"][0]["environment"].reverse()
+        frozen_original, frozen_observed = copy.deepcopy(original), copy.deepcopy(observed)
+        self.assertNotEqual(original, observed)
+        self.assertEqual(deploy.comparable_definition(original), deploy.comparable_definition(observed))
+        self.assertEqual(frozen_original, original)
+        self.assertEqual(frozen_observed, observed)
+
+    def test_named_environment_duplicate_or_malformed_entries_fail_closed(self):
+        valid = [{"name": "A", "value": ""}, {"name": "B", "value": "value"}]
+        for rows in (valid + [valid[0]], [{"name": "A", "value": 1}], [{"name": "", "value": "x"}],
+                     [{"name": "A"}], [{"name": "A", "value": "x", "extra": "x"}], [None], None):
+            with self.subTest(rows=rows), self.assertRaisesRegex(RuntimeError, "environment-invalid"):
+                deploy.comparable_definition({"containerDefinitions": [{"environment": rows}]})
+
+    def test_comparison_rejects_changed_missing_and_order_sensitive_runtime_fields(self):
+        original = deploy.guard_definition(source_definition(), "roy", IMAGE, "role", "bucket", "prefix")
+        expected = deploy.comparable_definition(original)
+        for field in ("command", "secrets", "environment-value", "environment-missing", "image"):
+            observed = copy.deepcopy(original)
+            container = observed["containerDefinitions"][0]
+            if field in {"command", "secrets"}:
+                container[field].reverse()
+            elif field == "environment-value":
+                container["environment"][0]["value"] += "-changed"
+            elif field == "environment-missing":
+                container["environment"].pop()
+            else:
+                container["image"] = "unreviewed-image"
+            with self.subTest(field=field):
+                self.assertNotEqual(expected, deploy.comparable_definition(observed))
+
+    def test_frozen_report_readback_accepts_only_environment_reordering(self):
+        value = controller()
+        original = deploy.guard_definition(source_definition(), "roy", IMAGE, "role", "bucket", "prefix")
+        value.definitions = {"synthetic-arn": original}
+        value.ecs = Mock()
+        observed = copy.deepcopy(original)
+        observed["containerDefinitions"][0]["environment"].reverse()
+        value.ecs.describe_task_definition.return_value = {"taskDefinition": observed}
+        deploy.CreditnoteDeployment.check_sources(value)
+        observed["containerDefinitions"][0]["command"].reverse()
+        with self.assertRaisesRegex(RuntimeError, "frozen-report-definition-drift"):
+            deploy.CreditnoteDeployment.check_sources(value)
+
     def test_historical_source_fetch_works_in_shallow_checkout_only_for_pinned_commit(self):
         commit = deploy.REPORT_PINS["roy"][2]
         for available in (True, False):
@@ -768,6 +815,107 @@ class CreditnoteCaptureClusterTests(unittest.TestCase):
         value.ecs.describe_tasks.return_value = {"tasks": [], "failures": [{"reason": "synthetic-missing"}]}
         with self.assertRaisesRegex(RuntimeError, "readback-incomplete"):
             value.tasks(None)
+
+
+class IndependentGuardProvisionEnvironmentTests(unittest.TestCase):
+    def provision_controller(self, project, mutate=None):
+        value = controller()
+        value.locations = {project: ("synthetic-private-bucket", f"daily-reports/{project}")}
+        value.create_role = Mock(return_value=f"arn:aws:iam::{ACCOUNT}:role/synthetic-guard-{project}")
+        logs = Mock()
+        value.session = Mock()
+        value.session.client.side_effect = lambda name: logs if name == "logs" else self.fail("unexpected client")
+        source = source_definition(project)
+        source["volumes"] = [{"name": "one"}, {"name": "two"}]
+        source["containerDefinitions"][0]["mountPoints"] = [
+            {"sourceVolume": "one", "containerPath": "/one"},
+            {"sourceVolume": "two", "containerPath": "/two"},
+        ]
+        original_source = copy.deepcopy(source)
+        source_arn = value.originals[f"{project}-daily-invoice-generation"]["Target"]["EcsParameters"]["TaskDefinitionArn"]
+        candidate_arn = f"arn:aws:ecs:eu-central-1:{ACCOUNT}:task-definition/{deploy.family(project)}:1"
+        registered = {}
+        observed = {}
+        def register(**request):
+            registered.update(copy.deepcopy(request))
+            observed.update(copy.deepcopy(request), taskDefinitionArn=candidate_arn)
+            observed["containerDefinitions"][0]["environment"].reverse()
+            if mutate:
+                mutate(observed)
+            return {"taskDefinition": copy.deepcopy(observed)}
+        def describe(**request):
+            arn = request["taskDefinition"]
+            if arn == source_arn:
+                return {"taskDefinition": copy.deepcopy(source)}
+            self.assertEqual(candidate_arn, arn)
+            return {"taskDefinition": copy.deepcopy(observed)}
+        value.ecs = Mock()
+        value.ecs.register_task_definition.side_effect = register
+        value.ecs.describe_task_definition.side_effect = describe
+        return value, source, original_source, registered, observed, candidate_arn
+
+    def test_actual_provision_accepts_reordered_readback_and_preserves_raw_candidate_evidence(self):
+        for project in deploy.PROJECTS:
+            value, source, original_source, registered, observed, expected_arn = self.provision_controller(project)
+            with self.subTest(project=project):
+                arn, definition = value.provision(project, IMAGE)
+                self.assertEqual(expected_arn, arn)
+                self.assertEqual(registered, definition)
+                self.assertEqual({"arn": arn, "definition": registered}, value.evidence["candidate_definitions"][project])
+                self.assertNotEqual(registered["containerDefinitions"][0]["environment"],
+                                    observed["containerDefinitions"][0]["environment"])
+                self.assertEqual(original_source, source)
+                value.save.assert_called_once_with("guard-candidate-registered")
+                value.ecs.register_task_definition.assert_called_once()
+                self.assertEqual(2, value.ecs.describe_task_definition.call_count)
+                value.ecs.run_task.assert_not_called()
+
+    def test_actual_provision_rejects_financially_relevant_or_order_sensitive_drift_before_publication(self):
+        def change(kind):
+            def mutate(definition):
+                container = definition["containerDefinitions"][0]
+                if kind == "duplicate":
+                    container["environment"].append(copy.deepcopy(container["environment"][0]))
+                elif kind == "missing":
+                    container["environment"].pop()
+                elif kind == "missing-environment":
+                    container.pop("environment")
+                elif kind == "changed":
+                    container["environment"][0]["value"] += "-changed"
+                elif kind == "malformed":
+                    container["environment"][0]["value"] = False
+                elif kind in ("command", "secrets", "mountPoints"):
+                    container[kind].reverse()
+                elif kind == "volumes":
+                    definition["volumes"].reverse()
+                elif kind == "extra-container":
+                    definition["containerDefinitions"].append({"name": "unexpected", "image": IMAGE})
+                elif kind == "image":
+                    container["image"] = IMAGE[:-1] + "f"
+                else:
+                    definition["executionRoleArn"] = "foreign-role"
+            return mutate
+        for project in deploy.PROJECTS:
+            for kind in ("duplicate", "missing", "missing-environment", "changed", "malformed", "command",
+                         "secrets", "mountPoints", "volumes", "extra-container", "image", "execution-role"):
+                value, source, original_source, registered, _, _ = self.provision_controller(project, change(kind))
+                with self.subTest(project=project, kind=kind), self.assertRaises(RuntimeError):
+                    value.provision(project, IMAGE)
+                self.assertNotIn("candidate_definitions", value.evidence)
+                value.save.assert_not_called()
+                value.ecs.register_task_definition.assert_called_once()
+                value.ecs.run_task.assert_not_called()
+                self.assertEqual(original_source, source)
+                self.assertEqual(registered, value.ecs.register_task_definition.call_args.kwargs)
+
+    def test_comparison_retains_absent_environment_and_container_order(self):
+        absent = {"containerDefinitions": [{"name": "one"}, {"name": "two"}]}
+        explicit = copy.deepcopy(absent)
+        explicit["containerDefinitions"][0]["environment"] = []
+        self.assertNotEqual(deploy.comparable_definition(absent), deploy.comparable_definition(explicit))
+        reordered = copy.deepcopy(absent)
+        reordered["containerDefinitions"].reverse()
+        self.assertNotEqual(deploy.comparable_definition(absent), deploy.comparable_definition(reordered))
 
 
 if __name__ == "__main__":

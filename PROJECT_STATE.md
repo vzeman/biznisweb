@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 - Guard definition comparison accepts only AWS environment ordering
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+What changed:
+
+- `comparable_definition` compares a deep copy of the existing task-field projection, sorting only explicitly present environment entries after exact name/value schema, string and uniqueness checks. Both frozen-source rechecks and provision readback use it. Missing versus empty environment remains distinct; commands, credentials, volumes, containers and all other ordered fields retain their original meaning. Raw captured evidence is not rewritten.
+- Independent actual-provision regressions cover both shops: reordered register/readback succeeds and preserves the original candidate request; 24 semantic drift variants fail before candidate evidence publication or task launch. Existing malformed/duplicate checks remain strict.
+
+What is verified:
+
+- **64 guard runner/deployment tests pass**, scoped Ruff and whitespace checks pass. Independent review accepted source SHA-256 `476f7553d0ec6489cebcee6b08be07d3cea2c20c85665e615a6fafd47aab8e81` and test SHA-256 `ea3214d33c1524c27a967df092896e8be67d78d0972bee0c2515ebb609a0bcc2`.
+- The existing private primary promotion audit `data/roy/order-automation/audits/2026-09-13/independent-deploy-fda36b49-20260913.json`, SHA-256 `ada17707d7885aa68b684633f9e0ee9ef4695734fe2b53dc5649b4eec649fb50`, independently confirms only environment ordering differs between all three managed requests and actual definitions. Eighteen additional altered-value/missing/duplicate/command/credential-order/role probes reject; private bytes and frozen tracked evidence remain unchanged.
+- That audit records successful primary deployment `34749213122`, source `fda36b49e7610d289d6dcb1d0affe892d1ba5ce7`, immutable image `sha256:29c0c8e4106438f204b0afaee097e90fab887a82e71327653e508a20574b90c0`, and current order pins ROY invoice `:11`, VEVO invoice `:9`, cancellation `:42`. These are verified historical publication/readbacks, not new AWS calls from this change.
+
+Known issues:
+
+- Standalone guards remain **UNDEPLOYED**. Root reports the reviewed noncollection closure completed with one silent status change, no financial writes and no emails; five original VEVO seed checks pass. The all-age VEVO scan and subsequent natural-run evidence are still pending. This source correction does not authorize a guard migration or reporting changes.
+
+Next exact step:
+
+- Commit/push this reviewed change, integrate actual main plus root's pushed closure/seed/UI documentation handoff, run the complete build/automation collections and smoke/security checks, then update existing PR #552. Parent alone may merge or deploy after the VEVO audit and natural evidence are clear. No provider/AWS calls or persistent local processes were started here.
+
 ## 2026-09-13 — Guard draft includes explicit ROY paid target correction
 
 Date: 2026-09-13

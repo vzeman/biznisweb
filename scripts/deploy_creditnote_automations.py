@@ -45,6 +45,28 @@ def fingerprint(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=str, separators=(",", ":")).encode()).hexdigest()
 
 
+def comparable_definition(definition):
+    """Compare ECS named environment entries without changing stored evidence."""
+    result = {key: copy.deepcopy(definition[key]) for key in TASK_FIELDS if key in definition}
+    containers = result.get("containerDefinitions", [])
+    require(isinstance(containers, list) and all(isinstance(row, dict) for row in containers),
+            "definition-containers-invalid")
+    for container in containers:
+        if "environment" not in container:
+            continue
+        rows = container["environment"]
+        require(isinstance(rows, list), "definition-environment-invalid")
+        names = set()
+        for row in rows:
+            require(isinstance(row, dict) and set(row) == {"name", "value"}
+                    and isinstance(row["name"], str) and bool(row["name"])
+                    and isinstance(row["value"], str) and row["name"] not in names,
+                    "definition-environment-invalid")
+            names.add(row["name"])
+        container["environment"] = sorted(rows, key=lambda row: row["name"])
+    return result
+
+
 def report_source_hash(commit):
     require(commit in {row[2] for row in REPORT_PINS.values()}, "report-source-commit-not-pinned")
     available = subprocess.run(["git", "cat-file", "-e", f"{commit}:daily_report_runner.py"], cwd=ROOT, capture_output=True)
@@ -331,7 +353,7 @@ class CreditnoteDeployment:
     def check_sources(self):
         for arn, original in self.definitions.items():
             actual = self.ecs.describe_task_definition(taskDefinition=arn)["taskDefinition"]
-            require({k: actual[k] for k in TASK_FIELDS if k in actual} == original, "frozen-report-definition-drift")
+            require(comparable_definition(actual) == comparable_definition(original), "frozen-report-definition-drift")
 
     def update(self, name, request):
         current = self.get_schedule(name)
@@ -453,7 +475,7 @@ class CreditnoteDeployment:
         logs.put_retention_policy(logGroupName=f"/ecs/{service}", retentionInDays=30)
         arn = self.ecs.register_task_definition(**definition)["taskDefinition"]["taskDefinitionArn"]
         actual = self.ecs.describe_task_definition(taskDefinition=arn)["taskDefinition"]
-        require({k: actual[k] for k in TASK_FIELDS if k in actual} == definition, "guard-definition-readback-failed")
+        require(comparable_definition(actual) == comparable_definition(definition), "guard-definition-readback-failed")
         self.evidence.setdefault("candidate_definitions", {})[project] = {"arn": arn, "definition": definition}
         self.save("guard-candidate-registered")
         return arn, definition
