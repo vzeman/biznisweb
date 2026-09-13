@@ -1,9 +1,35 @@
 # PROJECT_STATE
 
-Last updated: 2026-09-09
+Last updated: 2026-09-13
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
+
+## 2026-09-13 — Separate creditnote guard migration prepared, not deployed
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+What changed:
+
+- Added a standalone entry point for the corrected creditnote rules, aggregate live/dry metrics, mandatory durable state and complete-summary checks. A separate managed deployer provisions isolated roles/tasks, verifies the two unchanged report hosts and both new dry-run hosts, and requires both live guard completions before switching off inline guards. It preserves report images, commands and times, and all five invoice/cancellation schedules.
+- Migration pauses/drains existing writers before probes, uses private CAS receipts and drift-aware restoration, and leaves reports paused after any uncertain live attempt. It is an initial migration, not a blind retry/adoption mechanism. The dedicated workflow shares the production automation concurrency group and has a 300-minute bound with restoration headroom.
+- Capture exclusion now inspects active GitHub source/A/A workflows and all ECS clusters in this account/region. Only genuine unmodified collector service tasks are exempt. Current main and schedule/source snapshots are rechecked before each live guard launch.
+
+What is verified:
+
+- Independent read-only AWS inventory found three clusters: reporting, collector-preview (empty), collector-production (one ordinary collector service); no active capture/reconciler task was found. Both report task definitions retain their expected REPORT_PROJECT and REPORT_SKIP_INVOICES=true environment values.
+- 131 combined tests pass, including 50 independently rerun direct tests; Ruff and whitespace checks pass. No guard role, schedule, task, business mutation or email has been created by this draft.
+
+Known issues:
+
+- This branch predates the merged API cooldown correction and must integrate the current verified invoice release before PR/CI/build. Invoice recovery takes precedence; do not merge or deploy this draft during the invoice release freeze.
+- Future daily guard completion is monitored, not a strict dependency of the unchanged report images. Guard jobs are scheduled 92 minutes before their report, with completion/failure/review/DLQ alarms. The migration itself requires actual successful completions before resuming reports. Native FLOX stale payment-attempt handling remains a separate provider behavior.
+
+Next exact step:
+
+- Preserve this reviewed preparation in Git; after the invoice release and historical recovery finish, merge the current verified source/state into this branch, run combined regression and required PR checks, then build and execute the separate managed migration. Verify all six host outcomes and exact two-report skip-flag delta, with private receipt readback. Never alter fixed report task/image/command pins as a shortcut.
 
 ## 2026-09-09 — Separate creditnote guard migration in progress; report pins preserved
 
