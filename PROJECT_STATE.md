@@ -1,9 +1,101 @@
 # PROJECT_STATE
 
-Last updated: 2026-09-09
+Last updated: 2026-09-13
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
+
+## 2026-09-13 — Resume after rate-limited candidate; production remains on old image
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-automation-rate-limit-20260909`
+
+What changed:
+
+- Resumed on the clean, correct rate-limit worktree at `d1254f44` after fetch/prune and pull/rebase; main remains `c9a7d3e6`. The separate guard worktree contains identified drafts from the interrupted session, with no unknown user changes. No rate-limit code had been written before interruption. Do not merge the unfinished guard migration ahead of invoice recovery.
+- Managed invoice deployment `34375837853` failed before promotion: candidate task `fee7ea1d43a44f77933bc053eacaf56c`, Fargate instance ID not applicable, IP `172.31.15.162`, service `roy-invoice-daily:6`, `/app`, exact `7182a6a316a8a4e4c7f23c9850976136268f4dd4960e985647c811d0a2840e9f`, stopped with exit one on GraphQL HTTP 429 during full inventory. No localhost marker or later candidate exists. Snapshot `data/roy/order-automation/deployments/c9a7d3e6e5e2a312a3a7a472b234696a4c4f6693/2e032af9fc394a2f977fd0bfa62da121.json` reached `candidate-failed-state-policy-restored`, SHA-256 `fecae86388c30408baf9704e3f7bc92d96d231b68ea070ddec0c133ba0694b0a`; all five old schedule pins and three prior IAM state policies were independently verified restored. The failed release's main freeze has ended.
+
+What is verified:
+
+- Fresh AWS reads on resume still show the five enabled schedules on the old `26e4...` image: ROY/VEVO invoice definitions `:5`, cancellation `:38`. A current VEVO host is task `da5fb0752e954af8a3074af54493c58b`, IP `172.31.34.132`, service `vevo-invoice-daily:5`, `/app`; recent natural invoice tasks stopped with exit one. Runtime is not repaired merely because PR #544 merged.
+- ROY's six held seeds now have three `create_failed`, one `create_ambiguous` and two `complete` records; no invoice IDs are recorded. VEVO's five held seeds remain `create_failed`, with an active natural-run lease at the initial read. Fresh document reconciliation is required before any helper attempt. Do not clear uncertainty or infer document absence from this journal.
+- Official BiznisWeb documentation measures API limits by operating cost, including nested loads, rather than HTTP request count. HTTP 429 denotes frequency/window pressure; 509 denotes longer quota exhaustion. The installed GraphQL transport exposes fresh response headers before raising errors. Existing reads ignore `Retry-After` and use short fixed backoff; candidate full scans currently overlap natural tasks before the deployer pauses schedules. Concurrent load is an identified risk, not a proven sole cause of the historical 429.
+
+Next exact step:
+
+- Respect documented read-only cooldowns within existing finite deadlines, with no mutation retries. Pause and drain the five existing schedules before expensive candidates, restore them on failed preparation without overwriting drift, and retain the later promotion/rollback gates. Test, commit/push and review this correction before a new immutable release. Independently reconcile changed historical seeds; finish actual invoices only after uncertainty is resolved and old writers are drained. Resume the separate creditnote migration after invoice release succeeds.
+
+## 2026-09-13 — Read cooldown and pre-candidate drain correction ready
+
+What changed:
+
+- Added query-only, bounded `Retry-After` handling with fresh transport status/headers, permanent/partial failure rejection and lease renewal during cooldowns. Writes still have zero automatic retries. The complete inventory retains its shared 20-minute deadline; non-scan reads have a four-minute budget.
+- Managed deployment now verifies current main, pauses all five existing schedules and proves their 120-second quiet drain before full candidate scans. It verifies the paused configuration throughout candidate execution, repeats the drain before promotion and restores original schedules/IAM after safe failed preparation. Unresolved cleanup or concurrent drift remains paused for review. The workflow has 240 minutes to cover bounded probes, drain and restoration.
+
+What is verified:
+
+- Complete build regression: 612 tests pass; reporting smoke, focused Ruff and whitespace checks pass. Independent review also covers stale-main zero-write behavior and workflow timeout headroom. No new image or schedule target is live yet.
+- Fresh private document reads find two of the eleven original held historical cases already finalized externally, leaving nine missing. ROY also contains four ambiguous creation outcomes and two ambiguous email outcomes. Provider histories and matching log timestamps positively prove both ambiguous emails were sent; never resend them. Presence of a preinvoice does not prove pending finalization: four completed examples retain the same internal document identity in both collections.
+- All eleven historical email holds are retained. No financial write, customer message or AWS schedule mutation was performed during this resumed investigation. All local finite checks/readers ended; no development server or tunnel was started.
+
+Known issues:
+
+- Four old creation failures lost their exact request stage and require reviewed existing-document reconciliation; absence of a final document alone is not proof that replay is safe. The actual lexical format of a native email response remains unobserved. The separate creditnote guard draft is not deployed.
+
+Next exact step:
+
+- Commit/push and merge this correction after all required CI, build the exact main image and run the managed deployment once. Freeze main until its host/drain/promotion or rollback evidence is independently verified. Then reconcile confirmed emails without sending, recover only positively reviewed pending documents under the shared lease, finish the remaining historic invoices and full-inventory live checks, and complete the separate guard migration.
+
+## 2026-09-09 — Separate creditnote guard migration in progress; report pins preserved
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+What changed:
+
+- Started an isolated, clean, pushed worktree from verification head `03c788ac` after fetch/pull. The historical report task/IP/image/path gates below were verified before implementation. This branch owns subsequent state documentation to avoid competing documentation PRs. Main remains frozen for invoice deployment `34375837853`; this work cannot merge or deploy until that release ends.
+- Implementing a standalone wrapper around the already corrected creditnote business rules, with its own live/dry-run metrics, durable-state preflight and failure boundary. A separate narrow deployer will verify candidate hosts and transition only the two inline guard flags; report task definitions, immutable images and source commands remain pinned. Existing three-family invoice deployment code will not be widened indirectly.
+
+What is verified:
+
+- Both pinned report exporters use local order caches without S3 restoration. Their task definitions have no mounts/volumes; the SHA-verified application layers contain no `app/data` entries, and Docker build context excludes `data/`. No cache-forcing flag exists in task environment, secret mappings or runtime bundles. A fresh report starts with a fresh order cache, so no extra cache-clear override is necessary; the standalone guard must complete before its dependent report.
+- A complete current Scheduler inventory examined ten schedules and found only the two expected report-family targets: `roy-daily-report-email` to `roy-reporting-daily:71` and `vevo-daily-report-email` to `vevo-reporting-daily:33`, both enabled. No report override, new guard task or new guard schedule has been created.
+
+Known issues:
+
+- Deployment must preserve the fixed VEVO source and avoid an active source/A/A evidence capture, whose contract fingerprints the full Scheduler configuration. Guard/report completion ordering, failure handling, old-writer drain, private rollback evidence and actual localhost gates must be reviewed before promotion. Merely running the guard module as a script would silently perform no work because it has no entry point.
+
+Next exact step:
+
+- Finish the standalone runner and separate deployment/probe tests, review the exact two-report configuration delta and runtime ordering, and integrate CI/runbook documentation. Commit/push reviewed steps. First finish and verify the active invoice deployment and all historical invoices; only then merge/build and perform this independently gated guard migration. Native FLOX stale payment-attempt handling remains an external dependency.
+
+## 2026-09-09 — Invoice contract correction merged; exact build and release pending
+
+Date: 2026-09-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-invoice-contract-production-verification-20260909`
+
+What changed:
+
+- PR #544 merged as `c9a7d3e6e5e2a312a3a7a472b234696a4c4f6693` after all six exact-head checks passed on `ff8b0d03d480fc653cdc374b91d44b3ce1a7faff`, including Windows/Linux regression and security checks. Exact-image build `34375495049` is in progress. This clean verification branch starts from synchronized merged main; no direct main edits or force pushes occurred.
+- Build `34375495049` completed successfully. Independent ECR readback verifies digest `7182a6a316a8a4e4c7f23c9850976136268f4dd4960e985647c811d0a2840e9f` for exact merged source. Managed deployment `34375837853` was dispatched once after checking unchanged main, no active managed deployment and all five preceding schedule pins. Main is frozen until its promotion/rollback gates finish; no further PR may merge during that interval.
+
+What is verified:
+
+- Both migration helper previews passed from clean pushed source against real order reads, with zero invoice, email or journal writes. The first VEVO preview stopped at its safety gate during an overlapping old run; after that run released its lease, a fresh seed selection and preview passed. The private journal now contains six ROY and five VEVO `create_failed` seeds, no invoice IDs and all eleven email holds. These previews do not prove creation.
+- Final local regression is 572 passing tests, plus reporting smoke, focused Ruff and an independent 120-test review. The existing five schedules remain on the preceding immutable image; no financial canary has run against the new preparation phases.
+
+Known issues:
+
+- Actual final documents remain uncreated. The superseded `5ae96eea...` image must not be dispatched. Native FLOX stale payment-attempt handling remains external; the possible separate daily creditnote guard migration below is not yet implemented or live.
+- Before implementation of that separate migration, read-only source-host identity is confirmed for the latest scheduled pinned reports: ROY `roy-reporting-daily:71`, task `a908f6f8fec944d5aacb9942c803ce5f`, IP `172.31.42.115`, `/app`, immutable `9ff4738f998e3d80e7b76dc543f11bc36413d9d016e72b4a78eb3411433bc541`; VEVO `vevo-reporting-daily:33`, task `854f446a850341dfa911e80291612b3b`, IP `172.31.37.102`, `/app`, immutable `30a23fcd69eb2d7a41195bffa0bc055d38bc2dd706e9eb07d5126675a21a6add`. Both instance IDs are not applicable (Fargate), and these are historical stopped hosts. CloudTrail RunTask attachment UUIDs join exact EC2 ENI/IP events; ECR config blobs and host log paths independently confirm the images and working directory. More recent streams in the same log groups belong to different task definitions and are not source-host proof.
+- Report schedules remain enabled at 01:30 ROY / 01:00 VEVO Europe/Bratislava with the unchanged task pins and no target input. A separate candidate-only identity/skip-flag probe and new standalone guard dry-run localhost gates are required before any report override. Existing reporting smoke is unsuitable because it also uploads artifacts and can print raw logs; existing invoice deployment is intentionally scoped to its three families.
+
+Next exact step:
+
+- Verify build success and exact ECR digest for merged `c9a7d3e6`, dispatch the managed deployment once on unchanged main, and freeze main until its three actual localhost gates, old-writer drain and five schedule readbacks finish. Only then verify natural invoice runs or use one held-seed helper attempt under the shared lease. Confirm all eleven final documents independently, run the complete-discovery cancellation baseline, and record runtime/UI evidence without customer data in Git.
 
 ## 2026-09-09 — Verified invoice contract and pagination corrections ready for release
 

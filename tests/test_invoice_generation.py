@@ -25,7 +25,8 @@ from generate_invoices import (
 from invoice_automation_state import AutomationStateError, S3AutomationStateStore
 from tests.test_invoice_automation_state import MemoryS3
 from invoice_runner import resolve_invoice_runner_window
-from gql.transport.exceptions import TransportServerError
+from gql import gql
+from gql.transport.exceptions import TransportQueryError, TransportServerError
 from graphql import print_ast
 
 
@@ -911,7 +912,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
     @patch("generate_invoices.time.sleep")
     def test_retry_reads_recovers_transient_failure_and_is_bounded(self, _sleep):
         self.generator.read_attempts = 3
-        attempts = [RuntimeError("429"), invoice_page([self.order]), invoice_page([self.order])]
+        attempts = [TransportServerError("synthetic quota", code=429), invoice_page([self.order]), invoice_page([self.order])]
         def execute(*args, **kwargs):
             result = attempts.pop(0)
             if isinstance(result, Exception):
@@ -920,6 +921,79 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
         self.generator.client = SimpleNamespace(execute=execute)
         self.assertEqual(1, len(self.generator._fetch_order_pages()))
         self.assertEqual([], attempts)
+
+    def test_read_honors_retry_after_and_renews_lease_during_cooldown(self):
+        self.generator.read_attempts = 3
+        clock = [100.0]
+        renewals = []
+        self.generator.operation_journal = SimpleNamespace(assert_owned=lambda: renewals.append(clock[0]))
+        self.generator._last_lease_renewal_at = 100
+        transport = SimpleNamespace(response_headers=None)
+        calls = []
+        def execute(*args, **kwargs):
+            calls.append(True)
+            if len(calls) == 1:
+                transport.response_headers = {"Retry-After": "75"}
+                transport.response_status_code = 429
+                raise TransportQueryError("synthetic private quota")
+            return {"getOrder": self.order}
+        self.generator.client = SimpleNamespace(execute=execute, transport=transport)
+        def sleep(seconds):
+            clock[0] += seconds
+        with patch("generate_invoices.time.monotonic", side_effect=lambda: clock[0]), \
+                patch("generate_invoices.time.sleep", side_effect=sleep) as waiting:
+            self.assertEqual(self.order, self.generator.fetch_order_for_invoice(self.order["order_num"]))
+        self.assertEqual([30, 30, 15], [call.args[0] for call in waiting.call_args_list])
+        self.assertEqual([130, 160], renewals)
+        self.assertEqual(2, len(calls))
+
+    def test_json_http_509_stops_before_retry_or_creation(self):
+        self.generator.read_attempts = 4
+        transport = SimpleNamespace()
+        def execute(*args, **kwargs):
+            transport.response_status_code = 509
+            transport.response_headers = {"Retry-After": "1"}
+            raise TransportQueryError("synthetic private quota")
+        self.generator.client = SimpleNamespace(execute=execute, transport=transport)
+        with patch.object(self.generator.client, "execute", wraps=execute) as request, \
+                patch("generate_invoices.time.sleep") as sleep:
+            with self.assertRaises(TransportQueryError):
+                self.generator.fetch_order_for_invoice(self.order["order_num"])
+        self.assertEqual(1, request.call_count)
+        sleep.assert_not_called()
+        self.assertEqual([], self.web.get_urls)
+
+    def test_data_only_http_failure_never_becomes_invoice_evidence(self):
+        self.generator.read_attempts = 3
+        for status in (429, 509, 401, 308):
+            transport = SimpleNamespace()
+            def execute(*args, **kwargs):
+                transport.response_status_code = status
+                return {"getOrder": self.order}
+            self.generator.client = SimpleNamespace(execute=execute, transport=transport)
+            with patch.object(self.generator.client, "execute", wraps=execute) as request, \
+                    patch("generate_invoices.time.sleep"):
+                with self.assertRaises(TransportServerError):
+                    self.generator.fetch_order_for_invoice(self.order["order_num"])
+            self.assertEqual(3 if status == 429 else 1, request.call_count)
+        self.assertEqual([], self.web.get_urls)
+
+    def test_detail_read_cannot_outwait_its_budget_or_replay_a_mutation(self):
+        self.generator.read_attempts = 4
+        transport = SimpleNamespace()
+        def execute(*args, **kwargs):
+            transport.response_status_code = 429
+            transport.response_headers = {"Retry-After": "241"}
+            raise TransportQueryError("synthetic private quota")
+        self.generator.client = SimpleNamespace(execute=execute, transport=transport)
+        with patch.object(self.generator.client, "execute", wraps=execute) as request, \
+                patch("generate_invoices.time.sleep") as sleep:
+            with self.assertRaisesRegex(RuntimeError, "Invoice read time limit"):
+                self.generator.fetch_order_for_invoice(self.order["order_num"])
+            with self.assertRaisesRegex(ValueError, "query"):
+                self.generator.execute_read(gql("mutation { x }"), {})
+        self.assertEqual(1, request.call_count)
+        sleep.assert_not_called()
 
     def test_dry_run_has_no_s3_or_web_writes(self):
         summary = self.run_fixture(dry_run=True, full_backlog=True)
@@ -1473,7 +1547,7 @@ class StableInvoicePaginationTests(unittest.TestCase):
         self.setUp()
         self.generator._scan_started_at = 0
         self.generator.read_attempts = 4
-        self.generator.client = SimpleNamespace(execute=lambda *a, **k: (_ for _ in ()).throw(RuntimeError("429")))
+        self.generator.client = SimpleNamespace(execute=lambda *a, **k: (_ for _ in ()).throw(TransportServerError("synthetic quota", code=429)))
         with patch("generate_invoices.time.monotonic", return_value=1195), patch("generate_invoices.time.sleep") as sleep:
             with self.assertRaisesRegex(RuntimeError, "time limit"):
                 self.scan_ids()

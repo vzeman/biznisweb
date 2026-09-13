@@ -18,7 +18,9 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    # Initial drain, three probes, final drain and rollback each have finite
+    # bounds. Leave an additional hour for setup, API calls and restoration.
+    timeout-minutes: 240
     steps:
       - uses: actions/checkout@v6.0.2
       - name: Require current main

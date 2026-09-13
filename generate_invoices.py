@@ -17,6 +17,9 @@ from contextlib import nullcontext
 from zoneinfo import ZoneInfo
 
 from order_inventory import InventoryScanBudget, scan_order_inventory
+from api_read_backoff import (
+    READ_BUDGET_SECONDS, check_read_deadline, check_read_response_status, prepare_query_read, read_retry_delay, wait_before_read,
+)
 
 from invoice_automation_state import (
     AutomationLeaseBusy,
@@ -29,7 +32,7 @@ from invoice_automation_state import (
 
 from dotenv import load_dotenv
 from gql import gql, Client
-from gql.transport.requests import RequestsHTTPTransport
+from api_read_backoff import ReadAwareRequestsHTTPTransport as RequestsHTTPTransport
 from gql.transport.exceptions import TransportQueryError, TransportServerError
 from http_client import build_retry_session, resolve_timeout
 from logger_config import get_logger
@@ -435,7 +438,8 @@ def reconcile_existing_invoice_statuses(
         try:
             if journal:
                 journal.assert_owned()
-            refreshed = read_order(order_num) if read_order else fetch_order_safety_context(client, order_num)
+            refreshed = read_order(order_num) if read_order else fetch_order_safety_context(
+                client, order_num, progress_callback=journal.assert_owned if journal else None)
             if not _is_existing_invoice_status_reconciliation_candidate(refreshed, reconciliation_settings):
                 result["skipped_after_recheck"] += 1
                 continue
@@ -477,7 +481,8 @@ def reconcile_existing_invoice_statuses(
                          "target_status_name": actual_target, "reason": decision.reason}
             journal.update_order(order_num, status_mutation=operation)
             try:
-                change_status_verified(client, order_num, actual_id, actual_target, silent=True)
+                change_status_verified(client, order_num, actual_id, actual_target, silent=True,
+                                       progress_callback=journal.assert_owned)
             except Exception:
                 journal.update_order(order_num, status_mutation={**operation, "state": "uncertain"})
                 raise
@@ -901,44 +906,48 @@ class InvoiceGenerator:
             return False
     
     def execute_read(self, query: Any, variables: Dict[str, Any]) -> Dict[str, Any]:
-        """Retry only reads; the transport used for writes has retries disabled."""
-        from graphql import OperationType
+        """Retry only reads inside the shared scan budget or a bounded detail read."""
+        deadline = self._scan_read_deadline
+        if deadline is None:
+            deadline = time.monotonic() + READ_BUDGET_SECONDS
+        limit_message = ("Invoice scan time limit reached before completion" if self._scan_read_deadline is not None
+                         else "Invoice read time limit reached")
 
-        document = getattr(query, "document", query)
-        operations = [node for node in document.definitions if hasattr(node, "operation")]
-        if not operations or any(node.operation != OperationType.QUERY for node in operations):
-            raise ValueError("Invoice execute_read only accepts queries")
+        def check_deadline() -> None:
+            check_read_deadline(deadline, monotonic=time.monotonic, message=limit_message)
 
-        def check_scan_deadline(delay: float = 0) -> None:
-            deadline = self._scan_read_deadline
-            if deadline is not None and time.monotonic() + delay >= deadline:
-                raise RuntimeError("Invoice scan time limit reached before completion")
-
-        for attempt in range(self.read_attempts):
-            check_scan_deadline()
+        def heartbeat() -> None:
             if self.operation_journal and time.monotonic() - self._last_lease_renewal_at >= 30:
                 self.operation_journal.assert_owned()
                 self._last_lease_renewal_at = time.monotonic()
+
+        def wait(delay: float) -> None:
+            wait_before_read(delay, deadline=deadline, progress_callback=heartbeat,
+                             monotonic=time.monotonic, sleep=time.sleep, message=limit_message)
+
+        for attempt in range(self.read_attempts):
+            check_deadline()
+            heartbeat()
             remaining = self.page_delay_seconds - (time.monotonic() - self._last_read_at)
             if remaining > 0:
-                check_scan_deadline(remaining)
-                time.sleep(remaining)
-            check_scan_deadline()
+                wait(remaining)
+            check_deadline()
+            transport = prepare_query_read(self.client, query)
             self._last_read_at = time.monotonic()
             try:
                 result = self.client.execute(query, variable_values=variables)
-                check_scan_deadline()
+                check_read_response_status(transport)
+                check_deadline()
                 if not isinstance(result, dict):
                     raise RuntimeError("BiznisWeb returned an invalid read response")
                 return result
-            except Exception:
-                if attempt + 1 == self.read_attempts:
+            except Exception as exc:
+                delay = read_retry_delay(exc, attempt=attempt,
+                                         response_headers=getattr(transport, "response_headers", None),
+                                         response_status_code=getattr(transport, "response_status_code", None))
+                if delay is None or attempt + 1 == self.read_attempts:
                     raise
-                # FLOX can return quota errors inside HTTP 200 GraphQL responses.
-                # Short 1s retries extend that throttle instead of recovering.
-                delay = min(30, 10 * (attempt + 1))
-                check_scan_deadline(delay)
-                time.sleep(delay)
+                wait(delay)
         raise RuntimeError("Invoice read retries exhausted")
 
     def resolve_eligible_status_ids(self) -> set[int]:

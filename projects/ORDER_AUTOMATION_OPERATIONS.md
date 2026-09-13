@@ -157,16 +157,18 @@ outcomes remain blocked for review. Invoice existence alone is never shipment pr
    references after two finite dry-run hosts pass actual curl localhost markers.
 3. Complete regressions and PR checks, merge through the PR, wait for the exact
    `git-<merge-SHA>` ECR build. Never deploy `latest`.
-4. Ensure old natural jobs have finished; they predate the shared lease. Seed
-   reviewed historical records, then dispatch **Deploy Order Automations** on
-   current main. Three identified candidate hosts must pass the existing runners
+4. Seed reviewed historical records, then dispatch **Deploy Order Automations**
+   on current main. The deployer first pauses the five schedules and requires
+   existing jobs to finish plus two continuously quiet minutes. This prevents
+   expensive full candidate scans from competing with our natural jobs for the
+   shop's shared API quota. Three identified candidate hosts must pass the runners
    in dry-run mode and a localhost marker before any schedule promotion. The
    new invoice candidates explicitly force complete historical discovery,
    regardless of the last saved full-scan watermark; legacy pin probes retain
    their existing compatible arguments. The
-   deployer then pauses the five schedules, waits for existing tasks to finish
-   and requires two continuously quiet minutes before promotion. It never stops
-   natural tasks. The bounded drain also covers pending/stopping tasks; failed
+   deployer rechecks paused schedules during each probe and independently drains
+   again before promotion. It never stops natural tasks. The bounded drain also
+   covers pending/stopping tasks; failed
    partial promotion drains any new generation before restoring old schedules.
 5. Verify five schedule readbacks, immutable image/commands, live application
    completion, durable invoice/email outcomes and only then shop UI/history.
@@ -176,13 +178,27 @@ The deployer stores exact old schedules, definitions, candidate host evidence an
 state-policy snapshots privately under `data/roy/order-automation/deployments/`.
 Failed schedule promotion restores attempted schedule changes only after checking
 for concurrent operator drift. A drift or failed rollback requires operator review.
-Candidate failure restores changed state IAM policies. Monitoring provisioning can
+Candidate failure drains any unfinished probe, restores changed state IAM policies
+and restores the original schedules only when their identities remain unchanged.
+An unverified probe cleanup or conflicting state-policy change leaves schedules
+paused for operator review. Monitoring provisioning can
 leave harmless resource additions; this is not a transactional rollback of all AWS
 resources. Never overwrite the journal as a rollback: it contains financial effects.
 If concurrent changes or an unfinished rollback prevent safe restoration, leave
 the protected schedules paused for operator review and use the private snapshot.
-The managed workflow has a three-hour bound to leave room for all finite host and
-rollback gates; normal deployment is expected to be substantially shorter.
+The managed workflow has a four-hour bound, including an hour of headroom beyond
+the combined drain/probe bounds for setup and rollback. Normal deployment is
+expected to be substantially shorter. Main is checked again before any pause.
+
+API throttling uses operating cost, including nested entity loads, rather than
+HTTP request count. Read-only retries honor fresh `Retry-After` headers and use a
+minute-window cooldown for HTTP 429 when no valid server delay is provided.
+Longer daily/monthly quota exhaustion (509) fails without quick retries. All waits
+consume the original discovery deadline; an unfinished scan cannot advance its
+watermark or become an empty-success result. Mutation transports remain retry-free.
+See the vendor's [API limits](https://www.biznisweb.sk/a/1256/kvoty-limity-api),
+[operating cost](https://www.biznisweb.sk/a/1257/prevadzkove-naklady) and
+[Retry-After guidance](https://www.biznisweb.sk/partner-api).
 
 ## Monitoring and remaining external dependency
 

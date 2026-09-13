@@ -8,6 +8,7 @@ on:
       - 'unpaid_order_cancellation*.py'
       - 'order_status_safety.py'
       - 'order_inventory.py'
+      - 'api_read_backoff.py'
       - 'daily_report_runner.py'
       - 'reporting_core/**'
       - 'projects/*/settings.json'
@@ -43,6 +44,7 @@ jobs:
           tests.test_invoice_generation tests.test_invoice_automation_state
           tests.test_order_status_safety tests.test_unpaid_order_cancellation
           tests.test_order_inventory
+          tests.test_api_read_backoff
           tests.test_seeded_invoice_retry
           tests.test_creditnote_storno_guard tests.test_creditnote_export
           tests.test_creditnote_automation_context tests.test_automation_runner_health
