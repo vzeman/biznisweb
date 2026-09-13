@@ -5,6 +5,35 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Primary promotion independently verified; one uncollected closure pinned
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/reviewed-uncollected-close-20260913`
+
+What changed:
+
+- Managed order deployment `34749213122` and image build `34749045171` completed successfully for source `fda36b49e7610d289d6dcb1d0affe892d1ba5ce7`, image `sha256:29c0c8e4106438f204b0afaee097e90fab887a82e71327653e508a20574b90c0`. Independent terminal verification passed at 10:04:34 UTC; the primary main freeze is closed. This is now the verified order runtime.
+- Pinned only the two release constants in `scripts/close_reviewed_uncollected_obligation.py` to that independently verified release. The user definitively confirmed VEVO 2502000712 was uncollected/returned. The helper permits one silent Storno transition and separate obligation closure; the original ambiguous financial attempt remains unchanged. No closure has been applied at this checkpoint.
+- Reporting PR #553 is closed and superseded by #556. Its exact-head CI exposed an overly broad cleanup assertion and Windows checkout/test fixture assumptions; the author is repairing these offline with independent review. Real AWS environment-list reordering also requires strict semantic comparison of unique name/value entries before report readiness; order-sensitive arrays and frozen evidence must remain unchanged. No report deployment has occurred.
+
+What is verified:
+
+- Independent private proof `data/roy/order-automation/audits/2026-09-13/independent-deploy-fda36b49-20260913.json`, SHA `ada17707d7885aa68b684633f9e0ee9ef4695734fe2b53dc5649b4eec649fb50`, binds the complete final managed receipt SHA `40ba6e2debaf3286948cb248ce0538f9e236d91c7813a709f771e933e47a5c7c` at `data/roy/order-automation/deployments/fda36b49e7610d289d6dcb1d0affe892d1ba5ce7/a36ea17fb1664e709f1cd32d30b69808.json`.
+- All three actual Fargate hosts have unique task IDs/private IPs, `/app`, exact image, STOPPED exit 0 and one expected localhost marker each. ROY invoice :11 task `7f8f9dd56e8342228bc095375cce014b` / `172.31.18.111`; VEVO invoice :9 task `38b7f9d94ec64d0fb401be9b92a2291b` / `172.31.37.253`; ROY cancellation :42 task `ac184a7a9b7641e8a2554a51abbc43e7` / `172.31.28.24`. Cancellation stopped 09:59:09.136 UTC: 4,853 orders / 169 pages, 15 rechecked, zero eligible/recovery/review/failures/writes, no limit hit.
+- Both 120-second drains passed with zero unfinished tasks (09:18:59.671800 and 10:01:30.933162 UTC). Five schedules are enabled at the verified new pins; six IAM policies, 17 alarm configurations, three empty encrypted DLQs and both protected report pins ROY :71 / VEVO :33 match. No old/candidate tasks remained active at the final snapshot.
+- Earlier independent closure review passed 141 focused tests, seven actual release-gate adversarial cases and the real VEVO canonical-ID pipeline simulation. A second apply performs zero requests and preserves original financial fields. The final two-line pin still requires focused validation and own PR CI before apply.
+
+Known issues:
+
+- Two existing VEVO missing-completion/stale-full-scan alarms remain ALARM; fifteen other alarms were OK. Candidate dry success does not establish natural-run recovery or zero journal review/unknown counts. Natural runtime monitoring and VEVO all-age verification remain required.
+- Bank settlement provenance for 2602007943 is already recorded; compatible natural consumer evidence is pending. Native gateway callbacks can still overwrite a status before guarded repair; no vendor-side prevention was claimed. Standalone creditnote guard #552 and managed report #556 remain unmerged/undeployed.
+- No persistent local processes were started. Customer evidence remains private; no provider payment/receipt/refund/email was created by this checkpoint.
+
+Next exact step:
+
+- Validate and push the pinned helper on its own PR, require exact-head checks, then preview and apply once against the exact managed promotion receipt while the shared VEVO lease is free. Verify native status and preserved financial uncertainty, run VEVO five seeded cases plus all-age discovery, then complete the standalone guard and report migrations with their own host gates.
+
 ## 2026-09-13 — Explicit ROY target release merged; new deployment freeze
 
 Date: 2026-09-13
