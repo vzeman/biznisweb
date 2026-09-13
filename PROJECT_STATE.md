@@ -24,12 +24,74 @@ What is verified:
 
 Known issues:
 
-- This branch predates the merged API cooldown correction and must integrate the current verified invoice release before PR/CI/build. Invoice recovery takes precedence; do not merge or deploy this draft during the invoice release freeze.
+- This branch now incorporates the merged API cooldown correction and release handoff through `f140f5aa`. The integration preserved both independently added CI test entries and both project-state sections; no customer data or runtime configuration was changed. Invoice recovery takes precedence; do not merge or deploy this draft during the invoice release freeze.
 - Future daily guard completion is monitored, not a strict dependency of the unchanged report images. Guard jobs are scheduled 92 minutes before their report, with completion/failure/review/DLQ alarms. The migration itself requires actual successful completions before resuming reports. Native FLOX stale payment-attempt handling remains a separate provider behavior.
 
 Next exact step:
 
-- Preserve this reviewed preparation in Git; after the invoice release and historical recovery finish, merge the current verified source/state into this branch, run combined regression and required PR checks, then build and execute the separate managed migration. Verify all six host outcomes and exact two-report skip-flag delta, with private receipt readback. Never alter fixed report task/image/command pins as a shortcut.
+- After the invoice release and historical recovery finish, update the runtime handoff, run required PR checks, then build and execute the separate managed migration. The integrated full build regression passed all 662 tests before this merge commit. Main remains frozen for invoice deployment `34735770705`; this branch is preparation only. Verify all six host outcomes and exact two-report skip-flag delta, with private receipt readback. Never alter fixed report task/image/command pins as a shortcut.
+
+## 2026-09-13 — API cooldown correction merged; exact release pending
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-rate-production-verification-20260913`
+
+What changed:
+
+- PR #545 merged as `a97d974f4d86ac7c1d3fcb3ec7ff5d094245bb3c` after all six exact-head checks passed on `f503bdc569a4244b2f8384c2a28bd58b94d1119c`. Build `34735576536` is producing the immutable release. Production schedules still point to the preceding image until managed host/drain/promotion gates succeed.
+- Build `34735576536` succeeded. Independent ECR readback confirms exact merged source tag and immutable digest `8d06b6c7985b6a25024964653fb292db9c73a9b5eb5dbc0938665fcbc3166e7b`. Managed deployment `34735770705` was dispatched once after fresh unchanged-main and no-active-release checks. Main is frozen until this release finishes promotion or verified restoration; no other PR may merge during that interval. The separate guard preparation is committed/pushed as `166076cc` and remains undeployed.
+- Three fresh private artifacts were published create-only with AES256 and exact-byte/hash readback under `data/roy/order-automation/audits/2026-09-13/`: `runtime-refresh-20260913.json` SHA-256 `09bb3b699226cde7edcbe25bc6ee4a38f7b9451a023919205cb678b283abbd9b`; `uncertain-operations-readback-20260913.json` SHA-256 `b7a4bca333d919c2d7c16cd9269cc45851a8fbd6d7d3d4417cd98264cfa28545`; `final-document-identity-contract-20260913.json` SHA-256 `d3bfb5933e1eb19e5d126f197e3e6226f9d480bb3a193377219d79eaf2f0b5d7`. Bucket ownership, region and all four public-access blocks were verified.
+
+What is verified:
+
+- 612 local regression tests, Linux/Windows CI and security/observability checks pass. The private evidence confirms two ambiguous emails were actually sent, and nine of eleven original held invoices remain missing. No new financial operation or deployment has occurred yet.
+
+Next exact step:
+
+- Verify build success and exact ECR digest for merged source, confirm unchanged main and no active managed release, then dispatch the invoice deployment once. Freeze main while it runs. Independently verify all three localhost markers, old-writer drain and five schedule pins before any reviewed invoice reconciliation. Preserve public aggregate-only documentation and private provider evidence.
+
+## 2026-09-13 — Resume after rate-limited candidate; production remains on old image
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-automation-rate-limit-20260909`
+
+What changed:
+
+- Resumed on the clean, correct rate-limit worktree at `d1254f44` after fetch/prune and pull/rebase; main remains `c9a7d3e6`. The separate guard worktree contains identified drafts from the interrupted session, with no unknown user changes. No rate-limit code had been written before interruption. Do not merge the unfinished guard migration ahead of invoice recovery.
+- Managed invoice deployment `34375837853` failed before promotion: candidate task `fee7ea1d43a44f77933bc053eacaf56c`, Fargate instance ID not applicable, IP `172.31.15.162`, service `roy-invoice-daily:6`, `/app`, exact `7182a6a316a8a4e4c7f23c9850976136268f4dd4960e985647c811d0a2840e9f`, stopped with exit one on GraphQL HTTP 429 during full inventory. No localhost marker or later candidate exists. Snapshot `data/roy/order-automation/deployments/c9a7d3e6e5e2a312a3a7a472b234696a4c4f6693/2e032af9fc394a2f977fd0bfa62da121.json` reached `candidate-failed-state-policy-restored`, SHA-256 `fecae86388c30408baf9704e3f7bc92d96d231b68ea070ddec0c133ba0694b0a`; all five old schedule pins and three prior IAM state policies were independently verified restored. The failed release's main freeze has ended.
+
+What is verified:
+
+- Fresh AWS reads on resume still show the five enabled schedules on the old `26e4...` image: ROY/VEVO invoice definitions `:5`, cancellation `:38`. A current VEVO host is task `da5fb0752e954af8a3074af54493c58b`, IP `172.31.34.132`, service `vevo-invoice-daily:5`, `/app`; recent natural invoice tasks stopped with exit one. Runtime is not repaired merely because PR #544 merged.
+- ROY's six held seeds now have three `create_failed`, one `create_ambiguous` and two `complete` records; no invoice IDs are recorded. VEVO's five held seeds remain `create_failed`, with an active natural-run lease at the initial read. Fresh document reconciliation is required before any helper attempt. Do not clear uncertainty or infer document absence from this journal.
+- Official BiznisWeb documentation measures API limits by operating cost, including nested loads, rather than HTTP request count. HTTP 429 denotes frequency/window pressure; 509 denotes longer quota exhaustion. The installed GraphQL transport exposes fresh response headers before raising errors. Existing reads ignore `Retry-After` and use short fixed backoff; candidate full scans currently overlap natural tasks before the deployer pauses schedules. Concurrent load is an identified risk, not a proven sole cause of the historical 429.
+
+Next exact step:
+
+- Respect documented read-only cooldowns within existing finite deadlines, with no mutation retries. Pause and drain the five existing schedules before expensive candidates, restore them on failed preparation without overwriting drift, and retain the later promotion/rollback gates. Test, commit/push and review this correction before a new immutable release. Independently reconcile changed historical seeds; finish actual invoices only after uncertainty is resolved and old writers are drained. Resume the separate creditnote migration after invoice release succeeds.
+
+## 2026-09-13 — Read cooldown and pre-candidate drain correction ready
+
+What changed:
+
+- Added query-only, bounded `Retry-After` handling with fresh transport status/headers, permanent/partial failure rejection and lease renewal during cooldowns. Writes still have zero automatic retries. The complete inventory retains its shared 20-minute deadline; non-scan reads have a four-minute budget.
+- Managed deployment now verifies current main, pauses all five existing schedules and proves their 120-second quiet drain before full candidate scans. It verifies the paused configuration throughout candidate execution, repeats the drain before promotion and restores original schedules/IAM after safe failed preparation. Unresolved cleanup or concurrent drift remains paused for review. The workflow has 240 minutes to cover bounded probes, drain and restoration.
+
+What is verified:
+
+- Complete build regression: 612 tests pass; reporting smoke, focused Ruff and whitespace checks pass. Independent review also covers stale-main zero-write behavior and workflow timeout headroom. No new image or schedule target is live yet.
+- Fresh private document reads find two of the eleven original held historical cases already finalized externally, leaving nine missing. ROY also contains four ambiguous creation outcomes and two ambiguous email outcomes. Provider histories and matching log timestamps positively prove both ambiguous emails were sent; never resend them. Presence of a preinvoice does not prove pending finalization: four completed examples retain the same internal document identity in both collections.
+- All eleven historical email holds are retained. No financial write, customer message or AWS schedule mutation was performed during this resumed investigation. All local finite checks/readers ended; no development server or tunnel was started.
+
+Known issues:
+
+- Four old creation failures lost their exact request stage and require reviewed existing-document reconciliation; absence of a final document alone is not proof that replay is safe. The actual lexical format of a native email response remains unobserved. The separate creditnote guard draft is not deployed.
+
+Next exact step:
+
+- Commit/push and merge this correction after all required CI, build the exact main image and run the managed deployment once. Freeze main until its host/drain/promotion or rollback evidence is independently verified. Then reconcile confirmed emails without sending, recover only positively reviewed pending documents under the shared lease, finish the remaining historic invoices and full-inventory live checks, and complete the separate guard migration.
 
 ## 2026-09-09 — Separate creditnote guard migration in progress; report pins preserved
 

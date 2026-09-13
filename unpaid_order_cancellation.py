@@ -10,13 +10,14 @@ import unicodedata
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 from gql import Client, gql
-from gql.transport.requests import RequestsHTTPTransport
+from api_read_backoff import ReadAwareRequestsHTTPTransport as RequestsHTTPTransport
 
 from logger_config import get_logger
 from order_inventory import InventoryScanBudget, scan_order_inventory
+from api_read_backoff import check_read_deadline, check_read_response_status, prepare_query_read, read_retry_delay, wait_before_read
 from order_status_safety import (
     acquire_status_automation_lease,
     ORDER_SAFETY_QUERY,
@@ -535,8 +536,9 @@ def resolve_candidate_status_ids(
     return resolved
 
 
-def fetch_order_for_recheck(client: Client, order_num: str) -> Dict[str, Any]:
-    return fetch_order_safety_context(client, order_num)
+def fetch_order_for_recheck(client: Client, order_num: str, *,
+                            progress_callback: Optional[Callable[[], None]] = None) -> Dict[str, Any]:
+    return fetch_order_safety_context(client, order_num, progress_callback=progress_callback)
 
 
 def fetch_orders_for_cancellation(
@@ -550,35 +552,37 @@ def fetch_orders_for_cancellation(
 
     def read(variables: Dict[str, Any], deadline: float) -> Dict[str, Any]:
         nonlocal last_read_at
+        limit_message = "Unpaid cancellation scan time limit reached before completion"
 
-        def check_deadline(delay: float = 0) -> None:
-            if time.monotonic() + delay >= deadline:
-                raise RuntimeError("Unpaid cancellation scan time limit reached before completion")
+        def check_deadline() -> None:
+            check_read_deadline(deadline, monotonic=time.monotonic, message=limit_message)
+
+        def wait(delay: float) -> None:
+            wait_before_read(delay, deadline=deadline, monotonic=time.monotonic,
+                             sleep=time.sleep, message=limit_message)
 
         for attempt in range(settings.read_attempts):
             check_deadline()
             remaining = settings.page_delay_seconds - (time.monotonic() - last_read_at)
             if remaining > 0:
-                check_deadline(remaining)
-                time.sleep(remaining)
+                wait(remaining)
             check_deadline()
+            transport = prepare_query_read(client, UNPAID_ORDER_QUERY)
             last_read_at = time.monotonic()
             try:
-                result = execute_read(client, UNPAID_ORDER_QUERY, variable_values=variables, attempts=1)
+                result = client.execute(UNPAID_ORDER_QUERY, variable_values=variables)
+                check_read_response_status(transport)
                 check_deadline()
+                if not isinstance(result, dict):
+                    raise RuntimeError("Order API returned an invalid response")
                 return result
             except Exception as exc:
-                code = getattr(exc, "code", None) or getattr(getattr(exc, "response", None), "status_code", None)
-                transient = code in {429, 500, 502, 503, 504} or type(exc).__name__ in {
-                    "Timeout", "ReadTimeout", "ConnectTimeout", "ConnectionError", "TransportProtocolError",
-                    "TransportQueryError",
-                }
-                # A supplied partial response is never accepted as a page.
-                if getattr(exc, "data", None) or not transient or attempt + 1 == settings.read_attempts:
+                delay = read_retry_delay(exc, attempt=attempt,
+                                         response_headers=getattr(transport, "response_headers", None),
+                                         response_status_code=getattr(transport, "response_status_code", None))
+                if delay is None or attempt + 1 == settings.read_attempts:
                     raise
-                delay = min(30, 10 * (attempt + 1))
-                check_deadline(delay)
-                time.sleep(delay)
+                wait(delay)
         raise RuntimeError("Unpaid cancellation scan read retries exhausted")
 
     def validate_order(order: Any) -> None:
@@ -611,8 +615,10 @@ def fetch_orders_for_cancellation(
 
 def change_order_status(
     client: Client, order_num: str, status_id: int, status_name: str, *, silent: bool = False,
+    progress_callback: Optional[Callable[[], None]] = None,
 ) -> Dict[str, Any]:
-    return change_status_verified(client, order_num, status_id, status_name, silent=silent)
+    return change_status_verified(client, order_num, status_id, status_name, silent=silent,
+                                  progress_callback=progress_callback)
 
 
 def run_unpaid_order_cancellation(
@@ -748,7 +754,7 @@ def run_unpaid_order_cancellation(
             prior = journal.get_order(order_num) if journal else {}
             is_recovery = normalize_text(_status_name(listed)) in settings.normalized_recovery_source_statuses
             try:
-                checked = fetch_order_for_recheck(client, order_num)
+                checked = fetch_order_for_recheck(client, order_num, progress_callback=journal.assert_owned if journal else None)
                 summary.rechecked_orders += 1
                 action, target_name, reason = choose_action(checked, prior, heartbeat=journal.assert_owned if journal else None)
                 if journal:
@@ -784,13 +790,13 @@ def run_unpaid_order_cancellation(
             try:
                 if action == "recover" and not injected_creditnote_context:
                     refresh_creditnotes(journal.assert_owned)
-                live_order = fetch_order_for_recheck(client, order_num)
+                live_order = fetch_order_for_recheck(client, order_num, progress_callback=journal.assert_owned if journal else None)
                 summary.rechecked_orders += 1
                 if action != "recover" and needs_recovery_evidence(live_order) and not injected_creditnote_context:
                     refresh_creditnotes(journal.assert_owned)
                     # The complete creditnote scan may be slow. The actual
                     # mutation candidate must be read after that scan finishes.
-                    live_order = fetch_order_for_recheck(client, order_num)
+                    live_order = fetch_order_for_recheck(client, order_num, progress_callback=journal.assert_owned if journal else None)
                     summary.rechecked_orders += 1
                 live_action, target_name, reason = choose_action(live_order, prior, heartbeat=journal.assert_owned)
                 journal.assert_owned()
@@ -815,7 +821,8 @@ def run_unpaid_order_cancellation(
             journal.update_order(order_num, status_mutation=mutation_record)
             journal.assert_owned()
             try:
-                change_order_status(client, order_num, action_status_id, target_name, silent=live_action == "recover")
+                change_order_status(client, order_num, action_status_id, target_name, silent=live_action == "recover",
+                                    progress_callback=journal.assert_owned)
             except Exception:
                 journal.update_order(order_num, status_mutation={**mutation_record, "state": "uncertain"})
                 record_failure(order_num, live_action == "recover")

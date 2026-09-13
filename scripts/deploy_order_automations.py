@@ -20,6 +20,7 @@ import subprocess
 import sys
 import time
 import uuid
+from typing import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -326,8 +327,11 @@ class Deployment:
                 failed = True
         require(not failed, "state-policy-rollback-requires-operator")
 
-    def host_gate(self, family: str, task_arn: str, schedule: dict, digest: str, *, old_image: bool = False) -> dict:
+    def host_gate(self, family: str, task_arn: str, schedule: dict, digest: str, *, old_image: bool = False,
+                  paused_schedules: dict | None = None) -> dict:
         project, kind, _ = SERVICES[family]
+        if paused_schedules is not None:
+            self.verify_paused_schedules(paused_schedules)
         network = schedule["Target"]["EcsParameters"]["NetworkConfiguration"]["awsvpcConfiguration"]
         network = {key[0].lower() + key[1:]: value for key, value in network.items()}
         if old_image:
@@ -356,6 +360,8 @@ class Deployment:
         task = None
         try:
             while time.monotonic() < deadline:
+                if paused_schedules is not None:
+                    self.verify_paused_schedules(paused_schedules)
                 reply = self.ecs.describe_tasks(cluster=schedule["Target"]["Arn"], tasks=[own_task])
                 require(not reply.get("failures") and len(reply.get("tasks", [])) == 1, "candidate-readback-missing")
                 task = reply["tasks"][0]
@@ -505,14 +511,22 @@ class Deployment:
                     )})
         return unfinished
 
+    def verify_paused_schedules(self, paused: dict) -> None:
+        for name, expected in paused.items():
+            current = schedule_request(self.scheduler.get_schedule(Name=name))
+            require(current == schedule_request(expected) and current["State"] == "DISABLED",
+                    "schedule-changed-during-drain")
+
+    def require_current_main(self) -> None:
+        subprocess.run(["git", "fetch", "origin", "main"], cwd=ROOT, check=True, capture_output=True)
+        current_main = subprocess.check_output(["git", "rev-parse", "origin/main"], cwd=ROOT, text=True).strip()
+        require(current_main == self.commit, "main-changed-before-promotion")
+
     def wait_for_drain(self, paused: dict, *, timeout_seconds: int = 1800, quiet_seconds: int = 120) -> None:
         """Require a quiet interval after pause propagation, bounded to 30 minutes."""
         deadline, quiet_since = time.monotonic() + timeout_seconds, None
         while time.monotonic() < deadline:
-            for name, expected in paused.items():
-                current = schedule_request(self.scheduler.get_schedule(Name=name))
-                require(current == schedule_request(expected) and current["State"] == "DISABLED",
-                        "schedule-changed-during-drain")
+            self.verify_paused_schedules(paused)
             active = self.unfinished_automation_tasks(paused)
             now = time.monotonic()
             if active:
@@ -526,16 +540,34 @@ class Deployment:
             time.sleep(10)
         raise RuntimeError("old-automation-tasks-drain-timeout")
 
-    def pause_drain_and_promote(self, originals: dict, desired: dict) -> None:
+    def pause_drain_and_promote(self, originals: dict, desired: dict | None = None,
+                                *, prepare: Callable[[], dict] | None = None) -> None:
+        require((desired is None) != (prepare is None), "promotion-preparation-ambiguous")
+        if prepare is not None:
+            self.require_current_main()
         paused = {name: {**schedule_request(row), "State": "DISABLED"} for name, row in originals.items()}
         # The existing transactional updater handles partial/ambiguous pauses and
         # restores their original states without overwriting concurrent edits.
         promote_schedules(self.scheduler, originals, paused)
         promotion_started = False
+        preparation_started = False
         try:
             self.evidence["phase"] = "schedules-paused-draining"
             self.save_private(self.evidence_bucket)
             self.wait_for_drain(paused)
+            if prepare is not None:
+                # Expensive full scans must not compete with the old scheduled
+                # readers for the shop's shared GraphQL operating-cost quota.
+                self.evidence["candidate_drain"] = copy.deepcopy(self.evidence.get("drain", {}))
+                self.evidence["phase"] = "drain-verified-before-candidates"
+                self.save_private(self.evidence_bucket)
+                preparation_started = True
+                desired = prepare()
+                require(isinstance(desired, dict) and set(desired) == set(originals),
+                        "candidate-schedule-set-incomplete")
+                # Also exclude a task started outside Scheduler during the probes.
+                self.wait_for_drain(paused)
+                self.require_current_main()
             self.evidence["phase"] = "drain-verified-before-promotion"
             self.save_private(self.evidence_bucket)
             promotion_started = True
@@ -553,9 +585,17 @@ class Deployment:
                     restore_from = {name: {**row, "State": "DISABLED"} for name, row in current.items()}
                     promote_schedules(self.scheduler, current, restore_from)
                     self.wait_for_drain(restore_from)
+                elif preparation_started:
+                    # A failed/uncertain probe cleanup cannot race restored
+                    # production readers. Never terminate natural jobs here.
+                    self.wait_for_drain(paused)
+                if preparation_started:
+                    self.restore_state_policies()
                 promote_schedules(self.scheduler, restore_from,
                                   {name: schedule_request(row) for name, row in originals.items()})
+                self.evidence["rollback"] = "original-schedules-and-state-policies-restored"
             except Exception:
+                self.evidence["rollback"] = "requires-operator"
                 raise RuntimeError("schedule-drain-rollback-requires-operator") from None
             raise RuntimeError("schedule-drain-or-promotion-failed-originals-restored") from None
 
@@ -623,9 +663,10 @@ class Deployment:
         evidence_bucket = buckets["roy-invoice-daily"]
         self.evidence_bucket = evidence_bucket
         self.save_private(evidence_bucket)
-        # Journal access is a host-check prerequisite. All three hosts must pass
-        # before any schedule or monitoring mutation; failed probes restore IAM.
-        try:
+        def prepare_candidate_schedules() -> dict:
+            # Invoked only after the five old schedules are paused and drained.
+            # Journal access is a host-check prerequisite; the surrounding
+            # transaction restores it before resuming originals on failure.
             seen_state = set()
             for family, (project, _, _) in SERVICES.items():
                 identity = (project, buckets[family], definitions[family]["taskRoleArn"])
@@ -634,34 +675,31 @@ class Deployment:
                     seen_state.add(identity)
             for family, (_, _, schedule_name) in SERVICES.items():
                 candidates[family] = self.ecs.register_task_definition(**definitions[family])["taskDefinition"]["taskDefinitionArn"]
-                host = self.host_gate(family, candidates[family], snapshots[schedule_name], digest)
+                paused = {name: {**schedule_request(row), "State": "DISABLED"} for name, row in snapshots.items()}
+                host = self.host_gate(family, candidates[family], snapshots[schedule_name], digest,
+                                      paused_schedules=paused)
                 self.evidence["hosts"].append(host)
                 self.save_private(evidence_bucket)
-        except Exception:
-            self.restore_state_policies()
-            self.evidence["phase"] = "candidate-failed-state-policy-restored"
+            require(len(self.evidence["hosts"]) == len(SERVICES), "host-gate-incomplete")
+            self.alarm_actions = [established_alarm_route(self.session, self.account)]
+            self.evidence["alarm_actions"] = self.alarm_actions
+            self.require_current_main()
+            dlqs = {}
+            for family in SERVICES:
+                service_schedules = [snapshot for name, snapshot in snapshots.items() if SCHEDULES[name] == family]
+                dlqs[family] = self.provision_monitoring(family, service_schedules, buckets[family], definitions[family])
+            desired = {}
+            for name, family in SCHEDULES.items():
+                settings = json.loads((ROOT / "projects" / SERVICES[family][0] / "settings.json").read_text(encoding="utf-8"))
+                desired[name] = desired_schedule(snapshots[name], candidates[family], dlqs[family], settings)
+            self.evidence.update(desired_schedules=desired, phase="ready-to-promote")
             self.save_private(evidence_bucket)
-            raise
-        require(len(self.evidence["hosts"]) == len(SERVICES), "host-gate-incomplete")
-        self.alarm_actions = [established_alarm_route(self.session, self.account)]
-        self.evidence["alarm_actions"] = self.alarm_actions
-        subprocess.run(["git", "fetch", "origin", "main"], cwd=ROOT, check=True, capture_output=True)
-        current_main = subprocess.check_output(["git", "rev-parse", "origin/main"], cwd=ROOT, text=True).strip()
-        require(current_main == self.commit, "main-changed-before-promotion")
-        dlqs = {}
-        for family in SERVICES:
-            service_schedules = [snapshot for name, snapshot in snapshots.items() if SCHEDULES[name] == family]
-            dlqs[family] = self.provision_monitoring(family, service_schedules, buckets[family], definitions[family])
-        desired = {}
-        for name, family in SCHEDULES.items():
-            settings = json.loads((ROOT / "projects" / SERVICES[family][0] / "settings.json").read_text(encoding="utf-8"))
-            desired[name] = desired_schedule(snapshots[name], candidates[family], dlqs[family], settings)
-        self.evidence.update(desired_schedules=desired, phase="ready-to-promote")
-        self.save_private(evidence_bucket)
+            return desired
+
         try:
-            self.pause_drain_and_promote(snapshots, desired)
+            self.pause_drain_and_promote(snapshots, prepare=prepare_candidate_schedules)
         except Exception:
-            self.evidence["phase"] = "promotion-failed-review-rollback"
+            self.evidence["phase"] = "deployment-failed-check-rollback"
             self.save_private(evidence_bucket)
             raise
         self.evidence["phase"] = "promotion-readback-verified"

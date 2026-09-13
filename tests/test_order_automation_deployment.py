@@ -192,6 +192,7 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
         deployment.scheduler = FakeScheduler()
         deployment.evidence, deployment.evidence_bucket = {}, "private-fixture"
         deployment.save_private = Mock()
+        deployment.require_current_main = Mock()
         return deployment
 
     def test_pause_drain_precedes_first_candidate_schedule(self):
@@ -216,6 +217,105 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
             deployment.pause_drain_and_promote(originals, desired)
         self.assertEqual({name: schedule_request(row) for name, row in originals.items()}, deployment.scheduler.values)
         deployment.ecs.stop_task.assert_not_called()
+
+    def test_full_candidate_preparation_runs_only_between_verified_drains(self):
+        deployment = self.drain_deployment()
+        originals, desired = self.candidates()
+        events = []
+        def drained(paused):
+            self.assertTrue(all(row["State"] == "DISABLED" for row in deployment.scheduler.values.values()))
+            events.append("drained")
+            deployment.evidence["drain"] = {"quiet_seconds": 120, "unfinished_tasks": 0}
+        def prepare():
+            self.assertEqual(["drained"], events)
+            self.assertEqual("drain-verified-before-candidates", deployment.evidence["phase"])
+            self.assertTrue(all(row["State"] == "DISABLED" for row in deployment.scheduler.values.values()))
+            events.append("prepared")
+            return desired
+        deployment.wait_for_drain = Mock(side_effect=drained)
+        deployment.pause_drain_and_promote(originals, prepare=prepare)
+        self.assertEqual(["drained", "prepared", "drained"], events)
+        self.assertEqual(desired, deployment.scheduler.values)
+        self.assertEqual(120, deployment.evidence["candidate_drain"]["quiet_seconds"])
+
+    def test_failed_preparation_drains_and_restores_iam_before_resuming_originals(self):
+        deployment = self.drain_deployment()
+        originals, _ = self.candidates()
+        events = []
+        deployment.wait_for_drain = Mock(side_effect=lambda paused: events.append("drained"))
+        def restore():
+            self.assertEqual(["drained", "prepared", "drained"], events)
+            self.assertTrue(all(row["State"] == "DISABLED" for row in deployment.scheduler.values.values()))
+            events.append("iam-restored")
+        def prepare():
+            events.append("prepared")
+            raise RuntimeError("synthetic-read-quota-failure")
+        deployment.restore_state_policies = Mock(side_effect=restore)
+        with self.assertRaisesRegex(RuntimeError, "originals-restored"):
+            deployment.pause_drain_and_promote(originals, prepare=prepare)
+        self.assertEqual(["drained", "prepared", "drained", "iam-restored"], events)
+        self.assertEqual({name: schedule_request(row) for name, row in originals.items()}, deployment.scheduler.values)
+        self.assertEqual("original-schedules-and-state-policies-restored", deployment.evidence["rollback"])
+
+    def test_uncertain_candidate_cleanup_never_resumes_schedules_or_reverts_its_iam(self):
+        deployment = self.drain_deployment()
+        originals, _ = self.candidates()
+        deployment.wait_for_drain = Mock(side_effect=[None, RuntimeError("candidate-still-running")])
+        deployment.restore_state_policies = Mock()
+        with self.assertRaisesRegex(RuntimeError, "requires-operator"):
+            deployment.pause_drain_and_promote(originals, prepare=Mock(side_effect=RuntimeError("candidate-failed")))
+        deployment.restore_state_policies.assert_not_called()
+        self.assertTrue(all(row["State"] == "DISABLED" for row in deployment.scheduler.values.values()))
+        deployment.ecs.stop_task.assert_not_called()
+
+    def test_preparation_iam_drift_keeps_schedules_paused(self):
+        deployment = self.drain_deployment()
+        originals, _ = self.candidates()
+        deployment.wait_for_drain = Mock()
+        deployment.restore_state_policies = Mock(side_effect=RuntimeError("state-policy-drift"))
+        with self.assertRaisesRegex(RuntimeError, "requires-operator"):
+            deployment.pause_drain_and_promote(originals, prepare=Mock(side_effect=RuntimeError("candidate-failed")))
+        self.assertTrue(all(row["State"] == "DISABLED" for row in deployment.scheduler.values.values()))
+
+    def test_ambiguous_preparation_arguments_fail_before_any_schedule_write(self):
+        for with_both in (False, True):
+            deployment = self.drain_deployment()
+            originals, desired = self.candidates()
+            with self.assertRaisesRegex(RuntimeError, "preparation-ambiguous"):
+                deployment.pause_drain_and_promote(originals, desired if with_both else None,
+                                                   prepare=Mock() if with_both else None)
+            self.assertEqual([], deployment.scheduler.writes)
+
+    def test_source_change_after_probes_restores_originals_without_promotion(self):
+        deployment = self.drain_deployment()
+        originals, desired = self.candidates()
+        deployment.wait_for_drain = Mock()
+        deployment.require_current_main = Mock(side_effect=[None, RuntimeError("main-changed-before-promotion")])
+        deployment.restore_state_policies = Mock()
+        with self.assertRaisesRegex(RuntimeError, "originals-restored"):
+            deployment.pause_drain_and_promote(originals, prepare=lambda: desired)
+        self.assertEqual({name: schedule_request(row) for name, row in originals.items()}, deployment.scheduler.values)
+        deployment.restore_state_policies.assert_called_once()
+
+    def test_stale_source_is_rejected_before_pausing_or_preparing(self):
+        deployment = self.drain_deployment()
+        originals, desired = self.candidates()
+        prepare = Mock(return_value=desired)
+        deployment.require_current_main = Mock(side_effect=RuntimeError("main-changed-before-promotion"))
+        with self.assertRaisesRegex(RuntimeError, "main-changed-before-promotion"):
+            deployment.pause_drain_and_promote(originals, prepare=prepare)
+        self.assertEqual([], deployment.scheduler.writes)
+        prepare.assert_not_called()
+        deployment.ecs.run_task.assert_not_called()
+
+    def test_candidate_refuses_reenabled_schedule_before_starting_task(self):
+        deployment = self.drain_deployment()
+        originals, _ = self.candidates()
+        paused = {name: {**schedule_request(row), "State": "DISABLED"} for name, row in originals.items()}
+        with self.assertRaisesRegex(RuntimeError, "schedule-changed-during-drain"):
+            deployment.host_gate("roy-invoice-daily", "candidate", originals["roy-daily-invoice-generation"],
+                                 "sha256:" + "a" * 64, paused_schedules=paused)
+        deployment.ecs.run_task.assert_not_called()
 
     def test_pause_failure_restores_ambiguous_pause_and_never_drains(self):
         deployment = self.drain_deployment()
@@ -563,9 +663,15 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
         deployment.restore_state_policies = Mock()
         deployment.host_gate = Mock(side_effect=RuntimeError("synthetic-candidate-failure"))
         deployment.provision_monitoring = Mock()
-        with self.assertRaisesRegex(RuntimeError, "candidate-failure"):
+        deployment.wait_for_drain = Mock()
+        deployment.require_current_main = Mock()
+        with self.assertRaisesRegex(RuntimeError, "originals-restored"):
             deployment.run()
-        self.assertEqual(deployment.scheduler.writes, [])
+        self.assertEqual(len(SCHEDULES) * 2, len(deployment.scheduler.writes))
+        self.assertTrue(all(row["State"] == "ENABLED" for row in deployment.scheduler.values.values()))
+        self.assertTrue(all(row["Target"]["EcsParameters"]["TaskDefinitionArn"].endswith(":2")
+                            for row in deployment.scheduler.values.values()))
+        self.assertEqual(2, deployment.wait_for_drain.call_count)
         deployment.provision_monitoring.assert_not_called()
         deployment.restore_state_policies.assert_called_once()
 
@@ -613,6 +719,7 @@ class OrderAutomationDeploymentTests(unittest.TestCase):
         legacy = (root / ".github/workflows/deploy-unpaid-order-cancellation.yml").read_text(encoding="utf-8")
         self.assertIn("github.ref == 'refs/heads/main'", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
+        self.assertIn("timeout-minutes: 240", workflow)
         self.assertNotIn("\n  push:", workflow)
         self.assertNotIn("configure-aws-credentials", legacy)
         self.assertNotIn("\n  push:", legacy)
