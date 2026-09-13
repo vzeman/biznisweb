@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — VEVO board configuration corrected for confirmed status renames
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-production-board-audit-20260913`
+
+What changed:
+
+- The user confirmed both exact replacements: `Čaká na vybavenie` → `New order`; `Platba online - zaplatené` → `Payment online - paid`. Updated only VEVO's production-board active-status configuration to those two names. The generic defaults and other consumers are unchanged.
+- Chose the existing project configuration mechanism for this bounded rename correction. Stable-ID filtering remains a possible later hardening task, not a prerequisite or an implemented feature of this patch. Product exclusions and scan/cache settings are preserved.
+
+What is verified:
+
+- Five focused production-board/mobile tests pass, and `git diff --check` is clean. The new regression exercises actual VEVO configuration with new and paid orders, excludes shipped/cancelled/Stripe-unpaid orders, and preserves brand/product exclusions: two eligible orders, one product, four manufacturing units, fourteen excluded units.
+- This is fixture-based verification, not a current live backlog count. No persistent local service was started or needs cleanup.
+
+Known issues:
+
+- Production deployment is pending. AWS CLI has no configured credentials; fresh Chrome navigation to App Runner redirects to the AWS IAM sign-in form. No authenticated current service/image inspection or host localhost/marker gate is available in this session. GitHub is authenticated, so the tested patch can be pushed and reviewed without changing production.
+- The existing App Runner workflow uses GitHub AWS secrets, but dispatching it is a deployment with additional runtime/IAM actions, not a read-only identity probe. It was not used to bypass the user's pre-deploy identity gate.
+
+Next exact step:
+
+- Review the narrow configuration PR and its exact-head CI. With authenticated AWS access, establish service `biznisweb-vevo-production-board`, instance/private IP N/A for managed App Runner, current ARN/image, dynamic DNS and runtime `/app`; inspect the documented deployment's scope, deploy the merged correction, verify actual host curl/marker, then verify production UI and reconcile live demand counts.
+
 ## 2026-09-13 — VEVO production board false-zero diagnosis
 
 Date: 2026-09-13
