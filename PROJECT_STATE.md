@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Reviewed noncollection closes only the invoice obligation
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/reviewed-uncollected-closure-20260913`
+
+What changed:
+
+- Added a pure validator for the fixed private user-confirmed noncollection. It binds the complete embedded confirmation to pinned raw/canonical SHA `5b6ea4ae7b557003a58d7848b880120169c893f5d7e027a3be581ed813e6a8d0`, exact project/order scope, unchanged original financial projection, and a verified silent status correction. No real order/customer details are in public source or fixtures.
+- Every automatic financial entrypoint now requires an owned project journal. Marker presence blocks preparation/finalization/email and all automatic status repair; only a strictly validated final closure leaves active backlog. Full and incremental candidates, enqueue, remembered fulfillment and external-completion paths preserve the original financial uncertainty. The journal also rejects subsequent financial-field overwrites.
+- Each run independently rechecks the fixed closure's current order status, amount and absence of prepared/final documents. Drift opens a persistent review without reopening the invoice obligation. Closed obligations and closure reviews have separate summary/CloudWatch metrics. The original seeded-backfill audit accepts only the same sealed closure with fresh matching context and still reports the original financial outcome as `unknown`.
+- Direct `send_invoice_email` requires a fresh single-use authorization from the journaled send path; a stored consumed `sending` intent cannot be replayed. Legacy no-journal financial callers now stop with `AutomationStateError`; read-only API/native lookup and dry audits remain usable without a journal. Existing fixture financial calls now use actual owned in-memory S3 journals.
+
+What is verified:
+
+- Existing invoice/state/status checks and new runtime/pure/backfill cases pass (216 focused tests before the final metrics assertion). Private confirmation raw hash, canonical hash and strict scope validation were replayed locally without provider calls. Tests cover full/incremental/dry selection, status/document/amount regressions, malformed/pending markers, original-field preservation, direct financial calls, stale send intent and legacy read-only use.
+
+Known issues:
+
+- This branch is code only and has not been merged, deployed or applied. The once-only fixed status correction helper is being implemented independently in this same worktree with separate owned files. Its live apply must remain disabled until a compatible exact runtime has been promoted and verified. The original `prepare_ambiguous` operation must never be reset or replayed.
+- The manual-settlement/creditnote branch remains separate; later integration must preserve this early shared status-write blocker before restoration logic. Current production runtime predates the closure and must not receive the marker first.
+
+Next exact step:
+
+- Complete the fixed helper's native zero-document/payment gates, durable status intent and readback-only crash recovery; run synthetic failure tests and independent review. Publish small commits, integrate reviewed branches through a PR, promote the compatible runtime with all existing hard gates, then bind the helper to the exact release before its fresh preview/apply. No provider writes are authorized as part of this code-only implementation step.
+
 ## 2026-09-13 — Fixed helper bound to independently promoted native correction
 
 Date: 2026-09-13
