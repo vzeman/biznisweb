@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager, closing, ExitStack
+from datetime import datetime
 import hashlib
 import json
 import logging
@@ -20,11 +21,21 @@ from urllib.parse import urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from invoice_automation_state import S3AutomationStateStore, resolve_automation_state_location
 from manual_settlement import canonical_bytes, proof_reference, uncertainty_reason, updated_record
-from order_status_safety import assess_fulfillment_evidence, assess_payment_evidence, fetch_order_safety_context
+from order_status_identity import bind_catalogue, identity_for, invalidate_catalogue, positive_id, unique_target
+from order_status_safety import (
+    STATUS_CATALOGUE_QUERY, assess_fulfillment_evidence, assess_payment_evidence,
+    execute_read, fetch_order_safety_context,
+)
+from reviewed_invoice_obligations import has_reviewed_closure
 
 ACCOUNT = "919341186960"
 REGION = "eu-central-1"
 BUCKET = "biznisweb-reporting-artifacts-919341186960-eu-central-1"
+# Only clear unpaid/expiry roles qualify. Rejected/cancelled/refunded/returned
+# roles do not, including VEVO 34 despite its same visible label as expired 33.
+NEGATIVE_SOURCE_NAMES = frozenset({
+    "Platba online - platnosť vypršala", "Stripe - expired", "Stripe - unpaid",
+})
 
 
 def require_source(root: Path) -> str:
@@ -125,13 +136,61 @@ def api_environment(project: str, secret: dict, settings: dict):
                 os.environ[key] = value
 
 
-def check_current(order: dict, record: dict, reference: dict, project: str) -> dict:
+def read_regressed_context(client, project: str, number: str, *, progress_callback=None) -> tuple[dict, list]:
+    """Read fresh catalogue and detail together, including unrenamed ROY.
+
+    Never reuse a pre-lease catalogue or a label-only caller-supplied mapping.
+    This is API-only evidence; native creditnote clearance remains the runtime's
+    separate prerequisite for any later status repair.
+    """
+    policy = identity_for(client)
+    if policy is None or policy.project != project:
+        raise ValueError("manual_settlement_status_client_project_unbound")
+    invalidate_catalogue(client)
+    result = execute_read(client, STATUS_CATALOGUE_QUERY, variable_values={"lang_code": "SK"},
+                          progress_callback=progress_callback)
+    catalogue = bind_catalogue(client, result.get("listOrderStatuses"))
+    order = fetch_order_safety_context(client, number, progress_callback=progress_callback)
+    return order, sorted(catalogue, key=lambda row: positive_id(row["id"]))
+
+
+def check_negative_status(order: dict, record: dict, reference: dict, expected_id, catalogue) -> None:
+    if reference["proof"]["operation"] != "confirm":
+        raise ValueError("manual_settlement_negative_mode_requires_confirmation")
+    expected_id = positive_id(expected_id)
+    status = order.get("status")
+    if (not isinstance(status, dict) or positive_id(status.get("id")) != expected_id
+            or status.get("name") not in NEGATIVE_SOURCE_NAMES
+            or order.get("status_identity_unbound") or has_reviewed_closure(record)):
+        raise ValueError("manual_settlement_negative_status_changed_or_protected")
+    target = reference["proof"]["recovery_status"]
+    for identity, name in ((expected_id, status["name"]), (target["id"], target["name"])):
+        unique_target(catalogue, name, identity)
+        if next(row for row in catalogue if positive_id(row["id"]) == identity)["name"] != name:
+            raise ValueError("manual_settlement_canonical_status_changed")
+    stamp = order.get("last_change")
+    if not isinstance(stamp, str) or not stamp.strip():
+        raise ValueError("manual_settlement_source_generation_unknown")
+    datetime.fromisoformat(stamp)
+    if (record.get("order_num", order["order_num"]) != order["order_num"]
+            or (record.get("status_mutation") is not None
+                and (not isinstance(record["status_mutation"], dict)
+                     or record["status_mutation"].get("state") != "verified"))):
+        raise ValueError("manual_settlement_journal_context_unverified")
+
+
+def check_current(order: dict, record: dict, reference: dict, project: str, *,
+                  expected_current_negative_status_id=None, catalogue=None) -> dict:
     candidate = updated_record(record.get("manual_settlement"), reference, project=project, order=order)
+    if expected_current_negative_status_id is not None:
+        check_negative_status(order, record, reference, expected_current_negative_status_id, catalogue)
     if reference["proof"]["operation"] == "revoke":
         return candidate  # Withdrawing a claim cannot restore an order status.
     target = reference["proof"]["recovery_status"]
     status = order.get("status") or {}
-    if (order.get("blocked") is not False or str(status.get("id")) != target["id"] or status.get("name") != target["name"]
+    if (order.get("blocked") is not False
+            or (expected_current_negative_status_id is None
+                and (str(status.get("id")) != target["id"] or status.get("name") != target["name"]))
             or uncertainty_reason(record) or (record.get("status_mutation") or {}).get("state") not in {None, "verified"}):
         raise ValueError("manual_settlement_current_status_or_operation_unverified")
     payment = assess_payment_evidence(order)
@@ -142,15 +201,37 @@ def check_current(order: dict, record: dict, reference: dict, project: str) -> d
     return candidate
 
 
-def record_proof(*, store, reference: dict, project: str, read_order, apply: bool) -> dict:
+def record_proof(*, store, reference: dict, project: str, read_order, apply: bool,
+                 expected_current_negative_status_id=None, status_client=None) -> dict:
     number = reference["proof"]["order_num"]
     if store.project != project:
         raise ValueError("manual_settlement_journal_project_changed")
+    negative_mode = expected_current_negative_status_id is not None
+    if negative_mode:
+        positive_id(expected_current_negative_status_id)
+
+    def checked(record, progress_callback=None):
+        if not negative_mode:
+            kwargs = {"progress_callback": progress_callback} if progress_callback else {}
+            order = read_order(number, **kwargs)
+            return order, check_current(order, record, reference, project)
+        # A callback can change the provider independently of our journal lease.
+        # These repeated reads detect observed drift; they do not lock the
+        # provider or authorize a status/payment/receipt/invoice/email request.
+        first = read_regressed_context(status_client, project, number, progress_callback=progress_callback)
+        check_current(first[0], record, reference, project,
+                      expected_current_negative_status_id=expected_current_negative_status_id, catalogue=first[1])
+        second = read_regressed_context(status_client, project, number, progress_callback=progress_callback)
+        candidate = check_current(second[0], record, reference, project,
+                                  expected_current_negative_status_id=expected_current_negative_status_id, catalogue=second[1])
+        if first != second:
+            raise ValueError("manual_settlement_current_context_changed")
+        return second[0], candidate
+
     if apply:
         with store.lease(owner="record-verified-manual-settlement") as journal:
-            order = read_order(number, progress_callback=journal.assert_owned)
             record = journal.get_order(number)
-            candidate = check_current(order, record, reference, project)
+            order, candidate = checked(record, journal.assert_owned)
             journal.assert_owned()
             journal.record_manual_settlement(order, reference)
             if journal.get_order(number).get("manual_settlement") != candidate:
@@ -159,7 +240,7 @@ def record_proof(*, store, reference: dict, project: str, read_order, apply: boo
         state, etag = store.read()
         if state.get("lease"):
             raise ValueError("manual_settlement_preview_requires_free_lease")
-        check_current(read_order(number), state["orders"].get(number, {}), reference, project)
+        checked(state["orders"].get(number, {}))
         after, after_etag = store.read()
         if after_etag != etag or after != state:
             raise ValueError("manual_settlement_preview_journal_changed")
@@ -173,6 +254,8 @@ def main(argv=None) -> int:
     parser.add_argument("--proof-sha256", required=True)
     parser.add_argument("--profile", default="codex")
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--expected-current-negative-status-id",
+                        help="Confirm provenance at this freshly verified unpaid/expired status ID; no status writes")
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parents[1]
     require_source(root)
@@ -199,6 +282,8 @@ def main(argv=None) -> int:
             client = build_client(args.project, settings)
             try:
                 report = record_proof(store=store, reference=reference, project=args.project, apply=args.apply,
+                                      expected_current_negative_status_id=args.expected_current_negative_status_id,
+                                      status_client=client,
                                       read_order=lambda number, **kwargs: fetch_order_safety_context(client, number, **kwargs))
             finally:
                 client.transport.close()

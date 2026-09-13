@@ -5,6 +5,27 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Confirmed bank provenance can be recorded after gateway regression
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-regressed-provenance-20260913`
+
+What changed:
+
+- The recorder adds optional `--expected-current-negative-status-id`. It records only the existing immutable bank-confirmation proof while the exact current order remains at a verified unpaid/expired status. Default restored-target confirmation and revocation remain unchanged. Both shops use two fresh catalogue/detail pairs, inside the shared lease on apply, with exact canonical source/target binding and unchanged complete context. Same-label VEVO IDs33/34 remain distinct; rejected/cancelled/refunded/returned roles cannot qualify.
+- Existing uncertainty, closed obligations, blocked orders, partial/reversed/malformed payment and unsafe shipment context block this optional path. No provider mutation or native creditnote-clearance claim was added. The deployed recovery consumer still needs its own complete fresh creditnote and order checks. The proof records user-confirmed settlement without an invented bank receipt or transfer date.
+- Both CI collections include the new pipeline and independent regression modules. Root documentation through `6dbf1106` is integrated. Per the user's urgent scope, finish the one confirmed current-month payment case and its natural recovery; standalone #552 and reporting #556 remain postponed, unmerged and undeployed. Review scope is August2026 through today; prior evidence is retained and no additional broad scan was started here.
+
+What is verified:
+
+- 132 focused manual-settlement, consumer, status-identity and journal tests passed, plus five independent adversarial tests. The full recorder-to-existing-consumer synthetic pipeline preserves the provider until recording completes, requires creditnote clearance for recovery, sends one silent status correction and does not repeat it. The actual provider/API, AWS and browser were not called.
+- Independent source review found no blocker; reviewed helper SHA `f0d96ca2c23a4ea0bf1df91795f791f0e8a1cb4a49f79c9a9d6e20485abac69b`. Independent test SHA `8f4c2579167c4070744c6bb9eb03e181efda2b903014ba8bd6c9538b4b9d6b9b`. Scoped Ruff and whitespace checks pass. No persistent local process was started.
+
+Known issues / next exact step:
+
+- This source-only correction has not recorded live provenance or restored the current case. Push and obtain all six exact-head PR checks, then root runs preview/apply from clean pushed source against existing private proof `6049e628898509a7f3b0f613e5df7570b16bddf1a4388ae07f81ee1c9c7d870f` and expected negative ID33. Independently verify the next ordinary runtime and preserve original journal effects. No report/standalone deployment is part of this step.
+
 ## 2026-09-13 — Retrospective scope narrowed to August/September; second bank payment confirmed
 
 Date: 2026-09-13
