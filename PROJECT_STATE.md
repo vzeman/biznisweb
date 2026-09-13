@@ -13,10 +13,16 @@ Branch: `codex/vevo-report-managed-deploy-20260913`
 
 What changed:
 
+- Second offline checkpoint adds separate bootstrap-only workflow and a stdlib-only old-image identity/localhost probe. Promotion requires a previous completed successful bootstrap, exact final source/build after the quiet drain, and terminal binding/lease-generation readback. The diagnostic reader role is confined to VEVO report inputs and its own probe prefix. Private live-output metadata is compared before/after the candidate. Observed active provider tasks block dispatch; subsequent natural overlaps are recorded without changing their schedules.
+- Lost role-creation acknowledgement is reconciled by exact name/ARN/tag/trust before cleanup. Lost pointer acknowledgement restores the previous verified record only after schedule restoration; foreign drift is never overwritten. Unresolved terminal release pauses only a still-owned VEVO target and retains the incident lease. The 360-minute workflow budget includes rollback/cleanup headroom.
+- Protected snapshots now include installed guard/order/report/reconciler definitions, inline/attached/boundary role policies, collector ECS configuration and CloudFormation configuration/templates. Polling full protection/provenance checks is bounded to once a minute, with forced checks at mutation boundaries.
+
 - Isolated from reviewed reporting source `960837f1`. Draft managed deployer and diagnostic host wrapper preserve production input prefix and production email behavior; a dedicated scoped diagnostic role writes only probe artifacts/markers. The probe curls its own identity before accepting a managed hash-bound signal and then runs the ordinary report entrypoints with financial/email guards, suppressed metrics and isolated output publication.
 - Draft transaction owns only the VEVO report schedule and its candidate task/role. It requires exact main/build/image, a private current binding, independently reviewed fresh order/standalone-guard readiness and protected runtime snapshots. Known-state rollback preserves authority; unknown schedule/task/pointer ownership retains an incident lease. No live call or dispatch occurred.
 
 What is verified:
+
+- 24 own focused offline tests pass, including real run/update/rollback failure scenarios, stale image/main after final drain, foreign schedule drift, uncertain release, late old tasks, lost role-create acknowledgement, recovered exact-page reads versus unresolved errors and pagination caps. Required full shared-API integration and final independent review remain open; no live call or dispatch.
 
 - Initial 16 focused offline tests pass for host identity/handshake, output isolation/quality, actual financial/email/GraphQL boundaries, task ownership, restricted role and known-state schedule updates. Ruff passes. This is an implementation checkpoint, not release signoff.
 

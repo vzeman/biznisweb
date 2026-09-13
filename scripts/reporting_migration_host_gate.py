@@ -159,6 +159,7 @@ def report_probe(s3, prefix, release_id):
     result = {}
     attempts = {"provider_writes": 0, "email": 0, "live_output": 0}
     incomplete_reads = []
+    pending_reads = set()
     inventory = {}
 
     def forbidden(kind):
@@ -174,13 +175,18 @@ def report_probe(s3, prefix, release_id):
         operations = [d for d in definitions if isinstance(d, OperationDefinitionNode)]
         if not operations or any(d.operation != OperationType.QUERY for d in operations):
             return forbidden("provider_writes")()
+        roots = tuple(sorted(selection.name.value for operation in operations
+                             for selection in operation.selection_set.selections if hasattr(selection, "name")))
+        variables = kwargs.get("variable_values", args[0] if args else None) or {}
+        read_key = (id(client), roots, sha(canonical(variables)))
         try:
             value = execute(client, query, *args, **kwargs)
         except Exception:
-            # Even if an application fallback catches this error, a diagnostic
-            # candidate cannot claim unqualified complete-source verification.
-            incomplete_reads.append("provider-read-error")
+            # A successful retry or supported reduced-field read of this exact
+            # page resolves its error. Other successful pages cannot hide it.
+            pending_reads.add(read_key)
             raise
+        pending_reads.discard(read_key)
         if isinstance(value, dict) and "getOrderList" in value:
             page = value["getOrderList"]
             rows, info = page.get("data"), page.get("pageInfo", {})
@@ -228,7 +234,7 @@ def report_probe(s3, prefix, release_id):
         require(project == "vevo", "probe-output-project-invalid")
         require((os.environ.get("REPORT_S3_BUCKET"), os.environ.get("REPORT_S3_PREFIX")) == original_input,
                 "probe-input-location-changed")
-        require(not incomplete_reads, "probe-provider-reads-incomplete")
+        require(not incomplete_reads and not pending_reads, "probe-provider-reads-incomplete")
         result.update(isolate_outputs(s3, prefix, runner, paths))
         return {}
 
@@ -256,7 +262,7 @@ def report_probe(s3, prefix, release_id):
             stack.enter_context(patch.object(target, name, replacement))
         stack.enter_context(patch.object(sys, "argv", argv))
         runner.main()
-    require(result and not any(attempts.values()) and not incomplete_reads, "probe-report-not-verified")
+    require(result and not any(attempts.values()) and not incomplete_reads and not pending_reads, "probe-report-not-verified")
     return result
 
 

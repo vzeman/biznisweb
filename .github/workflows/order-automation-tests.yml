@@ -16,6 +16,10 @@ on:
       - 'daily_report_runner.py'
       - requirements-runtime-control.txt
       - scripts/reporting_runtime_binding.py
+      - scripts/deploy_vevo_report.py
+      - scripts/reporting_identity_probe.py
+      - scripts/reporting_migration_host_gate.py
+      - .github/workflows/deploy-vevo-report.yml
       - scripts/bootstrap_reporting_runtime.py
       - scripts/validate_growthbook_aa_infra_health_evidence.py
       - projects/vevo/reporting_runtime_policy.json
@@ -62,6 +66,7 @@ jobs:
           tests.test_order_status_safety tests.test_unpaid_order_cancellation
           tests.test_order_status_identity tests.test_status_identity_integration
           tests.test_reporting_runtime_binding tests.test_growthbook_aa_infra_health_evidence tests.test_growthbook_aa_infra_health_workflow
+          tests.test_reporting_migration_host_gate tests.test_vevo_report_deployment
           tests.test_order_inventory
           tests.test_api_read_backoff
           tests.test_seeded_invoice_retry tests.test_reviewed_invoice_reconciliation

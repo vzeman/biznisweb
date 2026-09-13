@@ -32,6 +32,45 @@ QUALITY = {'is_partial': False, 'qa_status': 'ok', 'qa_failure_count': 0, 'qa_er
 
 
 class HostGateTests(unittest.TestCase):
+    def test_inventory_errors_require_same_page_recovery_and_caps_stay_blocked(self):
+        import daily_report_runner as runner
+        import export_orders
+        from gql import Client, gql
+        required = {'REPORT_PROJECT': 'vevo', 'REPORT_SKIP_INVOICES': 'true', 'REPORT_SKIP_CREDITNOTE_STORNO_GUARD': 'true',
+                    'REPORT_SKIP_EMAIL': 'true', 'REPORT_S3_BUCKET': host.BUCKET, 'REPORT_S3_PREFIX': 'daily-reports/vevo'}
+        query = gql('query Orders { getOrderList { data { id } pageInfo { hasNextPage nextCursor } } }')
+        reduced = gql('query Orders { getOrderList { data { id } pageInfo { hasNextPage nextCursor } } }')
+        page = {'getOrderList': {'data': [{'id': 1}], 'pageInfo': {'hasNextPage': True, 'nextCursor': 'boundary'}}}
+        for scenario in ('same-page-recovered', 'different-page', 'cap', 'open-empty'):
+            def execute(*_args, **_kwargs):
+                execute.calls += 1
+                if execute.calls == 1:
+                    raise RuntimeError('transient or optional resolver')
+                return page if scenario != 'open-empty' else {'getOrderList': {'data': [], 'pageInfo': {'hasNextPage': True, 'nextCursor': 'x'}}}
+            execute.calls = 0
+            def ordinary_path():
+                client = object()
+                try:
+                    Client.execute(client, query, variable_values={'params': {'cursor': None}})
+                except RuntimeError:
+                    pass
+                try:
+                    Client.execute(client, reduced, variable_values={'params': {'cursor': 'other' if scenario == 'different-page' else None}})
+                except RuntimeError:
+                    pass
+                if scenario == 'cap':
+                    export_orders.logger.warning('Stopped after max_batches=1')
+                # A proven requested-date boundary may end while API has older history.
+                runner.s3_upload_outputs('vevo', {})
+            with self.subTest(scenario=scenario), patch.dict(host.os.environ, required), \
+                 patch.object(Client, 'execute', execute), patch.object(runner, 'main', ordinary_path), \
+                 patch.object(host, 'isolate_outputs', return_value={'key': 'private', 'sha256': 'hash'}):
+                if scenario == 'same-page-recovered':
+                    self.assertEqual('private', host.report_probe(S3(), host.PREFIX + 'a' * 32 + '/', 'a' * 32)['key'])
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'incomplete'):
+                        host.report_probe(S3(), host.PREFIX + 'a' * 32 + '/', 'a' * 32)
+
     def test_real_runner_boundaries_block_financial_email_and_graphql_mutation(self):
         import daily_report_runner as runner
         from gql import Client, gql
