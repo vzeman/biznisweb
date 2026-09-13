@@ -186,21 +186,32 @@ without an old audit baseline and keeps the original eleven-record journal check
 independent. Run only after verified promotion/recovery and coordinated scan drain.
 
 `scripts/reconcile_reviewed_invoice_outcomes.py` is restricted to the six reviewed
-ROY outcomes in two fixed, hash-verified private evidence objects. It does not
+ROY outcomes in three fixed, hash-verified private evidence objects: the original
+history/outcome proof, the cross-shop native contract, and the fresh six-case
+native mapping. The obsolete API-ID-equivalence proof is not accepted. It does not
 relax the ordinary generator or accept arbitrary orders, evidence or endpoints.
-The `confirm-emails` action records two provider-confirmed sends without web login
-or email transmission. This proves provider sending, not recipient delivery or
+The `confirm-emails` action records two provider-confirmed sends without email
+transmission. Both actions, including previews, log in solely for bounded native
+read-only POST lookups through the generator's strict `o#` grid query. This proves
+provider sending, not recipient delivery or
 exactly-once sending; each original provider history contains two send events.
 
 The `finalize-one` action handles one deterministic unfinished case from the four
 reviewed creation ambiguities. It can only assign a final number to the existing
 bound preinvoice. It never prepares another document, changes status or sends an
 email. It preserves the original attempt and journals a permanent one-attempt
-intent plus an email hold before the request. Repeated fresh reads must confirm
-identity, shipped/unblocked/positive eligibility and the same preinvoice. A unique
-final document with the same internal identity and nonempty number is required.
+intent plus an email hold before the request. The intent stores the reviewed
+native preinvoice key separately from the API association reference, together
+with the new mapping and contract hashes. Repeated fresh API/native reads must
+confirm internal/public order identity, shipped/unblocked/positive eligibility
+and the same native preinvoice key. Finalization uses only that native key.
+A unique API final document with the reviewed order association must have a
+nonempty `invoice_num` equal to the same native row's `inv_id`. Matching API IDs
+or a displayed number belonging to another order do not prove native identity.
 A final document already present is reconciled by readback only. An uncertain
 intent cannot be replayed, including after a crash before transmission.
+Legacy or changed intent schemas are blocked, never reset or silently migrated.
+Native read failures and disagreement after transmission preserve uncertainty.
 
 Both actions default to read-only previews from clean, pushed source:
 
@@ -225,8 +236,10 @@ Final independent business verification is still required after the helper runs.
 
 Apply currently remains blocked: the unchanged allowlist names `a97d974f` and
 `sha256:8d06b6c7...`, whose deployment `34735770705` failed and restored the old
-runtime. Integrating corrected main `ccf25c79` does not authorize that new release.
-Wait for its independently verified promotion, then review an explicit source/digest
+runtime. The subsequent `ccf25c79` release promoted successfully but its natural
+invoice attempts were refused by the provider; four invoice schedules were paused.
+Integrating the native correction at `47c3da77` does not authorize its execution.
+Wait for independently verified native-fix promotion, then review an explicit source/digest
 allowlist change and successful private deployment proof before either apply action.
 
 ## Release sequence and rollback

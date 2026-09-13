@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Fixed reconciliation now binds native document identities
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Corrected the six-case helper after integrating merged PR #548 in pushed merge `5fe6953c`. It retains original history/outcome evidence and now requires the cross-shop native contract (`a0fa9c33...`) and fixed six-case mapping (`ce520d23...`), replacing the obsolete API-ID-equivalence evidence. Each current read uses the generator's strict bounded native POST to bind both order identities, the retained native preinvoice key and the final number.
+- API association references remain separate from native route keys. Each of the four permitted finalizations uses the reviewed native key, freshly rebound after a schema-2 durable intent storing that key and the new evidence hashes. Fresh API/native final-number agreement is required even when nested API IDs still equal the order ID. Two provider-confirmed email outcomes remain journal-only confirmations; no email is resent. Preview and confirmation now need a native read-only session, but do not call financial endpoints.
+- Changed/legacy intents, native lookup errors, mismatched numbers and missing tokens fail closed; no uncertainty is reset and the original one-attempt/no-preparation/held-email constraints remain. S3 evidence bodies and both transports close explicitly. The post-recovery verifier's executable source is unchanged; its documentation distinguishes API association/backlog facts from the generator/helper's native financial-write confirmation.
+
+What is verified:
+
+- All 720 tests in the three exact build-workflow commands pass (72 + 20 + 628), including 51 helper tests and 17 post-recovery tests. Tests exercise the real generator native lookup with distinct native/API keys, all four route selections, wrong-owner/same-number documents, pre/post-intent native drift, final-number disagreement, exhausted native reads, missing tokens, evidence/legacy-intent drift, storage/lease failures and no replay or email. Reporting smoke, scoped Ruff and whitespace checks pass.
+- Offline hash-verified local loading of all three actual private artifacts successfully bound the six cases: six distinct native keys, all different from their API references. No private order identifiers were printed or committed. No AWS/provider request, live preview/apply, financial operation, journal mutation or PR merge occurred. All finite test processes ended; no persistent service was started.
+- Root independently reviewed the stable helper source and reran all 51 helper tests: PASS with no blocking finding. Review covered all three exact proof hashes, separate API/native binding, six current order/document checks, schema-2 intent before GET, held/no-email behavior, drift/readback-only recovery, CAS/release boundaries and closed S3 bodies.
+
+Known issues:
+
+- The helper's old failed `a97d974f` / `8d06b6c7...` release allowlist is deliberately unchanged and still blocks apply. Incident-aware native-fix deployment `34741354275` is pending under root's supervision; neither a successful build nor this source integration authorizes an allowlist update. Main is frozen on `47c3da775ff7018a1cf8950024c867310b91ae8a` until independently verified release completion or restoration.
+
+Next exact step:
+
+- Commit/push the independently reviewed correction and update PR #546's scope and validation. Keep that PR unmerged and all helper/provider execution stopped until root supplies the actually promoted source, digest and verified private receipt. Then review that explicit release binding before coordinated fixed-case recovery and the final all-age/original-eleven readbacks.
+
 ## 2026-09-13 — Native identity release integrated into reconciliation draft
 
 Date: 2026-09-13

@@ -2,7 +2,8 @@
 """Reconcile the fixed ROY incident evidence, without automatic write retries.
 
 Preview is read-only. ``confirm-emails --apply`` records two provider-confirmed
-sends without logging in or sending. ``finalize-one --apply`` reconciles one
+sends without sending. Both actions use read-only native row lookups, including
+in preview. ``finalize-one --apply`` reconciles one
 deterministically selected existing document, never prepares one, and holds its
 email. An intent is permanently consumed before the single native GET, including
 a crash before transmission. This is not a provider idempotency guarantee.
@@ -40,8 +41,13 @@ REVIEWED_RELEASE_COMMIT = "a97d974f4d86ac7c1d3fcb3ec7ff5d094245bb3c"
 REVIEWED_RELEASE_DIGEST = "sha256:8d06b6c7985b6a25024964653fb292db9c73a9b5eb5dbc0938665fcbc3166e7b"
 EVIDENCE_KEY = "data/roy/order-automation/audits/2026-09-13/uncertain-operations-readback-20260913.json"
 EVIDENCE_SHA = "b7a4bca333d919c2d7c16cd9269cc45851a8fbd6d7d3d4417cd98264cfa28545"
-IDENTITY_KEY = "data/roy/order-automation/audits/2026-09-13/final-document-identity-contract-20260913.json"
-IDENTITY_SHA = "d3bfb5933e1eb19e5d126f197e3e6226f9d480bb3a193377219d79eaf2f0b5d7"
+IDENTITY_KEY = "data/roy/order-automation/audits/2026-09-13/native-document-key-contract-20260913.json"
+IDENTITY_SHA = "a0fa9c3391e13baf0527a64c05ea8bb9e0b9451681dfc60d93618082f4fcff36"
+NATIVE_EVIDENCE_KEY = "data/roy/order-automation/audits/2026-09-13/reviewed-native-six-case-evidence-20260913.json"
+NATIVE_EVIDENCE_SHA = "ce520d23ca3f3ac1b55208f838f644f81356745ae451cb494bc22911ccca9af3"
+NATIVE_CONTRACT = {"find": "o#<order_num>", "limit": 20, "list_method": "POST",
+                   "native_finalize_field": "pre_inv_id", "native_send_field": "order_id",
+                   "path": "/erp/orders/invoices/getListJson", "start": 0, "token_required_by_native_code": True}
 RECONCILIATION = "reviewed_invoice_reconciliation"
 OPERATION_FIELDS = ("order_num", "phase", "email_state", "invoice_id", "invoice_num", "attempted_at", "email_policy")
 
@@ -56,7 +62,8 @@ def require(condition, code):
 
 
 def identity(value):
-    require(not isinstance(value, bool) and str(value or "").isdigit() and int(value) > 0, "invalid-document-identity")
+    require(not isinstance(value, bool) and isinstance(value, (str, int))
+            and re.fullmatch(r"[1-9][0-9]*", str(value)) is not None, "invalid-document-identity")
     return str(value)
 
 
@@ -112,22 +119,59 @@ def validate_manifest(evidence):
 
 def private_json(s3, key, *, expected_sha=None):
     response = s3.get_object(Bucket=BUCKET, Key=key, ExpectedBucketOwner=ACCOUNT)
-    require(response.get("ServerSideEncryption") in {"AES256", "aws:kms"}, "private-evidence-encryption-unverified")
-    payload = response["Body"].read(2_000_001)
+    try:
+        require(response.get("ServerSideEncryption") in {"AES256", "aws:kms"}, "private-evidence-encryption-unverified")
+        payload = response["Body"].read(2_000_001)
+    finally:
+        response["Body"].close()
     require(len(payload) <= 2_000_000, "private-evidence-too-large")
     if expected_sha:
         require(hashlib.sha256(payload).hexdigest() == expected_sha, "private-evidence-hash-mismatch")
     return json.loads(payload)
 
 
+def bind_native_manifest(cases, evidence, contract):
+    """Bind historical outcomes to separate native keys, never an API-ID alias."""
+    require(isinstance(contract, dict) and contract.get("read_only") is True
+            and type(contract.get("financial_requests")) is int and contract["financial_requests"] == 0
+            and contract.get("contract") == NATIVE_CONTRACT and len(contract.get("cases", [])) == 4,
+            "native-document-identity-contract-unverified")
+    require(isinstance(evidence, dict) and evidence.get("read_only") is True and evidence.get("complete") is True
+            and evidence.get("schema_version") == 1 and evidence.get("project") == "roy"
+            and all(type(evidence.get(key)) is int and evidence[key] == 0 for key in ("financial_requests", "journal_mutations"))
+            and evidence.get("manifest") == {"key": EVIDENCE_KEY, "sha256": EVIDENCE_SHA}
+            and evidence.get("native_contract_reference") == {"contract": NATIVE_CONTRACT,
+                "filename": IDENTITY_KEY.rsplit("/", 1)[-1], "sha256": IDENTITY_SHA}, "native-case-evidence-unverified")
+    rows = evidence.get("cases")
+    require(isinstance(rows, list) and len(rows) == 6 and all(isinstance(row, dict) for row in rows)
+            and {row.get("case") for row in rows} == {case["label"] for case in cases}, "native-case-scope-mismatch")
+    bound, native_keys = [], set()
+    for case in cases:
+        row = next(row for row in rows if row["case"] == case["label"])
+        api, native = row.get("api", {}), row.get("native", {})
+        require(row.get("ok") is True and row.get("arf_present") is True and row.get("native_total") == "1"
+                and row.get("order_num") == api.get("order_num") == native.get("order_num") == case["number"]
+                and identity(api.get("order_id")) == identity(native.get("order_id")) == case["order_id"]
+                and api.get("preinvoices") == [{"id": case["preinvoice_id"]}], "native-case-order-binding-mismatch")
+        key = identity(native.get("pre_inv_id"))
+        require(key not in native_keys, "native-case-key-reused")
+        native_keys.add(key)
+        if case["kind"] == "email":
+            require(row.get("kind") == "confirmed_email" and row.get("outcome") == "native_and_api_final_confirmed"
+                    and api.get("invoices") == [{"id": case["original"]["invoice_id"], "invoice_num": case["original"]["invoice_num"]}]
+                    and native.get("inv_id") == case["original"]["invoice_num"], "native-email-document-evidence-mismatch")
+        else:
+            require(row.get("kind") == "ambiguous_creation" and row.get("outcome") == "unique_pending_native_document"
+                    and api.get("invoices") == [] and native.get("inv_id") == "", "native-pending-document-evidence-mismatch")
+        bound.append({**deepcopy(case), "native_preinvoice_key": key})
+    return bound
+
+
 def load_cases(s3):
     evidence = private_json(s3, EVIDENCE_KEY, expected_sha=EVIDENCE_SHA)
     contract = private_json(s3, IDENTITY_KEY, expected_sha=IDENTITY_SHA)
-    require(contract.get("read_only") is True and contract.get("financial_endpoint_requests") == 0
-            and len(contract.get("document_cases", [])) == 4
-            and all(row.get("same_internal_id") is True and row.get("retains_preinvoice_after_finalization") is True
-                    for row in contract["document_cases"]), "final-document-identity-contract-unverified")
-    return validate_manifest(evidence)
+    native = private_json(s3, NATIVE_EVIDENCE_KEY, expected_sha=NATIVE_EVIDENCE_SHA)
+    return bind_native_manifest(validate_manifest(evidence), native, contract)
 
 
 def verify_release(session, *, digest, commit, evidence_key):
@@ -235,12 +279,16 @@ def validate_record(record, case):
     resolution = record.get(RECONCILIATION)
     if resolution:
         require(isinstance(resolution, dict) and resolution.get("evidence_sha256") == EVIDENCE_SHA
-                and resolution.get("schema_version") == 1 and resolution.get("evidence_key") == EVIDENCE_KEY
+                and resolution.get("schema_version") == 2 and resolution.get("evidence_key") == EVIDENCE_KEY
+                and resolution.get("native_evidence_key") == NATIVE_EVIDENCE_KEY
+                and resolution.get("native_evidence_sha256") == NATIVE_EVIDENCE_SHA
+                and resolution.get("identity_evidence_sha256") == IDENTITY_SHA
                 and resolution.get("state") in {"readback_only", "attempt_started", "uncertain", "verified"}
                 and resolution.get("case") == case["label"] and resolution.get("kind") == case["kind"]
                 and projection(resolution.get("original_record", {})) == projection(case["original"]), "reconciliation-intent-drift")
         require(record.get("order_num") == case["number"] and record.get("attempted_at") == case["original"].get("attempted_at")
-                and resolution.get("order_id") == case["order_id"] and resolution.get("preinvoice_id") == case["preinvoice_id"],
+                and resolution.get("order_id") == case["order_id"] and resolution.get("preinvoice_id") == case["preinvoice_id"]
+                and resolution.get("native_preinvoice_key") == case["native_preinvoice_key"],
                 "reconciliation-order-binding-drift")
         if case["kind"] == "finalize":
             require(record.get("email_policy") == "hold" and record.get("email_state") in {None, "held"}, "reconciliation-email-hold-lost")
@@ -276,10 +324,18 @@ def read_bound(generator, case):
     preinvoices = current.get("preinvoices")
     require(isinstance(invoices, list) and len(invoices) <= 1 and isinstance(preinvoices, list)
             and len(preinvoices) == 1 and identity(preinvoices[0].get("id")) == case["preinvoice_id"], "fresh-document-association-drift")
+    native = generator.fetch_native_invoice_context(case["number"], case["order_id"])
+    require(native.get("order_id") == case["order_id"] and native.get("order_num") == case["number"]
+            and native.get("preinvoice_key") == case["native_preinvoice_key"], "fresh-native-document-binding-drift")
     if invoices:
         invoice = invoices[0]
+        # ID equality confirms the reviewed API association only. The native
+        # route key is separate; final-number agreement proves the native result.
         require(identity(invoice.get("id")) == case["preinvoice_id"]
-                and isinstance(invoice.get("invoice_num"), str) and bool(invoice["invoice_num"].strip()), "final-document-binding-unverified")
+                and isinstance(invoice.get("invoice_num"), str) and bool(invoice["invoice_num"].strip())
+                and invoice["invoice_num"] == native.get("invoice_number"), "final-document-binding-unverified")
+    else:
+        require(native.get("invoice_number") == "", "native-final-without-api-confirmation")
     return current
 
 
@@ -317,8 +373,10 @@ def response_fingerprint(response):
 
 
 def resolution_record(case, current, *, state, source_commit):
-    return {"schema_version": 1, "case": case["label"], "kind": case["kind"], "state": state,
+    return {"schema_version": 2, "case": case["label"], "kind": case["kind"], "state": state,
             "evidence_key": EVIDENCE_KEY, "evidence_sha256": EVIDENCE_SHA, "source_commit": source_commit,
+            "native_evidence_key": NATIVE_EVIDENCE_KEY, "native_evidence_sha256": NATIVE_EVIDENCE_SHA,
+            "identity_evidence_sha256": IDENTITY_SHA, "native_preinvoice_key": case["native_preinvoice_key"],
             "original_record": deepcopy(current), "original_outcome": "unconfirmed",
             "order_id": case["order_id"], "preinvoice_id": case["preinvoice_id"],
             "recorded_at": datetime.now(timezone.utc).isoformat()}
@@ -417,7 +475,7 @@ def finalize_one(journal, generator, cases, source_commit, release_gate):
     require(final["status"]["id"] == latest["status"]["id"] and final["sum"] == latest["sum"], "eligibility-changed-after-intent")
     journal.assert_owned()
     try:
-        response = web.get(f"{generator.base_url}/erp/orders/invoices/finalize/{case['preinvoice_id']}",
+        response = web.get(f"{generator.base_url}/erp/orders/invoices/finalize/{case['native_preinvoice_key']}",
                            params={"arf": generator.arf_token}, allow_redirects=False, timeout=(10, 30),
                            headers={"X-Requested-With": "XMLHttpRequest", "Accept": "application/json",
                                     "Referer": f"{generator.base_url}/erp/orders/orders/detail/{case['order_id']}"})
@@ -448,9 +506,10 @@ def reconcile(*, store, cases, action, generator_factory, apply=False, source_co
         if state.get("lease"):
             return {"ok": False, "dry_run": True, "reviewed_cases": len(selected), "emailed_invoices": 0,
                     "finalization_requests": 0, "blocked_reason": "journal_lease_present"}
-        generator = generator_factory(web_login=False)
+        generator = generator_factory(web_login=True)
         try:
-            require(generator.web_session is None, "preview-opened-native-session")
+            require(generator.operation_journal is None, "preview-opened-journal-writer")
+            generator.send_invoice_email_enabled = False
             generator.resolve_eligible_status_ids()
             current = [read_bound(generator, case) for case in selected]
             blocked, pending = None, 0
@@ -479,25 +538,30 @@ def reconcile(*, store, cases, action, generator_factory, apply=False, source_co
                     "pending_cases": pending, "blocked_reason": blocked,
                     "finalization_requests": 0, "final_documents_present": sum(bool(row["invoices"]) for row in current)}
         finally:
-            generator.client.transport.close()
+            try:
+                if generator.web_session:
+                    generator.web_session.close()
+            finally:
+                generator.client.transport.close()
     require(callable(release_gate), "verified-release-gate-required")
     release_gate()
     with store.lease(owner="reviewed-invoice-reconciliation") as journal:
         validate_state(journal.snapshot())
         release_gate()
-        generator = generator_factory(web_login=action == "finalize-one")
+        generator = generator_factory(web_login=True)
         try:
             generator.operation_journal = journal
             generator.send_invoice_email_enabled = False
             generator.resolve_eligible_status_ids()
-            require(action != "confirm-emails" or generator.web_session is None, "email-confirmation-opened-native-session")
             result = (confirm_emails(journal, generator, selected, source_commit) if action == "confirm-emails"
                       else finalize_one(journal, generator, selected, source_commit, release_gate))
             return {**result, "dry_run": False, "reviewed_cases": len(selected), "emailed_invoices": 0}
         finally:
-            if generator.web_session:
-                generator.web_session.close()
-            generator.client.transport.close()
+            try:
+                if generator.web_session:
+                    generator.web_session.close()
+            finally:
+                generator.client.transport.close()
 
 
 def require_source(root):

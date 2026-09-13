@@ -6,10 +6,13 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
+from generate_invoices import InvoiceGenerator
 from invoice_automation_state import AutomationLeaseBusy, AutomationStateError, S3AutomationStateStore
 from scripts.reconcile_reviewed_invoice_outcomes import (
-    ACCOUNT, BUCKET, CLUSTER, EVIDENCE_SHA, RECONCILIATION, REVIEWED_RELEASE_COMMIT, REVIEWED_RELEASE_DIGEST, SCHEDULES,
-    ReconciliationBlocked, command_for, load_cases, private_json, reconcile,
+    ACCOUNT, BUCKET, CLUSTER, EVIDENCE_KEY, EVIDENCE_SHA, IDENTITY_KEY, IDENTITY_SHA,
+    NATIVE_CONTRACT, NATIVE_EVIDENCE_KEY, NATIVE_EVIDENCE_SHA, RECONCILIATION,
+    REVIEWED_RELEASE_COMMIT, REVIEWED_RELEASE_DIGEST, SCHEDULES,
+    ReconciliationBlocked, bind_native_manifest, command_for, load_cases, private_json, reconcile,
     require_source, response_fingerprint, validate_manifest, verify_release,
 )
 from tests.test_invoice_automation_state import MemoryS3
@@ -41,11 +44,39 @@ def evidence():
     return {"read_only": True, "cases": rows}
 
 
+def native_evidence(original):
+    rows = []
+    for row in original["cases"]:
+        fresh = row["fresh"]
+        final = bool(fresh["invoices"])
+        rows.append({"case": row["case"], "order_num": row["order_num"], "ok": True, "arf_present": True,
+                     "native_total": "1", "kind": "confirmed_email" if final else "ambiguous_creation",
+                     "outcome": "native_and_api_final_confirmed" if final else "unique_pending_native_document",
+                     "api": {"order_id": fresh["id"], "order_num": row["order_num"],
+                             "preinvoices": deepcopy(fresh["preinvoices"]), "invoices": deepcopy(fresh["invoices"])},
+                     "native": {"order_id": fresh["id"], "order_num": row["order_num"],
+                                "pre_inv_id": str(900000 + int(fresh["id"])),
+                                "inv_id": fresh["invoices"][0]["invoice_num"] if final else ""}})
+    return {"schema_version": 1, "read_only": True, "complete": True, "project": "roy",
+            "financial_requests": 0, "journal_mutations": 0, "cases": rows,
+            "manifest": {"key": EVIDENCE_KEY, "sha256": EVIDENCE_SHA},
+            "native_contract_reference": {"contract": deepcopy(NATIVE_CONTRACT),
+                "filename": IDENTITY_KEY.rsplit("/", 1)[-1], "sha256": IDENTITY_SHA}}
+
+
+def native_contract():
+    return {"read_only": True, "financial_requests": 0, "contract": deepcopy(NATIVE_CONTRACT), "cases": [{}, {}, {}, {}]}
+
+
 class Generator:
+    fetch_native_invoice_context = InvoiceGenerator.fetch_native_invoice_context
+    _require_native_token = InvoiceGenerator._require_native_token
+    _positive_internal_id = staticmethod(InvoiceGenerator._positive_internal_id)
+
     def __init__(self, orders):
         self.orders = orders
         self.base_url = "https://example.test"
-        self.arf_token = "private-fixture-token"
+        self.arf_token = "FixtureToken"
         self.client = SimpleNamespace(transport=SimpleNamespace(close=Mock()))
         self.web_session = None
         self.operation_journal = None
@@ -77,6 +108,24 @@ class Web:
         self.before_send = None
         self.retry_total = 0
         self.response_body = b'{success:true}'
+        self.native_calls = []
+        self.native_hook = None
+        self.native_overrides = {}
+        self.native_status = 200
+
+    def post(self, url, **kwargs):
+        assert url == f"{self.generator.base_url}/erp/orders/invoices/getListJson"
+        number = kwargs["data"]["find"][2:]
+        assert kwargs["data"] == {"find": f"o#{number}", "start": 0, "limit": 20, "arf": "FixtureToken"}
+        assert kwargs["allow_redirects"] is False and kwargs["timeout"] == (10, 30)
+        self.native_calls.append((url, kwargs))
+        if self.native_hook:
+            self.native_hook(number, len(self.native_calls))
+        order = self.generator.orders[number]
+        row = {"order_id": order["id"], "order_num": number, "pre_inv_id": str(900000 + int(number)),
+               "inv_id": order["invoices"][0]["invoice_num"] if order["invoices"] else ""}
+        row.update(self.native_overrides.get(number, {}))
+        return SimpleNamespace(status_code=self.native_status, text=json.dumps({"total": "1", "rows": [row]}))
 
     def get_adapter(self, prefix):
         return SimpleNamespace(max_retries=SimpleNamespace(total=self.retry_total))
@@ -85,7 +134,7 @@ class Web:
         self.calls.append((url, kwargs))
         if self.before_send:
             self.before_send()
-        number = url.rsplit("/", 1)[-1]
+        number = str(int(url.rsplit("/", 1)[-1]) - 900000)
         if self.outcome in {"success", "lost_response"}:
             self.generator.orders[number]["invoices"] = [{"id": number, "invoice_num": f"TEST-{number}"}]
         if self.outcome in {"timeout", "lost_response"}:
@@ -96,7 +145,8 @@ class Web:
 class ReviewedReconciliationTests(unittest.TestCase):
     def setUp(self):
         self.evidence = evidence()
-        self.cases = validate_manifest(self.evidence)
+        self.native_evidence = native_evidence(self.evidence)
+        self.cases = bind_native_manifest(validate_manifest(self.evidence), self.native_evidence, native_contract())
         self.s3 = MemoryS3()
         self.store = S3AutomationStateStore(self.s3, "private", "data/roy/order-automation/state.json", "roy",
             now=lambda: datetime(2026, 9, 13, tzinfo=timezone.utc))
@@ -112,8 +162,7 @@ class ReviewedReconciliationTests(unittest.TestCase):
     def factory(self, *, web_login):
         self.factories.append(web_login)
         self.generator.web_session = self.web if web_login else None
-        if web_login:
-            self.assertTrue(self.store.read()[0]["lease"])
+        self.generator.operation_journal = None
         return self.generator
 
     def run_reconciliation(self, action="finalize-one", apply=True, **overrides):
@@ -152,11 +201,165 @@ class ReviewedReconciliationTests(unittest.TestCase):
             with self.assertRaises(ReconciliationBlocked):
                 validate_manifest(data)
 
-    def test_preview_reads_fixed_scope_without_lease_web_or_any_write(self):
+    def test_native_manifest_requires_exact_six_case_order_and_document_binding(self):
+        for mutate in (
+            lambda e: e["cases"].pop(),
+            lambda e: e["cases"][0].update(case="UNCERTAIN-2"),
+            lambda e: e.update(complete=False),
+            lambda e: e.update(financial_requests=1),
+            lambda e: e["manifest"].update(sha256="f" * 64),
+            lambda e: e["native_contract_reference"].update(sha256="f" * 64),
+            lambda e: e["cases"][0].update(arf_present=False),
+            lambda e: e["cases"][0].update(native_total="2"),
+            lambda e: e["cases"][0]["native"].update(order_id="9999"),
+            lambda e: e["cases"][0]["native"].update(order_num="1002"),
+            lambda e: e["cases"][0]["native"].update(pre_inv_id=True),
+            lambda e: e["cases"][0]["native"].update(pre_inv_id="0901001"),
+            lambda e: e["cases"][0]["native"].update(pre_inv_id="901002"),
+            lambda e: e["cases"][0]["native"].update(inv_id="UNREVIEWED"),
+            lambda e: e["cases"][1]["native"].update(inv_id="UNRELATED"),
+            lambda e: e["cases"][1]["api"]["invoices"][0].update(id="9999"),
+        ):
+            with self.subTest(mutate=mutate):
+                native = deepcopy(self.native_evidence)
+                mutate(native)
+                with self.assertRaises(ReconciliationBlocked):
+                    bind_native_manifest(validate_manifest(self.evidence), native, native_contract())
+
+    def test_obsolete_api_id_equivalence_contract_cannot_authorize_native_key(self):
+        with self.assertRaisesRegex(ReconciliationBlocked, "native-document-identity-contract"):
+            bind_native_manifest(validate_manifest(self.evidence), self.native_evidence,
+                                 {"read_only": True, "financial_endpoint_requests": 0,
+                                  "document_cases": [{"same_internal_id": True}] * 4})
+
+    def test_all_four_finalizations_use_separate_native_keys_and_api_associations(self):
+        for _ in range(4):
+            result = self.run_reconciliation()
+            self.assertTrue(result["ok"])
+        self.assertEqual(["901001", "901004", "901005", "901006"],
+                         [url.rsplit("/", 1)[-1] for url, _ in self.web.calls])
+        for number in ("1001", "1004", "1005", "1006"):
+            row = self.record(number)
+            self.assertEqual(number, row["invoice_id"])
+            self.assertEqual(str(900000 + int(number)), row[RECONCILIATION]["native_preinvoice_key"])
+            self.assertEqual("held", row["email_state"])
+        self.generator.send_invoice_email.assert_not_called()
+        self.assertEqual(0, self.run_reconciliation()["finalization_requests"])
+
+    def test_matching_display_number_from_unrelated_native_order_never_authorizes_write(self):
+        self.web.native_overrides["1001"] = {"order_id": "9999", "pre_inv_id": "901001", "inv_id": "901001"}
+        with self.assertRaisesRegex(ValueError, "native_invoice_context_unverified"):
+            self.run_reconciliation()
+        self.assertNotIn(RECONCILIATION, self.record())
+        self.assert_no_business_calls()
+
+    def test_native_preinvoice_drift_before_or_after_intent_never_selects_new_key(self):
+        for read in (1, 2, 3):
+            with self.subTest(read=read):
+                self.setUp()
+                self.web.native_hook = lambda number, count: self.web.native_overrides.update(
+                    {number: {"pre_inv_id": "1001"}}) if count == read else None
+                with self.assertRaisesRegex(ReconciliationBlocked, "native-document-binding"):
+                    self.run_reconciliation()
+                self.assert_no_business_calls()
+                if read == 3:
+                    self.assertEqual("attempt_started", self.record()[RECONCILIATION]["state"])
+                    self.web.native_overrides.clear()
+                    self.web.native_hook = None
+                    with self.assertRaisesRegex(ReconciliationBlocked, "previous-intent-consumed"):
+                        self.run_reconciliation()
+                    self.assert_no_business_calls()
+                else:
+                    self.assertNotIn(RECONCILIATION, self.record())
+
+    def test_native_final_without_api_after_intent_blocks_and_cannot_replay(self):
+        self.web.native_hook = lambda number, count: self.web.native_overrides.update(
+            {number: {"inv_id": "NATIVE-ONLY"}}) if count == 3 else None
+        with self.assertRaisesRegex(ReconciliationBlocked, "native-final-without-api"):
+            self.run_reconciliation()
+        self.assertEqual("attempt_started", self.record()[RECONCILIATION]["state"])
+        self.web.native_overrides.clear()
+        self.web.native_hook = None
+        with self.assertRaisesRegex(ReconciliationBlocked, "previous-intent-consumed"):
+            self.run_reconciliation()
+        self.assert_no_business_calls()
+
+    def test_post_request_native_number_mismatch_is_sticky_uncertainty(self):
+        self.web.native_hook = lambda number, count: self.web.native_overrides.update(
+            {number: {"inv_id": "UNRELATED"}}) if count == 4 else None
+        for _ in range(2):
+            with self.assertRaisesRegex(ReconciliationBlocked, "final-document-binding"):
+                self.run_reconciliation()
+        self.assertEqual(1, len(self.web.calls))
+        self.assertEqual(("create_ambiguous", "uncertain"), (self.record()["phase"], self.record()[RECONCILIATION]["state"]))
+        self.generator.send_invoice_email.assert_not_called()
+        self.web.native_overrides.clear()
+        self.web.native_hook = None
+        self.assertEqual(0, self.run_reconciliation()["finalization_requests"])
+        self.assertEqual(1, len(self.web.calls))
+
+    def test_post_request_native_read_failure_preserves_consumed_intent(self):
+        self.web.native_hook = lambda number, count: setattr(self.web, "native_status", 429) if count == 4 else None
+        for _ in range(2):
+            with self.assertRaisesRegex(ValueError, "native_invoice_context_unverified"):
+                self.run_reconciliation()
+        self.assertEqual(1, len(self.web.calls))
+        self.assertEqual("uncertain", self.record()[RECONCILIATION]["state"])
+        self.generator.send_invoice_email.assert_not_called()
+
+    def test_confirmation_native_number_must_match_even_when_api_ids_match(self):
+        self.web.native_overrides["1003"] = {"inv_id": "UNRELATED"}
+        with self.assertRaisesRegex(ReconciliationBlocked, "final-document-binding"):
+            self.run_reconciliation(action="confirm-emails")
+        self.assertNotIn(RECONCILIATION, self.record("1002"))
+        self.assertNotIn(RECONCILIATION, self.record("1003"))
+        self.assert_no_business_calls()
+
+    def test_token_is_required_before_preview_or_either_intent(self):
+        for action, apply in (("finalize-one", False), ("finalize-one", True), ("confirm-emails", True)):
+            with self.subTest(action=action, apply=apply):
+                self.setUp()
+                self.generator.arf_token = ""
+                with self.assertRaisesRegex(ValueError, "native_session_token_missing"):
+                    self.run_reconciliation(action=action, apply=apply)
+                self.assertFalse(any(RECONCILIATION in self.record(case["number"]) for case in self.cases))
+                self.assertEqual([], self.web.native_calls)
+                self.assert_no_business_calls()
+
+    def test_native_intent_or_evidence_drift_is_never_reset_or_replayed(self):
+        for mutation in (
+            lambda r: r[RECONCILIATION].update(native_preinvoice_key="1001"),
+            lambda r: r[RECONCILIATION].update(native_evidence_sha256="f" * 64),
+            lambda r: r[RECONCILIATION].update(identity_evidence_sha256="f" * 64),
+            lambda r: r[RECONCILIATION].update(schema_version=1),
+        ):
+            with self.subTest(mutation=mutation):
+                self.setUp()
+                self.web.outcome = "timeout"
+                self.run_reconciliation()
+                self.change_record(mutation)
+                before = deepcopy(self.record())
+                with self.assertRaises(ReconciliationBlocked):
+                    self.run_reconciliation()
+                self.assertEqual(before, self.record())
+                self.assertEqual(1, len(self.web.calls))
+
+    def test_preview_and_apply_close_graphql_even_if_native_close_fails(self):
+        for apply in (False, True):
+            with self.subTest(apply=apply):
+                self.setUp()
+                self.web.close.side_effect = RuntimeError("fixture-close-failure")
+                with self.assertRaisesRegex(RuntimeError, "fixture-close"):
+                    self.run_reconciliation(action="confirm-emails", apply=apply)
+                self.generator.client.transport.close.assert_called_once_with()
+                self.assert_no_business_calls()
+
+    def test_preview_reads_fixed_scope_with_native_reads_without_lease_or_any_write(self):
         result = self.run_reconciliation(apply=False)
         self.assertTrue(result["ok"])
         self.assertEqual(4, result["reviewed_cases"])
-        self.assertEqual([False], self.factories)
+        self.assertEqual([True], self.factories)
+        self.assertEqual(4, len(self.web.native_calls))
         self.assertEqual([], self.s3.writes)
         self.gate.assert_not_called()
         self.assert_no_business_calls()
@@ -203,10 +406,11 @@ class ReviewedReconciliationTests(unittest.TestCase):
             with self.assertRaisesRegex(ReconciliationBlocked, "journal-identity"):
                 self.run_reconciliation(apply=False)
 
-    def test_email_confirmation_writes_two_verified_records_without_web_login(self):
+    def test_email_confirmation_writes_two_verified_records_with_read_only_native_binding(self):
         result = self.run_reconciliation(action="confirm-emails")
         self.assertEqual(2, result["confirmed_emails"])
-        self.assertEqual([False], self.factories)
+        self.assertEqual([True], self.factories)
+        self.assertEqual(4, len(self.web.native_calls))
         self.assert_no_business_calls()
         for number in ("1002", "1003"):
             row = self.record(number)
@@ -252,12 +456,16 @@ class ReviewedReconciliationTests(unittest.TestCase):
         self.assertEqual(1, result["finalization_requests"])
         self.assertEqual(1, len(self.web.calls))
         url, opts = self.web.calls[0]
-        self.assertTrue(url.endswith("/finalize/1001"))
+        self.assertTrue(url.endswith("/finalize/901001"))
         self.assertFalse(opts["allow_redirects"])
         self.assertEqual((10, 30), opts["timeout"])
         self.assertEqual("create_ambiguous", seen[0]["phase"])
         self.assertEqual("hold", seen[0]["email_policy"])
         self.assertEqual("attempt_started", seen[0][RECONCILIATION]["state"])
+        self.assertEqual("1001", seen[0][RECONCILIATION]["preinvoice_id"])
+        self.assertEqual("901001", seen[0][RECONCILIATION]["native_preinvoice_key"])
+        self.assertEqual(2, seen[0][RECONCILIATION]["schema_version"])
+        self.assertEqual(NATIVE_EVIDENCE_SHA, seen[0][RECONCILIATION]["native_evidence_sha256"])
         self.assertEqual(before["attempted_at"], self.record()["attempted_at"])
         self.assertEqual(before, self.record()[RECONCILIATION]["original_record"])
         self.assertEqual("unconfirmed", self.record()[RECONCILIATION]["original_outcome"])
@@ -267,14 +475,14 @@ class ReviewedReconciliationTests(unittest.TestCase):
         self.generator.create_invoice.assert_not_called()
         self.generator._prepare_invoice.assert_not_called()
         self.generator.send_invoice_email.assert_not_called()
-        self.assertNotIn("private-fixture-token", json.dumps(self.store.read()[0]))
+        self.assertNotIn("FixtureToken", json.dumps(self.store.read()[0]))
         self.assertNotIn("1001", json.dumps(result))
 
     def test_next_explicit_apply_selects_next_unfinished_fixed_case(self):
         self.run_reconciliation()
         self.run_reconciliation()
         self.assertEqual(2, len(self.web.calls))
-        self.assertTrue(self.web.calls[1][0].endswith("/1004"))
+        self.assertTrue(self.web.calls[1][0].endswith("/901004"))
         self.assertEqual("hold", self.record("1004")["email_policy"])
         self.assertIsNone(self.record("1004")[RECONCILIATION]["email_policy_before"])
 
@@ -519,6 +727,27 @@ class ReleaseAndEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ReconciliationBlocked, "hash-mismatch"):
             private_json(s3, "private-evidence", expected_sha=EVIDENCE_SHA)
         s3.get_object.assert_called_once_with(Bucket=BUCKET, Key="private-evidence", ExpectedBucketOwner=ACCOUNT)
+        self.assertTrue(s3.get_object.return_value["Body"].closed)
+
+    def test_private_evidence_body_closes_when_encryption_is_unverified(self):
+        s3 = Mock()
+        body = BytesIO(b'{}')
+        s3.get_object.return_value = {"Body": body}
+        with self.assertRaisesRegex(ReconciliationBlocked, "encryption-unverified"):
+            private_json(s3, "private-evidence")
+        self.assertTrue(body.closed)
+
+    def test_loader_reads_only_three_pinned_proofs_and_retains_separate_native_keys(self):
+        original = evidence()
+        with patch("scripts.reconcile_reviewed_invoice_outcomes.private_json",
+                   side_effect=[original, native_contract(), native_evidence(original)]) as reader:
+            cases = load_cases(Mock())
+        self.assertEqual([EVIDENCE_KEY, IDENTITY_KEY, NATIVE_EVIDENCE_KEY],
+                         [call.args[1] for call in reader.call_args_list])
+        self.assertEqual([EVIDENCE_SHA, IDENTITY_SHA, NATIVE_EVIDENCE_SHA],
+                         [call.kwargs["expected_sha"] for call in reader.call_args_list])
+        self.assertEqual(6, len(cases))
+        self.assertTrue(all(case["native_preinvoice_key"] != case["preinvoice_id"] for case in cases))
 
     def test_loader_never_accepts_an_arbitrary_evidence_key_or_hash(self):
         with patch("scripts.reconcile_reviewed_invoice_outcomes.private_json", return_value=evidence()) as reader:

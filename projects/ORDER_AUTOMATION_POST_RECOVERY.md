@@ -53,6 +53,12 @@ writes are create-only AES256 private reports, verified by exact-byte/encryption
 readback with closed S3 bodies. Console output contains aggregates and evidence
 key/hash, never private order rows.
 
+This scanner uses GraphQL nested document IDs only as API association references;
+it never treats them as native route keys. An `already_invoiced` result means a
+unique, numbered API document on the freshly bound order. Native/API final-number
+agreement for each recovered write is enforced by the generator and fixed-case
+reconciliation helper, separately from this all-age read-only backlog snapshot.
+
 After both snapshots, freshly recheck the original eleven held records with the
 existing verifier, sequentially while each journal has no lease and can remain
 stable:
