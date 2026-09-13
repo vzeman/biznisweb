@@ -26,6 +26,7 @@ What is verified:
 
 Known issues:
 
+- The user subsequently narrowed further historical order investigation to 2026-08-01 through the current September 2026 date. Do not start another older-history/full-history provider audit. Preserve completed closure and prior immutable evidence; the current confirmed bank case is within September. Normal automation safety and current natural-run monitoring remain in scope.
 - The all-age VEVO audit and any provider page failure are separate root-owned work; natural incremental success does not establish all-age completeness. The newly confirmed bank case still needs root's controlled proof application and subsequent natural recovery verification. Standalone guard and reporting migrations remain separate unreleased work.
 - This branch remains a review fixture and evidence handoff, not the current production source. Do not deploy it or rerun historical release finalizers.
 
