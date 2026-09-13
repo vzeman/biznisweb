@@ -11,11 +11,13 @@ import time
 import unicodedata
 from contextlib import contextmanager, ExitStack
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, Iterable, Mapping
 
 from gql import gql
+from manual_settlement import confirmed_proof
+from order_status_identity import bind_catalogue, canonical_order, identity_for, unique_target
 from api_read_backoff import (
     READ_BUDGET_SECONDS, check_read_deadline, check_read_response_status, prepare_query_read, read_retry_delay, wait_before_read,
 )
@@ -57,6 +59,12 @@ mutation ChangeOrderStatusSafely(
 """
 )
 
+STATUS_CATALOGUE_QUERY = gql("""
+query ListOrderStatuses($lang_code: CountryCodeAlpha2!) {
+  listOrderStatuses(lang_code: $lang_code, only_active: true) { id name }
+}
+""")
+
 
 def normalize_status(value: Any) -> str:
     text = unicodedata.normalize("NFKD", str(value or ""))
@@ -74,6 +82,7 @@ class RecoveryDecision:
     action: str
     reason: str
     target_status_name: str = ""
+    manual_settlement_sha256: str = ""
 
 
 @dataclass(frozen=True)
@@ -195,6 +204,22 @@ def assess_payment_evidence(order: Mapping[str, Any]) -> Evidence:
     return Evidence("unpaid" if not invoices else "unknown", "no_settlement_evidence")
 
 
+def assess_settlement_evidence(order: Mapping[str, Any], *, project: str | None = None,
+                               manual_settlement: Any = None) -> Evidence:
+    """Prefer native/API settlement; only an explicit bound claim can fill absence."""
+    payment = assess_payment_evidence(order)
+    if payment.state == "confirmed" or manual_settlement is None:
+        return payment
+    # A reversal or malformed native context must never be hidden by a claim.
+    if payment.reason != "no_settlement_evidence":
+        return payment
+    try:
+        confirmed_proof(manual_settlement, project, order)
+    except (KeyError, TypeError, ValueError):
+        return Evidence("unknown", "manual_settlement_invalid_revoked_or_changed")
+    return Evidence("confirmed", "verified_manual_bank_settlement")
+
+
 def assess_fulfillment_evidence(order: Mapping[str, Any]) -> Evidence:
     shipments = api_collection(order, "shipments")
     if shipments is None:
@@ -230,8 +255,18 @@ def creditnote_coverage_reason(order: Mapping[str, Any], creditnotes: list[dict[
     invoices = api_collection(order, "invoices")
     if total is None or total.amount <= 0 or not invoices:
         return "creditnote_order_amount_or_invoice_unknown"
-    invoice_ids = {str(row.get("id") or "") for row in invoices if isinstance(row, Mapping)}
-    if "" in invoice_ids or len(invoice_ids) != len(invoices):
+    order_id, order_number = order.get("id"), order.get("order_num")
+    if (isinstance(order_id, bool) or not isinstance(order_id, (str, int)) or not str(order_id).strip()
+            or not isinstance(order_number, str) or not order_number.strip()):
+        return "creditnote_order_identity_unknown"
+    invoice_numbers: set[str] = set()
+    for invoice in invoices:
+        if (not isinstance(invoice, Mapping) or isinstance(invoice.get("id"), bool)
+                or str(invoice.get("id") or "") != str(order_id)
+                or not isinstance(invoice.get("invoice_num"), str) or not invoice["invoice_num"].strip()):
+            return "creditnote_invoice_identity_unknown"
+        invoice_numbers.add(invoice["invoice_num"])
+    if len(invoice_numbers) != len(invoices):
         return "creditnote_invoice_identity_unknown"
     credited = Decimal(0)
     seen: set[str] = set()
@@ -266,9 +301,18 @@ def creditnote_coverage_reason(order: Mapping[str, Any], creditnotes: list[dict[
         if not isinstance(document, Mapping):
             return "creditnote_document_invalid"
         identity = str(document.get("id") or "")
-        if not identity or identity in seen or str(document.get("invoice_id") or "") not in invoice_ids:
+        # Native inv_id is a final invoice number, while the API document ID
+        # binds the parent order. Require both order identities as well: invoice
+        # numbers alone can collide across series/orders.
+        if (not identity or identity in seen or isinstance(document.get("order_id"), bool)
+                or str(document.get("order_id") or "") != str(order_id)
+                or document.get("order_num") != order_number
+                or not isinstance(document.get("invoice_number"), str)
+                or document.get("invoice_number") not in invoice_numbers):
             return "creditnote_identity_or_invoice_mismatch"
         seen.add(identity)
+        if document.get("state") != "issued":
+            return "creditnote_not_issued"
         if document.get("currency") != total.currency:
             return "creditnote_currency_mismatch"
         raw_amount = document.get("amount")
@@ -309,6 +353,8 @@ def decide_recovery(
     shipped_target: str = "Odoslaná",
     creditnote_status: str = "unknown",
     verified_previous_status: str | None = None,
+    project: str | None = None,
+    manual_settlement: Any = None,
 ) -> RecoveryDecision:
     """A safe automatic recovery never substitutes an invoice for payment proof."""
     status = normalize_status((order.get("status") or {}).get("name"))
@@ -320,12 +366,19 @@ def decide_recovery(
         return RecoveryDecision("review", "order_blocked_or_block_flag_missing")
     if creditnote_status != "clear":
         return RecoveryDecision("review", "creditnote_present" if creditnote_status == "present" else "creditnote_context_missing")
-    payment = assess_payment_evidence(order)
+    payment = assess_settlement_evidence(order, project=project, manual_settlement=manual_settlement)
     if payment.state != "confirmed":
         return RecoveryDecision("review", payment.reason)
+    proof, digest = None, ""
+    if manual_settlement is not None:
+        try:
+            proof = confirmed_proof(manual_settlement, project, order)
+            digest = manual_settlement["evidence_sha256"]
+        except (KeyError, TypeError, ValueError):
+            return RecoveryDecision("review", "manual_settlement_invalid_revoked_or_changed")
     fulfillment = assess_fulfillment_evidence(order)
     if fulfillment.state == "fulfilled":
-        return RecoveryDecision("shipped", fulfillment.reason, shipped_target)
+        return RecoveryDecision("shipped", fulfillment.reason, shipped_target, digest)
     if fulfillment.state == "exception":
         return RecoveryDecision("review", fulfillment.reason)
     if fulfillment.reason in {"missing_shipment_context", "invalid_shipment_context"}:
@@ -335,8 +388,14 @@ def decide_recovery(
     # This argument is supplied only by the trusted private runtime journal, not
     # by an order/client field or a source-controlled incident override.
     if verified_previous_status and normalize_status(verified_previous_status) == normalize_status(shipped_target):
-        return RecoveryDecision("shipped", "verified_previous_shipped_status", shipped_target)
+        return RecoveryDecision("shipped", "verified_previous_shipped_status", shipped_target, digest)
     if fulfillment.state == "none":
+        if proof:
+            target = proof["recovery_status"]["name"]
+            if normalize_status(target) == normalize_status(shipped_target):
+                return RecoveryDecision("shipped", "verified_manual_bank_settlement", target, digest)
+            if normalize_status(target) == normalize_status(paid_target):
+                return RecoveryDecision("paid", "verified_manual_bank_settlement", target, digest)
         return RecoveryDecision("review", "shipment_history_unavailable")
     return RecoveryDecision("review", fulfillment.reason)
 
@@ -369,14 +428,32 @@ def execute_read(client: Any, query: Any, *, variable_values: dict[str, Any], at
     raise RuntimeError("Order API read was not attempted")
 
 
+def refresh_status_catalogue(client: Any, *, progress_callback=None):
+    """Refresh reviewed rename bindings, never once for every inventory row."""
+    policy = identity_for(client)
+    if policy is None or not policy.renamed:
+        return None
+    policy.catalogue = {}
+    result = execute_read(client, STATUS_CATALOGUE_QUERY, variable_values={"lang_code": "SK"},
+                          progress_callback=progress_callback)
+    return bind_catalogue(client, result.get("listOrderStatuses"))
+
+
+def ensure_status_catalogue(client: Any, *, progress_callback=None) -> None:
+    policy = identity_for(client)
+    if policy is not None and policy.renamed and not policy.catalogue:
+        refresh_status_catalogue(client, progress_callback=progress_callback)
+
+
 def fetch_order_safety_context(client: Any, order_num: str, *,
                                progress_callback: Callable[[], None] | None = None) -> dict[str, Any]:
+    ensure_status_catalogue(client, progress_callback=progress_callback)
     result = execute_read(client, ORDER_SAFETY_QUERY, variable_values={"order_num": str(order_num)},
                           progress_callback=progress_callback)
     order = result.get("getOrder")
     if not isinstance(order, dict) or str(order.get("order_num") or "") != str(order_num):
         raise RuntimeError("Order API detail identity does not match the requested order")
-    return order
+    return canonical_order(client, order)
 
 
 def change_status_verified(
@@ -398,6 +475,11 @@ def change_status_verified(
         raise RuntimeError("Status mutations require a no-retry transport")
     if not isinstance(status_id, int) or isinstance(status_id, bool) or status_id <= 0 or not status_name.strip():
         raise ValueError("Invalid target status")
+    if getattr(transport, "url", None) is not None and identity_for(client) is None:
+        raise RuntimeError("Status mutation requires explicit project identity")
+    catalogue = refresh_status_catalogue(client, progress_callback=progress_callback)
+    if catalogue is not None:
+        unique_target(catalogue, status_name, status_id)
     variables: dict[str, Any] = {"order_num": str(order_num), "status_id": status_id}
     variables["send_notification"] = [{"type": "EMAIL_CUSTOMER", "if": ["NONE"]}] if silent else None
     try:
@@ -406,18 +488,22 @@ def change_status_verified(
         # The request may already have committed. Resolve by a read, never by a
         # second write. If the target cannot be proved, the caller retains its
         # durable pending/uncertain record and requires review on future runs.
+        refresh_status_catalogue(client, progress_callback=progress_callback)
         verified = fetch_order_safety_context(client, order_num, progress_callback=progress_callback)
         _validate_target(verified, order_num, status_id, status_name)
         return verified
     changed = result.get("changeOrderStatus") if isinstance(result, dict) else None
-    _validate_target(changed, order_num, status_id, status_name)
+    refresh_status_catalogue(client, progress_callback=progress_callback)
+    _validate_target(canonical_order(client, changed), order_num, status_id, status_name)
     verified = fetch_order_safety_context(client, order_num, progress_callback=progress_callback)
     _validate_target(verified, order_num, status_id, status_name)
     return verified
 
 
 def status_write_block_reason(
-    journal_order: Mapping[str, Any], *, next_reason: str = "", next_target_status_name: str = ""
+    journal_order: Mapping[str, Any], *, next_reason: str = "", next_target_status_name: str = "",
+    manual_settlement_sha256: str = "", current_order: Mapping[str, Any] | None = None,
+    project: str | None = None, source_statuses: Iterable[str] = (),
 ) -> str:
     """Block uncertainty/regressions, allowing a proven subsequent full refund.
 
@@ -425,6 +511,30 @@ def status_write_block_reason(
     full_creditnote. That legitimate terminal transition must not be blocked by
     an earlier verified payment/fulfillment repair. No uncertain write qualifies.
     """
+    from reviewed_invoice_obligations import has_reviewed_closure
+
+    if has_reviewed_closure(journal_order):
+        return "reviewed_noncollection_requires_manual_review"
+    if manual_settlement_sha256:
+        from manual_settlement import positive_id, uncertainty_reason
+        try:
+            proof = confirmed_proof(journal_order.get("manual_settlement"), project, current_order)
+            positive_id(str((current_order.get("status") or {}).get("id")))
+            datetime.fromisoformat(current_order["last_change"])
+            if (manual_settlement_sha256 != journal_order["manual_settlement"]["evidence_sha256"]
+                    or normalize_status((current_order.get("status") or {}).get("name"))
+                    not in {normalize_status(name) for name in source_statuses}
+                    or normalize_status((current_order.get("status") or {}).get("name")) in _PROTECTED_STATUSES
+                    or (proof["recovery_status"]["name"] != next_target_status_name and not (
+                        next_target_status_name == "Odoslaná" and (
+                            assess_fulfillment_evidence(current_order).state == "fulfilled"
+                            or journal_order.get("verified_fulfillment_status") == "Odoslaná")))):
+                return "manual_settlement_status_binding_changed"
+        except (AttributeError, KeyError, TypeError, ValueError):
+            return "manual_settlement_invalid_revoked_or_changed"
+        blocked = uncertainty_reason(journal_order)
+        if blocked:
+            return blocked
     previous = journal_order.get("status_mutation")
     if not previous:
         return ""
@@ -438,6 +548,27 @@ def status_write_block_reason(
             in {"odoslana", "platba online - zaplatene"}
         ):
             return ""
+        if (manual_settlement_sha256 and previous.get("manual_settlement_sha256") == manual_settlement_sha256
+                and current_order and (previous.get("target_status_name") == next_target_status_name or (
+                    previous.get("target_status_name") == "Platba online - zaplatené" and next_target_status_name == "Odoslaná"
+                    and (assess_fulfillment_evidence(current_order).state == "fulfilled"
+                         or journal_order.get("verified_fulfillment_status") == "Odoslaná")))
+                and normalize_status(next_target_status_name) in {"odoslana", "platba online - zaplatene"}
+                and previous.get("order_id") == str(current_order.get("id"))
+                and previous.get("order_num") == str(current_order.get("order_num"))
+                and (current_order.get("status") or {}).get("name") != next_target_status_name):
+            try:
+                source = current_order["last_change"]
+                before = previous["source_last_change"]
+                verified = previous["verified_last_change"]
+                # FLOX order timestamps are local ISO strings. Require identical
+                # timezone convention and a strictly later observed generation.
+                stamps = [datetime.fromisoformat(value) for value in (source, before, verified)]
+                if (all(stamp.tzinfo == stamps[0].tzinfo for stamp in stamps)
+                        and stamps[0] > stamps[2] >= stamps[1]):
+                    return ""
+            except (KeyError, TypeError, ValueError):
+                pass
         return "repeated_status_regression"
     return "previous_status_mutation_unresolved"
 

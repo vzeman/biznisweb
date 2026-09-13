@@ -608,7 +608,7 @@ def main(argv=None):
             url = secret["BIZNISWEB_API_URL"]
             return InvoiceGenerator(url, secret["BIZNISWEB_API_TOKEN"], derive_biznisweb_base_url(url),
                 username=secret["BIZNISWEB_USERNAME"] if web_login else None,
-                password=secret["BIZNISWEB_PASSWORD"] if web_login else None, send_invoice_email=False,
+                password=secret["BIZNISWEB_PASSWORD"] if web_login else None, send_invoice_email=False, project="roy",
                 eligible_statuses=configured["eligible_statuses"], exclude_zero_total_orders=True,
                 page_delay_seconds=configured["page_delay_seconds"], read_attempts=configured["read_attempts"])
 
