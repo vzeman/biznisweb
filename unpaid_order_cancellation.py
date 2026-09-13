@@ -111,20 +111,6 @@ query GetOrdersForUnpaidCancellation($params: OrderParams) {
         id
         name
       }
-      price_elements {
-        type
-        title
-        value
-        reference_id
-        price {
-          value
-          formatted
-        }
-      }
-      sum {
-        value
-        formatted
-      }
     }
     pageInfo {
       hasNextPage
@@ -425,13 +411,12 @@ def recovery_eligibility_reason(
     return "eligible" if decision.action in {"paid", "shipped"} else decision.reason
 
 
-def cancellation_eligibility_reason(
+def cancellation_discovery_reason(
     order: Dict[str, Any],
     settings: UnpaidCancellationSettings,
     cutoff_date: date,
-    *,
-    require_payment_context: bool = True,
 ) -> str:
+    """Select possible candidates without asserting payment or invoice facts."""
     purchased_at = order_purchase_date(order)
     if purchased_at is None:
         return "missing_purchase_date"
@@ -445,27 +430,45 @@ def cancellation_eligibility_reason(
         return "already_target_status"
     if status in settings.normalized_excluded_statuses:
         return "excluded_status"
-    if has_final_invoice(order):
-        return "final_invoice_present"
     if settings.normalized_candidate_statuses and status not in settings.normalized_candidate_statuses:
         return "not_candidate_status"
-    if not payment_matches(order, settings):
-        return "payment_not_matched"
     if order.get("blocked") is True:
         return "order_blocked"
     if order.get("blocked") is not False:
         return "order_block_flag_missing"
-    if require_payment_context:
-        payment = assess_payment_evidence(order)
-        if payment.state == "unknown":
-            return "payment_evidence_unknown"
-        if payment.state != "unpaid":
-            return "payment_present"
-        fulfillment = assess_fulfillment_evidence(order)
-        if fulfillment.state == "unknown":
-            return "shipment_evidence_unknown"
-        if fulfillment.state != "none":
-            return "shipment_present"
+    return "eligible"
+
+
+def cancellation_eligibility_reason(
+    order: Dict[str, Any],
+    settings: UnpaidCancellationSettings,
+    cutoff_date: date,
+) -> str:
+    """Decide cancellation only from the fresh, complete safety detail."""
+    reason = cancellation_discovery_reason(order, settings, cutoff_date)
+    if reason != "eligible":
+        return reason
+    if has_final_invoice(order):
+        return "final_invoice_present"
+    # Inventory deliberately omits this resolver. Missing detail fields must
+    # remain unknown rather than becoming an unsupported/empty payment method.
+    elements = order.get("price_elements")
+    if ("price_elements" not in order or (elements is not None and not isinstance(elements, list))
+            or any(not isinstance(element, dict) or not {"type", "title", "reference_id"}.issubset(element)
+                   for element in (elements or []))):
+        return "payment_evidence_unknown"
+    if not payment_matches(order, settings):
+        return "payment_not_matched"
+    payment = assess_payment_evidence(order)
+    if payment.state == "unknown":
+        return "payment_evidence_unknown"
+    if payment.state != "unpaid":
+        return "payment_present"
+    fulfillment = assess_fulfillment_evidence(order)
+    if fulfillment.state == "unknown":
+        return "shipment_evidence_unknown"
+    if fulfillment.state != "none":
+        return "shipment_present"
     return "eligible"
 
 
@@ -546,7 +549,7 @@ def fetch_orders_for_cancellation(
     settings: UnpaidCancellationSettings,
     status_ids: Sequence[int],
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    """Read one complete ID inventory, then retain candidate statuses locally."""
+    """Read a complete inventory of discovery fields; inspect candidates later."""
     budget = InventoryScanBudget(max_pages=settings.scan_max_pages)
     last_read_at = 0.0
 
@@ -588,14 +591,10 @@ def fetch_orders_for_cancellation(
     def validate_order(order: Any) -> None:
         if (not isinstance(order, dict) or "status" not in order
                 or (order["status"] is not None and (not isinstance(order["status"], dict)
-                                                     or not order["status"].get("id")))
+                                                     or not order["status"].get("id") or "name" not in order["status"]))
                 or not isinstance(order.get("blocked"), bool) or "pur_date" not in order
-                or "price_elements" not in order
-                or (order["price_elements"] is not None and not isinstance(order["price_elements"], list))
-                or any(not isinstance(element, dict)
-                       or not {"type", "title", "reference_id"}.issubset(element)
-                       for element in (order["price_elements"] or []))):
-            raise RuntimeError("Unpaid cancellation inventory has incomplete status or payment fields")
+                or "last_change" not in order):
+            raise RuntimeError("Unpaid cancellation inventory has incomplete discovery fields")
 
     inventory = scan_order_inventory(
         read, validate_order, budget=budget, page_limit=settings.page_limit,
@@ -732,7 +731,7 @@ def run_unpaid_order_cancellation(
         if settings.recovery_enabled and normalize_text(_status_name(order)) in settings.normalized_recovery_source_statuses:
             provisional_orders.append(order)
         else:
-            reason = cancellation_eligibility_reason(order, settings, cutoff_date, require_payment_context=False)
+            reason = cancellation_discovery_reason(order, settings, cutoff_date)
             if reason == "eligible":
                 provisional_orders.append(order)
             else:

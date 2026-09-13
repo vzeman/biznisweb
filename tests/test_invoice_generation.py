@@ -16,6 +16,7 @@ from generate_invoices import (
     InvoiceGenerator,
     InvoiceRunSummary,
     PREINVOICE_ORDER_MUTATION,
+    _parse_native_response_object,
     _status_matches_invoice_generation,
     reconcile_existing_invoice_statuses,
     resolve_invoice_date_window,
@@ -753,6 +754,46 @@ class InvoiceWebFake(_FakeInvoiceWebSession):
         raise AssertionError("Unexpected invoice web request")
 
 
+class NativeInvoiceResponseParserTests(unittest.TestCase):
+    def test_json_and_narrow_native_literals_preserve_string_contents(self):
+        samples = [
+            ('{"success":true}', {"success": True}),
+            ("{success: true}", {"success": True}),
+            ("{'success': 'true'}", {"success": "true"}),
+            ("{success: false, reason: null, data: [1, -2.5e2]}", {"success": False, "reason": None, "data": [1, -250]}),
+            (r'''{success: 'true', message: 'true false null \"double\" \'single\' \\ slash \/ \u00e1'}''',
+             {"success": "true", "message": 'true false null "double" \'single\' \\ slash / á'}),
+        ]
+        for source, expected in samples:
+            with self.subTest(source=source):
+                self.assertEqual(expected, _parse_native_response_object(source))
+        expected = {"success": "true", "message": "true false null \\ \' \" \n á", "nested": [False, None, {"key": "value"}]}
+        self.assertEqual(expected, _parse_native_response_object(json.dumps(expected)))
+
+    def test_duplicate_decoded_keys_are_rejected_in_json_and_native_objects(self):
+        for source in ('{"success":false,"success":true}', "{success:false, 'success':true}",
+                       r'''{success:false, "succ\u0065ss":true}''', "{success:true, data:{id:1, id:2}}"):
+            with self.subTest(source=source), self.assertRaisesRegex(ValueError, "duplicate"):
+                _parse_native_response_object(source)
+
+    def test_nonliteral_nonobject_and_trailing_syntax_are_rejected(self):
+        for source in ("", " ", "null", "true", "[]", "'true'", "<html>success:true</html>",
+                       "{success:true};", "({success:true})", "{success:true} {other:false}",
+                       "{success:true,}", "{success:true // comment\n}", "{success:/*comment*/true}",
+                       "{success:True}", "{success:undefined}", "{success:check()}",
+                       "{success:NaN}", "{success:Infinity}", "{success:1e999}",
+                       "{success:0x1}", r"{success:'\x74rue'}", r"{success:'\q'}"):
+            with self.subTest(source=source), self.assertRaises(ValueError):
+                _parse_native_response_object(source)
+
+    def test_size_and_nesting_limits_apply_before_decoding(self):
+        for source in ("{value:'" + "a" * 65536 + "'}", "{value:'" + "á" * 32768 + "'}",
+                       "{value:" * 33 + "null" + "}" * 33):
+            with self.subTest(length=len(source)), self.assertRaisesRegex(ValueError, "size|nesting"):
+                _parse_native_response_object(source)
+        self.assertIsInstance(_parse_native_response_object("{value:" * 32 + "null" + "}" * 32), dict)
+
+
 class InvoiceSafetyRegressionTests(unittest.TestCase):
     def setUp(self):
         self.fixed_now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
@@ -1031,6 +1072,75 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
         self.assertEqual(0, result.recovered_invoices)
         self.assertEqual(1, result.emailed_invoices)
         self.assertEqual(0, result.ambiguous_invoice_operations)
+
+    def test_raw_native_string_success_confirms_once_without_replay(self):
+        original = self.web.get
+        def native_response(url, headers=None, **kwargs):
+            response = original(url, headers=headers, **kwargs)
+            response._payload = None  # response.json() cannot decode this wire body.
+            response.text = "{success: 'true', message: 'true false null'}"
+            return response
+        with patch.object(self.web, "get", side_effect=native_response):
+            first = self.run_fixture()
+            second = self.run_fixture()
+        self.assertEqual(1, first.created_invoices)
+        self.assertEqual(0, first.recovered_invoices)
+        self.assertEqual(1, first.emailed_invoices)
+        self.assertEqual(0, first.ambiguous_invoice_operations)
+        self.assertEqual(0, second.pending_invoice_operations)
+        self.assertEqual(1, sum("/finalize/" in url for url in self.web.get_urls))
+        self.assertEqual(1, sum("/sendEmail/" in url for url in self.web.get_urls))
+
+    def test_raw_native_email_flag_uses_only_explicit_success_or_boolean_failure(self):
+        for body, expected, outcome in (("{success:true}", True, "sent"), ("{success:'true'}", True, "sent"),
+                                        ("{success:false}", False, "failed"), ("{success:'false'}", False, "ambiguous"),
+                                        ("{success:1}", False, "ambiguous"), ("{success:'True'}", False, "ambiguous")):
+            with self.subTest(body=body):
+                response = _FakeInvoiceResponse("https://example.test/native", None)
+                response.text = body
+                with patch.object(self.web, "get", return_value=response) as request:
+                    self.assertEqual(expected, self.generator.send_invoice_email("1"))
+                self.assertEqual(1, request.call_count)
+                self.assertEqual(outcome, self.generator.last_email_outcome)
+
+    def test_duplicate_success_email_response_stays_ambiguous_and_is_not_resent(self):
+        original = self.web.get
+        def duplicate_response(url, headers=None, **kwargs):
+            response = original(url, headers=headers, **kwargs)
+            if "/sendEmail/" in url:
+                response.text = '{"success":false,"success":true}'
+            return response
+        with patch.object(self.web, "get", side_effect=duplicate_response):
+            first = self.run_fixture()
+            second = self.run_fixture()
+        self.assertEqual(1, first.ambiguous_invoice_operations)
+        self.assertEqual(1, second.ambiguous_invoice_operations)
+        self.assertEqual(1, sum("/sendEmail/" in url for url in self.web.get_urls))
+
+    def test_raw_native_success_cannot_replace_final_invoice_readback_or_trigger_replay(self):
+        response = _FakeInvoiceResponse("https://example.test/native", None)
+        response.text = "{success:true}"
+        with patch.object(self.web, "get", return_value=response) as request:
+            first = self.run_fixture()
+            second = self.run_fixture()
+        self.assertEqual(0, first.created_invoices)
+        self.assertEqual(0, first.emailed_invoices)
+        self.assertEqual(1, first.ambiguous_invoice_operations)
+        self.assertEqual(1, second.ambiguous_invoice_operations)
+        self.assertEqual(1, request.call_count)
+
+    def test_unparseable_finalize_response_still_recovers_only_from_readback(self):
+        original = self.web.get
+        def native_response(url, headers=None, **kwargs):
+            response = original(url, headers=headers, **kwargs)
+            response.text = "{success:" if "/finalize/" in url else "{success:true}"
+            return response
+        with patch.object(self.web, "get", side_effect=native_response):
+            summary = self.run_fixture()
+        self.assertEqual(0, summary.created_invoices)
+        self.assertEqual(1, summary.recovered_invoices)
+        self.assertEqual(1, summary.emailed_invoices)
+        self.assertEqual(0, summary.ambiguous_invoice_operations)
 
     def test_native_misleading_truthy_values_never_confirm_email(self):
         for value in ("TRUE", "yes", "1", 1, {"value": True}, [True]):
