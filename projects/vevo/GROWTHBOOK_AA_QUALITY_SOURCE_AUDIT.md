@@ -1,4 +1,4 @@
-# A/A quality-source audit — 2026-09-09
+# A/A quality-source audit — 2026-09-13
 
 Status: `SOURCE_RECEIPT_CONCATENATED_MARKER_FRAMING`. The complete-log health
 correction is merged and independently verified in production. One subsequent
@@ -8,6 +8,90 @@ Complete source coverage and A/A PASS remain unproven. This is
 not permission to restart an experiment or alter its window. Separately, browser
 QA is fail-closed on `GTM_LIVE_VERSION_DRIFT` and the newly verified static
 `CLARITY_DIAGNOSTIC_FREE_TEXT_PRIVACY_RISK`; see the browser precheck.
+
+### September 13: historical-proof assessment and owner decision boundary
+
+PR #539 is merged, including actual exact-head Linux execution of all 316
+regressions with no skips. Today's existing managed health workflow succeeded
+as run `34744300456` on original main
+`95e4421303a4d8cb3b517a020a93e8af75139f7c`. Both independent in-memory
+downloads, sole artifact/ZIP/JSON hashes, original run/main/Git deployment
+binding, offline validator and latest-due/freshness checks passed. Exact hashes
+and observation are recorded in `PROJECT_STATE.md`. No source was dispatched.
+
+**The original historical proof cannot complete using the known retained input
+and unchanged acceptance contract.** The original reducer requires one valid
+JSON receipt per unique CloudWatch event and rejects the already diagnosed
+concatenated message. Another read, more traffic or a forward-only emission lock
+cannot satisfy that requirement without changing the input or acceptance.
+This conclusion does not prove actual lost requests, duplicate writes, wrong
+orders or a statistical A/A FAIL. It is not a claim that every possible external
+source has been exhausted or that independently stronger evidence cannot exist.
+
+Scope precision from the actual code:
+
+- `receipt_parity()` reads `context_from_utc` through the frozen end. Its start
+  is the UTC day of the verified-empty foundation, not the A/A start. It filters
+  the receipt marker without an experiment/eligible-cohort filter. The fixed
+  failure code does not locate the malformed record within that wider context;
+  do not claim it necessarily belongs to an eligible A/A exposure.
+- The four marker fields have neither an occurrence identity nor a timestamp.
+  An outer CloudWatch event's identity/time cannot independently locate each
+  constituent receipt. Conditional S3 persistence retains unique writes, not
+  a separate ledger of all duplicate retries. A matching single total would
+  not independently prove lossless historical multiplicity or boundary timing.
+- `received_at` is assigned before persistence; the receipt is emitted after
+  persistence. Do not treat these as a demonstrated atomic time boundary.
+- The checked-in collector log-group retention is 30 days. The acquisition
+  separately requires the entire foundation context to remain within the live
+  retention policy, using a strict age comparison. Waiting can close this gate
+  too; the 180-day raw-S3 check is not the log-retention check. No live retention
+  value, physical deletion or recovery has been established by this static
+  assessment, and no retention change is authorized.
+
+#### Proposed next diagnostic, not implemented or dispatched
+
+The smallest useful deployed-framing readback is configuration-only: no
+CloudWatch messages, S3 event reads, counts or outcome query. A separately
+reviewed managed exact-main workflow would bind the original manifests and a
+fresh independently verified same-main health artifact before credentials.
+It would use only exact STS/CloudFormation/ECS/log-group metadata reads; bound
+pagination/time/bytes, fail on ambiguity, and verify the same exact live
+collector/task/private-IP/service/task-definition/image identity before and
+after the read. `/app` must remain bound to the reviewed image/host proof;
+metadata alone is not a new localhost execution claim.
+
+One small canonical identity-free artifact would expose only fixed enums,
+booleans and evidence hashes: awslogs driver match, multiline/datetime option
+presence, declared delivery mode (`blocking`, `non-blocking`, `unspecified`),
+buffer-option presence, log-group/region/prefix matches, retention-policy
+coverage, command/environment override matches, and stable runtime identity
+verified in runner memory. No raw configuration, ARN/IP/task/stream identity,
+secret, message, count, experiment result or raw exception may be exported.
+Require sole-artifact ownership, ZIP/JSON/schema/hash validation and exact
+failure cleanup. Unknown configuration remains unknown, not healthy by default.
+
+An unspecified delivery mode does not prove lossless logging: the
+[AWS logging contract](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_LogConfiguration.html)
+allows a regional account default, and documents possible buffer loss in
+non-blocking mode. This is not evidence such loss occurred here. Current
+configuration also does not prove historical configuration, the exact deployed
+interpreter or why the earlier message was combined; those require separate
+digest-bound evidence. No ECS exec, restart or synthetic production request is
+part of this proposal.
+
+#### Decision required before a replacement measurement
+
+Do not implement a new decoder, drop/split/recover receipts, reset data or move
+the frozen dates to produce PASS. A new start/end with the same foundation
+context still includes the historical blocker. Preparing a replacement A/A
+requires explicit owner direction, a separately reviewed preserved-history and
+new-context/generation design, a proven forward prevention fix, exact runtime
+identity before change/deploy and localhost markers before UI. Its old/new
+experiment and evidence transitions must be explicit; existing acceptance
+manifests remain untouched now. Stop/readback, GTM/privacy QA, paid Pro and CTA
+remain separately gated. Until direction is supplied, only the established
+daily result-blind infrastructure monitor continues.
 
 ### September 9: possible emitter race reproduced; no historical recovery
 
