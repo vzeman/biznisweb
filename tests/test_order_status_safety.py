@@ -63,6 +63,9 @@ class MemoryAutomationStore:
     def get_order(self, number):
         return copy.deepcopy(self.orders.get(number, {}))
 
+    def read(self):
+        return {"orders": copy.deepcopy(self.orders), "lease": None}, "fixture-etag"
+
     def update_order(self, number, **fields):
         self.assert_owned()
         self.orders.setdefault(number, {}).update(copy.deepcopy(fields))

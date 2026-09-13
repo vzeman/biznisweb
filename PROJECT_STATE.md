@@ -5,6 +5,34 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Manual external settlement protection draft
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- A payment-method change or past paid status does not prove settlement. Added explicit private operator-confirmed full-bank-settlement provenance bound to project, internal/public order identity, total, currency and an already-restored shipped/paid target. Native receipts/paid invoices remain primary; only complete absence of settlement may use the manual fallback. No financial flags, receipts or transfer dates are synthesized.
+- A dedicated recorder verifies canonical private hash-bound evidence, source/remote branch, AWS/project/API/storage identity and fresh current status. Preview is read-only; apply writes only leased journal provenance. Explicit revocation preserves the original proof. No provider mutation, email, invoice or native admin call is part of recording.
+- Both status-recovery callers and unpaid cancellation consume the same proof. Later gateway regressions require the same proof/order and a strictly newer verified order generation, retaining prior intents atomically. The target stays the same except a one-way paid-to-shipped advance with fresh proven fulfillment; shipped-to-paid is forbidden. Uncertain financial/email/status operations, any creditnote, returned shipments, blocked/changed orders and revoked evidence still block automatic recovery. Existing complete-creditnote Storno priority remains unchanged.
+- Reproducible schema, CLI, operator authority and limitations are documented in `projects/MANUAL_SETTLEMENT_PROTECTION.md`; customer-specific evidence remains private. The user's known case was already manually restored; this draft does not restore it again.
+
+What is verified:
+
+- All 680 build-workflow tests pass (21 seeded-retry + 20 backoff + 639 combined), including 28 new provenance/recorder/caller regressions. Reporting smoke and Ruff/diff pass. Independent final review passed 231 focused tests and a separate both-writer paid-to-shipped/no-downgrade probe with no remaining blocker.
+- Independent review caught the initial strict same-target rule blocking paid-to-shipped progression after delivery. The narrow monotonic exception is covered through both actual callers, including subsequent no-downgrade behavior.
+- The canonical user-confirmation proof was validated offline against the exact schema/hash; no private identifiers or content entered Git. No live recorder preview/apply, AWS/provider writes, financial recovery or production deployment was performed for this branch.
+
+Known issues:
+
+- Native gateway mappings can still overwrite status; this supplies evidence and guarded repair, not a provider-side conditional webhook.
+- Root owns a separate proven native creditnote invoice-number/lifecycle fix. This branch deliberately does not edit that coverage function or creditnote tests; integrate the reviewed correction after its push.
+
+Next exact step:
+
+- Integrate root's separately reviewed native creditnote correction after its push, resolve only known owned documentation hunks and rerun combined checks. Release and the already-published private confirmation require separately verified root execution; do not run the helper from this branch before that gate.
+
 ## 2026-09-13 — Native identity and paused-deployment correction validated
 
 Date: 2026-09-13
