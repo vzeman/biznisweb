@@ -3282,7 +3282,10 @@ class BizniWebExporter:
         return order
 
     def _status_norm(self, order: Dict[str, Any]) -> str:
-        return self._normalize_match_text(self._status_name(self._reporting_order_context(order)))
+        current = self._reporting_order_context(order)
+        if current.get("status_identity_unbound"):
+            return ""
+        return self._normalize_match_text(self._status_name(current))
 
     @staticmethod
     def _is_price_elements_error(error: Exception) -> bool:

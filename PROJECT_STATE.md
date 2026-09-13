@@ -14,7 +14,8 @@ Branch: `codex/report-status-identity-20260913`
 What changed:
 
 - Reporting live/cache acquisition now binds the reviewed VEVO catalogue before classification; period children reuse that verified catalogue. Realized revenue, failed-payment segmentation and shipped-creditnote context use canonical copies while raw display/cache rows remain unchanged. Same-shop/project/transport drift and foreign role collisions reject authority. ROY keeps its existing policy.
-- Added a report-only unpaid lifecycle wrapper; the original frozen GrowthBook classifier and facts-only no-client constructor behavior remain unchanged. Added 20 focused regressions, wired into image-build and both-platform automation CI. Existing provider-query mocks explicitly model an unbound client/catalogue where their tests cover unrelated payment or frozen-facts behavior.
+- Final parent review confirmed no current unbound-ID filter bypass: revenue and failed segmentation were already guarded. `_status_norm` now also returns no classification label for unbound rows. Added actual generic filter/failed-segment/raw-preservation and JSON-output regressions; the bound creditnote client stays internal. Final scoped reporting, creditnote and frozen GrowthBook suite: 173 pass.
+- Added a report-only unpaid lifecycle wrapper; the original frozen GrowthBook classifier and facts-only no-client constructor behavior remain unchanged. Added 22 focused regressions, wired into image-build and both-platform automation CI. Existing provider-query mocks explicitly model an unbound client/catalogue where their tests cover unrelated payment or frozen-facts behavior.
 - Updated `projects/REPORT_STATUS_IDENTITY_AUDIT.md` with fresh parent-verified read-only Stripe settings proof (SHA `250a22f46db21b120611adf473ddfaba0d651b813800b688497715a0c4f68b2f`): current PAID maps to reviewed ID 31, CANCELLED to 34, EXPIRED to 33, REFUNDED to 73 and UNPAID to 69. The repaired paid path is covered. Catalogue ID 70 is unused by that mapping and stays excluded; no historical mapping or successful gateway callback is claimed. No gateway configuration change.
 - Report source checkpoint `4d5008f8` is pushed. Integrated both exact security-baseline supplements `fd3d0061` and `a7f1bdd9` through merge `96be382a`, preserving both additive project histories. Security baseline passes; no production source changed during this integration.
 
@@ -29,7 +30,7 @@ Known issues:
 
 Next exact step:
 
-- Commit/push this precise Stripe proof clarification, then hand off the reviewed report branch for parent-coordinated PR and managed release after the primary order deployment freeze ends. Preserve protected reporting pins and historical GrowthBook proofs until that separately verified migration. Root owns PR merge and all runtime releases.
+- Commit/push the final unbound-label hardening, then hand off the reviewed report branch for parent-coordinated PR and managed release after the primary order deployment freeze ends. Preserve protected reporting pins and historical GrowthBook proofs until that separately verified migration. Root owns PR merge and all runtime releases.
 
 ## 2026-09-13 — Reporting branch integrates reviewed status identity dependency
 

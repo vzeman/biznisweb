@@ -1,4 +1,5 @@
 import copy
+import json
 from datetime import datetime
 from types import SimpleNamespace
 import unittest
@@ -101,6 +102,21 @@ class ReportStatusIdentityTests(unittest.TestCase):
         for label in ("Odoslaná", "Shipped", "Platba online - zaplatené", "Payment online - paid"):
             with self.subTest(label=label):
                 self.assertEqual((False, "unbound_status"), exp._realized_revenue_decision(order("999", label)))
+
+    def test_unbound_old_labels_cannot_enter_generic_filter_or_failed_segment(self):
+        exp = exporter()
+        exp.prepare_reporting_status_identity()
+        rows = [order("999", label) for label in (
+            "Odoslaná", "Platba online - zaplatené", "Platba online - platnosť vypršala",
+        )]
+        saved = copy.deepcopy(rows)
+        self.assertEqual(["", "", ""], [exp._status_norm(row) for row in rows])
+        self.assertEqual([], exp._filter_by_status(rows))
+        self.assertEqual([], exp.excluded_orders)
+        self.assertEqual(rows, exp.excluded_status_orders)
+        self.assertEqual(saved, rows)
+        frozen = BizniWebExporter("https://vevo.flox.sk/api/graphql", "", project_name="vevo", order_facts_only=True)
+        self.assertEqual("odoslana", frozen._status_norm(order(label="Odoslaná")))
 
     def test_role_collision_or_missing_reviewed_catalogue_id_blocks(self):
         for rows in (CATALOGUE[:4], [*CATALOGUE, {"id": "999", "name": "Odoslaná"}]):
@@ -242,6 +258,20 @@ class ReportStatusIdentityTests(unittest.TestCase):
         self.assertTrue(order_was_sent_before_creditnote(current, status_change_audit=audit, status_client=exp.client))
         audit["orders"][0]["previous_status"] = "Shipped"
         self.assertFalse(order_was_sent_before_creditnote(current, status_change_audit=audit, status_client=exp.client))
+
+    def test_creditnote_client_authority_is_absent_from_serializable_outputs(self):
+        exp = exporter()
+        exp.prepare_reporting_status_identity()
+        raw = order()
+        context = {"project": "vevo", "included_orders": [raw], "all_orders": [raw], "_status_client": exp.client}
+        outputs = build_creditnote_reporting_audit(
+            [{"Eshop": "VEVO", "Objednavka": "synthetic-order", "Mena": "EUR", "Suma s DPH": 10, "Suma bez DPH": 8}],
+            {"vevo": context},
+        )
+        serialized = json.dumps(outputs)
+        self.assertNotIn("_status_client", serialized)
+        self.assertNotIn("transport", serialized)
+        self.assertEqual(1, outputs[2]["checked_orders"])
 
     def test_creditnote_reporting_denominator_uses_bound_context(self):
         exp = exporter()
