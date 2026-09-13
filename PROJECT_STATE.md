@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Native response compatibility validated before release
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/unpaid-inventory-discovery-fields-20260913`
+
+What changed:
+
+- Cancellation discovery correction `4acd5ea3` is pushed in PR #547 and passed all six required checks. Before merge, a narrow native-response compatibility correction is being added to the same reviewed release.
+- Current invoice email handling accepts JSON only, although the served native UI also accepts JavaScript object literals. The new non-executing bounded decoder preserves strings and rejects duplicate keys, nonfinite numbers, excessive nesting and trailing code. It is used only for native finalization/send responses; GraphQL preparation, authoritative invoice readback, durable uncertainty and no-replay behavior remain unchanged.
+- Actual bodies of the two old ambiguous send responses were not retained. Their successful send histories are positive evidence; the lexical format is not known. Do not claim the parser proves their specific root cause or resend either email.
+
+What is verified:
+
+- Fresh AWS-only receipt `data/roy/order-automation/audits/2026-09-13/pre-release-runtime-refresh-20260913T041656Z.json`, SHA-256 `7ba743219f8d4bd07ee53a723f40145e47df923a83363449b2e312f42d12e578`, is published create-only with AES256 and exact-byte readback. All five old schedule pins remain; latest completed ROY/VEVO runs created zero invoices and failed 17/16. All eleven original email holds remain. An active natural-run lease is not evidence of a completed outcome.
+
+Known issues:
+
+- All 627 full build regression tests and 220 combined safety tests pass, including actual lexical fixtures, strict success flags, mandatory final readback and repeated-run no-replay checks. Ruff and whitespace checks pass. Independent review passes, including 124 separately executed tests and 18,000 semantic-preservation cases plus adversarial rejection cases. Production remains unchanged at the old image and main remains `a97d974f`.
+
+Next exact step:
+
+- Commit/push the independently reviewed change and rerun exact-head PR checks. Merge/build/deploy once; then complete reviewed historical recovery and standalone guard migration as below.
+
 ## 2026-09-13 — Stable cancellation discovery; fresh financial gates retained
 
 Date: 2026-09-13
