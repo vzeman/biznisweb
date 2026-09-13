@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — VEVO AWS session recovered; scoped image deployment prepared
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-board-image-deploy-20260913`
+
+What changed:
+
+- The user had completed AWS login after the prior sign-in check. The temporary browser tab was automatically closed because it was not retained. Reopened and explicitly retained the AWS tab; authenticated account `919341186960` is now verified. The earlier access blocker is resolved.
+- PR #558 passed all six exact-head CI checks and merged as `d2728a7783203cd3eec7ba683e13b92e8f20793b`; ECR build `34752509626` succeeded. The status-name correction is in main; runtime promotion is still pending at this checkpoint.
+- Added a repository-local two-phase image deployer and runbook. It probes in a temporary Fargate task with no task role and only the API secret, verifies curl localhost/marker and actual task/IP/image/exit, then allows an image-only App Runner update if the saved service configuration is unchanged. Existing IAM, business schedules and report data are not mutated. This avoids the older dashboard workflow's wider IAM/reporting reconciliation.
+
+What is verified:
+
+- Fresh AWS UI identity: App Runner service `biznisweb-vevo-production-board`, ARN suffix `2711a253ae014a8aaf1a37929997496d`, RUNNING, manual deployment, image `sha256:19ab8ab8b1313dbf627808eafff42dffe557d12891fb401149fd0cd27aa2f3fd`; command `python live_dashboard_server.py --host 0.0.0.0 --port 8080`, Docker WORKDIR `/app`, instance/private host IP N/A (managed).
+- Origin `https://2mhmsmgq3m.eu-central-1.awsapprunner.com`, dynamic DNS IPs `3.126.244.1`, `35.157.121.17`, `3.74.221.100`; project env is VEVO with its own existing runtime role and S3 prefix.
+- Eight focused tests pass, including rejection of wrong task/owner/image/exit/IP/path/status/zero-count proof, image-only payload preservation and redirect blocking. Python syntax and diff whitespace checks pass. No local persistent process was started.
+
+Known issues:
+
+- New deploy helper and host probe are prepared but not yet exercised against AWS. No production update has occurred at this checkpoint.
+
+Next exact step:
+
+- Push the helper/runbook, run the pinned d2728a77 image probe from a verified Git checkout in the authenticated CloudShell, inspect actual host proof, then promote the same digest, verify live API and browser UI, and record final process/task cleanup. Preserve the AWS tab across turns.
+
 ## 2026-09-13 — VEVO board configuration corrected for confirmed status renames
 
 Date: 2026-09-13
