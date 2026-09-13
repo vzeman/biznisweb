@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 - Root preparation of integrated report PR
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-deploy-20260913`
+
+What changed:
+
+- Root accepted clean pushed author handoff `31053aef9116db1fd01727298e9c25b87d9be388`, fetched/pulled the correct branch, and prepared one integrated report PR replacing the narrower draft #553. No new PR has yet been established: the first REST create returned an empty-response parse error and the second returned HTTP 502; exact head-filtered and recent open-PR readbacks confirmed absence after each. The remote head was independently re-read as the expected author commit. Do not assume creation or blindly replay an uncertain write.
+- Main remains frozen on `fda36b49` for order deployment `34749213122`. Both ROY and VEVO invoice dry hosts independently passed STOPPED 0 / exact image / full-backlog localhost markers; the cancellation candidate is still under verification. No report merge, bootstrap, readiness publication or deployment is permitted by these partial order results.
+
+What is verified:
+
+- Author source passes 1,044 build and 782 automation tests, plus the independent 89-test collection and smoke/security/Ruff checks described below. Root's source-only integration scope review confirms a 35-file reporting diff. This root step changes documentation only.
+- Limited root read-only AWS preflight confirms `vevo-growthbook-production` and `vevo-growthbook-reconciliation-production` both `UPDATE_COMPLETE`, and the existing reconciliation schedule is ENABLED at `cron(45 3 * * ? *)`, task definition `vevo-growthbook-reconcile-production:3`, cluster `vevo-reporting-cluster`. These three reads do not replace the later full protected runtime/policy snapshot. No provider or runtime write occurred and no persistent local process was started.
+
+Known issues:
+
+- GitHub PR creation currently returns transient server responses; cause is not established. Draft #553 remains open until the integrated replacement is confirmed. The earlier ready-for-review failure on #554 was resolved with identical-source replacement #555; it does not authorize bypassing checks on this new source.
+- Primary promotion, reviewed noncollection closure, VEVO historical verification and both standalone guards remain prerequisites. The maintenance windows and fresh-versus-historical host evidence rules remain as documented below.
+
+Next exact step:
+
+- Retry PR creation only after confirmed absence, using bounded backoff or the supported browser fallback; then require checks on its actual head and close #553 only once a replacement exists. Keep main frozen until independently complete primary promotion/restoration. After the separate guard cutover, execute the runbook's bootstrap, readiness producer and managed reporting promotion.
+
 ## 2026-09-13 - Integrated managed VEVO reporting handoff (offline verified)
 
 Date: 2026-09-13
