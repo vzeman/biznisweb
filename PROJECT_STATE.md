@@ -20,6 +20,7 @@ What is verified:
 
 - Exact `e55ccd14` pure-method probes reproduce three included-to-excluded revenue cases after only a label change, two lost failed-payment segment entries and the unpaid lifecycle misclassification. These are synthetic source checks, not measured live report totals. Git source and existing receipts only; no provider, AWS, financial or message action.
 - The separate guard migration preserves report task/image pins and adds only an inline-guard skip environment override. That protects the mutation boundary but cannot repair name-based report filters.
+- The production board has its own API client and name-based active-order/early-stop predicates; a shared exporter correction alone will not restore renamed paid orders there. The separate live-dashboard reader/release dependency is recorded in the audit and remains outside this branch's deployment scope.
 
 Known issues:
 
