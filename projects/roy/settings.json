@@ -109,7 +109,7 @@
     "existing_invoice_status_reconciliation": {
       "enabled": true,
       "target_status_name": "Platba online - zaplatené",
-      "target_status_id": null,
+      "target_status_id": 67,
       "lang_code": "SK"
     },
     "schedule_name": "roy-daily-invoice-generation",
@@ -242,7 +242,7 @@
       "Stripe - expired"
     ],
     "recovery_target_status_name": "Platba online - zaplatené",
-    "recovery_target_status_id": null,
+    "recovery_target_status_id": 67,
     "lang_code": "SK",
     "payment_reference_ids": [
       "6",

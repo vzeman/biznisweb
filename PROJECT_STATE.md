@@ -5,6 +5,33 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Candidate rejected; original runtime restored; explicit ROY target correction
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- Managed run `34747360516` rejected the first candidate before promotion. Actual ROY task `14c69cd06f7d4e298fc9fbf678830620`, IP `172.31.43.249`, service `roy-invoice-daily:10`, `/app`, Fargate instance N/A, exact `a05b6466...` image, stopped with exit 1 at 08:37:13 UTC. Its scan reached reconciliation, where `unique_target` rejected the paid target because ROY has two distinct status IDs with the same name. No localhost success marker or promotion was established.
+- Exact rollback independently passed: five original enabled schedules and ROY :9 / VEVO :8 / cancellation :41 image `c3842dda...`, six IAM policies, both protected reporting definitions/images (:71 / :33), 17 alarm configurations, three encrypted empty queues, stopped candidate and 120-second quiet drain. The deployment freeze is closed by verified restoration, not by success. Main remains `b417caa7`; it has not become the order runtime.
+- The corrective source filters an explicitly configured target by both its validated ID and expected name. Duplicate catalogue IDs, wrong/missing target IDs, changed names and unconfigured duplicate-name targets still fail. VEVO's separate canonical-role collision gate remains unchanged. Both ROY paid-recovery settings now pin ID 67.
+
+What is verified:
+
+- Independent rollback proof: `data/roy/order-automation/audits/2026-09-13/independent-deploy-b417caa7-20260913.json`, SHA `2cdf1786ac63a62760b03b842990da0f84ab69910757af796953549588ce89ef`. Terminal managed receipt SHA `017eb0e0ed3f84509e732656aa4ebcfedb6fc1b24bd1fa11f80d3f4b50e80cb9`. These are failure/restoration evidence, not a release authorization.
+- Existing same-shop API/native catalogue proof `811967d8...` establishes duplicate paid names on 31/67. Fresh read-only native Stripe mapping explicitly shows PAID -> 67. Canonical proof: `data/roy/order-automation/audits/2026-09-13/current-stripe-paid-target-ui-20260913-v2.json`, SHA `befab3a15da05ea71f81cff2faca37949310d38101830c627cf794b23e3bd871`. Version 2 replaces an estimated timestamp with the bounded observed window; mapping content is unchanged. No gateway setting, payment, invoice, status or email was written; the temporary browser tab was closed.
+- All 847 build-workflow tests passed on the corrective source (72 + 20 + 29 + 726), together with the separate 585-test automation suite, scoped Ruff and whitespace checks. Three new regressions cover duplicate-name order independence, invalid target/catalogue rejection and both real ROY recovery resolvers. Two existing settings assertions were updated to the reviewed explicit ID. Independent mutation-pipeline tests, exact-head CI and live zero-write resolver readback remain next.
+
+Known issues:
+
+- VEVO still has missing-completion and stale-full-scan alarms; restoration is not successful VEVO execution. Manual bank provenance remains recorded, but its new protection consumer is not live. The fixed uncollected helper's release constants stay empty and no closure has been applied. Do not reuse the failed `b417` receipt as promotion proof.
+- Separate reporting draft #553 is now at `960837f1` with 174 related tests and cache-day refresh for unreviewed stale labels. It remains undeployed; standalone guard #552 and managed reporting work remain later dependencies.
+
+Next exact step:
+
+- Complete the narrow target correction review/tests, commit/push and new PR, then perform read-only live target resolution without another full scan. Require exact-head CI, exact merged-image build and a new managed deployment with independent restoration/promotion proof. Only a successful release permits pinning/applying the fixed uncollected closure and finishing VEVO seeded/all-age verification. No local persistent processes were started.
+
 ## 2026-09-13 — Combined safety release merged; deployment freeze active
 
 Date: 2026-09-13
