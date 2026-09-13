@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Direct bank settlement must survive an expired gateway attempt
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/native-preinvoice-identity-20260913`
+
+What changed:
+
+- The user confirms a reviewed older VEVO order was paid directly by bank transfer and has already restored it to shipped. Their normal correction also changes the payment method from online card to bank transfer; the original gateway can still overwrite its status. This is trusted user testimony about external settlement, not a GoPay settlement result. Exact order identity and payment evidence belong only in private audit storage.
+- Required precedence: confirmed payment from any source outranks an unpaid/expired individual gateway attempt. Preserve proven fulfillment. A genuine complete return/full creditnote remains an independent cancellation reason; a partial return must not cancel the entire order. Payment-method changes, invoice existence and historic paid statuses alone are not payment proof. Shared admin credentials prevent reliable human/automation attribution from actor names alone.
+- Older VEVO attempts were checked in authenticated GoPay, not Stripe. Both exact attempts timed out; this cannot disprove a separate bank payment. The user-confirmed case needs durable explicit settlement provenance without inventing a receipt, transfer date or transaction reference. The user has already corrected its status, so no duplicate correction is planned.
+
+What is verified:
+
+- Official FLOX documentation and served native code distinguish the manual invoice payment/receipt workflow from a status change. The payment workflow records an amount/date/type and creates a cash-register receipt; a mere paid status need not create that evidence. No payment or receipt mutation was made. A bounded native integration-setting review is still needed to determine whether the initial stale gateway write can be prevented; AWS repair alone does not prevent it.
+- Deployment `34741354275` remains active and main remains frozen at `47c3da775ff7018a1cf8950024c867310b91ae8a`. ROY candidate `8afe06f235534ce7b920b7498bb5e2b4` passed its actual localhost marker and stopped with exit zero, matching 17 dry-run candidates with zero invoice/email/status writes. VEVO candidate `931ccefe9a224adcb6b2f62e1fae97cb`, Fargate instance N/A, IP `172.31.15.95`, service `vevo-invoice-daily:8`, `/app`, exact `c3842dda` image, is running; its marker and terminal result are not yet claimed.
+- Independent standalone guard review of pushed `e131b789` passes 57 focused tests, Ruff and diff checks. Both pinned historical report images use `python daily_report_runner.py`; parser-only checks against their exact runner sources pass without importing business code. Full-creditnote identity still needs a real same-order native/API contract check: the creditnote grid field must not be assumed equivalent to the separately proven invoice grid field.
+
+Known issues:
+
+- Manual bank settlement is not yet represented in the current recovery decision. Isolated implementation/review is starting; native stale-event prevention remains unproven. Invoice infrastructure promotion and actual financial recovery are still pending. GoPay private evidence publication is in progress.
+
+Next exact step:
+
+- Finish independent deployment gates without parallel broad provider scans or main merges. Observe the first actual invoice outcome after successful promotion, then complete the separately reviewed six-case reconciliation and all-age audit. In parallel, add and test explicit private manual-settlement provenance on an isolated branch and prove the creditnote identity contract before guard migration.
+
 ## 2026-09-13 — Native-key correction merged; incident-aware deployment active
 
 Date: 2026-09-13
