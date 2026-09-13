@@ -5,6 +5,33 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Uncollected closure applied; VEVO seeded audit passes
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/reviewed-uncollected-close-20260913`
+
+What changed:
+
+- PR #557 passed all six checks on exact `8e187357a4c082dd70f6727b047498cf212a25a8` and merged as `eb89ea90da686678e3080dbe5be9f859be65e332`. The local final pin passed 141 focused tests, Ruff and whitespace checks. This helper-only merge does not change the independently verified order runtime `fda36b49` / `29c0c8e4`.
+- Fresh closure preview passed with no consumed intent and zero requests. After a fresh free-lease preflight, the reviewed helper applied once against the verified primary receipt: `ok=true`, one silent status request, one closed obligation, zero financial requests and zero invoice emails. Finite command session 80222 ended exit 0. No second apply or uncertain replay was attempted.
+- Fresh native VEVO UI readback confirms exact order 2502000712 / EUR15 / COD now shows Cancelled and the Create proforma action rather than a linked invoice. Order 2602007943 remains Shipped / bank transfer / EUR13.48 with invoice 2602007137. The one root-created Chrome inspection tab was closed, with no UI writes.
+
+What is verified:
+
+- VEVO seeded verification passed all five orders: four `verified_invoice`, one `reviewed_uncollected_obligation_closed`, zero failed orders or global issues. Private artifact `data/vevo/order-automation/verification/backfill-verification-20260913T102111686650Z.json`, SHA `308f688758295c5c3c3514014af63a3ebeb0175aea988e90beacc5710bbfa4bb`, was published encrypted with exact readback; JSON and Markdown remain ignored locally.
+- The first ROY natural task :11 / `5ff0d065b1364f63879e37f928a81f18` / IP `172.31.19.84` stopped 10:08:36.391 UTC with exit 0 and actual `29c0c8e4` image. VEVO's pre-closure 10:15 task :9 / `76dbe595f77b48c0bb87ff33d392d87c` / IP `172.31.31.239` stopped 10:16:30.586 UTC exit 1: completed incremental scan, two pages, one retained ambiguous preparation, no created invoices. Its original attempt timestamp remained 06:31:34.595203; this does not establish a repeated financial request. Post-closure natural success remains to verify.
+- Standalone guard has the same concrete AWS environment-order comparison problem found in report readiness. Root corrected only strict unique environment comparison in candidate registration and frozen-source readback; raw saved evidence and all other array ordering remain unchanged. Independent review passed 64 tests, 24 provision drift variants and the actual three-primary-definition evidence check. The guard author owns integration, complete suites, memory and PR #552 CI; no guard deployment occurred.
+
+Known issues:
+
+- One read-only VEVO all-age verification is running from clean pushed `8e187357` (finite session 56253); no second broad provider scan was added. The start inventory had no active reporting task; later short natural scans may overlap without pausing enabled production schedules. Completion, post-closure journal preservation and natural/alarm recovery remain pending.
+- No local persistent server, worker, watcher or tunnel was started. Native gateway callback prevention still requires the documented vendor change; private manual bank confirmation is not an invented bank receipt or settlement date.
+
+Next exact step:
+
+- Finish the single VEVO all-age scan and independent post-closure/natural proof. Publish the audit and reconcile any actual remaining eligible candidates without replaying the sealed ambiguous attempt. Then merge/build/deploy standalone #552 with six-host verification, followed by the separately gated report #556. Keep the five current order schedules and both report pins protected throughout.
+
 ## 2026-09-13 — Primary promotion independently verified; one uncollected closure pinned
 
 Date: 2026-09-13
