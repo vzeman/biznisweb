@@ -289,7 +289,7 @@ class GrowthBookAaWindowCheckpointWorkflowTests(unittest.TestCase):
             "21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb",
             "cron(45 3 * * ? *)",
             "Europe/Bratislava",
-            "vevo-reporting-daily:33",
+            "validate_runtime(current_binding, source, current_binding['record']['task_definition'])",
             "collector.get('StackStatus') != 'UPDATE_COMPLETE'",
             "reconciliation.get('StackStatus') != 'UPDATE_COMPLETE'",
             "reconciliation_parameters.get('ClusterArn')",

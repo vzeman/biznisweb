@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "project": "vevo",
+  "account": "919341186960",
+  "region": "eu-central-1",
+  "cluster": "arn:aws:ecs:eu-central-1:919341186960:cluster/vevo-reporting-cluster",
+  "service": "vevo-daily-report-email",
+  "family": "vevo-reporting-daily",
+  "container": "reporting",
+  "path": "/app",
+  "bucket": "biznisweb-reporting-artifacts-919341186960-eu-central-1",
+  "prefix": "data/vevo/reporting/runtime/",
+  "historical_evidence_sha256": "21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb",
+  "baseline_definition": "arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:33",
+  "baseline_image_digest": "sha256:30a23fcd69eb2d7a41195bffa0bc055d38bc2dd706e9eb07d5126675a21a6add",
+  "baseline_source_commit": "e55ccd14b47c660b9b39a5788a1e65a63a98fc1a"
+}

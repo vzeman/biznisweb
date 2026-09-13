@@ -69,6 +69,7 @@ def validate_health_evidence(
     deploy_evidence: Mapping[str, Any],
     *,
     deploy_evidence_bytes: bytes,
+    current_binding: Mapping[str, Any] | None = None,
 ) -> None:
     """Validate one canonical, identity-free infrastructure-health snapshot."""
 
@@ -90,7 +91,7 @@ def validate_health_evidence(
         "evidence",
     )
     schema_version = evidence["schema_version"]
-    _require(schema_version in {1, 2}, "schema version drift")
+    _require(schema_version in {1, 2, 3}, "schema version drift")
     _require(
         evidence["evidence_type"]
         == "vevo_growthbook_production_aa_infra_health",
@@ -100,9 +101,12 @@ def validate_health_evidence(
     _parse_timestamp(evidence["observed_at_utc"], "observed_at_utc")
 
     provenance = evidence["provenance"]
+    provenance_keys = {"deploy_evidence_sha256", "main_commit", "workflow", "workflow_run_id"}
+    if schema_version == 3:
+        provenance_keys.add("current_reporting_binding_sha256")
     _exact_keys(
         provenance,
-        {"deploy_evidence_sha256", "main_commit", "workflow", "workflow_run_id"},
+        provenance_keys,
         "provenance",
     )
     _require(
@@ -155,7 +159,7 @@ def validate_health_evidence(
             "task_definition",
             "task_id",
     }
-    if schema_version == 2:
+    if schema_version in {2, 3}:
         runtime_keys.add("identity_source")
     _exact_keys(runtime, runtime_keys, "runtime")
     expected_task_definition = deploy_evidence["reconciliation"]["task_definition"].rsplit("/", 1)[-1]
@@ -191,7 +195,7 @@ def validate_health_evidence(
             "source_task_definition",
             "success_marker_sha256",
     }
-    if schema_version == 2:
+    if schema_version in {2, 3}:
         control_keys.update({"runtime_state_retained", "scheduler_run_task_verified"})
     _exact_keys(control, control_keys, "control")
     _require(control["schedule_name"] == EXPECTED_SCHEDULE, "schedule name drift")
@@ -207,9 +211,22 @@ def validate_health_evidence(
     _require(control["dlq_empty"] is True, "DLQ gate failed")
     _require(control["source_schedule_name"] == EXPECTED_SOURCE_SCHEDULE, "source schedule name drift")
     _require(control["source_schedule_state"] == "ENABLED", "source schedule state drift")
+    expected_source = deploy_evidence["source_runtime"]["task_definition"].rsplit("/", 1)[-1]
+    if schema_version == 3:
+        from scripts.reporting_runtime_binding import BindingError, sha256, stamp, validate_record
+        _require(isinstance(current_binding, dict), "independent current reporting binding required")
+        try:
+            record = current_binding["record"]
+            validate_record(record)
+            _require(current_binding["record_sha256"] == sha256(record)
+                     == provenance["current_reporting_binding_sha256"], "current reporting binding hash drift")
+            _require(stamp(record["verified_at"]) <= _parse_timestamp(evidence["observed_at_utc"], "observed_at_utc"),
+                     "current reporting binding is from the future")
+            expected_source = record["task_definition"]["taskDefinitionArn"].rsplit("/", 1)[-1]
+        except (BindingError, KeyError, TypeError) as exc:
+            raise InfraHealthEvidenceError("current reporting binding invalid") from exc
     _require(
-        control["source_task_definition"]
-        == deploy_evidence["source_runtime"]["task_definition"].rsplit("/", 1)[-1],
+        control["source_task_definition"] == expected_source,
         "source task definition drift",
     )
     _require(control["source_schedule_unchanged"] is True, "source schedule drift")
@@ -225,7 +242,7 @@ def validate_health_evidence(
             control["generated_published_parity_verified"] is None,
             "pre-first-run parity drift",
         )
-        if schema_version == 2:
+        if schema_version in {2, 3}:
             _require(runtime["identity_source"] is None, "pre-first-run identity source drift")
             _require(
                 control["scheduler_run_task_verified"] is False,
@@ -267,7 +284,7 @@ def validate_health_evidence(
             set(control["alarm_states"].values()) == {"OK"},
             "post-run alarms must all be OK",
         )
-        if schema_version == 2:
+        if schema_version in {2, 3}:
             identity_source = runtime["identity_source"]
             _require(
                 identity_source
@@ -339,6 +356,7 @@ def _read_json(path: Path) -> Mapping[str, Any]:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--evidence", type=Path, required=True)
+    parser.add_argument("--current-binding", type=Path, help="Independently verified current runtime snapshot for schema 3 only")
     parser.add_argument(
         "--deploy-evidence",
         type=Path,
@@ -358,6 +376,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             evidence,
             deploy_evidence,
             deploy_evidence_bytes=deploy_bytes,
+            current_binding=_read_json(args.current_binding) if args.current_binding else None,
         )
     except (OSError, InfraHealthEvidenceError) as exc:
         print(f"validate_growthbook_aa_infra_health_evidence.py: FAIL: {exc}")

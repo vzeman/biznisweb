@@ -103,6 +103,60 @@ Known issues:
 Next exact step:
 
 - Commit/push this documentation checkpoint, then integrate the reviewed status identity dependency and implement the smallest exporter/creditnote classification correction with same-ID rename parity and cross-shop/foreign-ID regressions. Keep provider calls, runtime writes and PR merge out of this branch's current work. Root coordinates the primary order release, separate guard migration and later managed reporting release.
+## 2026-09-13 — Current report authority implemented for independent review
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-migration-design-20260913`
+
+What changed:
+
+- Implemented the approved bounded shared VEVO current-runtime policy, strict baseline/promotion builders, private AES256 create-only receipts, conditional current pointer and nonstealable migration lease. Candidate and production definitions are bound separately; the restricted candidate role, exact wrapper command and skip-email environment are the only permitted diagnostic differences. The separate managed deployer/probe remains owned by the reporting author.
+- Added a managed-main bootstrap writer that validates an approved canonical baseline record against current revision-33 schedule/definition and the actual stopped identity-probe host. It launches no tasks and changes no schedule. Preview performs no lease or object write. Failed/uncertain publication retains a blocking lease.
+- Replaced five live workflow revision-suffix checks with the shared full runtime gate at entry and before publication. It independently checks actual AWS configuration, managed GitHub run/build provenance, image digest and unchanged pointer/lease. New health schema 3 binds current authority separately; historical schemas 1/2, frozen activation/reconciliation files, exact validators and fixed quality-source capture behavior remain unchanged.
+- Rollback writes separate immutable audit evidence and restores the exact previous successful current pointer using CAS. A failed deployment's rollback receipt never becomes current authority. No `latest` tag, missing-pointer fallback, expired-lease takeover, financial retry or historical evidence rewrite was added.
+- Corrected the design using the published native Stripe map: paid 31, cancelled 34, expired 33, refunded 73, unpaid 69; unused 70 is not a release blocker. Current primary b417 failure is not authority for any downstream release.
+
+What is verified:
+
+- Ninety focused tests pass: 25 new binding/bootstrap/rollback/health/workflow regressions plus the existing health and five workflow suites. Scoped Ruff, `git diff --check` and `scripts/security_ci.py` pass. All five workflows' inline Python blocks compile. Shared tests are explicitly included in both existing regression workflows.
+- No AWS/provider calls, infrastructure/business mutations, PR/main merge or persistent local process occurred. All work remains offline, on the correctly tracked isolated branch; root's main freeze is respected.
+
+Known issues:
+
+- This is a checkpoint for independent review, not a release. The mandatory current baseline must be bootstrapped before the five switched consumers run; absent authority intentionally blocks them. Integrate with the reviewed managed workflow so bootstrap executes first, and preserve old live consumers until that transition is ready.
+- A successful compatible primary order release, verified standalone guards and the reporting correction remain deployment prerequisites. No current pointer, migration lease or candidate has been created in AWS from this branch.
+
+Next exact step:
+
+- Commit/push this bounded checkpoint and hand its source to guard_review for independent schema/CAS/lease/rollback/workflow review. Coordinate only concrete corrections with the separate deployer author, then run the final combined regression collection. Do not merge main or execute bootstrap/deployment here.
+
+## 2026-09-13 — VEVO report migration architecture prepared offline
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-migration-design-20260913`
+
+What changed:
+
+- Added `projects/VEVO_MANAGED_REPORT_MIGRATION_DESIGN.md`, a bounded proposal for a VEVO-only immutable-image migration. It names the five current GrowthBook workflow gates, their shared current-runtime authority, candidate host/report checks, protected schedules and conditional rollback. No runtime implementation is included.
+- Historical A/A activation/reconciliation and existing health/source captures remain byte-exact. New current health requires separately versioned evidence; replacing historical revision 33 is explicitly rejected. A frozen managed quality-source capture also has a historical runtime check and must not be silently recaptured under a migrated report image.
+- Identified candidate isolation requirements from actual code: output tags alone do not prevent `s3_upload_outputs` from updating stable aliases; use a separate private probe prefix and separate/suppressed metrics. Both invoice and inline-creditnote skips plus skip-email are mandatory for the candidate. The existing `latest`-based production-reporting-smoke workflow is not a safe deployment mechanism.
+
+What is verified:
+
+- Source-only inspection of the five workflow gates, historical activation/health/source validators, daily report output/metric paths and reviewed order/guard deployment patterns. This branch began clean at main `b417caa736cfbd1f97b20821cacc39b144e1e460` with normal fetch, pull and tracking push. Documentation-only changes require no runtime test expansion.
+- The separate reporting correction passed independent source review and 19 tests before its author added another limitation test. Its code is not changed here. No AWS/provider calls, infrastructure/business writes, PR/main merge, local server or persistent process occurred in this design worktree.
+
+Known issues:
+
+- Main is frozen for root's active primary order deployment `34747360516`; this proposal does not claim that deployment complete. Report revision 33 cannot move safely until root approves the new authority design, the reporting payment-role contract is complete, and both standalone guards have been independently verified before removing the inline guard.
+- Subsequent native proof establishes the active Stripe paid mapping at 31; unused 70 is not a blocker. The implementation checkpoint above supersedes that earlier uncertainty.
+
+Next exact step:
+
+- Commit/push this specification for root review, then wait for an explicit implementation scope. Do not implement a current-binding pointer, change historical evidence, run a candidate, or repoint any schedule from this branch.
+
 ## 2026-09-13 — Live settlement preview passed; exact checksum scan exception
 
 Date: 2026-09-13

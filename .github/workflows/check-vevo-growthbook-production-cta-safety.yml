@@ -18,12 +18,15 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: vevo-growthbook-production-cta-safety-checkpoint
   cancel-in-progress: false
 
 env:
+  CURRENT_REPORT_BINDING_FILE: ''
+  GH_TOKEN: ${{ github.token }}
   AWS_REGION: eu-central-1
   EXPECTED_ACCOUNT_ID: '919341186960'
   COLLECTOR_STACK: vevo-growthbook-production
@@ -98,6 +101,15 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Verify independent current reporting runtime binding
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
+        run: |
+          set -euo pipefail
+          CURRENT_REPORT_BINDING_FILE="${RUNNER_TEMP}/vevo-current-reporting-${GITHUB_RUN_ID}.json"
+          echo "CURRENT_REPORT_BINDING_FILE=${CURRENT_REPORT_BINDING_FILE}" >> "${GITHUB_ENV}"
+          python -m pip install -r requirements-runtime-control.txt
+          python scripts/reporting_runtime_binding.py --output "${CURRENT_REPORT_BINDING_FILE}"
+
       - name: Verify exact Fargate host gate and current control plane
         if: ${{ env.RUN_CHECKPOINT == 'true' }}
         run: |
@@ -132,6 +144,9 @@ jobs:
           reconciliation = json.load(open(root / 'reconciliation-stack.json', encoding='utf-8'))['Stacks'][0]
           schedule = json.load(open(root / 'schedule.json', encoding='utf-8'))
           source = json.load(open(root / 'source-schedule.json', encoding='utf-8'))
+          from scripts.reporting_runtime_binding import validate_runtime
+          current_binding = json.loads(Path(os.environ['CURRENT_REPORT_BINDING_FILE']).read_text(encoding='utf-8'))
+          validate_runtime(current_binding, source, current_binding['record']['task_definition'])
           if collector.get('StackStatus') != 'UPDATE_COMPLETE' or reconciliation.get('StackStatus') != 'UPDATE_COMPLETE':
               raise SystemExit('Production GrowthBook stack state drift')
           collector_outputs = {row['OutputKey']: row['OutputValue'] for row in collector.get('Outputs') or []}
@@ -169,7 +184,7 @@ jobs:
               or source.get('Name') != os.environ['EXPECTED_SOURCE_SCHEDULE']
               or source.get('State') != 'ENABLED'
               or source.get('Target', {}).get('Arn') != reconciliation_parameters.get('ClusterArn')
-              or not str(source.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') or '').endswith('vevo-reporting-daily:33')
+              or source.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') != current_binding['record']['task_definition']['taskDefinitionArn']
           ):
               raise SystemExit('scheduled runtime/source identity drift')
           values = {
@@ -377,6 +392,12 @@ jobs:
             rmdir "${TARGET}"
           fi
 
+      - name: Recheck unchanged current reporting authority before publication
+        if: ${{ env.RUN_CHECKPOINT == 'true' }}
+        run: |
+          set -euo pipefail
+          python scripts/reporting_runtime_binding.py --compare "${CURRENT_REPORT_BINDING_FILE}" --output "${CURRENT_REPORT_BINDING_FILE}.rechecked"
+
       - name: Upload only the canonical three-file safety bundle
         if: ${{ env.RUN_CHECKPOINT == 'true' }}
         uses: actions/upload-artifact@v4.6.2
@@ -408,4 +429,15 @@ jobs:
           print(f"- Manual stop required: `{str(decision['manual_stop_required']).lower()}`")
           print('- Primary/business outcomes, Meta dimensions and winner read: `false`')
           print('- GrowthBook, GTM, Meta Ads, BiznisWeb and commerce mutation: `none`')
+          PY
+
+      - name: Remove private current reporting snapshots
+        if: ${{ always() && env.CURRENT_REPORT_BINDING_FILE != '' }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          base = os.environ["CURRENT_REPORT_BINDING_FILE"]
+          for name in (base, base + ".rechecked"):
+              Path(name).unlink(missing_ok=True)
           PY
