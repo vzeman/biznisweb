@@ -136,6 +136,46 @@ business data, and fails incomplete or uncertain outcomes. It writes ignored
 JSON/Markdown evidence; the optional flag also saves immutable encrypted copies
 under the same private bucket's project verification prefix.
 
+## Fixed incident reconciliation
+
+`scripts/reconcile_reviewed_invoice_outcomes.py` is restricted to the six reviewed
+ROY outcomes in two fixed, hash-verified private evidence objects. It does not
+relax the ordinary generator or accept arbitrary orders, evidence or endpoints.
+The `confirm-emails` action records two provider-confirmed sends without web login
+or email transmission. This proves provider sending, not recipient delivery or
+exactly-once sending; each original provider history contains two send events.
+
+The `finalize-one` action handles one deterministic unfinished case from the four
+reviewed creation ambiguities. It can only assign a final number to the existing
+bound preinvoice. It never prepares another document, changes status or sends an
+email. It preserves the original attempt and journals a permanent one-attempt
+intent plus an email hold before the request. Repeated fresh reads must confirm
+identity, shipped/unblocked/positive eligibility and the same preinvoice. A unique
+final document with the same internal identity and nonempty number is required.
+A final document already present is reconciled by readback only. An uncertain
+intent cannot be replayed, including after a crash before transmission.
+
+Both actions default to read-only previews from clean, pushed source:
+
+```powershell
+python scripts/reconcile_reviewed_invoice_outcomes.py confirm-emails --profile codex
+python scripts/reconcile_reviewed_invoice_outcomes.py finalize-one --profile codex
+```
+
+Apply additionally requires `--apply`, `--expected-image-digest`,
+`--expected-source-commit` and `--deployment-evidence-key` for the exact reviewed
+release. The helper rechecks three actual host markers, both complete drains,
+all five current schedule pins and ECR source identity, rejects old/unverified
+active writers and holds the shared ROY lease. A retained lease after storage
+failure must expire normally; never clear it to force progress. Preview checks
+stable journal evidence and reports consumed intents or lease contention.
+
+The fixed release allowlist is intentional. A future release or changed incident
+requires a reviewed source change and new evidence; do not broaden the CLI or clear
+journal phases as a shortcut. The native identity contract supports the existing-
+document operation, but does not establish backend replay/idempotency guarantees.
+Final independent business verification is still required after the helper runs.
+
 ## Release sequence and rollback
 
 For a previously shipped order whose state was lost, first inspect its authenticated

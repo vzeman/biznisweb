@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Fixed uncertain-outcome reconciliation prepared
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Added a separate preview-first helper for exactly two provider-confirmed emails and four reviewed ROY creation ambiguities, bound to the published private evidence hashes. Email confirmation writes only the journal. One finalization per explicit apply binds the existing preinvoice, forbids preparation/email/status changes, preserves the old attempt and persists an email hold plus consumed intent before one native request.
+- Apply requires the exact reviewed `a97d974f`/`8d06b6c7...` release, its private successful receipt, exact three host markers, both 120-second drains, all five current pins, no old/unverified active writer and the shared lease. Readback alone can complete a document already finalized elsewhere. No ordinary ambiguity guard was weakened.
+- CI includes the helper's focused regressions on both operating systems; the operations runbook records all gates and limits. The worktree fast-forwarded to the synchronized release handoff without rewriting any published branch.
+
+What is verified:
+
+- Complete build regression passes 649 tests; the 72 focused checks include 37 reconciliation tests. Ruff and whitespace checks pass. Storage-failure recovery proves immediate retry remains blocked by the retained lease, then recovers only by readback after expiry without a second financial request. The fixed real private manifest passes schema/binding validation; no live helper preview or apply has occurred yet.
+- Native mapping mitigation evidence is published with AES256, create-only protection and exact readback at `data/roy/order-automation/audits/2026-09-13/stripe-status-mapping-mitigation-20260913.json`, SHA-256 `44bf135730c5bd1f47fd736b9a8689f1612866a6db59e6042ac8dcc122b6782f`. Both failure mappings expose only existing order statuses; no supported selective suppression option was established. No gateway setting or event was changed.
+
+Known issues:
+
+- Invoice deployment `34735770705` is still active; main remains frozen. ROY's new candidate passed its actual full-backlog localhost gate, while later candidates/promotion are pending. Nine original held historical invoices and other recent failures still need actual completion. Native stale-attempt downgrades remain unresolved outside AWS.
+
+Next exact step:
+
+- Complete full regression, commit/push and run required PR checks. Do not merge during the active release. After its complete independent promotion evidence, run read-only previews and the fixed journal-only email confirmations, then one reviewed existing-document correction at a time. Inspect each actual result before continuing, finish remaining held seeds and independently verify all historical documents and natural runs. Preserve unresolved outcomes instead of replaying writes.
+
 ## 2026-09-13 — API cooldown correction merged; exact release pending
 
 Date: 2026-09-13
