@@ -14,7 +14,7 @@ Private evidence is under `data/vevo/order-automation/audits/2026-09-13/` in the
 | `native-creditnote-invoice-key-contract-20260913.json` | `523a2c2d5c7677f4e0889cdffed116e863865e814090c79207c7b904171dc70e` | Raw VEVO API ID 17 was `Storno`. |
 | `status-review-two-case-api-20260913.json` | `f7b1b0ddd42a7fd038088e94e235fcc2e812affb6283a1362d95ad6b4f9dc5cc` | Raw API ID 33 was `Platba online - platnosť vypršala`. |
 | `gopay-native-status-guard-inspection-20260913.json` | `4c28ff3ace67ae583249ef85a5f01aeef9c5128608b79a6d8e67ea70d00499bc` | Native events PAID→31, TIMEOUTED→33, CANCELED→34. Labels are explicitly transliterated; 34 was described as rejected payment, not proof of the literal label “cancelled”. |
-| `current-native-status-catalogue-20260913.json` | `879d05d452b7a29842fca578278b841b63f9340a4ffc8d8bcbac195fcaf0952b` | Current same-shop catalogue has 4 `Shipped`, 17 `Cancelled`, 31 `Payment online paid`, and both 33/34 `Payment online expired`. New Stripe states use distinct IDs 69–73. |
+| `current-native-status-catalogue-20260913.json` | `879d05d452b7a29842fca578278b841b63f9340a4ffc8d8bcbac195fcaf0952b` | Current same-shop catalogue has 4 `Shipped`, 17 `Cancelled`, 31 `Payment online - paid`, and both 33/34 `Payment online - expired`. New Stripe states use distinct IDs 69–73. |
 
 Unchanged order/status IDs with changed labels and matching current API/native catalogues support a shop status rename, not a client-language transport defect. No VEVO role is inferred from a ROY ID. Duplicate labels on 33/34 must not merge their roles. This audit did not independently prove the old ID 1 label.
 
