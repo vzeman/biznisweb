@@ -45,6 +45,14 @@ The vendor documents the suppression condition in
 [NotificationCondition](https://www.biznisweb.sk/api/docs/notificationcondition.doc.html);
 an empty notification list is not used as an undocumented substitute.
 
+Native finalization/send responses use a bounded non-executing decoder for JSON
+and the narrow object-literal syntax accepted by the served UI. Only boolean true
+or the exact string "true" explicitly confirms success; boolean false is a known
+rejection. Duplicate keys, malformed/unknown syntax and unconfirmed responses
+remain ambiguous. Final invoices still require independent order readback. This
+compatibility rule does not establish the body of an older lost response and never
+grants permission to resend an ambiguous email.
+
 Payment settlement, invoicing and shipment are separate facts. Existing invoices
 alone cannot promote an order to paid. Known shipment status is retained privately
 and used only with fresh settlement/creditnote evidence. Insufficient history and
@@ -55,7 +63,8 @@ suppress customer status emails. Partial creditnotes do not cancel whole orders.
 
 The nightly ROY cancellation run uses the same bounded inventory scanner before
 acquiring its mutation lease. It reads all orders, including blocked ones, with
-its own payment-element query and selects configured statuses locally. Separate
+a minimal identity/date/status/block query and selects configured statuses locally.
+Payment fields are read only in the full fresh safety detail for selected candidates. Separate
 status-filtered offset scans can silently omit orders when rows move between
 statuses; an unfiltered unique-ID inventory removes that pagination dependency.
 The maximum is 5,000 reads within twenty minutes, with two-second read pacing and
@@ -189,6 +198,15 @@ the protected schedules paused for operator review and use the private snapshot.
 The managed workflow has a four-hour bound, including an hour of headroom beyond
 the combined drain/probe bounds for setup and rollback. Normal deployment is
 expected to be substantially shorter. Main is checked again before any pause.
+
+Cancellation inventory requests only stable identity, date, status and block fields.
+It does not request each historical order's nested price resolver: an unrelated
+resolver failure must not prevent discovering possible candidates. Date/status/block
+filtering is only discovery. Every selected candidate still requires complete fresh
+financial and fulfillment detail, complete creditnotes, a shared lease and a final
+recheck before any silent status write. Missing payment detail means unknown/review;
+it is never evidence that the order is unpaid. Any incomplete inventory or candidate
+GraphQL error remains a failure, with no partial-data success.
 
 API throttling uses operating cost, including nested entity loads, rather than
 HTTP request count. Read-only retries honor fresh `Retry-After` headers and use a

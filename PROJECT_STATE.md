@@ -5,6 +5,102 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Native response compatibility validated before release
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/unpaid-inventory-discovery-fields-20260913`
+
+What changed:
+
+- Cancellation discovery correction `4acd5ea3` is pushed in PR #547 and passed all six required checks. Before merge, a narrow native-response compatibility correction is being added to the same reviewed release.
+- Current invoice email handling accepts JSON only, although the served native UI also accepts JavaScript object literals. The new non-executing bounded decoder preserves strings and rejects duplicate keys, nonfinite numbers, excessive nesting and trailing code. It is used only for native finalization/send responses; GraphQL preparation, authoritative invoice readback, durable uncertainty and no-replay behavior remain unchanged.
+- Actual bodies of the two old ambiguous send responses were not retained. Their successful send histories are positive evidence; the lexical format is not known. Do not claim the parser proves their specific root cause or resend either email.
+
+What is verified:
+
+- Fresh AWS-only receipt `data/roy/order-automation/audits/2026-09-13/pre-release-runtime-refresh-20260913T041656Z.json`, SHA-256 `7ba743219f8d4bd07ee53a723f40145e47df923a83363449b2e312f42d12e578`, is published create-only with AES256 and exact-byte readback. All five old schedule pins remain; latest completed ROY/VEVO runs created zero invoices and failed 17/16. All eleven original email holds remain. An active natural-run lease is not evidence of a completed outcome.
+
+Known issues:
+
+- All 627 full build regression tests and 220 combined safety tests pass, including actual lexical fixtures, strict success flags, mandatory final readback and repeated-run no-replay checks. Ruff and whitespace checks pass. Independent review passes, including 124 separately executed tests and 18,000 semantic-preservation cases plus adversarial rejection cases. Production remains unchanged at the old image and main remains `a97d974f`.
+
+Next exact step:
+
+- Commit/push the independently reviewed change and rerun exact-head PR checks. Merge/build/deploy once; then complete reviewed historical recovery and standalone guard migration as below.
+
+## 2026-09-13 — Stable cancellation discovery; fresh financial gates retained
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/unpaid-inventory-discovery-fields-20260913`
+
+What changed:
+
+- Removed unused financial resolvers from the complete cancellation inventory. Discovery now requests identity, purchase/change timestamps, block flag and status only. Its provisional predicate selects possible cases by date/status/blocking; all invoice, payment-method, receipt, shipment and creditnote decisions remain fresh detail checks under the shared lease, including the final recheck before a single status write and readback.
+- Missing or malformed payment-method fields in a selected candidate now remain unknown/review, never an unsupported-method skip or evidence of nonpayment. Incomplete discovery and GraphQL errors still fail without partial-data acceptance or watermark advancement.
+- Integrated the preceding release/rollback handoff without altering other draft branches. All code is on a dedicated branch; no production image or schedule was changed here.
+
+What is verified:
+
+- All 618 full build regression tests, reporting smoke, focused Ruff and whitespace checks pass. Independent review and 116 focused tests pass, including projected discovery responses, missing financial detail, payments, shipments, creditnotes, lease and final-write checks. A separate 896-context comparison found identical full eligibility and no old eligible case excluded by the new discovery predicate. The complete inventory implementation and full safety query are unchanged.
+- Four bounded read-only provider requests compared original/minimal discovery at the descending anchor and first ascending page. Both returned the same identities and metadata (4,849 total records); the observed resolver error did not recur on those pages. Later pages were not probed and successful full runtime discovery is not yet claimed.
+- Private reproduction receipt is published encrypted with exact-byte readback at `data/roy/order-automation/audits/2026-09-13/cancellation-resolver-firstpage-20260913.json`, SHA-256 `9ab84e2e7acc661876db36acc3c7a468784ada26c80f02132d96148cfb363617`.
+
+Known issues:
+
+- Production remains on the old failing invoice image. Reconciliation PR #546 still points to the unpromoted failed release and must reject execution until deliberately updated to the next verified successful release. Historical invoice completion and the separate creditnote guard migration remain outstanding.
+
+Next exact step:
+
+- Complete the full build regression and smoke checks, commit/push this narrow correction and merge only after required CI. Verify the exact merge build/digest, dispatch one managed deployment, freeze main and independently verify host/drain/promotion evidence. Only after actual promotion may financial reconciliation and live backfill verification proceed.
+
+## 2026-09-13 — Cancellation resolver failure; release restored, no promotion
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-rate-production-verification-20260913`
+
+What changed:
+
+- Managed release `34735770705` finished with failure and verified restoration. New image `8d06b6c7985b6a25024964653fb292db9c73a9b5eb5dbc0938665fcbc3166e7b` was not promoted. Private receipt `data/roy/order-automation/deployments/a97d974f4d86ac7c1d3fcb3ec7ff5d094245bb3c/4e184a615f7f46c78714fa385580a12f.json` reached `deployment-failed-check-rollback` / `original-schedules-and-state-policies-restored`, SHA-256 `548ac13936024633369fe5711e8528fa7c1aea863e90b45bd9baccd89bdcdb79`.
+- Both invoice candidates passed actual full-backlog localhost gates and stopped with exit zero: ROY task `6bec25ae00b149bc8d368a7ec3b1a54f`, IP `172.31.28.159`, `roy-invoice-daily:7`; VEVO task `50365dc52de740cc8d5909079eb2e308`, IP `172.31.25.185`, `vevo-invoice-daily:6`. Both exact new image, `/app`, Fargate instance ID not applicable; dry summaries matched 17/16 with zero creation/email/failure.
+- Cancellation candidate task `c07ccee062a74de498b7af2af6155c3a`, IP `172.31.18.39`, `roy-unpaid-order-cancellation:39`, same exact image and `/app`, stopped with exit one before any summary or marker. The actual GraphQL error is `Internal server error` at `getOrderList.data[4].price_elements`, during complete inventory. This is a row resolver failure, not an observed HTTP 429 or proof of a scan timeout.
+
+What is verified:
+
+- Independent AWS reads verify all five schedules exactly restored, enabled on old invoice `:5` and cancellation `:38` pins; all three previous state policies match IAM readback. All three diagnostic tasks are stopped. Both drain receipts prove 120 quiet seconds and zero unfinished tasks. The failed-release main freeze has ended.
+- Independent private verification artifact SHA-256 `6850dcbac49c84f9aab4027c924df124265fbb682b251e869893645622af9c69` records the outcome and direct IAM checks. No invoice, email or status mutation occurred in these dry candidates.
+- Reconciliation helper PR #546 at `f8d50117` passed all six checks and 649 local tests, but remains unmerged/unapplied: its fixed release gate intentionally rejects this unpromoted image. Standalone guard preparation `9eb0f033` is pushed with 669 integrated tests and independently corrected native credentials/report-command/source gates; it is not deployed.
+
+Known issues:
+
+- The cancellation inventory unnecessarily loads financial price fields for every historical order. A new narrow correction is being implemented in `codex/unpaid-inventory-discovery-fields-20260913`: complete discovery will use stable identity/status/date/block fields, with all financial checks retained in fresh candidate detail reads before writes. Never accept partial GraphQL data or treat missing payment fields as unpaid.
+
+Next exact step:
+
+- Verify the bounded live read-only reproduction, review/test the coarse discovery correction and fresh detail guards, commit/push through required PR checks, and build/deploy a new exact release. Do not run the financial helper until its allowlist is deliberately updated to an actually promoted reviewed release. Finish real invoices, all-age verification and the separate guard migration afterward. Production remains on the older failing invoice implementation; do not claim remediation complete.
+
+## 2026-09-13 — API cooldown correction merged; exact release pending
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-rate-production-verification-20260913`
+
+What changed:
+
+- PR #545 merged as `a97d974f4d86ac7c1d3fcb3ec7ff5d094245bb3c` after all six exact-head checks passed on `f503bdc569a4244b2f8384c2a28bd58b94d1119c`. Build `34735576536` is producing the immutable release. Production schedules still point to the preceding image until managed host/drain/promotion gates succeed.
+- Build `34735576536` succeeded. Independent ECR readback confirms exact merged source tag and immutable digest `8d06b6c7985b6a25024964653fb292db9c73a9b5eb5dbc0938665fcbc3166e7b`. Managed deployment `34735770705` was dispatched once after fresh unchanged-main and no-active-release checks. Main is frozen until this release finishes promotion or verified restoration; no other PR may merge during that interval. The separate guard preparation is committed/pushed as `166076cc` and remains undeployed.
+- Three fresh private artifacts were published create-only with AES256 and exact-byte/hash readback under `data/roy/order-automation/audits/2026-09-13/`: `runtime-refresh-20260913.json` SHA-256 `09bb3b699226cde7edcbe25bc6ee4a38f7b9451a023919205cb678b283abbd9b`; `uncertain-operations-readback-20260913.json` SHA-256 `b7a4bca333d919c2d7c16cd9269cc45851a8fbd6d7d3d4417cd98264cfa28545`; `final-document-identity-contract-20260913.json` SHA-256 `d3bfb5933e1eb19e5d126f197e3e6226f9d480bb3a193377219d79eaf2f0b5d7`. Bucket ownership, region and all four public-access blocks were verified.
+
+What is verified:
+
+- 612 local regression tests, Linux/Windows CI and security/observability checks pass. The private evidence confirms two ambiguous emails were actually sent, and nine of eleven original held invoices remain missing. No new financial operation or deployment has occurred yet.
+
+Next exact step:
+
+- Verify build success and exact ECR digest for merged source, confirm unchanged main and no active managed release, then dispatch the invoice deployment once. Freeze main while it runs. Independently verify all three localhost markers, old-writer drain and five schedule pins before any reviewed invoice reconciliation. Preserve public aggregate-only documentation and private provider evidence.
+
 ## 2026-09-13 — Resume after rate-limited candidate; production remains on old image
 
 Date: 2026-09-13
