@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — VEVO report migration architecture prepared offline
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-migration-design-20260913`
+
+What changed:
+
+- Added `projects/VEVO_MANAGED_REPORT_MIGRATION_DESIGN.md`, a bounded proposal for a VEVO-only immutable-image migration. It names the five current GrowthBook workflow gates, their shared current-runtime authority, candidate host/report checks, protected schedules and conditional rollback. No runtime implementation is included.
+- Historical A/A activation/reconciliation and existing health/source captures remain byte-exact. New current health requires separately versioned evidence; replacing historical revision 33 is explicitly rejected. A frozen managed quality-source capture also has a historical runtime check and must not be silently recaptured under a migrated report image.
+- Identified candidate isolation requirements from actual code: output tags alone do not prevent `s3_upload_outputs` from updating stable aliases; use a separate private probe prefix and separate/suppressed metrics. Both invoice and inline-creditnote skips plus skip-email are mandatory for the candidate. The existing `latest`-based production-reporting-smoke workflow is not a safe deployment mechanism.
+
+What is verified:
+
+- Source-only inspection of the five workflow gates, historical activation/health/source validators, daily report output/metric paths and reviewed order/guard deployment patterns. This branch began clean at main `b417caa736cfbd1f97b20821cacc39b144e1e460` with normal fetch, pull and tracking push. Documentation-only changes require no runtime test expansion.
+- The separate reporting correction passed independent source review and 19 tests before its author added another limitation test. Its code is not changed here. No AWS/provider calls, infrastructure/business writes, PR/main merge, local server or persistent process occurred in this design worktree.
+
+Known issues:
+
+- Main is frozen for root's active primary order deployment `34747360516`; this proposal does not claim that deployment complete. Report revision 33 cannot move safely until root approves the new authority design, the reporting payment-role contract is complete, and both standalone guards have been independently verified before removing the inline guard.
+- Current report draft deliberately does not infer a new Stripe-paid role from status 70's label. Any later proof/implementation belongs to the reporting author and must be integrated before release.
+
+Next exact step:
+
+- Commit/push this specification for root review, then wait for an explicit implementation scope. Do not implement a current-binding pointer, change historical evidence, run a candidate, or repoint any schedule from this branch.
+
 ## 2026-09-13 — Live settlement preview passed; exact checksum scan exception
 
 Date: 2026-09-13
