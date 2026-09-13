@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Six reviewed invoice outcomes reconciled; verifier client compatibility fixed
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Merged PR #546 was executed from clean pushed source against independently promoted `47c3da77` / `c3842dda...`. Two already-sent invoice emails were confirmed in the journal without sending. Four older finalization cases now have native/API-bound final documents and held emails: three once-only native requests and one readback-only completion of an already-existing document. No creator is inferred for that preexisting document. Original attempts and evidence remain preserved.
+- One initial helper invocation blocked before any durable intent; a subsequent read proved all four original records unchanged and the lease free. Fresh release/native preflight passed before the first actual finalization. No consumed financial intent was replayed.
+- The all-age post-recovery CLI stopped before provider access because actual botocore clients have `close()` but no context-manager protocol. Wrapped those clients in `contextlib.closing`; changed the CLI fixture to ordinary mocks and verified closure on account-gate failure and failed scans. No discovery or financial rule changed.
+
+What is verified:
+
+- The original ROY six-order historical audit passed: six checked, zero failed, four verified invoices and two externally invoiced cases, with private reports published. All four reviewed helper results succeeded; independent six-case S3 evidence verification is running separately.
+- All 18 post-recovery verifier tests, scoped Ruff and whitespace checks pass. Actual local boto3/botocore `1.42.63` confirms no `__enter__` and a supported `close()` method. Both failed all-age startup attempts made no provider scan or business mutation.
+- The user definitively confirmed the remaining VEVO COD case as uncollected/returned. Its private immutable confirmation is `data/vevo/order-automation/audits/2026-09-13/reviewed-uncollected-confirmation-20260913.json`, SHA `5b6ea4ae7b557003a58d7848b880120169c893f5d7e027a3be581ed813e6a8d0`. Do not invoice it or retry its unknown preparation. Exact native empty-receipt readback is separately published at `data/vevo/order-automation/audits/2026-09-13/uncollected-native-zero-receipts-contract-20260913.json`, SHA `2104d03fe34ccaac3dd3a3c280a0e807179a959b12c9198ab1e17471613c75db`. Its actual pseudo-JSON contains only empty `rows`; no total field was inferred. Earlier strict JSON/content-type/total assumptions were rejected before publication, with zero business writes.
+
+Known issues:
+
+- Production remains five enabled order schedules on `47c3da77`, with 28 natural-run invoice creations already verified. Manual bank protection, correct issued-creditnote binding and the reviewed noncollection closure are prepared on isolated branches but are not deployed. Native gateway callback prevention remains an external FLOX integration limitation; ROY uses Stripe and VEVO is migrating GoPay to Stripe.
+
+Next exact step:
+
+- Commit/push this verifier-only correction and integrate it into the combined safety PR before merge. Run the corrected all-age ROY audit, then finish reviewed closure/helper integration, exact-head CI and managed order deployment. Apply the compatible one-shot noncollection closure and verify original VEVO five cases plus its all-age backlog. Complete the separately reviewed standalone creditnote migration afterward. No local server, watcher or tunnel was started; finite commands have ended.
+
 ## 2026-09-13 — Fixed helper bound to independently promoted native correction
 
 Date: 2026-09-13
