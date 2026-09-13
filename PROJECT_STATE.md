@@ -5,6 +5,32 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Native document key proved; correction in preparation
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/native-preinvoice-identity-20260913`
+
+What changed:
+
+- Read-only native ERP/API comparison proved the finalization identity mismatch. The served invoice store uses `pre_inv_id`; GraphQL nested document IDs identify the parent-order association. A filtered native POST with the served `o#` order search binds `order_id` and `order_num` to the correct row. A raw GET ignored the filter and returned a large unfiltered response; it was not accepted as identity proof. No financial request was made in this investigation.
+- Corrected the runbook's previously unproven API/native-ID equivalence. Runtime implementation and regression fixtures are being updated on this dedicated branch, with separate API association and native route keys, fresh rebinding, ARF requirement and native/API final-number confirmation. A reviewed optional incident manifest will allow deployment directly from the exact paused state, retaining the pause on rollback.
+
+What is verified:
+
+- Private four-case cross-shop proof is published at `data/roy/order-automation/audits/2026-09-13/native-document-key-contract-20260913.json`, SHA-256 `a0fa9c3391e13baf0527a64c05ea8bb9e0b9451681dfc60d93618082f4fcff36`. ROY has a missing-final preinvoice and a completed document; VEVO has an order with no prepared document and a completed document. Both completed cases retain the native preinvoice key and their native final number equals fresh API `invoice_num`. Current runtime login provides ARF; a separate ROY page read confirms the token matches the served native page token.
+- The first VEVO sample-selection attempts found no completed journal record with an invoice ID; a bounded native twenty-row read supplied an existing completed example instead. The unprepared VEVO example correctly has no API documents and zero native invoice rows; do not misclassify every VEVO failure as an existing-preinvoice route-key rejection.
+- Independent incident proof at `data/roy/order-automation/audits/2026-09-13/independent-incident-pause-be732225-20260913.json`, SHA-256 `35494c751fe751e307d9326cc1e480b56682ff9181f83ff9e0c51e42c89d169c`, confirms exact four disabled invoice schedules, unchanged enabled cancellation/reports, and no unfinished or late invoice tasks across the three regional clusters at 05:21:38 UTC.
+- Fresh read-only UI inspection shows the original suspicious order is shipped with a final invoice. Ten historical transitions remain visible, most recently 10 September; blank actor fields alone cannot establish automation attribution. The owned temporary audit tab was closed without business changes.
+
+Known issues:
+
+- Correction is not deployed. Four invoice schedules remain deliberately paused; original uncertain operations and historical email holds are untouched. Helper and standalone guard remain undeployed. Native stale Stripe event prevention still needs the external provider fix described in the unsent handoff.
+
+Next exact step:
+
+- Complete narrow native-binding and incident-aware deployment tests, independently review both, run exact full build checks, then commit/push and merge through required CI. Verify the exact built image, deploy with the reviewed incident key/hash, and independently verify host/promotion gates before financial recovery. Finish fresh native-bound six-case reconciliation and the full historical business audit afterward.
+
 ## 2026-09-13 — Infrastructure promoted; invoice provider rejection contained
 
 Date: 2026-09-13
