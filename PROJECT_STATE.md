@@ -5,6 +5,36 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Minimum production repair complete; broader releases postponed
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/reviewed-uncollected-close-20260913`
+
+What changed:
+
+- The user requested immediate completion of the working core because the remaining token budget is low. This checkpoint supersedes all older next-step instructions to continue optional migrations. **PR #552 (standalone guard), #556 (managed reporting) and #559 (optional recorder enhancement) are postponed, unmerged and undeployed.** Their work is safely pushed at `5332e31ae93ed2223e89bec557e2cf1acc3cc282`, `def0e1bfd2e88726d22b9cc467ffe46052bcc88a` and `2e2586adb3953ec6f60f3f69e8350da0b58b6032`, respectively. Do not resume their CI polling, integration or deployment as part of this minimum checkpoint.
+- A fresh exact API read at approximately 10:48 UTC found VEVO 2602008663 / internal ID18207 / EUR33.89 already restored to canonical 4/Odoslaná (raw 4/Shipped), last change `2026-09-13 12:34:37`. Its review was already closed as `status_resolved_elsewhere`. This restoration was not performed by our recorder; do not attribute it to our apply.
+- The existing reviewed default recorder from clean, pushed `6dbf11063a284afc9308152c2110a1a7438e2a10` therefore sufficed. Preview and then one leased apply passed with `provider_writes=0`; no optional PR #559 code was used. The confirmation was recorded at **10:49:27.208105 UTC**. Finite sessions 53051 and 46151 both ended exit 0. No bank receipt, bank settlement date, invoice-paid flag or provider status was created by this operation.
+
+What is verified:
+
+- Independent root S3 readback at 10:55 UTC validated both exact private confirmation documents against their journal records: 2602008663 SHA `6049e628898509a7f3b0f613e5df7570b16bddf1a4388ae07f81ee1c9c7d870f` and unchanged 2602007943 SHA `c4b63939914d2e38b0ab0f589cc723b3b6b7e109686a9f8aaa79d8079e164016`. Both records are confirmed and both status reviews are closed. The existing deployed consumer can use this provenance subject to its fresh payment, fulfillment and creditnote checks; this is not evidence of a new post-apply status correction.
+- Both shops have **zero active invoice operations and zero open status reviews**. ROY's two phase-less records are not financial operations. VEVO 2502000712 remains validly closed as a reviewed uncollected obligation; the original `prepare_ambiguous` financial projection remains preserved and must never be blindly replayed.
+- A fresh lookup using the exact three committed service families returned all **17 expected CloudWatch alarms, all OK**. The first lookup had mistakenly used non-existent family names and returned zero alarms; it was corrected immediately and never treated as health evidence. No alarm configuration or threshold was changed.
+- Final private AES256 artifact with exact byte readback: `data/vevo/order-automation/audits/2026-09-13/manual-settlement-final-complete-1056.json`, SHA `a313a2610a25d2a23be83b972560ade6d63345781b7ac3ddc643ab820d216f3d`. It references the original journal-only observation `manual-settlement-final-root-readback-105508Z.json`, SHA `7a08018d49053d2a187373f53cb5ca16e89e3d05b40d0fc1ba134bf9272d504a`. Neither check wrote to the provider.
+- Production order source remains independently verified `fda36b49e7610d289d6dcb1d0affe892d1ba5ce7`, image `sha256:29c0c8e4106438f204b0afaee097e90fab887a82e71327653e508a20574b90c0`, with the five schedules enabled. Both shops' natural runs passed. The completed invoice inventories cover the user's final August/September scope and found no further eligible uninvoiced orders; no additional historical scan is required.
+- Unrelated main advancement through PR #558 (`d2728a7783203cd3eec7ba683e13b92e8f20793b`) was inspected: the settings change is confined to VEVO production-board labels, with no invoice/manual-settlement setting change. Other-user work was preserved. No main freeze remains active.
+
+Known issues:
+
+- Native FLOX gateway callbacks can still temporarily regress a status before guarded reconciliation. Fully preventing the vendor's callback requires its conditional-status fix described in `projects/FLOX_STRIPE_STATUS_GUARD_HANDOFF.md`. That draft remains unsent; no contact with others was authorized. Missing card-gateway payment is not proof that a user-confirmed bank payment was unpaid, and a bank confirmation does not waive return/creditnote safety checks.
+- No persistent local server, worker, watcher or tunnel was started. All root finite commands have ended and the root-created browser inspection tab was closed. Existing production schedules intentionally remain running.
+
+Next exact step:
+
+- Deliver the completed minimum repair and the native-callback limitation to the user. Let the existing production schedules and alarms continue. Do not start more historical scans, new features, optional PR merges or deployments in this scope. If broader work is requested later, begin with a fresh repo/branch/pull/runtime check and this checkpoint, then revalidate the deferred branches against current main and the live release.
+
 ## 2026-09-13 — Retrospective scope narrowed to August/September; second bank payment confirmed
 
 Date: 2026-09-13
