@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import textwrap
@@ -169,6 +170,24 @@ class HealthLogCliTests(unittest.TestCase):
 
 
 class HealthLogWorkflowIntegrationTests(unittest.TestCase):
+    PUBLICATION_STEPS = (
+        "Revalidate canonical evidence after successful cleanup",
+        "Recheck unchanged current reporting authority before publication",
+        "Upload only canonical sanitized infrastructure-health evidence",
+        "Publish result-blind infrastructure summary",
+    )
+
+    @staticmethod
+    def workflow_step(workflow, name):
+        return workflow.split(f"      - name: {name}\n", 1)[1].split("\n      - name:", 1)[0]
+
+    def assert_success_only_publication(self, workflow):
+        for name in self.PUBLICATION_STEPS:
+            step = self.workflow_step(workflow, name)
+            self.assertEqual(["${{ env.RUN_INFRA_HEALTH == 'true' }}"],
+                             re.findall(r"^        if: (.+)$", step, re.MULTILINE), name)
+            self.assertNotIn("always()", step, name)
+
     def test_original_marker_parity_and_hash_logic_with_complete_pages(self):
         step = WORKFLOW.split("- name: Verify natural success marker", 1)[1]
         block = textwrap.dedent(step.split("python - <<'PY'\n", 1)[1].split("          PY", 1)[0])
@@ -211,17 +230,55 @@ class HealthLogWorkflowIntegrationTests(unittest.TestCase):
         read = WORKFLOW.index("python scripts/growthbook_aa_health_log_io.py\n")
         cleanup = WORKFLOW.index("- name: Remove every temporary AWS response")
         validate = WORKFLOW.index("- name: Revalidate canonical evidence after successful cleanup")
+        recheck = WORKFLOW.index("- name: Recheck unchanged current reporting authority before publication")
         upload = WORKFLOW.index("- name: Upload only canonical sanitized")
+        summary = WORKFLOW.index("- name: Publish result-blind infrastructure summary")
+        private_cleanup = WORKFLOW.index("- name: Remove private current reporting snapshots")
         self.assertLess(selected, read)
         self.assertLess(read, cleanup)
         self.assertLess(cleanup, validate)
-        self.assertLess(validate, upload)
+        self.assertLess(validate, recheck)
+        self.assertLess(recheck, upload)
+        self.assertLess(upload, summary)
+        self.assertLess(summary, private_cleanup)
         self.assertIn("if: ${{ always() && env.RUN_INFRA_HEALTH == 'true' }}", WORKFLOW[cleanup:validate])
         self.assertIn("--cleanup-only", WORKFLOW[cleanup:validate])
         self.assertNotIn("rm -rf", WORKFLOW[cleanup:validate])
-        self.assertNotIn("always()", WORKFLOW[validate:])
+        self.assertNotIn("always()", WORKFLOW[validate:private_cleanup])
+        self.assert_success_only_publication(WORKFLOW)
         self.assertNotIn("continue-on-error", WORKFLOW)
         self.assertEqual(1, WORKFLOW.count("uses: actions/upload-artifact@"))
+
+    def test_unconditional_publication_or_recheck_is_rejected(self):
+        for name in self.PUBLICATION_STEPS:
+            step = self.workflow_step(WORKFLOW, name)
+            unconditional = step.replace("if: ${{ env.RUN_INFRA_HEALTH == 'true' }}",
+                                         "if: ${{ always() && env.RUN_INFRA_HEALTH == 'true' }}", 1)
+            self.assertNotEqual(step, unconditional)
+            with self.subTest(name=name), self.assertRaises(AssertionError):
+                self.assert_success_only_publication(WORKFLOW.replace(step, unconditional, 1))
+
+    def test_final_always_cleanup_removes_only_private_reporting_snapshots(self):
+        step = self.workflow_step(WORKFLOW, "Remove private current reporting snapshots")
+        self.assertEqual(["${{ always() && env.CURRENT_REPORT_BINDING_FILE != '' }}"],
+                         re.findall(r"^        if: (.+)$", step, re.MULTILINE))
+        self.assertNotIn("uses:", step)
+        self.assertNotIn("GITHUB_STEP_SUMMARY", step)
+        block = textwrap.dedent(step.split("python - <<'PY'\n", 1)[1].split("          PY", 1)[0])
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory) / "current-binding.json"
+            rechecked = Path(str(base) + ".rechecked")
+            unrelated = Path(directory) / "canonical-evidence.json"
+            for path in (base, rechecked, unrelated):
+                path.write_text("synthetic private fixture", encoding="utf-8")
+            with patch.dict(os.environ, CURRENT_REPORT_BINDING_FILE=str(base)):
+                exec(compile(block, "actual-private-snapshot-cleanup", "exec"), {})
+                self.assertFalse(base.exists())
+                self.assertFalse(rechecked.exists())
+                self.assertTrue(unrelated.is_file())
+                # A failed earlier step may leave either snapshot absent.
+                exec(compile(block, "actual-private-snapshot-cleanup", "exec"), {})
+                self.assertEqual("synthetic private fixture", unrelated.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
-## 2026-09-13 - Root preparation of integrated report PR
+## 2026-09-13 - Integrated report PR 556; narrow CI test correction
 
 Date: 2026-09-13
 Repo: `vzeman/biznisweb`
@@ -13,22 +13,25 @@ Branch: `codex/vevo-report-managed-deploy-20260913`
 
 What changed:
 
-- Root accepted clean pushed author handoff `31053aef9116db1fd01727298e9c25b87d9be388`, fetched/pulled the correct branch, and prepared one integrated report PR replacing the narrower draft #553. No new PR has yet been established: the first REST create returned an empty-response parse error and the second returned HTTP 502; exact head-filtered and recent open-PR readbacks confirmed absence after each. The remote head was independently re-read as the expected author commit. Do not assume creation or blindly replay an uncertain write.
-- Main remains frozen on `fda36b49` for order deployment `34749213122`. Both ROY and VEVO invoice dry hosts independently passed STOPPED 0 / exact image / full-backlog localhost markers; the cancellation candidate is still under verification. No report merge, bootstrap, readiness publication or deployment is permitted by these partial order results.
+- Created non-draft [PR 556](https://github.com/vzeman/biznisweb/pull/556) on verified head `320bdddfb3ff48f25cedeb95830c6148178dfc67` after exact readbacks confirmed that earlier EOF/HTTP 502 attempts had created no PR. All six own checks started. Parent closed narrower PR 553 as superseded; no main merge or report deployment occurred.
+- The first security-baseline run found one outdated broad workflow-text assertion: it rejected the final `always()` cleanup of private current-binding snapshots after publication. Narrowed the test to require success-only conditions on canonical validation, current-authority recheck, artifact upload and summary. A negative matrix changes each to `always()` and must fail. A separate test executes the actual final cleanup snippet, removes only its two private snapshots, preserves unrelated evidence and accepts already-absent snapshots. The production workflow, authority and validation code are unchanged by this correction.
+- Added the health-log CLI test module to image-build and automation regression collections so the affected boundary is included in the normal local release checks.
 
 What is verified:
 
-- Author source passes 1,044 build and 782 automation tests, plus the independent 89-test collection and smoke/security/Ruff checks described below. Root's source-only integration scope review confirms a 35-file reporting diff. This root step changes documentation only.
-- Limited root read-only AWS preflight confirms `vevo-growthbook-production` and `vevo-growthbook-reconciliation-production` both `UPDATE_COMPLETE`, and the existing reconciliation schedule is ENABLED at `cron(45 3 * * ? *)`, task definition `vevo-growthbook-reconcile-production:3`, cluster `vevo-reporting-cluster`. These three reads do not replace the later full protected runtime/policy snapshot. No provider or runtime write occurred and no persistent local process was started.
+- The complete previously failing security A/A source/lifecycle group now passes **318 tests**. Related health modules pass **61 tests** with three existing platform skips. Exact updated image-build and automation collections pass **1,057** and **795** tests respectively. Reporting smoke, repository security checks, scoped Ruff and whitespace checks pass.
+- Independent review confirmed the actual 15-step workflow AST, four success-only gates, one artifact upload and no `continue-on-error`. It rejected 32 unsafe condition variants and verified the exact private-file cleanup behavior. Reviewed test SHA-256: `9cdb0e835407d3a8e44a3e7b3b7e2b98b90f3201c03ac6bd0398a76cb54ea78e`. The corrected pushed head still requires all six own GitHub checks before handoff; a local suite is not a replacement for CI.
+- Parent reports primary deployment `34749213122` completed successfully at 10:01:48 UTC. Its independent observer published actual proof `data/roy/order-automation/audits/2026-09-13/independent-deploy-fda36b49-20260913.json`, SHA-256 `ada17707d7885aa68b684633f9e0ee9ef4695734fe2b53dc5649b4eec649fb50`. This is the observer's handoff, not a fresh runtime check performed by this reporting task.
+- No AWS/provider call, runtime write or persistent local process in the PR/CI correction task. GitHub PR/check reads and the single confirmed PR creation are the only external actions.
 
 Known issues:
 
-- GitHub PR creation currently returns transient server responses; cause is not established. Draft #553 remains open until the integrated replacement is confirmed. The earlier ready-for-review failure on #554 was resolved with identical-source replacement #555; it does not authorize bypassing checks on this new source.
-- Primary promotion, reviewed noncollection closure, VEVO historical verification and both standalone guards remain prerequisites. The maintenance windows and fresh-versus-historical host evidence rules remain as documented below.
+- Reviewed noncollection closure, VEVO historical verification and both standalone guards remain under parent control before report readiness. The actual primary proof observer notes AWS may reorder unique named environment entries in returned task definitions; separately check readiness compatibility against that real proof before first publication. This test-only CI repair does not loosen runtime proof comparisons.
+- The first integrated source's security-baseline failure is fully diagnosed above; do not blindly rerun that old SHA or treat its five other checks as acceptance of the corrected head.
 
 Next exact step:
 
-- Retry PR creation only after confirmed absence, using bounded backoff or the supported browser fallback; then require checks on its actual head and close #553 only once a replacement exists. Keep main frozen until independently complete primary promotion/restoration. After the separate guard cutover, execute the runbook's bootstrap, readiness producer and managed reporting promotion.
+- Commit/push this reviewed test/collection/documentation correction and require all six checks on the new PR 556 head. Parent controls any merge and the subsequent primary/closure/guard/report release sequence. Preserve the documented reporting maintenance window and the distinct fresh-versus-historical host requirements.
 
 ## 2026-09-13 - Integrated managed VEVO reporting handoff (offline verified)
 
