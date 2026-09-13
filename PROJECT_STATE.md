@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 - Managed VEVO reporting implementation checkpoint (not dispatchable)
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-deploy-20260913`
+
+What changed:
+
+- Isolated from reviewed reporting source `960837f1`. Draft managed deployer and diagnostic host wrapper preserve production input prefix and production email behavior; a dedicated scoped diagnostic role writes only probe artifacts/markers. The probe curls its own identity before accepting a managed hash-bound signal and then runs the ordinary report entrypoints with financial/email guards, suppressed metrics and isolated output publication.
+- Draft transaction owns only the VEVO report schedule and its candidate task/role. It requires exact main/build/image, a private current binding, independently reviewed fresh order/standalone-guard readiness and protected runtime snapshots. Known-state rollback preserves authority; unknown schedule/task/pointer ownership retains an incident lease. No live call or dispatch occurred.
+
+What is verified:
+
+- Initial 16 focused offline tests pass for host identity/handshake, output isolation/quality, actual financial/email/GraphQL boundaries, task ownership, restricted role and known-state schedule updates. Ruff passes. This is an implementation checkpoint, not release signoff.
+
+Known issues:
+
+- Shared binding/bootstrap API integration, baseline identity orchestration, managed workflow, full transaction/failure regressions and independent review remain required. Primary order release and both standalone guards must be independently verified before readiness can authorize promotion.
+- Future natural invoice tasks may overlap a long probe even after initial scan/deployment exclusion; preserve their schedules, record observed overlap and fail promotion for incomplete reports. Do not claim a global provider-read lock.
+
+Next exact step:
+
+- Commit/push this reproducible checkpoint, merge the clean shared API `aa0ce967`, finish the bootstrap/workflow and adversarial tests, then request independent source review. No AWS/provider writes, deployment or main merge without the separately managed release gates.
+
 ## 2026-09-13 - Reporting role adaptation passes offline regression
 
 Date: 2026-09-13
