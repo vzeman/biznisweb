@@ -119,6 +119,8 @@ class ReadinessFixture:
                 elif host['kind'] == 'report-probe':
                     item['markers']['REPORTING_GUARD_IDENTITY_OK'] = [{'marker': 'REPORTING_GUARD_IDENTITY_OK',
                         'project': project, 'task': host['task'], 'private_ip': host['private_ip'], 'path': '/app',
+                        'service': host['service'], 'revision': str(ready.REPORT_PINS[project][0]),
+                        'instance_id': 'N/A:FARGATE', 'source_sha256': ready.REPORT_RUNNER_SHA256[project],
                         'inline_guard_skipped': True, 'business_runner_started': False}]
             final_hosts[host['task']] = item
         prefix, workflow = ready.REFERENCES[kind]

@@ -31,6 +31,8 @@ REFERENCES = {"primary_release": ("deployments", ".github/workflows/deploy-order
 require = binding.require
 REPORT_PINS = {"roy": (71, "sha256:9ff4738f998e3d80e7b76dc543f11bc36413d9d016e72b4a78eb3411433bc541"),
                "vevo": (33, binding.POLICY["baseline_image_digest"])}
+REPORT_RUNNER_SHA256 = {"roy": "45cfbd4aa816b45a5679ceadaaff2445ad341140e01c876f649325e17568b760",
+                       "vevo": binding.POLICY["baseline_runner_sha256"]}
 
 
 def gh(path):
@@ -119,22 +121,31 @@ def read_independent(s3, reference, kind, fetch_run):
                 require(actual.get("summaries") == [host.get("summary")], "readiness-independent-live-summary")
             if host_kind == "report-probe":
                 rows = markers.get("REPORTING_GUARD_IDENTITY_OK", [])
-                require(len(rows) == 1 and rows[0].get("marker") == "REPORTING_GUARD_IDENTITY_OK"
-                        and rows[0].get("project") == project and rows[0].get("task") == host["task"]
-                        and rows[0].get("private_ip") == host["private_ip"] and rows[0].get("path") == "/app"
-                        and rows[0].get("inline_guard_skipped") is True and rows[0].get("business_runner_started") is False,
+                require(rows == [{"marker": "REPORTING_GUARD_IDENTITY_OK", "project": project, "service": host["service"],
+                        "revision": str(REPORT_PINS[project][0]), "task": host["task"], "private_ip": host["private_ip"],
+                        "instance_id": "N/A:FARGATE", "path": "/app", "source_sha256": REPORT_RUNNER_SHA256[project],
+                        "inline_guard_skipped": True, "business_runner_started": False}],
                         "readiness-independent-report-localhost")
     return managed, independent
 
 
-def verify_host(ecs, host, definition_arn, digest):
+def verify_host(ecs, host, definition_arn, digest, *, historical_task):
     require(host.get("task_definition") == definition_arn and host.get("image_digest") == digest
             and host.get("path") == "/app" and host.get("instance_id") == "N/A:FARGATE"
             and type(host.get("exit_code")) is int and host["exit_code"] == 0,
             "readiness-host-proof-incomplete")
     task_id = host.get("task", "")
     require(re.fullmatch(re.escape(CLUSTER.replace(":cluster/", ":task/")) + r"/[a-f0-9]{32}", task_id), "readiness-host-scope")
+    # This snapshot comes only from the already hash/marker/run-crosslinked
+    # independent promotion audit. It is durable when ECS ages out stopped tasks.
+    verify_task(historical_task, host, definition_arn, digest)
     result = ecs.describe_tasks(cluster=CLUSTER, tasks=[task_id])
+    failures = result.get("failures", [])
+    missing = (isinstance(failures, list) and len(failures) == 1 and isinstance(failures[0], dict)
+               and set(failures[0]) <= {"arn", "reason", "detail"} and failures[0].get("arn") == task_id
+               and failures[0].get("reason") == "MISSING" and isinstance(failures[0].get("detail", ""), str))
+    if result.get("tasks") == [] and missing:
+        return
     require(not result.get("failures") and len(result.get("tasks", [])) == 1, "readiness-host-no-longer-observable")
     verify_task(result["tasks"][0], host, definition_arn, digest)
 
@@ -225,7 +236,8 @@ def validate_readiness(receipt, *, s3, ecs, ecr, protected, vevo_schedule, fetch
         if kind == "invoice":
             marker["full_backlog"] = True
         require(host.get("marker") == marker, "readiness-primary-localhost-marker")
-        verify_host(ecs, host, protected["schedules"][schedule_name]["Target"]["EcsParameters"]["TaskDefinitionArn"], primary["image_digest"])
+        verify_host(ecs, host, protected["schedules"][schedule_name]["Target"]["EcsParameters"]["TaskDefinitionArn"], primary["image_digest"],
+                    historical_task=primary_audit["final"]["hosts"][host["task"]]["direct_terminal_task"])
     guards, guard_audit = read_independent(s3, receipt["standalone_guards"], "standalone_guards", fetch_run)
     expected_names = set(SCHEDULES) | {f"{p}-{suffix}" for p in ("roy", "vevo") for suffix in ("daily-report-email", "creditnote-storno-guard")}
     require(set(guards.get("expected_schedules", {})) == expected_names
@@ -282,7 +294,7 @@ def validate_readiness(receipt, *, s3, ecs, ecr, protected, vevo_schedule, fetch
                         ("failed_orders", "review_required_orders", "audit_error_orders")), "readiness-guard-needs-review")
             require(type(summary.get("updated_orders")) is int and summary["updated_orders"] >= 0
                     and (kind != "guard-probe" or summary["updated_orders"] == 0), "readiness-guard-dry-write")
-        verify_host(ecs, host, arn, digest)
+        verify_host(ecs, host, arn, digest, historical_task=guard_audit["final"]["hosts"][host["task"]]["direct_terminal_task"])
     require(len(guard_digests) == 1, "readiness-guard-image-split")
     require(guard_audit.get("expected_image_digest") == next(iter(guard_digests)), "readiness-independent-guard-image")
     for proof, digest in ((primary, primary["image_digest"]), (guards, next(iter(guard_digests)))):

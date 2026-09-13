@@ -292,3 +292,129 @@ class IndependentFullReadinessTests(unittest.TestCase):
                 task["containers"][0]["networkInterfaces"][0]["privateIpv4Address"] = "172.31.9.9"
             with self.subTest(scenario=scenario):
                 self.reject(fixture)
+
+    def test_full_report_marker_must_bind_unchanged_source_revision_and_service(self):
+        for project in ("roy", "vevo"):
+            for changes in ({"source_sha256": "f" * 64}, {"revision": "99"},
+                            {"service": "foreign-reporting-daily"}, {"instance_id": "foreign"}):
+                fixture = self.fixture()
+                report = next(row for row in fixture.guards["hosts"]
+                              if row["service"] == project + "-reporting-daily")
+                marker = fixture.guard_audit["final"]["hosts"][report["task"]]["markers"]["REPORTING_GUARD_IDENTITY_OK"][0]
+                marker.update(changes)
+                with self.subTest(project=project, changes=changes):
+                    self.reject(fixture)
+
+
+class IndependentHistoricalExpiryTests(unittest.TestCase):
+    def fixture(self):
+        from tests.test_reporting_readiness import ReadinessFixture
+        return ReadinessFixture()
+
+    @staticmethod
+    def missing(**request):
+        return {"tasks": [], "failures": [{"arn": request["tasks"][0], "reason": "MISSING"}]}
+
+    def test_exact_missing_uses_independent_proof_in_real_producer_and_consumer(self):
+        from tests.test_reporting_readiness import NOW
+        fixture = self.fixture()
+        fixture.describe_tasks = Mock(side_effect=self.missing)
+        deployment = SimpleNamespace(s3=fixture, ecs=fixture, schedule=lambda: deepcopy(fixture.vevo_schedule),
+            definition=lambda arn: deepcopy(fixture.definitions[arn]), snapshot_protected=lambda: deepcopy(fixture.protected))
+        session = SimpleNamespace(client=lambda name: SimpleNamespace(get_caller_identity=lambda: {"Account": readiness.ACCOUNT})
+                                  if name == "sts" else fixture)
+        validate = readiness.validate_readiness
+        def checked(receipt, **kwargs):
+            return validate(receipt, **kwargs, fetch_run=fixture.fetch_run, now=NOW)
+        with patch.object(readiness, "require_source"), patch.object(readiness.binding, "require_private_bucket"), \
+             patch.object(readiness.binding, "check_migration"), patch.object(deploy, "Deployment", return_value=deployment), \
+             patch.object(readiness, "datetime") as clock, patch.object(readiness, "validate_readiness", side_effect=checked):
+            clock.now.return_value = NOW
+            result = readiness.prepare(session, fixture.receipt["primary_release"], fixture.receipt["standalone_guards"], publish=False)
+        self.assertFalse(result["published"])
+        self.assertEqual([], fixture.puts)
+        self.assertEqual(9, fixture.describe_tasks.call_count)
+
+        consumer = object.__new__(deploy.Deployment)
+        consumer.binding, consumer.s3, consumer.ecs, consumer.session = readiness.binding, fixture, fixture, session
+        consumer.readiness_key = readiness.binding.PREFIX + "readiness/independent-fixture.json"
+        consumer.readiness_sha = fixture.store(consumer.readiness_key, fixture.receipt)
+        consumer.snapshot_protected = lambda: deepcopy(fixture.protected)
+        consumer.schedule = lambda: deepcopy(fixture.vevo_schedule)
+        with patch.object(readiness.binding, "require_private_bucket"), \
+             patch.object(readiness, "validate_readiness", side_effect=checked):
+            consumer.readiness()
+        self.assertEqual(fixture.protected, consumer.protected)
+        self.assertEqual(18, fixture.describe_tasks.call_count)
+        self.assertEqual([], fixture.puts)
+        self.assertTrue(all(body.closed for body in fixture.bodies))
+
+    def test_missing_optional_string_detail_is_supported_but_unmatched_or_partial_is_not(self):
+        fixture = self.fixture()
+        fixture.describe_tasks = lambda **request: {"tasks": [], "failures": [{
+            "arn": request["tasks"][0], "reason": "MISSING", "detail": "expired historical task"}]}
+        fixture.validate()
+        for scenario in ("empty", "wrong-arn", "wrong-reason", "duplicate-failure", "mixed-task-and-failure", "malformed-detail"):
+            fixture = self.fixture()
+            def reply(**request):
+                failure = {"arn": request["tasks"][0], "reason": "MISSING"}
+                result = {"tasks": [], "failures": [failure]}
+                if scenario == "empty":
+                    return {"tasks": [], "failures": []}
+                if scenario == "wrong-arn":
+                    failure["arn"] = "foreign-task"
+                elif scenario == "wrong-reason":
+                    failure["reason"] = "ACCESS_DENIED"
+                elif scenario == "duplicate-failure":
+                    result["failures"].append(deepcopy(failure))
+                elif scenario == "mixed-task-and-failure":
+                    result["tasks"] = [deepcopy(fixture.tasks[request["tasks"][0]])]
+                else:
+                    failure["detail"] = False
+                return result
+            fixture.describe_tasks = reply
+            with self.subTest(scenario=scenario), self.assertRaises(readiness.binding.BindingError):
+                fixture.validate()
+
+    def test_timeout_and_access_denial_are_not_historical_expiry(self):
+        for error in (TimeoutError("synthetic timeout"), IamError("AccessDenied")):
+            fixture = self.fixture()
+            fixture.describe_tasks = Mock(side_effect=error)
+            with self.subTest(error=type(error).__name__), self.assertRaises(type(error)):
+                fixture.validate()
+            self.assertTrue(all(body.closed for body in fixture.bodies))
+
+    def test_exact_missing_cannot_replace_absent_or_contradictory_independent_snapshot(self):
+        for audit_name in ("primary_audit", "guard_audit"):
+            for scenario in ("absent-task", "not-stopped", "wrong-marker"):
+                fixture = self.fixture()
+                fixture.describe_tasks = Mock(side_effect=self.missing)
+                audited = next(iter(getattr(fixture, audit_name)["final"]["hosts"].values()))
+                if scenario == "absent-task":
+                    audited.pop("direct_terminal_task")
+                elif scenario == "not-stopped":
+                    audited["direct_terminal_task"]["lastStatus"] = "RUNNING"
+                else:
+                    audited["markers"] = [] if audit_name == "primary_audit" else {}
+                fixture.reseal()
+                with self.subTest(audit_name=audit_name, scenario=scenario), self.assertRaises(readiness.binding.BindingError):
+                    fixture.validate()
+
+    def test_existing_fresh_drift_rejects_even_while_other_historical_tasks_are_missing(self):
+        for scenario in ("wrong-image", "wrong-ip", "not-stopped"):
+            fixture = self.fixture()
+            chosen = fixture.guards["hosts"][-1]["task"]
+            def reply(**request):
+                if request["tasks"][0] != chosen:
+                    return self.missing(**request)
+                task = deepcopy(fixture.tasks[chosen])
+                if scenario == "wrong-image":
+                    task["containers"][0]["imageDigest"] = "sha256:" + "f" * 64
+                elif scenario == "wrong-ip":
+                    task["containers"][0]["networkInterfaces"][0]["privateIpv4Address"] = "172.31.9.9"
+                else:
+                    task["lastStatus"] = "STOPPING"
+                return {"tasks": [task], "failures": []}
+            fixture.describe_tasks = reply
+            with self.subTest(scenario=scenario), self.assertRaises(readiness.binding.BindingError):
+                fixture.validate()
