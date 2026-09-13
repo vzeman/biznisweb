@@ -5,7 +5,7 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
-## 2026-09-13 — Native-key correction merged; production build pending
+## 2026-09-13 — Native-key correction merged; incident-aware deployment active
 
 Date: 2026-09-13
 Repo: `vzeman/biznisweb`
@@ -13,7 +13,7 @@ Branch: `codex/native-preinvoice-identity-20260913`
 
 What changed:
 
-- PR #548 merged as `47c3da775ff7018a1cf8950024c867310b91ae8a` after all six exact-head checks passed on `0f803d3cfe64c7760e8710df167eb35b5b44b975`. Build `34741199613` is producing the immutable image. This worktree fast-forwarded to the merge without editing main; no deployment has occurred.
+- PR #548 merged as `47c3da775ff7018a1cf8950024c867310b91ae8a` after all six exact-head checks passed on `0f803d3cfe64c7760e8710df167eb35b5b44b975`. Build `34741199613` succeeded. Independent ECR readback binds the exact merge tag to `sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`. This worktree fast-forwarded to the merge without editing main. After fresh unchanged-main, no-active-release and incident/protected-source readback, managed deployment `34741354275` was dispatched once using the exact reviewed incident key/SHA. Main is frozen at this merge until independent terminal verification; production promotion is not yet claimed.
 - Independent final email guard review passed all twelve consumed-state/hold/token combinations, preserving the exact journal and making zero API/web/journal requests. The four old incorrect native keys currently match no native document in complete read-only searches; this is current absence only, not historical absence or a resolved old outcome. Private collision proof: `data/roy/order-automation/audits/2026-09-13/reviewed-old-key-collision-check-20260913.json`, SHA-256 `b3faaba354940d0238657696f4a217c2f48f114f02c1e183506139877ebb41fa`.
 
 What is verified:
@@ -22,7 +22,7 @@ What is verified:
 
 Next exact step:
 
-- Verify build `34741199613` and the exact `git-47c3da775ff7018a1cf8950024c867310b91ae8a` ECR digest. Recheck current main and absence of another managed release, then dispatch once with incident key `data/roy/order-automation/incidents/2026-09-13/be7322255d3b4464907ccb8348425457.json` and SHA-256 `b5765ba648a1ca5ddb9b1cdfc382c90c36dbc1982c93e4f2580868d4371dda46`. Freeze main during host/drain/promotion or verified pause-preserving restoration. The reconciliation helper may integrate source on its separate branch but must retain its blocked old release gate and must not merge/apply during deployment.
+- Observe managed deployment `34741354275` without overlapping provider scans. Independently verify all three actual host/localhost markers, both drains, five promoted pins and policies, and unchanged protected reports; on failure prove restoration to the four disabled invoice originals. Incident key is `data/roy/order-automation/incidents/2026-09-13/be7322255d3b4464907ccb8348425457.json`, SHA-256 `b5765ba648a1ca5ddb9b1cdfc382c90c36dbc1982c93e4f2580868d4371dda46`. Retain main freeze through the outcome. Helper source integration/tests may proceed on its own pushed branch, but no merge, preview or financial apply is allowed during this release.
 
 ## 2026-09-13 — Native identity and paused-deployment correction validated
 
