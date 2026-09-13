@@ -171,6 +171,62 @@ Known issues:
 Next exact step:
 
 - Commit/push this specification for root review, then wait for an explicit implementation scope. Do not implement a current-binding pointer, change historical evidence, run a candidate, or repoint any schedule from this branch.
+## 2026-09-13 — Candidate rejected; original runtime restored; explicit ROY target correction
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- Managed run `34747360516` rejected the first candidate before promotion. Actual ROY task `14c69cd06f7d4e298fc9fbf678830620`, IP `172.31.43.249`, service `roy-invoice-daily:10`, `/app`, Fargate instance N/A, exact `a05b6466...` image, stopped with exit 1 at 08:37:13 UTC. Its scan reached reconciliation, where `unique_target` rejected the paid target because ROY has two distinct status IDs with the same name. No localhost success marker or promotion was established.
+- Exact rollback independently passed: five original enabled schedules and ROY :9 / VEVO :8 / cancellation :41 image `c3842dda...`, six IAM policies, both protected reporting definitions/images (:71 / :33), 17 alarm configurations, three encrypted empty queues, stopped candidate and 120-second quiet drain. The deployment freeze is closed by verified restoration, not by success. Main remains `b417caa7`; it has not become the order runtime.
+- The corrective source filters an explicitly configured target by both its validated ID and expected name. Duplicate catalogue IDs, wrong/missing target IDs, changed names and unconfigured duplicate-name targets still fail. VEVO's separate canonical-role collision gate remains unchanged. Both ROY paid-recovery settings now pin ID 67.
+
+What is verified:
+
+- Independent rollback proof: `data/roy/order-automation/audits/2026-09-13/independent-deploy-b417caa7-20260913.json`, SHA `2cdf1786ac63a62760b03b842990da0f84ab69910757af796953549588ce89ef`. Terminal managed receipt SHA `017eb0e0ed3f84509e732656aa4ebcfedb6fc1b24bd1fa11f80d3f4b50e80cb9`. These are failure/restoration evidence, not a release authorization.
+- Existing same-shop API/native catalogue proof `811967d8...` establishes duplicate paid names on 31/67. Fresh read-only native Stripe mapping explicitly shows PAID -> 67. Canonical proof: `data/roy/order-automation/audits/2026-09-13/current-stripe-paid-target-ui-20260913-v2.json`, SHA `befab3a15da05ea71f81cff2faca37949310d38101830c627cf794b23e3bd871`. Version 2 replaces an estimated timestamp with the bounded observed window; mapping content is unchanged. No gateway setting, payment, invoice, status or email was written; the temporary browser tab was closed.
+- All 847 build-workflow tests passed on the corrective source (72 + 20 + 29 + 726), together with the separate 585-test automation suite, scoped Ruff and whitespace checks. Three new regressions cover duplicate-name order independence, invalid target/catalogue rejection and both real ROY recovery resolvers. Two existing settings assertions were updated to the reviewed explicit ID. Independent mutation-pipeline tests, exact-head CI and live zero-write resolver readback remain next.
+- Subsequently imported only the independently authored nine-test fixture from `6b6a2894` and added it to both CI lists. The final local gates pass all 856 build tests, 594 automation tests, reporting smoke, scoped Ruff and whitespace checks. Real resolver -> one silent status request -> exact acknowledgement/readback tests reject same-label wrong ID 31 and never replay timeout uncertainty. Synthetic rename-policy tests are explicitly distinct from ROY's unchanged inner catalogue refresh behavior. No production read/write was used by these tests.
+- Live catalogue-only verification passed on clean pushed `0bed7803`: both actual ROY resolvers selected 67 while both catalogues retained duplicate-name IDs 31/67. Exactly two status-catalogue reads, no order reads or status/financial/email writes. Private proof `data/roy/order-automation/audits/2026-09-13/live-explicit-paid-target-resolution-20260913.json`, SHA `5860a030b21edc642ea3a303e8263af73ee3fe51d3737d465349c13c5bcf14c3`. Corrective PR #554 is open; all six checks passed before the independent fixture was added and must pass again on its final head. Two GraphQL creation failures were checked for absence before one successful REST creation; there is only one corrective PR.
+
+Known issues:
+
+- VEVO still has missing-completion and stale-full-scan alarms; restoration is not successful VEVO execution. Manual bank provenance remains recorded, but its new protection consumer is not live. The fixed uncollected helper's release constants stay empty and no closure has been applied. Do not reuse the failed `b417` receipt as promotion proof.
+- Separate reporting draft #553 is now at `960837f1` with 174 related tests and cache-day refresh for unreviewed stale labels. It remains undeployed; standalone guard #552 and managed reporting work remain later dependencies.
+
+Next exact step:
+
+- Complete the narrow target correction review/tests, commit/push and new PR, then perform read-only live target resolution without another full scan. Require exact-head CI, exact merged-image build and a new managed deployment with independent restoration/promotion proof. Only a successful release permits pinning/applying the fixed uncollected closure and finishing VEVO seeded/all-age verification. No local persistent processes were started.
+
+## 2026-09-13 — Combined safety release merged; deployment freeze active
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- All six PR #550 checks passed on exact head `a7f1bdd9`, including Linux/Windows automation regression and both secret/security checks. PR #550 merged at 08:15:19 UTC as `b417caa736cfbd1f97b20821cacc39b144e1e460`. Main is frozen on this source until managed order deployment is independently verified or restored; image build `34747227117` is running.
+- Image build `34747227117` subsequently passed; direct ECR read binds that source to `sha256:a05b6466883681ff52d143224ed20ce26d82eddf00d5fe3f8f06a6f1457e684e`. Managed deployment `34747360516` started at 08:18:44 UTC. Its private receipt is `data/roy/order-automation/deployments/b417caa736cfbd1f97b20821cacc39b144e1e460/c75ffef0c72542a3815d078ea073887e.json`. Initial 120-second drain passed at 08:21:26 UTC; actual ROY candidate :10, task `14c69cd06f7d4e298fc9fbf678830620`, IP `172.31.43.249`, `/app`, Fargate N/A, is running its full-backlog dry check. Terminal success and promotion are not yet established.
+- Applied the separately verified manual bank-settlement provenance through the shared leased recorder. The exact private proof SHA is `c4b63939914d2e38b0ab0f589cc723b3b6b7e109686a9f8aaa79d8079e164016`; its content-addressed key is under `data/vevo/order-automation/manual-settlements/`. The recorder returned successful journal readback and zero provider writes. It did not create a receipt, mark an invoice paid, change status or send mail.
+
+What is verified:
+
+- Both live previews passed before apply: the manual bank record and the one fixed uncollected closure. The latter remains unconsumed, with zero status, financial and email requests. The old deployed journal implementation preserves additive record fields, so it retains the settlement proof while the compatible consumer is deployed.
+- Independent predeploy inventory verifies all seven schedule snapshots and the additive manual proof: `data/roy/order-automation/audits/2026-09-13/predeploy-order-automation-inventory-20260913T081632Z.json`, SHA `487aa09ab8330a50b5e37f3a39b710ea9d76dafdce0a93d25fab6cd637c8591c`. Old VEVO jobs are still unsuccessful; configuration parity is not represented as runtime health. Both leases were free, with the single known preparation ambiguity retained.
+- Fresh native Stripe UI readback at 08:24:30 UTC establishes current mapping: paid -> 31, cancelled -> 34, expired -> 33, refunded -> 73, unpaid -> 69. This supersedes the other migration task's older paid -> 70 note. Private proof `data/vevo/order-automation/audits/2026-09-13/current-stripe-status-map-ui-20260913.json`, SHA `250a22f46db21b120611adf473ddfaba0d651b813800b688497715a0c4f68b2f`, preserves only event/ID/label fields; no credentials or page content. No configuration was saved. Mapping readback does not prove a completed payment callback. The current paid path is covered by the reviewed ID31 contract.
+- Source `b417caa7` includes the independently reviewed 844 build tests, 582 automation tests and smoke checks. Standalone guard draft PR #552 is separately prepared at `3463efb5` with 901 build/639 automation tests; it is not merged or deployed.
+- Separate reporting draft PR #553 is prepared at `c238345a`; all six PR checks passed, including both operating-system regression jobs. Its final 173 reporting/creditnote/GrowthBook tests include unbound-label exclusion and raw/JSON-output preservation. It remains undeployed. The managed reporting migration is being prepared independently and must preserve immutable historical GrowthBook evidence and protected runtime targets; the native current Stripe mapping above is its authority for paid ID 31.
+
+Known issues:
+
+- Production still runs `47c3da77` / `c3842dda...`; the new settlement protection must not be claimed active until the new image is promoted. Closure release pins remain empty and its original preparation outcome stays unknown. Protected reporting task pins remain ROY :71 and VEVO :33; their separate name-based reporting regression is being repaired on its own branch.
+
+Next exact step:
+
+- Verify exact merge-image build, dispatch the managed order deployment and independently verify actual hosts, localhost markers, drains, five schedule pins and protected reporting snapshots. Pin the fixed closure helper only to that verified release, close the uncollected obligation once, and run VEVO seeded plus all-age verification. Then complete the separate standalone guard migration. Do not merge another PR during the deployment freeze. No local persistent processes remain.
 
 ## 2026-09-13 — Live settlement preview passed; exact checksum scan exception
 
