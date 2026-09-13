@@ -55,11 +55,43 @@ class ProductionBoardTests(unittest.TestCase):
 
         self.assertTrue(settings["enabled"])
         self.assertEqual(
-            ["\u010cak\u00e1 na vybavenie", "Platba online - zaplaten\u00e9"],
+            ["New order", "Payment online - paid"],
             settings["active_order_statuses"],
         )
         self.assertIn("Vevo Ylang Absolute prac\u00ed g\u00e9l 1L", settings["excluded_product_labels"])
         self.assertIn("vevo", settings["manufactured_product_terms"])
+
+    def test_vevo_snapshot_includes_renamed_active_statuses_only(self) -> None:
+        project_settings = json.loads((ROOT_DIR / "projects" / "vevo" / "settings.json").read_text(encoding="utf-8"))
+        settings = resolve_production_board_settings(project_settings)
+        orders = []
+        for order_num, status_id, status_name in (
+            ("NEW", "1", "New order"),
+            ("PAID", "31", "Payment online - paid"),
+            ("SHIPPED", "4", "Shipped"),
+            ("CANCELLED", "17", "Cancelled"),
+            ("UNPAID", "69", "Stripe - unpaid"),
+        ):
+            order = make_order(
+                order_num,
+                status_name,
+                [
+                    make_item("VEVO cotton 200ml", 2, ean="8580001"),
+                    make_item("Other Brand product", 3, ean="9990001"),
+                    make_item("Vevo Ylang Absolute prac\u00ed g\u00e9l 1L", 4, ean="8589999"),
+                ],
+            )
+            order["status"]["id"] = status_id
+            orders.append(order)
+
+        snapshot = build_production_board_snapshot(project="vevo", orders=orders, settings=settings)
+
+        self.assertEqual(["NEW", "PAID"], [order["order_num"] for order in snapshot["orders"]])
+        self.assertEqual(2, snapshot["summary"]["active_orders"])
+        self.assertEqual(2, snapshot["summary"]["manufacturing_orders"])
+        self.assertEqual(1, snapshot["summary"]["manufacturing_products"])
+        self.assertEqual(4.0, snapshot["summary"]["units_to_make"])
+        self.assertEqual(14.0, snapshot["summary"]["ignored_units"])
 
     def test_snapshot_filters_active_statuses_and_manufactured_products(self) -> None:
         settings = make_settings()
