@@ -5,6 +5,25 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — API cooldown correction merged; exact release pending
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-rate-production-verification-20260913`
+
+What changed:
+
+- PR #545 merged as `a97d974f4d86ac7c1d3fcb3ec7ff5d094245bb3c` after all six exact-head checks passed on `f503bdc569a4244b2f8384c2a28bd58b94d1119c`. Build `34735576536` is producing the immutable release. Production schedules still point to the preceding image until managed host/drain/promotion gates succeed.
+- Three fresh private artifacts were published create-only with AES256 and exact-byte/hash readback under `data/roy/order-automation/audits/2026-09-13/`: `runtime-refresh-20260913.json` SHA-256 `09bb3b699226cde7edcbe25bc6ee4a38f7b9451a023919205cb678b283abbd9b`; `uncertain-operations-readback-20260913.json` SHA-256 `b7a4bca333d919c2d7c16cd9269cc45851a8fbd6d7d3d4417cd98264cfa28545`; `final-document-identity-contract-20260913.json` SHA-256 `d3bfb5933e1eb19e5d126f197e3e6226f9d480bb3a193377219d79eaf2f0b5d7`. Bucket ownership, region and all four public-access blocks were verified.
+
+What is verified:
+
+- 612 local regression tests, Linux/Windows CI and security/observability checks pass. The private evidence confirms two ambiguous emails were actually sent, and nine of eleven original held invoices remain missing. No new financial operation or deployment has occurred yet.
+
+Next exact step:
+
+- Verify build success and exact ECR digest for merged source, confirm unchanged main and no active managed release, then dispatch the invoice deployment once. Freeze main while it runs. Independently verify all three localhost markers, old-writer drain and five schedule pins before any reviewed invoice reconciliation. Preserve public aggregate-only documentation and private provider evidence.
+
 ## 2026-09-13 — Resume after rate-limited candidate; production remains on old image
 
 Date: 2026-09-13
