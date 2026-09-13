@@ -5,6 +5,119 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 - Guard source synchronized with verified primary and completed closure
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+What changed:
+
+- Reviewed environment-order correction `d1621604` is pushed. Integrated root handoff `310edcc37ab2bcab102d1ad54a9891dc7ebb63f0`, which contains actual main `eb89ea90da686678e3080dbe5be9f859be65e332`. The sole conflict was additive `PROJECT_STATE.md` history; both sides are preserved. The only imported executable change is the already merged two-line reviewed closure release pin; it exactly matches the root handoff. Guard source and independent tests remain unchanged from their signed-off correction.
+- Root's durable handoff records successful one-shot noncollection closure (one silent status update, zero financial/email writes), native UI verification of both the closed order and the separately confirmed bank-paid/shipped case, and all five original VEVO seeded records passing `backfill-verification-20260913T102111686650Z.json`. Case identities and private financial evidence stay outside Git.
+
+What is verified:
+
+- **920 exact build-workflow tests** and **658 exact automation-workflow tests** pass, including **64 guard runner/deployment tests**. Reporting smoke, `scripts/security_ci.py`, scoped Ruff and whitespace checks pass. Test collection used the committed workflow commands with separate normal Python processes, without disabling logging or changing runtime behavior.
+- Primary runtime is independently confirmed by audit SHA `ada17707d7885aa68b684633f9e0ee9ef4695734fe2b53dc5649b4eec649fb50`: source `fda36b49`, image `sha256:29c0c8e4106438f204b0afaee097e90fab887a82e71327653e508a20574b90c0`, ROY invoice `:11`, VEVO invoice `:9`, cancellation `:42`. Preserve all five current order schedules and reporting `ROY:71` / `VEVO:33` during the future standalone migration.
+- No AWS/provider reads or mutations, helper execution, main merge, image build or deployment occurred in this integration. No persistent local server/worker was started; all finite test processes completed.
+
+Known issues:
+
+- Standalone guards remain **UNDEPLOYED**. Root's complete all-age VEVO scan and fresh natural-run evidence still precede any guard merge/deployment. The separate reporting-name correction and reporting image migration are not part of this PR. Historical failure and empty-pin notes below are retained as history and are superseded by this current handoff.
+
+Next exact step:
+
+- Push this integration and refresh PR #552 with the final source/tests. Require its own exact-head CI, make one ready-for-review attempt, and hand control back to root. Only root may merge after VEVO audit/natural evidence is clear; a later managed deployment must perform fresh host, task/IP/service/path, localhost marker, complete live guard and rollback gates.
+
+## 2026-09-13 — Uncollected closure applied; VEVO seeded audit passes
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/reviewed-uncollected-close-20260913`
+
+What changed:
+
+- PR #557 passed all six checks on exact `8e187357a4c082dd70f6727b047498cf212a25a8` and merged as `eb89ea90da686678e3080dbe5be9f859be65e332`. The local final pin passed 141 focused tests, Ruff and whitespace checks. This helper-only merge does not change the independently verified order runtime `fda36b49` / `29c0c8e4`.
+- Fresh closure preview passed with no consumed intent and zero requests. After a fresh free-lease preflight, the reviewed helper applied once against the verified primary receipt: `ok=true`, one silent status request, one closed obligation, zero financial requests and zero invoice emails. Finite command session 80222 ended exit 0. No second apply or uncertain replay was attempted.
+- Fresh native VEVO UI readback confirms exact order 2502000712 / EUR15 / COD now shows Cancelled and the Create proforma action rather than a linked invoice. Order 2602007943 remains Shipped / bank transfer / EUR13.48 with invoice 2602007137. The one root-created Chrome inspection tab was closed, with no UI writes.
+
+What is verified:
+
+- VEVO seeded verification passed all five orders: four `verified_invoice`, one `reviewed_uncollected_obligation_closed`, zero failed orders or global issues. Private artifact `data/vevo/order-automation/verification/backfill-verification-20260913T102111686650Z.json`, SHA `308f688758295c5c3c3514014af63a3ebeb0175aea988e90beacc5710bbfa4bb`, was published encrypted with exact readback; JSON and Markdown remain ignored locally.
+- The first ROY natural task :11 / `5ff0d065b1364f63879e37f928a81f18` / IP `172.31.19.84` stopped 10:08:36.391 UTC with exit 0 and actual `29c0c8e4` image. VEVO's pre-closure 10:15 task :9 / `76dbe595f77b48c0bb87ff33d392d87c` / IP `172.31.31.239` stopped 10:16:30.586 UTC exit 1: completed incremental scan, two pages, one retained ambiguous preparation, no created invoices. Its original attempt timestamp remained 06:31:34.595203; this does not establish a repeated financial request. Post-closure natural success remains to verify.
+- Standalone guard has the same concrete AWS environment-order comparison problem found in report readiness. Root corrected only strict unique environment comparison in candidate registration and frozen-source readback; raw saved evidence and all other array ordering remain unchanged. Independent review passed 64 tests, 24 provision drift variants and the actual three-primary-definition evidence check. The guard author owns integration, complete suites, memory and PR #552 CI; no guard deployment occurred.
+
+Known issues:
+
+- One read-only VEVO all-age verification is running from clean pushed `8e187357` (finite session 56253); no second broad provider scan was added. The start inventory had no active reporting task; later short natural scans may overlap without pausing enabled production schedules. Completion, post-closure journal preservation and natural/alarm recovery remain pending.
+- No local persistent server, worker, watcher or tunnel was started. Native gateway callback prevention still requires the documented vendor change; private manual bank confirmation is not an invented bank receipt or settlement date.
+
+Next exact step:
+
+- Finish the single VEVO all-age scan and independent post-closure/natural proof. Publish the audit and reconcile any actual remaining eligible candidates without replaying the sealed ambiguous attempt. Then merge/build/deploy standalone #552 with six-host verification, followed by the separately gated report #556. Keep the five current order schedules and both report pins protected throughout.
+
+## 2026-09-13 — Primary promotion independently verified; one uncollected closure pinned
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/reviewed-uncollected-close-20260913`
+
+What changed:
+
+- Managed order deployment `34749213122` and image build `34749045171` completed successfully for source `fda36b49e7610d289d6dcb1d0affe892d1ba5ce7`, image `sha256:29c0c8e4106438f204b0afaee097e90fab887a82e71327653e508a20574b90c0`. Independent terminal verification passed at 10:04:34 UTC; the primary main freeze is closed. This is now the verified order runtime.
+- Pinned only the two release constants in `scripts/close_reviewed_uncollected_obligation.py` to that independently verified release. The user definitively confirmed VEVO 2502000712 was uncollected/returned. The helper permits one silent Storno transition and separate obligation closure; the original ambiguous financial attempt remains unchanged. No closure has been applied at this checkpoint.
+- Reporting PR #553 is closed and superseded by #556. Its exact-head CI exposed an overly broad cleanup assertion and Windows checkout/test fixture assumptions; the author is repairing these offline with independent review. Real AWS environment-list reordering also requires strict semantic comparison of unique name/value entries before report readiness; order-sensitive arrays and frozen evidence must remain unchanged. No report deployment has occurred.
+
+What is verified:
+
+- Independent private proof `data/roy/order-automation/audits/2026-09-13/independent-deploy-fda36b49-20260913.json`, SHA `ada17707d7885aa68b684633f9e0ee9ef4695734fe2b53dc5649b4eec649fb50`, binds the complete final managed receipt SHA `40ba6e2debaf3286948cb248ce0538f9e236d91c7813a709f771e933e47a5c7c` at `data/roy/order-automation/deployments/fda36b49e7610d289d6dcb1d0affe892d1ba5ce7/a36ea17fb1664e709f1cd32d30b69808.json`.
+- All three actual Fargate hosts have unique task IDs/private IPs, `/app`, exact image, STOPPED exit 0 and one expected localhost marker each. ROY invoice :11 task `7f8f9dd56e8342228bc095375cce014b` / `172.31.18.111`; VEVO invoice :9 task `38b7f9d94ec64d0fb401be9b92a2291b` / `172.31.37.253`; ROY cancellation :42 task `ac184a7a9b7641e8a2554a51abbc43e7` / `172.31.28.24`. Cancellation stopped 09:59:09.136 UTC: 4,853 orders / 169 pages, 15 rechecked, zero eligible/recovery/review/failures/writes, no limit hit.
+- Both 120-second drains passed with zero unfinished tasks (09:18:59.671800 and 10:01:30.933162 UTC). Five schedules are enabled at the verified new pins; six IAM policies, 17 alarm configurations, three empty encrypted DLQs and both protected report pins ROY :71 / VEVO :33 match. No old/candidate tasks remained active at the final snapshot.
+- Earlier independent closure review passed 141 focused tests, seven actual release-gate adversarial cases and the real VEVO canonical-ID pipeline simulation. A second apply performs zero requests and preserves original financial fields. The final two-line pin still requires focused validation and own PR CI before apply.
+
+Known issues:
+
+- Two existing VEVO missing-completion/stale-full-scan alarms remain ALARM; fifteen other alarms were OK. Candidate dry success does not establish natural-run recovery or zero journal review/unknown counts. Natural runtime monitoring and VEVO all-age verification remain required.
+- Bank settlement provenance for 2602007943 is already recorded; compatible natural consumer evidence is pending. Native gateway callbacks can still overwrite a status before guarded repair; no vendor-side prevention was claimed. Standalone creditnote guard #552 and managed report #556 remain unmerged/undeployed.
+- No persistent local processes were started. Customer evidence remains private; no provider payment/receipt/refund/email was created by this checkpoint.
+
+Next exact step:
+
+- Validate and push the pinned helper on its own PR, require exact-head checks, then preview and apply once against the exact managed promotion receipt while the shared VEVO lease is free. Verify native status and preserved financial uncertainty, run VEVO five seeded cases plus all-age discovery, then complete the standalone guard and report migrations with their own host gates.
+
+## 2026-09-13 — Explicit ROY target release merged; new deployment freeze
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-paid-target-release-20260913`
+
+What changed:
+
+- Corrective PR #555 merged exact reviewed head `8569a6eb03cf039259b363b302a5d17f80fc7f0c` as `fda36b49e7610d289d6dcb1d0affe892d1ba5ce7`. All six checks on PR #555 itself passed. MAIN FREEZE is active on this new merge until independent promotion/restoration verification; no other branch may merge meanwhile.
+- PR #554 was closed after GitHub repeatedly failed its draft-to-ready operation. Replacement #555 used a new pushed branch at the identical reviewed commit. Ambiguous API responses were read back before retries; only one corrective PR was active for merge. The original three startup-failed workflows passed after one controlled rerun each; no global incident or billing cause was established.
+- Exact merged-source image build `34749045171` passed. Direct AWS account/ECR read binds the source to `sha256:29c0c8e4106438f204b0afaee097e90fab887a82e71327653e508a20574b90c0`. Managed order deployment `34749213122` was dispatched once against verified current main. Independent monitoring is assigned; actual candidate host gates and promotion remain pending.
+- New private receipt is `data/roy/order-automation/deployments/fda36b49e7610d289d6dcb1d0affe892d1ba5ce7/a36ea17fb1664e709f1cd32d30b69808.json`. Independent initial drain passed at 09:18:59.671800 UTC (120 seconds, zero unfinished). Actual ROY candidate task `7f8f9dd56e8342228bc095375cce014b`, IP `172.31.18.111`, service `roy-invoice-daily:11`, `/app`, Fargate instance N/A, exact `29c0c8e4...` image stopped at 09:35:44.112 UTC with exit 0 and exactly one expected full-backlog localhost marker. Direct summary: matched 0, created/failed/emailed/status-reconciliation-failed 0; 147 zero-total rows skipped. The previous duplicate-target failure did not recur. Intermediate one-host receipt SHA `4539477cfbfee089159c5505107226ef52c5e8c5a9c92affa8e3622ec2365a5b` is progress evidence, not promotion.
+- Actual VEVO candidate task `38b7f9d94ec64d0fb401be9b92a2291b`, IP `172.31.37.253`, service `vevo-invoice-daily:9`, `/app`, Fargate instance N/A, exact `29c0c8e4...` image stopped at 09:47:27.534 UTC with exit 0 and exactly one full-backlog localhost marker. Direct dry summary: matched 1, status-reconciliation candidates 1, reconciled/created/failed/emailed/status-reconciliation-failed 0 and 45 zero-total skipped. These are dry candidates, not live remediation. Durable pending/unknown/review journal counts are not printed and must not be inferred as zero. Intermediate two-host receipt SHA `7fda9a7fa9aca3f579a64da05758bf823491ecc963fd75aabf7f4cb8aece6e40` is progress evidence only.
+- Actual cancellation task `ac184a7a9b7641e8a2554a51abbc43e7`, IP `172.31.28.24`, service `roy-unpaid-order-cancellation:42`, `/app`, Fargate instance N/A, exact `29c0c8e4...` image is RUNNING as independently observed at 09:51:19 UTC. Its completion and final promotion remain pending; both protected reports are unchanged. Normal inventory code has no per-page INFO progress, so startup-only logs cannot distinguish progress from a stall. The shared scanner deadline is 1,200 seconds and host bound is 1,800 seconds; no extra provider reads were introduced for monitoring.
+
+What is verified:
+
+- Root worktree was fetched, pulled with rebase, fast-forwarded to the actual main merge and pushed on its codex branch. Repository/account identities match `vzeman/biznisweb` and AWS `919341186960`. Previously verified status catalogue/Stripe map and two zero-write live resolver checks still support explicit ROY target 67.
+- Independent one-shot closure review passes 141 focused tests plus seven actual release-gate adversarial checks and an unmodified VEVO canonical-ID pipeline simulation. ID4 Shipped and ID17 Cancelled bind correctly; one silent request and a second apply with zero requests preserve the sealed confirmation and original `prepare_ambiguous` financial projection. No blocker remains for the future two-line release pin after successful independent promotion; pins stay empty now. Reviewed helper SHA `8a472930009d8333caded5524ceac199f0f739f3a41224aebec90ff0cfbd3369` and tests SHA `90fb1b8062d65f8f0fe25ff929f5dada8fce85cd458b7f13298166951fe599e0`.
+- Root independently reviewed managed report source `c3afe118` (deployer, workflow, baseline identity and isolated report host probe). Two concrete pre-release blockers were handed to the author: hash verification alone must not accept semantically unverified primary/standalone receipts; uncertain role creation followed by an eventually consistent not-found response must retain reconciliation/cleanup ownership. A reproducible readiness producer and common consumer validator are being added. The subsequent scoped independent review passes 82 tests, including fifteen new regressions (test file SHA `16c98ffe65d3ab14287ad2c98c6ad1c2c1dd1d6f3d5da51cbc1dbc2c11ffaa51`), after correcting both original blockers, later cleanup visibility loss and contradictory independent-audit promotion fields. Final publisher checks, commit/push, exact fda36 branch integration and full suites remain with the author. This work remains offline, with no deployment or provider writes. The first baseline bootstrap must directly precede report promotion because older stopped-task metadata is not permanent AWS authority; future migration needs a fresh identity probe rather than relaxing this gate. Root additionally found that the readiness validator re-read all nine historical primary/standalone stopped tasks, which can expire already during the first migration. The author is correcting only this historical-evidence boundary: exact ECS MISSING may use the full hash-bound independent terminal/marker snapshot while current schedule/definition/ECR/GitHub checks stay fresh; read errors, partial responses and observed drift still fail. Fresh baseline and report-candidate gates remain unchanged. Official references: [ECS DescribeTasks](https://docs.aws.amazon.com/AmazonECS/latest/APIReference/API_DescribeTasks.html), [IAM propagation guidance](https://docs.aws.amazon.com/IAM/latest/UserGuide/troubleshoot.html).
+- Shared current-report binding is separately committed/pushed at `10f5260771867d4182f9f62eadd21c6f84a96ebb`; independent review and 105 focused / 899 build / 637 automation tests pass. It remains offline and must be integrated with the managed reporting identity probe/deployer. Standalone guard #552 and report correction #553 remain unmerged dependencies after this order deployment.
+
+Known issues:
+
+- Failed `b417` deployment was restored and is not a live release. Original order image `c3842dda...` remains the last independently verified production authority until the new transaction passes. Closure release pins remain empty; no closure was applied to user-confirmed returned/uncollected VEVO order 2502000712. Its original uncertain financial attempt must remain unchanged.
+- VEVO stale scan/missing completion and separate old reporting status-name handling remain unresolved. Manual bank provenance is recorded, but compatible-consumer runtime proof is still pending. No local persistent processes were started.
+- Separate dashboard audit (source-only, no fresh runtime probe): saved September 4 deployment evidence identifies VEVO App Runner `biznisweb-vevo-production-board`, `/app`, `python live_dashboard_server.py`. The unchanged `production_board.py` name-only paid filter drops current ID31 `Payment online - paid` in a synthetic same-ID test (1 order/2 units becomes 0/0). Its VEVO path reads orders only; this display defect does not block primary invoice deployment and needs its own App Runner correction. The shared server also exposes ROY-only manual pickup status POSTs via `roy_operations_dashboard.py`, with fresh limited read and no transient retry but without the shared automation lease/verified write readback. Do not claim every manual UI writer is covered by this automation release. Existing board pagination/retries/cache may contribute provider load, but no outage cause was established.
+
+Next exact step:
+
+- Independently verify run `34749213122`: exact source/digest, three actual host/IP/service/path and curl markers, drains, five promoted schedule pins or exact restoration, six IAM policies, seventeen alarm configurations, three queues and both protected report definitions. Only verified promotion permits pinning/applying the single noncollection closure and VEVO seeded/all-age verification. Keep main frozen until that result.
+
 ## 2026-09-13 - Guard definition comparison accepts only AWS environment ordering
 
 Date: 2026-09-13
@@ -193,6 +306,7 @@ Known issues:
 Next exact step:
 
 - After the invoice release and historical recovery finish, update the runtime handoff, run required PR checks, then build and execute the separate managed migration. The integrated full build regression passed all 662 tests before this merge commit. Main remains frozen for invoice deployment `34735770705`; this branch is preparation only. Verify all six host outcomes and exact two-report skip-flag delta, with private receipt readback. Never alter fixed report task/image/command pins as a shortcut.
+
 
 ## 2026-09-13 — Candidate rejected; original runtime restored; explicit ROY target correction
 
