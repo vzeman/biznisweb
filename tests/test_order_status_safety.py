@@ -35,7 +35,7 @@ def order(*, paid=False, receipts=None, shipments=None):
         "status": {"id": 69, "name": "Stripe - expired"},
         "sum": money(), "shipments": [] if shipments is None else shipments,
         "vat_summary": [{"tax_rate": 0, "tax_base": 100, "amount": 0}],
-        "invoices": [{"id": "invoice-1", "paid": paid, "sum": money(),
+        "invoices": [{"id": "order-1", "invoice_num": "invoice-1", "paid": paid, "sum": money(),
                       "payments": [] if receipts is None else receipts, "preinvoice": None}],
         "preinvoices": [],
     }
@@ -243,24 +243,24 @@ class CreditnoteCoverageTests(unittest.TestCase):
 
     def test_only_exact_full_credit_permits_whole_order_cancellation(self):
         value = order()
-        document = {"id": "credit-1", "invoice_id": "invoice-1", "amount": 100,
+        document = {"id": "credit-1", "invoice_number": "invoice-1", "order_id": "order-1", "order_num": "ORDER-1", "amount": 100,
                     "net_amount": 100, "currency": "EUR"}
         self.assertEqual("full_creditnote", creditnote_coverage_reason(value, [document]))
         self.assertEqual("partial_creditnote", creditnote_coverage_reason(value, [{**document, "amount": 10}]))
         self.assertEqual("creditnote_exceeds_current_order", creditnote_coverage_reason(value, [{**document, "amount": 110}]))
 
     def test_duplicate_wrong_invoice_currency_and_missing_amount_are_rejected(self):
-        document = {"id": "credit-1", "invoice_id": "invoice-1", "amount": 100, "currency": "EUR"}
+        document = {"id": "credit-1", "invoice_number": "invoice-1", "order_id": "order-1", "order_num": "ORDER-1", "amount": 100, "currency": "EUR"}
         for docs in (
-            [document, document], [{**document, "invoice_id": "unrelated"}],
+            [document, document], [{**document, "invoice_number": "unrelated"}],
             [{**document, "currency": "USD"}], [{**document, "amount": None}],
             [{**document, "amount": float("nan")}],
         ):
             self.assertNotEqual("full_creditnote", creditnote_coverage_reason(order(), docs))
 
     def test_split_partial_creditnotes_can_cover_whole_invoice_without_double_counting(self):
-        docs = [{"id": "a", "invoice_id": "invoice-1", "amount": 40, "currency": "EUR"},
-                {"id": "b", "invoice_id": "invoice-1", "amount": 60, "currency": "EUR"}]
+        docs = [{"id": "a", "invoice_number": "invoice-1", "order_id": "order-1", "order_num": "ORDER-1", "amount": 40, "currency": "EUR"},
+                {"id": "b", "invoice_number": "invoice-1", "order_id": "order-1", "order_num": "ORDER-1", "amount": 60, "currency": "EUR"}]
         self.assertEqual("full_creditnote", creditnote_coverage_reason(order(), docs))
 
     def test_inverted_net_flag_never_selects_net_credit_amount(self):
@@ -268,13 +268,13 @@ class CreditnoteCoverageTests(unittest.TestCase):
         value["sum"]["is_net_price"] = True
         value["sum"]["value"] = 123
         value["vat_summary"] = [{"tax_rate": 23, "tax_base": 100, "amount": 23}]
-        document = {"id": "credit-1", "invoice_id": "invoice-1", "amount": 123, "net_amount": 100, "currency": "EUR"}
+        document = {"id": "credit-1", "invoice_number": "invoice-1", "order_id": "order-1", "order_num": "ORDER-1", "amount": 123, "net_amount": 100, "currency": "EUR"}
         self.assertEqual("full_creditnote", creditnote_coverage_reason(value, [document]))
         self.assertEqual("partial_creditnote", creditnote_coverage_reason(value, [{**document, "amount": 100}]))
 
     def test_inconsistent_or_missing_vat_basis_prevents_cancellation(self):
         value = order()
-        document = {"id": "credit-1", "invoice_id": "invoice-1", "amount": 100, "net_amount": 80, "currency": "EUR"}
+        document = {"id": "credit-1", "invoice_number": "invoice-1", "order_id": "order-1", "order_num": "ORDER-1", "amount": 100, "net_amount": 80, "currency": "EUR"}
         value.pop("vat_summary")
         self.assertEqual("creditnote_order_tax_basis_unknown", creditnote_coverage_reason(value, [document]))
         value["vat_summary"] = [{"tax_rate": 23, "tax_base": 100, "amount": 23}]
@@ -285,7 +285,7 @@ class CreditnoteCoverageTests(unittest.TestCase):
     def test_tax_exempt_credit_can_match_with_explicit_empty_vat_summary(self):
         value = order()
         value["vat_summary"] = None
-        document = {"id": "credit-1", "invoice_id": "invoice-1", "amount": 100, "net_amount": 100, "currency": "EUR"}
+        document = {"id": "credit-1", "invoice_number": "invoice-1", "order_id": "order-1", "order_num": "ORDER-1", "amount": 100, "net_amount": 100, "currency": "EUR"}
         self.assertEqual("full_creditnote", creditnote_coverage_reason(value, [document]))
 
 

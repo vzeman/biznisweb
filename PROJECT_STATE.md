@@ -5,6 +5,33 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Native creditnote binding corrected; bank protection in parallel
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/native-creditnote-identity-20260913`
+
+What changed:
+
+- Real same-order samples from both shops prove that native creditnote `inv_id` is the final invoice number (`invoice_num`), while GraphQL `invoices[].id` is the parent-order association. Coverage previously rejected correctly linked creditnotes. Normalization now exposes `invoice_number` and both order identities explicitly; whole-order credit coverage requires the exact native/API order ID, order number and final invoice number. The former API-ID comparison has no fallback.
+- Amount, currency, VAT, duplicate-credit and full-versus-partial rules remain intact. Distinct final invoice numbers may share the same API parent alias; duplicate final numbers remain unsafe. Missing or cross-order native links cannot authorize Storno, even when a displayed invoice number collides.
+- The user clarified the gateway direction: ROY already uses Stripe; VEVO is migrating to Stripe. Older VEVO attempts are historical GoPay evidence. Separate manual bank settlement protection must be gateway-independent. The user-confirmed VEVO case is already restored to shipped with bank-transfer payment method, so no correction write is needed now.
+
+What is verified:
+
+- 655 tests in the exact three build commands pass (21 + 20 + 614), including 75 focused safety/creditnote tests; reporting smoke, Ruff and diff checks pass. Synthetic regression cases reproduce the native number/API parent-alias difference and prove that wrong order links, missing/duplicate final numbers and partial amounts cannot authorize whole-order cancellation.
+- Private actual contract evidence is encrypted and hash-verified in the canonical audit bucket: VEVO `data/vevo/order-automation/audits/2026-09-13/native-creditnote-invoice-key-contract-20260913.json`, SHA `523a2c2d5c7677f4e0889cdffed116e863865e814090c79207c7b904171dc70e`; ROY `data/roy/order-automation/audits/2026-09-13/native-creditnote-invoice-key-contract-roy-20260913.json`, SHA `4dc426ce8dacb3892dae2873e4bd1fe338d9a0d3d07f6c32b2072974c84b6b0b`. Existing amount/VAT rules classify the saved VEVO example as full and ROY as partial when the identity is corrected. Historical June Storno actions do not prove that those returns were complete; no historical order was changed.
+- Native GoPay settings inspection found no confirmed supported current-status/payment-method guard, per-order unlink or no-change mapping. Settings remain unchanged and the audit tabs are closed. All ten new status/GoPay/creditnote evidence receipts are durable privately; no payment, receipt or status mutation occurred. A supplier-side stale-event prevention fix remains distinct from AWS corrective automation.
+- Invoice release `34741354275` completed at main `47c3da775ff7018a1cf8950024c867310b91ae8a`, image `sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`. Independent terminal proof `data/roy/order-automation/audits/2026-09-13/independent-deploy-47c3da77-20260913.json`, SHA `5cb5500db1467854862dadd055b9ac222eb5f3fdfec4c5f657a04b41ced713aa`, verifies all three actual localhost probes/stopped exits, both drains, five enabled pins (ROY invoice :9, VEVO :8, cancellation :41), six policies and unchanged reports/alarms/routes. Final drain ended 06:22:46.089472 UTC, 120 seconds/zero unfinished tasks. Main freeze ended after 06:23:49 UTC independent signoff. Actual financial recovery remains unproven; first natural VEVO/ROY runs are due 06:30/06:35 UTC.
+
+Known issues:
+
+- This creditnote correction is not deployed. Independent review and exact-code offline replay of the private samples are next. Manual settlement implementation is isolated on `codex/manual-settlement-protection-20260913`; six-case invoice reconciliation and standalone guard migration also remain pending. No local dev server or background service was started.
+
+Next exact step:
+
+- Commit/push and independently review this bounded identity correction, including the two private samples, then integrate it with manual settlement protection before guarded status deployment. In parallel observe natural invoices; only after actual creation succeeds update the fixed six-case helper's release allowlist, review/apply the bounded reconciliation and verify the all-age backlog. Preserve historical uncertain sends and creation intents throughout.
+
 ## 2026-09-13 — Native identity and paused-deployment correction validated
 
 Date: 2026-09-13

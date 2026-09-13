@@ -365,7 +365,10 @@ def normalize_creditnote_automation_context(raw_rows: Iterable[Dict[str, Any]]) 
         numbered = bool(number)
         context.setdefault(order_num, []).append({
             "id": identity, "number": number, "amount": abs(amount) if numbered else None, "currency": currency,
-            "invoice_id": str(row.get("inv_id") or ""),
+            # The native creditnote grid's inv_id is the final invoice number.
+            # GraphQL invoices[].id is a parent-order association, not this key.
+            "invoice_number": str(row.get("inv_id") or ""),
+            "order_id": str(row.get("order_id") or ""), "order_num": order_num,
             "net_amount": abs(net_amount) if numbered and net_amount is not None else None,
             "numbered": numbered,
         })

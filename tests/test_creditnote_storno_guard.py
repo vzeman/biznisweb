@@ -18,6 +18,7 @@ def creditnote_row(number: str, order_num: str) -> dict:
         "inv_id": "invoice-" + order_num,
         "created": "2026-05-12 10:00:00",
         "order_num": order_num,
+        "order_id": order_num,
         "price": "10,00 €",
         "taxed_price": "12,30 €",
     }
@@ -32,7 +33,7 @@ def order_row(order_num: str, status_name: str) -> dict:
         "price_elements": [],
         "blocked": False, "sum": money(12.30),
         "vat_summary": [{"tax_rate": 23, "tax_base": 10, "amount": 2.30}],
-        "invoices": [{"id": "invoice-" + order_num}],
+        "invoices": [{"id": order_num, "invoice_num": "invoice-" + order_num}],
     }
 
 
