@@ -22,7 +22,7 @@ What is verified:
 
 Known issues:
 
-- Deployment `34735770705` failed its cancellation gate and restored the old schedules and state policies. The allowlisted `a97d974f` / `8d06b6c7...` image was never promoted, so apply remains blocked. The new merge's exact image build `34737947355` was pending at the incoming handoff; no successful promotion evidence for that release has been supplied to this helper branch.
+- Deployment `34735770705` failed its cancellation gate and restored the old schedules and state policies. The allowlisted `a97d974f` / `8d06b6c7...` image was never promoted, so apply remains blocked. The root task reports corrected release `34738085098` now active on exact `ccf25c79` / `sha256:e8e4830c19bfb0e166519d412cfa1e3e8c690f042a6cbc72a88e52369ccdecc5`; main is frozen until independently verified promotion or restoration. An active deployment does not authorize an allowlist update or either helper apply action.
 
 Next exact step:
 
