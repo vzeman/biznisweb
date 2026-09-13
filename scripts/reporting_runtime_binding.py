@@ -12,10 +12,12 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import ipaddress
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
 import sys
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = json.loads((ROOT / "projects/vevo/reporting_runtime_policy.json").read_text(encoding="utf-8"))
@@ -259,12 +261,34 @@ def build_promotion_record(previous_binding, schedule, task_definition, *, relea
                            workflow_run_id, build_run_id, protected_sha256, candidate_proof, verified_at, candidate_task_definition):
     validate_record(previous_binding["record"])
     require(previous_binding["record_sha256"] == sha256(previous_binding["record"]), "runtime-predecessor-hash")
+    require(previous_binding["record"]["workflow_run_id"] != workflow_run_id, "runtime-promotion-requires-separate-run")
     require(image == task_definition["containerDefinitions"][0]["image"], "runtime-requested-image-drift")
+    validate_production_transition(previous_binding["record"], schedule_snapshot(schedule), definition_snapshot(task_definition))
     return _record(schedule, task_definition, release_id=release_id, source_commit=source_commit,
                    image_digest=image.rsplit("@", 1)[-1], workflow_run_id=workflow_run_id, build_run_id=build_run_id,
                    protected_sha256=protected_sha256, candidate_proof=candidate_proof, verified_at=verified_at,
                    phase="promotion-readback-verified", predecessor_sha256=previous_binding["record_sha256"],
                    candidate_task_definition=definition_snapshot(candidate_task_definition))
+
+
+def validate_production_transition(previous, schedule, definition):
+    """A migration cannot silently change inherited credentials or privileges."""
+    expected = copy.deepcopy(previous["task_definition"])
+    expected["taskDefinitionArn"] = definition["taskDefinitionArn"]
+    old_container, new_container = expected["containerDefinitions"][0], definition["containerDefinitions"][0]
+    old_container["image"] = new_container["image"]
+    if new_container.get("workingDirectory") == "/app":
+        old_container["workingDirectory"] = "/app"
+    if new_container.get("command") == ["python", "daily_report_runner.py"]:
+        old_container["command"] = new_container["command"]
+    env = unique_environment(old_container.get("environment", []))
+    env.update(REPORT_SKIP_INVOICES="true", REPORT_SKIP_CREDITNOTE_STORNO_GUARD="true")
+    require(unique_environment(new_container.get("environment", [])) == env, "runtime-production-environment-drift")
+    old_container["environment"] = new_container["environment"]
+    require(definition == expected, "runtime-production-unreviewed-difference")
+    expected_schedule = copy.deepcopy(previous["schedule"])
+    expected_schedule["Target"]["EcsParameters"]["TaskDefinitionArn"] = definition["taskDefinitionArn"]
+    require(schedule == expected_schedule, "runtime-production-schedule-drift")
 
 
 def _record(schedule, definition, **fields):
@@ -348,9 +372,9 @@ def write_object(s3, key, value, *, etag=None):
 
 
 def validate_lock(value):
-    exact_keys(value, {"schema_version", "owner", "state", "updated_at", "expires_at"}, "runtime-lock-schema")
+    exact_keys(value, {"schema_version", "owner", "state", "updated_at", "expires_at", "generation"}, "runtime-lock-schema")
     require(type(value["schema_version"]) is int and value["schema_version"] == 1 and isinstance(value["owner"], str) and value["owner"]
-            and value["state"] in {"active", "released", "uncertain"}, "runtime-lock-identity")
+            and value["state"] in {"active", "released", "uncertain"} and hex_value(value["generation"], 32), "runtime-lock-identity")
     require(stamp(value["expires_at"]) > stamp(value["updated_at"]), "runtime-lock-time")
 
 
@@ -374,12 +398,23 @@ class MigrationLease:
     def __init__(self, s3, *, owner, now=None):
         require(isinstance(owner, str) and re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{7,95}", owner), "runtime-lease-owner")
         self.s3, self.owner, self.now, self.etag = s3, owner, now or now_utc, None
+        self.pending_value = None
 
     def _write(self, state, previous):
         now = self.now()
         value = {"schema_version": 1, "owner": self.owner, "state": state, "updated_at": now.isoformat(),
-                 "expires_at": (now + timedelta(minutes=20)).isoformat()}
-        self.etag = write_object(self.s3, LOCK_KEY, value, etag=previous)
+                 "expires_at": (now + timedelta(minutes=20)).isoformat(), "generation": uuid.uuid4().hex}
+        self.pending_value = value
+        try:
+            self.etag = write_object(self.s3, LOCK_KEY, value, etag=previous)
+        except Exception:
+            # A PUT can commit before its response is lost. Read once; never
+            # replay it or assume that a newer foreign generation is ours.
+            observed = read_object(self.s3, LOCK_KEY, optional=True)
+            if observed is None or observed[0] != value or observed[1] == previous:
+                raise
+            self.etag = observed[1]
+        self.pending_value = None
 
     def acquire(self):
         require_private_bucket(self.s3)
@@ -398,6 +433,9 @@ class MigrationLease:
     def retain_uncertain(self):
         # This may also fail; the existing active/stale lock still blocks readers.
         found = read_object(self.s3, LOCK_KEY)
+        if self.pending_value is not None and found[0] == self.pending_value:
+            self.etag = found[1]
+            self.pending_value = None
         require(found[1] == self.etag and found[0]["owner"] == self.owner, "runtime-lease-lost")
         self._write("uncertain", self.etag)
 
@@ -406,6 +444,7 @@ def load_current_binding(s3, *, lease=None):
     require_private_bucket(s3)
     lock_etag = check_migration(s3, lease=lease)
     pointer, etag = read_object(s3, CURRENT_KEY)
+    require(lock_etag is not None, "runtime-established-migration-record-missing")
     exact_keys(pointer, {"schema_version", "record_key", "record_sha256"}, "runtime-pointer-schema")
     require(type(pointer["schema_version"]) is int and pointer["schema_version"] == 1 and hex_value(pointer["record_sha256"])
             and pointer["record_key"] == PREFIX + "releases/" + pointer["record_sha256"] + ".json", "runtime-pointer-identity")
@@ -414,7 +453,8 @@ def load_current_binding(s3, *, lease=None):
     require(record["phase"] in {"baseline-readback-verified", "promotion-readback-verified"}, "runtime-current-record-phase")
     require(sha256(record) == pointer["record_sha256"], "runtime-record-hash")
     require(read_object(s3, CURRENT_KEY) == (pointer, etag) and check_migration(s3, lease=lease) == lock_etag, "runtime-authority-changed")
-    return {"record": record, "record_key": pointer["record_key"], "record_sha256": pointer["record_sha256"], "pointer_etag": etag}
+    return {"record": record, "record_key": pointer["record_key"], "record_sha256": pointer["record_sha256"],
+            "pointer_etag": etag, "migration_etag": lock_etag}
 
 
 def publish_verified_binding(s3, record, *, expected_pointer_etag, lease):
@@ -429,6 +469,8 @@ def publish_verified_binding(s3, record, *, expected_pointer_etag, lease):
     if prior:
         previous = load_current_binding(s3, lease=lease)
         require(record["predecessor_sha256"] == previous["record_sha256"], "runtime-publish-predecessor")
+        require(record["workflow_run_id"] != previous["record"]["workflow_run_id"], "runtime-publish-requires-separate-run")
+        validate_production_transition(previous["record"], record["schedule"], record["task_definition"])
     else:
         require(record["phase"] == "baseline-readback-verified" and record["predecessor_sha256"] is None, "runtime-bootstrap-required")
     digest = sha256(record)
@@ -482,7 +524,7 @@ def verify_current_runtime(s3, scheduler, ecs):
     return binding
 
 
-def verify_managed_provenance(binding, *, fetch_run=None):
+def verify_managed_provenance(binding, *, fetch_run=None, require_completed=True):
     """Use independent GitHub metadata, never a receipt's claimed conclusion."""
     if fetch_run is None:
         def fetch_run(run_id):
@@ -491,11 +533,16 @@ def verify_managed_provenance(binding, *, fetch_run=None):
             return decode_json(result.stdout)
     record = binding["record"]
     run = fetch_run(record["workflow_run_id"])
+    own_running = (not require_completed and os.environ.get("GITHUB_ACTIONS") == "true"
+                   and os.environ.get("GITHUB_REF") == "refs/heads/main"
+                   and os.environ.get("GITHUB_RUN_ID") == record["workflow_run_id"]
+                   and os.environ.get("GITHUB_SHA") == run.get("head_sha")
+                   and os.environ.get("GITHUB_WORKFLOW_REF") == "vzeman/biznisweb/.github/workflows/deploy-vevo-report.yml@refs/heads/main")
     require(str(run.get("id")) == record["workflow_run_id"] and run.get("head_branch") == "main"
             and run.get("repository", {}).get("full_name") == "vzeman/biznisweb"
             and run.get("path") == ".github/workflows/deploy-vevo-report.yml"
             and run.get("event") == "workflow_dispatch"
-            and (run.get("status") == "in_progress" and run.get("conclusion") is None
+            and (own_running and run.get("status") == "in_progress" and run.get("conclusion") is None
                  or run.get("status") == "completed" and run.get("conclusion") == "success"), "runtime-managed-run-unverified")
     if record["phase"] == "promotion-readback-verified":
         require(run.get("head_sha") == record["source_commit"], "runtime-managed-source-drift")
@@ -505,6 +552,14 @@ def verify_managed_provenance(binding, *, fetch_run=None):
                 and build.get("head_branch") == "main" and build.get("repository", {}).get("full_name") == "vzeman/biznisweb"
                 and build.get("path") == ".github/workflows/build-and-push-ecr.yml"
                 and build.get("status") == "completed" and build.get("conclusion") == "success", "runtime-build-unverified")
+
+
+def build_baseline_probe_command(source_text, runner_sha256, image_digest):
+    require(isinstance(source_text, str) and source_text and hex_value(runner_sha256)
+            and re.fullmatch(r"sha256:[a-f0-9]{64}", image_digest), "runtime-baseline-probe-input")
+    filename = "/app/scripts/reporting_identity_probe.py"
+    invocation = f"exec(compile({source_text!r}, {filename!r}, 'exec'), {{'__name__': '__main__', '__file__': {filename!r}}})"
+    return ["python", "-c", invocation, "--runner-sha256", runner_sha256, "--image-digest", image_digest]
 
 
 def main(argv=None):

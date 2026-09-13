@@ -5,7 +5,7 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
-## 2026-09-13 — Current report authority implemented for independent review
+## 2026-09-13 — Current report authority passed independent offline review
 
 Date: 2026-09-13
 Repo: `vzeman/biznisweb`
@@ -18,20 +18,21 @@ What changed:
 - Replaced five live workflow revision-suffix checks with the shared full runtime gate at entry and before publication. It independently checks actual AWS configuration, managed GitHub run/build provenance, image digest and unchanged pointer/lease. New health schema 3 binds current authority separately; historical schemas 1/2, frozen activation/reconciliation files, exact validators and fixed quality-source capture behavior remain unchanged.
 - Rollback writes separate immutable audit evidence and restores the exact previous successful current pointer using CAS. A failed deployment's rollback receipt never becomes current authority. No `latest` tag, missing-pointer fallback, expired-lease takeover, financial retry or historical evidence rewrite was added.
 - Corrected the design using the published native Stripe map: paid 31, cancelled 34, expired 33, refunded 73, unpaid 69; unused 70 is not a release blocker. Current primary b417 failure is not authority for any downstream release.
+- Closed the independent review findings: baseline authority now requires the exact reviewed injected identity command, pinned historical runner hash and a unique verified localhost marker from complete logs; bootstrap and promotion require separate runs; external consumers require completed-success provenance. The returned migration generation detects a capture spanning an acquire/release even with no pointer change. Lost release acknowledgements reconcile one exact owner generation without replay or foreign takeover. Publication independently rejects predecessor role/resource/credential/scheduler drift.
 
 What is verified:
 
-- Ninety focused tests pass: 25 new binding/bootstrap/rollback/health/workflow regressions plus the existing health and five workflow suites. Scoped Ruff, `git diff --check` and `scripts/security_ci.py` pass. All five workflows' inline Python blocks compile. Shared tests are explicitly included in both existing regression workflows.
+- Independent source review found no remaining shared-code blocker. All 105 focused tests, 899 build-workflow tests and 637 automation-workflow tests pass. Reporting smoke, scoped Ruff, `git diff --check` and `scripts/security_ci.py` pass. All five workflows' inline Python blocks compile. The 13 independent failure-boundary regressions are explicitly included in both existing workflows; their file SHA256 is `1670e431cc89beb36465800bb8aa773c365eb2e5640980d094f6f3385a5a9210`.
 - No AWS/provider calls, infrastructure/business mutations, PR/main merge or persistent local process occurred. All work remains offline, on the correctly tracked isolated branch; root's main freeze is respected.
 
 Known issues:
 
-- This is a checkpoint for independent review, not a release. The mandatory current baseline must be bootstrapped before the five switched consumers run; absent authority intentionally blocks them. Integrate with the reviewed managed workflow so bootstrap executes first, and preserve old live consumers until that transition is ready.
+- This is shared-code signoff, not a release or managed-deployer signoff. The separately authored `scripts/reporting_identity_probe.py` is a mandatory bootstrap dependency and must be integrated and reviewed before execution. A separate successful baseline bootstrap must precede promotion and the five switched consumers; absent authority intentionally blocks them. Preserve old live consumers until that transition is ready.
 - A successful compatible primary order release, verified standalone guards and the reporting correction remain deployment prerequisites. No current pointer, migration lease or candidate has been created in AWS from this branch.
 
 Next exact step:
 
-- Commit/push this bounded checkpoint and hand its source to guard_review for independent schema/CAS/lease/rollback/workflow review. Coordinate only concrete corrections with the separate deployer author, then run the final combined regression collection. Do not merge main or execute bootstrap/deployment here.
+- Push the reviewed shared correction and hand its exact source to the separate managed deployer author. Integrate the exact identity probe, complete that deployer's transaction/protected-scope tests and obtain its independent review. Only root may coordinate the later bootstrap/consumer switch after successful primary release and standalone-guard prerequisites. Do not merge main or execute bootstrap/deployment here.
 
 ## 2026-09-13 — VEVO report migration architecture prepared offline
 
