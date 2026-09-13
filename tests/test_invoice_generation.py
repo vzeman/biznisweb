@@ -13,6 +13,7 @@ from unittest.mock import patch
 import daily_report_runner as daily_runner
 from daily_report_runner import maybe_run_invoice_automation, parse_args as parse_daily_report_args
 from generate_invoices import (
+    InvoiceCreationResult,
     InvoiceGenerator,
     InvoiceRunSummary,
     PREINVOICE_ORDER_MUTATION,
@@ -55,10 +56,16 @@ class _FakeInvoiceWebSession:
     def __init__(self) -> None:
         self.post_urls: list[str] = []
         self.get_urls: list[str] = []
+        self.api = None
 
     def post(self, url: str, headers: dict | None = None, **kwargs) -> _FakeInvoiceResponse:
         self.post_urls.append(url)
-        raise AssertionError("Invoice flow must not POST to the native web endpoints")
+        if not url.endswith("/erp/orders/invoices/getListJson") or kwargs["data"]["find"] != "o#1001":
+            raise AssertionError("Unexpected native write or lookup")
+        invoices = self.api.invoices if self.api and self.api.calls > 2 else []
+        return _FakeInvoiceResponse(url, {"total": "1", "rows": [{
+            "order_id": "501", "order_num": "1001", "pre_inv_id": "9001001",
+            "inv_id": invoices[0]["invoice_num"] if invoices else ""}]})
 
     def get(self, url: str, headers: dict | None = None, **kwargs) -> _FakeInvoiceResponse:
         self.get_urls.append(url)
@@ -550,6 +557,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         )
         generator.web_session = _FakeInvoiceWebSession()
         generator.client = _FakeInvoiceClient([{"id": "INV-123", "invoice_num": "FV-123"}])
+        generator.web_session.api = generator.client
         generator.arf_token = "arf123"
 
         result = generator.create_invoice(
@@ -566,10 +574,10 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertTrue(result.created)
         self.assertEqual("INV-123", result.invoice_id)
         self.assertTrue(result.email_sent)
-        self.assertEqual(["https://example.com/erp/orders/invoices/finalize/701?arf=arf123",
+        self.assertEqual(["https://example.com/erp/orders/invoices/finalize/9001001?arf=arf123",
                           "https://example.com/erp/orders/invoices/sendEmail/501?arf=arf123"],
                          generator.web_session.get_urls)
-        self.assertEqual([], generator.web_session.post_urls)
+        self.assertEqual(["https://example.com/erp/orders/invoices/getListJson"] * 3, generator.web_session.post_urls)
 
     @patch("time.sleep", return_value=None)
     def test_create_invoice_requires_verified_invoice_after_finalization(self, _sleep_mock) -> None:
@@ -581,6 +589,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         )
         generator.web_session = _FakeInvoiceWebSession()
         generator.client = _FakeInvoiceClient([])
+        generator.web_session.api = generator.client
         generator.arf_token = "arf123"
 
         result = generator.create_invoice(
@@ -733,6 +742,27 @@ class InvoiceWebFake(_FakeInvoiceWebSession):
         self.finalize_timeout_after_commit = False
         self.get_kwargs = []
         self.native_success = True
+        self.native_rows = {}
+        self.post_kwargs = []
+        self.final_api_id = "fixture-invoice"
+
+    def native_row(self, row):
+        return self.native_rows.setdefault(row["order_num"], {
+            "order_id": str(row["id"]), "order_num": row["order_num"],
+            "pre_inv_id": str(900000 + int(row["id"])),
+            "inv_id": row["invoices"][0].get("invoice_num", "") if row["invoices"] else ""})
+
+    def post(self, url, headers=None, **kwargs):
+        self.post_urls.append(url)
+        self.post_kwargs.append(deepcopy(kwargs))
+        if not url.endswith("/erp/orders/invoices/getListJson"):
+            raise AssertionError("Unexpected native POST mutation")
+        data = kwargs["data"]
+        if set(data) != {"find", "start", "limit", "arf"} or data["start"] != 0 or data["limit"] != 20 or not data["arf"]:
+            raise AssertionError("Native lookup form differs")
+        rows = [self.native_row(row) for row in [self.api.order] + self.api.extra_orders
+                if data["find"] == "o#" + row["order_num"]]
+        return _FakeInvoiceResponse(url, {"total": str(len(rows)), "rows": deepcopy(rows)})
 
     def get(self, url, headers=None, **kwargs):
         self.get_urls.append(url)
@@ -742,8 +772,9 @@ class InvoiceWebFake(_FakeInvoiceWebSession):
                 return _FakeInvoiceResponse(url, {"success": False}, 429)
             preinvoice_id = url.split("/finalize/", 1)[1].split("?", 1)[0]
             row = next(row for row in [self.api.order] + self.api.extra_orders
-                       if any(str(pre["id"]) == preinvoice_id for pre in row.get("preinvoices") or []))
-            row["invoices"] = [{"id": "fixture-invoice", "invoice_num": "fixture-number"}]
+                       if self.native_row(row)["pre_inv_id"] == preinvoice_id)
+            row["invoices"] = [{"id": self.final_api_id, "invoice_num": "fixture-number"}]
+            self.native_row(row)["inv_id"] = "fixture-number"
             if self.finalize_timeout_after_commit:
                 raise TimeoutError("simulated response loss after commit")
             return _FakeInvoiceResponse(url, {"success": self.native_success})
@@ -807,6 +838,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
         self.generator.client = self.api
         self.web = InvoiceWebFake(self.api)
         self.generator.web_session = self.web
+        self.generator.arf_token = "arf123"
         self.generator.validate_session = lambda: True
         self.settings = {"invoice_generation": {
             "enabled": True, "lookback_days": 90, "all_age_backlog_enabled": True,
@@ -1059,11 +1091,199 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
         self.order.update(id="501", order_num="public-order-9001", preinvoices=[{"id": "702"}])
         result = self.run_fixture()
         self.assertEqual(1, result.created_invoices)
-        self.assertEqual(["https://example.test/erp/orders/invoices/finalize/702",
-                          "https://example.test/erp/orders/invoices/sendEmail/501"], self.web.get_urls)
-        self.assertEqual([], self.web.post_urls)
+        self.assertEqual(["https://example.test/erp/orders/invoices/finalize/900501?arf=arf123",
+                          "https://example.test/erp/orders/invoices/sendEmail/501?arf=arf123"], self.web.get_urls)
+        self.assertEqual(["https://example.test/erp/orders/invoices/getListJson"] * 3, self.web.post_urls)
+        self.assertTrue(all(call["data"] == {"find": "o#public-order-9001", "start": 0, "limit": 20, "arf": "arf123"}
+                            for call in self.web.post_kwargs))
         self.assertTrue(all(kwargs == {"allow_redirects": False} for kwargs in self.web.get_kwargs))
         self.assertEqual([], self.api.preparation_calls)
+
+    def test_native_key_is_separate_from_api_order_alias_and_unrelated_final_number(self):
+        self.order["preinvoices"] = [{"id": self.order["id"]}]
+        self.web.final_api_id = self.order["id"]
+        target_key = self.web.native_row(self.order)["pre_inv_id"]
+        unrelated = invoice_order("unrelated", id="2", invoices=[{"id": "2", "invoice_num": target_key}])
+        self.api.extra_orders = [unrelated]
+        self.web.native_row(unrelated)
+        unchanged = deepcopy(unrelated)
+        original_get = self.web.get
+
+        def inspect_intent(url, *args, **kwargs):
+            if "/finalize/" in url:
+                record = self.store.read()[0]["orders"]["fixture-order"]
+                self.assertEqual("creating", record["phase"])
+                self.assertEqual(self.order["id"], record["preinvoice_id"])
+                self.assertEqual(target_key, record["native_preinvoice_key"])
+            return original_get(url, *args, **kwargs)
+
+        with patch.object(self.web, "get", side_effect=inspect_intent):
+            result = self.run_fixture()
+        self.assertEqual(1, result.created_invoices)
+        self.assertEqual(unchanged, unrelated)
+        self.assertNotEqual(self.order["id"], target_key)
+        self.assertIn(f"/finalize/{target_key}?", self.web.get_urls[0])
+        self.assertEqual(self.order["id"], self.order["invoices"][0]["id"])
+
+    def test_native_lookup_rejects_incomplete_ambiguous_or_wrong_order_rows_before_intent(self):
+        row = deepcopy(self.web.native_row(self.order))
+        payloads = [{"total": total, "rows": [row]} for total in (0, "0", "01", True, 1.0, "2", None)]
+        payloads += [{"total": "1", "rows": rows} for rows in (None, {}, [], [row, row])]
+        payloads += [{"total": "1", "rows": [{**row, **change}]} for change in (
+            {"order_id": "999"}, {"order_num": "unrelated"}, {"pre_inv_id": None},
+            {"pre_inv_id": ""}, {"pre_inv_id": True}, {"inv_id": None}, {"inv_id": "already-final"})]
+        payloads += [{"total": "1", "rows": [row], "success": value} for value in (False, 1, "yes")]
+        for field in ("order_id", "order_num", "pre_inv_id", "inv_id"):
+            missing = deepcopy(row)
+            missing.pop(field)
+            payloads.append({"total": "1", "rows": [missing]})
+        for payload in payloads:
+            with self.subTest(payload=payload), patch.object(
+                self.web, "post", return_value=_FakeInvoiceResponse("fixture", payload)
+            ) as post:
+                self.assertFalse(self.generator.create_invoice(self.order).created)
+                post.assert_called_once()
+        self.assertEqual([], self.web.get_urls)
+        self.assertEqual([], self.api.preparation_calls)
+
+    def test_native_lookup_wire_errors_are_bounded_safe_and_never_retried(self):
+        for status, body in ((302, "redirect"), (429, "private-fixture"), (200, "<html>private-fixture</html>"),
+                             (200, '{"total":1,"total":1,"rows":[]}'),
+                             (200, "{message:'" + "a" * 65536 + "'}")):
+            response = _FakeInvoiceResponse("fixture", {}, status)
+            response.text = body
+            with self.subTest(status=status, body_length=len(body)), patch.object(self.web, "post", return_value=response) as post:
+                with self.store.lease("test") as journal:
+                    self.generator.operation_journal = journal
+                    result = self.generator.create_invoice(self.order)
+                    record = journal.get_order("fixture-order")
+                self.assertFalse(result.created)
+                self.assertEqual("native_invoice_context_unverified", record["last_creation_failure"]["kind"])
+                self.assertNotIn("private-fixture", json.dumps(record))
+                post.assert_called_once()
+        self.assertEqual([], self.web.get_urls)
+
+    def test_missing_or_invalid_native_token_blocks_even_preparation(self):
+        self.order["preinvoices"] = []
+        for token in (None, "", True, 123, "contains-space ", "a" * 129):
+            with self.subTest(token=token):
+                self.generator.arf_token = token
+                self.assertFalse(self.generator.create_invoice(self.order).created)
+        self.assertEqual([], self.api.preparation_calls)
+        self.assertEqual([], self.web.post_urls)
+        self.assertEqual([], self.web.get_urls)
+
+    def test_pending_email_without_token_is_failed_before_intent_and_ambiguous_email_stays_held(self):
+        self.generator.arf_token = None
+        self.order["invoices"] = [{"id": "fixture-invoice", "invoice_num": "fixture-number"}]
+        with self.store.lease("test") as journal:
+            self.generator.operation_journal = journal
+            journal.update_order("fixture-order", phase="email", email_state="pending",
+                                 invoice_id="fixture-invoice", invoice_num="fixture-number")
+            with patch.object(journal, "update_order", wraps=journal.update_order) as update:
+                results = self.generator.retry_pending_invoice_emails()
+            self.assertEqual("failed", results[0].email_error)
+            self.assertFalse(results[0].ambiguous)
+            self.assertEqual("failed", journal.get_order("fixture-order")["email_state"])
+            self.assertFalse(any(call.kwargs.get("email_state") == "sending" for call in update.call_args_list))
+            journal.update_order("fixture-order", email_state="ambiguous")
+            original = deepcopy(journal.get_order("fixture-order"))
+            results = self.generator.retry_pending_invoice_emails()
+            self.assertTrue(results[0].ambiguous)
+            self.assertEqual(original, journal.get_order("fixture-order"))
+        self.assertEqual([], self.web.get_urls)
+        self.assertEqual([], self.web.post_urls)
+
+    def test_direct_email_send_requires_token_without_classifying_no_request_as_uncertain(self):
+        for token in (None, "", True, "invalid token"):
+            self.generator.arf_token = token
+            self.assertFalse(self.generator.send_invoice_email("1"))
+            self.assertEqual("failed", self.generator.last_email_outcome)
+        self.assertEqual([], self.web.get_urls)
+
+    def test_direct_journaled_email_preserves_consumed_states_before_token_or_hold_checks(self):
+        self.order["invoices"] = [{"id": "fixture-invoice", "invoice_num": "fixture-number"}]
+        for state in ("sending", "ambiguous", "sent"):
+            for policy in ("send", "hold"):
+                with self.subTest(state=state, policy=policy), self.store.lease("test") as journal:
+                    self.generator.operation_journal = journal
+                    journal.update_order("fixture-order", phase="email", email_state=state, email_policy=policy,
+                                         invoice_id="fixture-invoice", invoice_num="fixture-number")
+                    original = deepcopy(journal.get_order("fixture-order"))
+                    with patch.object(journal, "update_order", wraps=journal.update_order) as update:
+                        for token in (None, "arf123"):
+                            self.generator.arf_token = token
+                            result = InvoiceCreationResult(email_required=True, invoice_id="fixture-invoice",
+                                                           invoice_num="fixture-number")
+                            self.generator._send_journaled_email("fixture-order", result)
+                            self.assertEqual(state == "sent", result.email_sent)
+                            self.assertEqual(state != "sent", result.ambiguous)
+                            self.assertEqual("" if state == "sent" else "ambiguous", result.email_error)
+                        retried = self.generator.retry_pending_invoice_emails()
+                        self.assertEqual(state == "sent", retried[0].email_sent)
+                        update.assert_not_called()
+                    self.assertEqual(original, journal.get_order("fixture-order"))
+        self.assertEqual([], self.api.calls)
+        self.assertEqual([], self.web.get_urls)
+        self.assertEqual([], self.web.post_urls)
+
+    def test_native_binding_change_on_final_recheck_blocks_financial_request(self):
+        row = deepcopy(self.web.native_row(self.order))
+        for change in ({"pre_inv_id": "888888"}, {"order_id": "999"}, {"inv_id": "already-final"}):
+            replies = [_FakeInvoiceResponse("fixture", {"total": "1", "rows": [row]}),
+                       _FakeInvoiceResponse("fixture", {"total": "1", "rows": [{**row, **change}]})]
+            with self.subTest(change=change), patch.object(self.web, "post", side_effect=replies) as post:
+                self.assertFalse(self.generator.create_invoice(self.order).created)
+                self.assertEqual(2, post.call_count)
+        self.assertEqual([], self.web.get_urls)
+
+    def test_native_api_final_mismatch_preserves_uncertainty_and_never_sends_email(self):
+        self.order["preinvoices"] = [{"id": self.order["id"]}]
+        self.web.final_api_id = self.order["id"]
+        original_get = self.web.get
+
+        def wrong_native_final(url, *args, **kwargs):
+            result = original_get(url, *args, **kwargs)
+            self.web.native_row(self.order)["inv_id"] = "unrelated-final-number"
+            return result
+
+        with patch.object(self.web, "get", side_effect=wrong_native_final):
+            first = self.run_fixture()
+            second = self.run_fixture()
+        self.assertEqual(1, first.ambiguous_invoice_operations)
+        self.assertEqual(1, second.ambiguous_invoice_operations)
+        self.assertEqual(1, sum("/finalize/" in url for url in self.web.get_urls))
+        self.assertEqual(0, sum("/sendEmail/" in url for url in self.web.get_urls))
+        self.assertEqual("create_ambiguous", self.store.read()[0]["orders"]["fixture-order"]["phase"])
+
+    def test_native_final_without_api_readback_overrides_explicit_rejection_to_uncertainty(self):
+        original_get = self.web.get
+
+        def committed_but_api_lagging(url, *args, **kwargs):
+            original_get(url, *args, **kwargs)
+            self.order["invoices"] = []
+            return _FakeInvoiceResponse(url, {"success": False})
+
+        with patch.object(self.web, "get", side_effect=committed_but_api_lagging):
+            first = self.run_fixture()
+            second = self.run_fixture()
+        self.assertEqual(1, first.ambiguous_invoice_operations)
+        self.assertEqual(1, second.ambiguous_invoice_operations)
+        self.assertEqual(1, len(self.web.get_urls))
+        self.assertEqual("create_ambiguous", self.store.read()[0]["orders"]["fixture-order"]["phase"])
+
+    def test_changed_api_final_number_before_email_is_not_hidden_by_order_alias_id(self):
+        original_send = self.generator._send_journaled_email
+
+        def changed_number(number, result):
+            self.order["invoices"][0]["invoice_num"] = "different-final-number"
+            return original_send(number, result)
+
+        with patch.object(self.generator, "_send_journaled_email", side_effect=changed_number):
+            result = self.run_fixture()
+        self.assertEqual(1, result.created_invoices)
+        self.assertEqual(0, result.emailed_invoices)
+        self.assertEqual(0, sum("/sendEmail/" in url for url in self.web.get_urls))
 
     def test_native_literal_string_true_confirms_finalization_and_email(self):
         self.web.native_success = "true"
