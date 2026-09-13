@@ -19,19 +19,21 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: vevo-growthbook-production-aa-infra-health
   cancel-in-progress: false
 
 env:
+  CURRENT_REPORT_BINDING_FILE: ''
+  GH_TOKEN: ${{ github.token }}
   AWS_REGION: eu-central-1
   EXPECTED_ACCOUNT_ID: '919341186960'
   COLLECTOR_STACK: vevo-growthbook-production
   RECONCILIATION_STACK: vevo-growthbook-reconciliation-production
   EXPECTED_SERVICE: vevo-growthbook-reconcile-production
   EXPECTED_SOURCE_SCHEDULE: vevo-daily-report-email
-  EXPECTED_SOURCE_TASK_DEFINITION: vevo-reporting-daily:33
   EXPECTED_DATABASE: vevo_growthbook_production
   EXPECTED_WORKGROUP: vevo-growthbook-reporting-production
   EXPECTED_RUNTIME_PATH: /app
@@ -161,6 +163,15 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Verify independent current reporting runtime binding
+        if: ${{ env.RUN_INFRA_HEALTH == 'true' }}
+        run: |
+          set -euo pipefail
+          CURRENT_REPORT_BINDING_FILE="${RUNNER_TEMP}/vevo-current-reporting-${GITHUB_RUN_ID}.json"
+          echo "CURRENT_REPORT_BINDING_FILE=${CURRENT_REPORT_BINDING_FILE}" >> "${GITHUB_ENV}"
+          python -m pip install -r requirements-runtime-control.txt
+          python scripts/reporting_runtime_binding.py --output "${CURRENT_REPORT_BINDING_FILE}"
+
       - name: Read exact stacks schedules task definition alarms and DLQ
         if: ${{ env.RUN_INFRA_HEALTH == 'true' }}
         run: |
@@ -184,6 +195,9 @@ jobs:
           reconciliation = json.load(open(root / 'reconciliation-stack.json', encoding='utf-8'))['Stacks'][0]
           schedule = json.load(open(root / 'schedule.json', encoding='utf-8'))
           source = json.load(open(root / 'source-schedule.json', encoding='utf-8'))
+          from scripts.reporting_runtime_binding import validate_runtime
+          current_binding = json.loads(Path(os.environ['CURRENT_REPORT_BINDING_FILE']).read_text(encoding='utf-8'))
+          validate_runtime(current_binding, source, current_binding['record']['task_definition'])
           if collector.get('StackStatus') != 'UPDATE_COMPLETE' or reconciliation.get('StackStatus') != 'UPDATE_COMPLETE':
               raise SystemExit('Production GrowthBook stack state drift')
           collector_outputs = {row['OutputKey']: row['OutputValue'] for row in collector.get('Outputs') or []}
@@ -235,10 +249,9 @@ jobs:
               or not override.get('name')
           ):
               raise SystemExit('Production reconciliation scheduled command drift')
-          expected_source = deploy['source_runtime']['task_definition']
+          expected_source = current_binding['record']['task_definition']['taskDefinitionArn']
           if (
-              expected_source.rsplit('/', 1)[-1] != os.environ['EXPECTED_SOURCE_TASK_DEFINITION']
-              or source.get('Name') != os.environ['EXPECTED_SOURCE_SCHEDULE']
+              source.get('Name') != os.environ['EXPECTED_SOURCE_SCHEDULE']
               or source.get('State') != 'ENABLED'
               or source.get('Target', {}).get('Arn') != reconciliation_parameters.get('ClusterArn')
               or source.get('Target', {}).get('EcsParameters', {}).get('TaskDefinitionArn') != expected_source
@@ -598,12 +611,15 @@ jobs:
           deploy = json.loads(deploy_bytes)
           schedule = json.load(open(root / 'schedule.json', encoding='utf-8'))
           source = json.load(open(root / 'source-schedule.json', encoding='utf-8'))
+          from scripts.reporting_runtime_binding import validate_runtime
+          current_binding = json.loads(Path(os.environ['CURRENT_REPORT_BINDING_FILE']).read_text(encoding='utf-8'))
+          validate_runtime(current_binding, source, current_binding['record']['task_definition'])
           alarm_states = json.load(open(root / 'alarm-states.json', encoding='utf-8'))
           post_run = os.environ['HEALTH_PHASE'] == 'natural_reconciliation_verified'
           natural = json.load(open(root / 'natural-control.json', encoding='utf-8')) if post_run else {}
           task_definition = deploy['reconciliation']['task_definition'].rsplit('/', 1)[-1]
           evidence = {
-              'schema_version': 2,
+              'schema_version': 3,
               'evidence_type': 'vevo_growthbook_production_aa_infra_health',
               'environment': 'production',
               'observed_at_utc': datetime.now(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z'),
@@ -612,6 +628,7 @@ jobs:
                   'workflow_run_id': os.environ['GITHUB_RUN_ID'],
                   'main_commit': os.environ['GITHUB_SHA'],
                   'deploy_evidence_sha256': hashlib.sha256(deploy_bytes).hexdigest(),
+                  'current_reporting_binding_sha256': current_binding['record_sha256'],
               },
               'aws': deploy['aws'],
               'phase': {
@@ -650,7 +667,7 @@ jobs:
                   'dlq_empty': True,
                   'source_schedule_name': source['Name'],
                   'source_schedule_state': source['State'],
-                  'source_task_definition': deploy['source_runtime']['task_definition'].rsplit('/', 1)[-1],
+                  'source_task_definition': current_binding['record']['task_definition']['taskDefinitionArn'].rsplit('/', 1)[-1],
                   'source_schedule_unchanged': True,
                   'scheduler_run_task_verified': post_run,
                   'runtime_state_retained': (
@@ -687,7 +704,8 @@ jobs:
           PY
           python scripts/validate_growthbook_aa_infra_health_evidence.py \
             --evidence "${HEALTH_EVIDENCE_FILE}" \
-            --deploy-evidence "${DEPLOY_EVIDENCE}"
+            --deploy-evidence "${DEPLOY_EVIDENCE}" \
+            --current-binding "${CURRENT_REPORT_BINDING_FILE}"
 
       - name: Remove every temporary AWS response and log message
         if: ${{ always() && env.RUN_INFRA_HEALTH == 'true' }}
@@ -701,7 +719,14 @@ jobs:
           set -euo pipefail
           python scripts/validate_growthbook_aa_infra_health_evidence.py \
             --evidence "${HEALTH_EVIDENCE_FILE}" \
-            --deploy-evidence "${DEPLOY_EVIDENCE}"
+            --deploy-evidence "${DEPLOY_EVIDENCE}" \
+            --current-binding "${CURRENT_REPORT_BINDING_FILE}"
+
+      - name: Recheck unchanged current reporting authority before publication
+        if: ${{ env.RUN_INFRA_HEALTH == 'true' }}
+        run: |
+          set -euo pipefail
+          python scripts/reporting_runtime_binding.py --compare "${CURRENT_REPORT_BINDING_FILE}" --output "${CURRENT_REPORT_BINDING_FILE}.rechecked"
 
       - name: Upload only canonical sanitized infrastructure-health evidence
         if: ${{ env.RUN_INFRA_HEALTH == 'true' }}
@@ -733,4 +758,15 @@ jobs:
           print(f"- Alarms clear / DLQ empty: `{control['alarms_clear']}` / `{control['dlq_empty']}`")
           print('- A/A population, arms, outcomes, Meta dimensions, and performance read: `none`')
           print('- GrowthBook, GTM, Meta Ads, BiznisWeb, AWS resources, reporting, and commerce mutation: `none`')
+          PY
+
+      - name: Remove private current reporting snapshots
+        if: ${{ always() && env.CURRENT_REPORT_BINDING_FILE != '' }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          base = os.environ["CURRENT_REPORT_BINDING_FILE"]
+          for name in (base, base + ".rechecked"):
+              Path(name).unlink(missing_ok=True)
           PY

@@ -13,6 +13,16 @@ on:
       - 'order_inventory.py'
       - 'api_read_backoff.py'
       - 'daily_report_runner.py'
+      - requirements-runtime-control.txt
+      - scripts/reporting_runtime_binding.py
+      - scripts/bootstrap_reporting_runtime.py
+      - scripts/validate_growthbook_aa_infra_health_evidence.py
+      - projects/vevo/reporting_runtime_policy.json
+      - .github/workflows/monitor-vevo-growthbook-production-aa-infra.yml
+      - .github/workflows/check-vevo-growthbook-production-aa-window.yml
+      - .github/workflows/check-vevo-growthbook-production-cta-window.yml
+      - .github/workflows/check-vevo-growthbook-production-cta-safety.yml
+      - .github/workflows/build-vevo-growthbook-production-cta-final-snapshot.yml
       - 'reporting_core/**'
       - 'projects/*/settings.json'
       - 'scripts/*order_automation*.py'
@@ -50,6 +60,7 @@ jobs:
           tests.test_invoice_generation tests.test_invoice_automation_state tests.test_manual_settlement tests.test_manual_settlement_recovery tests.test_reviewed_invoice_obligations tests.test_reviewed_invoice_runtime tests.test_reviewed_uncollected_closure
           tests.test_order_status_safety tests.test_unpaid_order_cancellation
           tests.test_order_status_identity tests.test_status_identity_integration
+          tests.test_reporting_runtime_binding tests.test_growthbook_aa_infra_health_evidence tests.test_growthbook_aa_infra_health_workflow
           tests.test_order_inventory
           tests.test_api_read_backoff
           tests.test_seeded_invoice_retry tests.test_reviewed_invoice_reconciliation

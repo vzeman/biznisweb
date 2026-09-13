@@ -1,0 +1,2 @@
+# Match the repository's existing pinned AWS SDK, without the report stack.
+boto3==1.42.63
