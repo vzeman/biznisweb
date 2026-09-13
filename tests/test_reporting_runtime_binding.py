@@ -6,6 +6,9 @@ import hashlib
 import io
 import json
 import os
+from pathlib import Path
+import subprocess
+from tempfile import TemporaryDirectory
 import textwrap
 import unittest
 from unittest.mock import Mock, patch
@@ -454,6 +457,23 @@ class RuntimeBindingTests(unittest.TestCase):
 
 
 class RuntimeWorkflowTests(unittest.TestCase):
+    def test_hash_bound_json_survives_windows_style_git_checkout(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            def git(*args):
+                return subprocess.run(["git", "-C", str(root), "-c", "core.autocrlf=true", *args],
+                                      check=True, capture_output=True)
+            git("init", "--quiet")
+            (root / ".gitattributes").write_bytes((b.ROOT / ".gitattributes").read_bytes())
+            artifact = root / "historical-deployment.json"
+            artifact.write_bytes(DEPLOY_BYTES)
+            git("add", ".gitattributes", artifact.name)
+            artifact.unlink()
+            git("checkout-index", "--all", "--force")
+            self.assertEqual(DEPLOY_BYTES, artifact.read_bytes())
+            self.assertEqual(b.POLICY["historical_evidence_sha256"],
+                             hashlib.sha256(artifact.read_bytes()).hexdigest())
+
     def test_all_five_workflows_have_independent_entry_exit_gates_and_compile(self):
         names = ("monitor-vevo-growthbook-production-aa-infra", "check-vevo-growthbook-production-aa-window",
                  "check-vevo-growthbook-production-cta-window", "check-vevo-growthbook-production-cta-safety",

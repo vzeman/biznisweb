@@ -4,6 +4,7 @@
 *.yaml text eol=lf
 *.py text eol=lf
 *.md text eol=lf
+*.json text eol=lf
 .env.example text eol=lf
 .env.required text eol=lf
 .env.*.template text eol=lf

@@ -140,7 +140,7 @@ class HostGateTests(unittest.TestCase):
 
     def test_canonical_outputs_are_isolated_without_live_aliases(self):
         with TemporaryDirectory() as folder:
-            root = Path(folder)
+            root = Path(folder).resolve()
             data = root / 'data' / 'vevo'
             data.mkdir(parents=True)
             html, payload, quality = data / 'tagged.html', data / 'tagged.json', data / 'qa.json'
