@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Fixed helper bound to independently promoted native correction
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Updated only the helper's immutable runtime allowlist from the failed earlier release to main `47c3da775ff7018a1cf8950024c867310b91ae8a`, image `sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`. Fixed six-case evidence, native-key binding, durable once-only intent, held emails and all live release/lease checks remain unchanged. No preview, financial request or journal mutation has been performed.
+
+What is verified:
+
+- Managed deployment `34741354275` passed independent terminal verification at 06:23:49 UTC. All three actual localhost markers/stopped exits, both 120-second drains, five enabled pins, six policies and protected reporting configurations are verified. Managed receipt: `data/roy/order-automation/deployments/47c3da775ff7018a1cf8950024c867310b91ae8a/4b88d8c4d91943ef871b54b7b19031e3.json`, SHA `ad2cf88569c98325c1ca8a441d61ede97febf5763646a1ec20824d84a8fc06ef`; independent audit SHA `5cb5500db1467854862dadd055b9ac222eb5f3fdfec4c5f657a04b41ced713aa`. Main freeze ended after that signoff.
+- Natural VEVO task `3bec1ef7734842008efd361d067e22da`, Fargate N/A, IP `172.31.4.48`, invoice service :8, `/app`, exact image, completed 15 new native/API-confirmed invoices. ROY task `7653a0a551554f70b9f5af655467b362`, IP `172.31.0.177`, invoice service :9, same image/path, has also created confirmed invoices and is still being observed. Infrastructure proof is now backed by actual native finalization success.
+- Prior full helper validation remains 720 passing build tests with independent 51-test native-binding review. This two-constant release change is receiving focused regression and independent release-binding review before apply.
+
+Known issues:
+
+- One VEVO order without a prepared document produced an unconfirmed `preinvoiceOrder` API error and remains durably `prepare_ambiguous`. That case is outside this helper and is under a separate read-only investigation; no old uncertainty is reset. Four older ROY creation ambiguities and two already-sent email confirmations remain pending this reviewed helper.
+- Gateway-independent manual bank settlement protection and corrected native creditnote identity/lifecycle gates are being prepared on isolated branches. ROY already uses Stripe and VEVO is migrating to Stripe; historical GoPay checks do not define future gateway configuration.
+
+Next exact step:
+
+- Finish focused tests and independent allowlist review, commit/push PR #546 and require all exact-head CI checks before merge. Once natural ROY work finishes and its shared lease is free, preview the two fixed helper actions, confirm the two already-sent email outcomes without sending, and reconcile the four existing native documents one at a time with fresh readback. Then run the original-eleven and all-age post-recovery audits; investigate the separate VEVO preparation case without retrying its uncertain intent.
+
 ## 2026-09-13 — Fixed reconciliation now binds native document identities
 
 Date: 2026-09-13

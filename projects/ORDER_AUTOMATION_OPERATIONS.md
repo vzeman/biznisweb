@@ -234,13 +234,16 @@ journal phases as a shortcut. The native identity contract supports the existing
 document operation, but does not establish backend replay/idempotency guarantees.
 Final independent business verification is still required after the helper runs.
 
-Apply currently remains blocked: the unchanged allowlist names `a97d974f` and
-`sha256:8d06b6c7...`, whose deployment `34735770705` failed and restored the old
-runtime. The subsequent `ccf25c79` release promoted successfully but its natural
-invoice attempts were refused by the provider; four invoice schedules were paused.
-Integrating the native correction at `47c3da77` does not authorize its execution.
-Wait for independently verified native-fix promotion, then review an explicit source/digest
-allowlist change and successful private deployment proof before either apply action.
+The reviewed allowlist now binds the independently promoted native correction
+`47c3da775ff7018a1cf8950024c867310b91ae8a` /
+`sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`.
+Managed deployment `34741354275` passed all actual hosts, drains and promotion
+readbacks; both shops' subsequent natural tasks created native/API-confirmed
+invoices. Its private receipt is
+`data/roy/order-automation/deployments/47c3da775ff7018a1cf8950024c867310b91ae8a/4b88d8c4d91943ef871b54b7b19031e3.json`.
+This source change still requires review before apply. One separate VEVO
+preparation uncertainty is outside the fixed six-case ROY scope and cannot be
+reset or replayed by this helper. Failed earlier releases remain disallowed.
 
 ## Release sequence and rollback
 
