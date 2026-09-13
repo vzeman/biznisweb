@@ -5,6 +5,35 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Retrospective scope narrowed to August/September; second bank payment confirmed
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/reviewed-uncollected-close-20260913`
+
+What changed:
+
+- The user narrowed further retrospective investigation to the current and preceding month: **2026-08-01 through the current September 2026 date**. Do not start another historical order audit or investigate older orders. Existing completed corrections and immutable evidence remain preserved. This scopes retrospective audit work; ongoing automation safety and the already confirmed cases remain part of the original task.
+- The previously running VEVO read-only scan had already completed at 10:38:10 UTC: PASS, 8,980 orders / 311 pages, zero eligible uninvoiced candidates, zero failures/global issues. This completed inventory also covers August/September; no repeat scan is needed for the narrowed scope. Private proof `data/vevo/order-automation/verification/invoice-discovery-20260913T103810Z-4cee25bf3f18459da57dbe2381599756.json`, SHA `04d3c1a73485c5133750313c8614a12ec10b9d95f4163a26ff194fa83f4a5922`. Finite session 12030 ended exit 0.
+- The first scan stopped safely after 34 pages with TransportQueryError and was retained as incomplete: private `invoice-discovery-20260913T102350Z-f47c626b98a1499f90ae2960a207877a.json`, SHA `8dffd930f15f41de14761ae0ea133c7853e413ce6e66f2f5f0a1d73003ce6ff0`. One targeted read at inferred cursor 957 succeeded before the one controlled full retry. The original exception contains no retained structured detail; its cause is unknown and was not represented as a proven outage or retry bug. Read/partial-response safety was not weakened.
+- The user explicitly confirmed full payment of VEVO 2602008663 / EUR33.89. Independent exact API/native evidence proves internal ID18207, manual paid status and bank-method change on September 6, shipment status on September 7, then a gateway-style expired regression on September 13. Private supporting audit `data/vevo/order-automation/audits/2026-09-13/independent-status-review-20260913.json`, SHA `6eeba15c2e838352f7670266b84b4c693cf3e38601f83ef839b97260c9214d4d`.
+
+What is verified:
+
+- Content-addressed user confirmation `data/vevo/order-automation/manual-settlements/6049e628898509a7f3b0f613e5df7570b16bddf1a4388ae07f81ee1c9c7d870f.json` has canonical SHA `6049e628898509a7f3b0f613e5df7570b16bddf1a4388ae07f81ee1c9c7d870f`, exact project/order/amount/currency, recovery status 4/Odoslaná and recording timestamp 10:32:51.907359 UTC. No bank date or receipt was invented. It is published privately but **not yet applied to the journal**.
+- Independent post-closure natural proof `data/roy/order-automation/audits/2026-09-13/independent-natural-fda36b49-20260913.json`, SHA `96ab80252a8adcc9ae2b8b1d026db3aab94915ee6deade13e6b399ecb808b9d6`, confirms both shops have zero active invoice operations/ambiguities. VEVO :9 task `11ae7c0f2cbe4f6990bd8224a30fc866` on actual `29c0c8e4` stopped 10:31:18.783 UTC exit 0: complete two-page incremental scan, zero matches/created/failed/ambiguous; one separate status-reconciliation candidate. The sealed noncollection financial projection remains exact, and the earlier bank confirmation remains unchanged.
+- At that observation 15 of 17 alarms were OK. VEVO pending-backlog still reflected prior metrics, while review-required correctly represented the separately confirmed September order awaiting safe provenance application. These were not muted or falsely reported healthy.
+- Standalone PR #552 exact `5332e31ae93ed2223e89bec557e2cf1acc3cc282` is ready with all six CI checks passing, 920 build/658 automation tests. Report #556 exact `def0e1bfd2e88726d22b9cc467ffe46052bcc88a` has all six checks passing, 1,067 build/805 automation tests. Both remain unmerged/undeployed and need integration of the small recorder correction before their later releases.
+
+Known issues:
+
+- Existing `record_verified_manual_settlement.py` requires the order already at its recovery target. It worked for the earlier user-restored case but correctly blocks current expired status33 on 2602008663. A new isolated branch is implementing a narrow optional exact-negative-source mode that records only user-confirmed provenance under the lease; the default remains unchanged. Fresh canonical source/target identity, full order stability and existing conflict checks are mandatory. It does not assert creditnote clearance or change provider state; the already deployed guarded consumer retains the fresh creditnote/status mutation checks.
+- No older-order investigation or additional broad scan is running. All root finite verification/apply sessions have ended; no persistent local process was started. The root inspection tab was closed. Native callback prevention remains a separate vendor requirement documented in the existing handoff.
+
+Next exact step:
+
+- Independently review/test/commit/push the optional recorder correction, require its own PR checks, preview and apply the September confirmation once, then observe the next natural leased status correction and native UI. After that checkpoint, complete standalone guard and report migrations with their managed host gates and preserve protected schedules. Do not repeat the completed historical scan.
+
 ## 2026-09-13 — Uncollected closure applied; VEVO seeded audit passes
 
 Date: 2026-09-13
