@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 - Independent explicit target regression fixture
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/explicit-target-review-20260913`
+
+What changed:
+
+- Added nine independent integration tests for the reviewed fix after failed deployment `34747360516`. The immutable candidate failed before promotion with `status_identity_target_missing_or_ambiguous`; exact original schedules, six IAM policies, reports and monitoring were independently verified restored. Private final proof: `data/roy/order-automation/audits/2026-09-13/independent-deploy-b417caa7-20260913.json`, SHA `2cdf1786ac63a62760b03b842990da0f84ab69910757af796953549588ce89ef`. Root ended that deployment freeze; no automatic retry was made.
+- This is a test-first handoff based on `0917328f`. No runtime implementation or settings were modified here. Root's separate candidate narrowly filters duplicate-name target matches by an explicitly configured positive ID, and pins both reviewed ROY paid-status recovery targets to ID 67 using verified catalog/native gateway evidence.
+
+What is verified:
+
+- All nine tests pass against root's candidate working copy and Ruff passes. The original unfixed base intentionally fails the new regressions, confirming they detect the missing configured binding and strict duplicate-name defect. Actual invoice/cancellation resolvers feed one silent request for the configured ID, and acknowledgement/readback never accept the other same-named ID. Lost replies make no second request. No-ID ambiguity and wrong-label configured IDs remain rejected. A separate explicitly synthetic rename fixture checks fresh catalog validation before/after the actual shared mutation helper without claiming ROY labels were renamed.
+- No root-owned files, provider state, AWS configuration, journal, email or financial operation were changed by this review. All finite checks ended; no local persistent process was started.
+
+Known issues:
+
+- This test-only branch is intentionally incomplete without root's separately reviewed implementation/settings correction. It is not a release or deployment source. The pending native proof timestamp metadata correction belongs to root and does not change the observed IDs.
+
+Next exact step:
+
+- Include `tests/test_explicit_target_integration.py` in the corrected source branch and both workflow test collections, then run the combined regression and exact-head CI before any separately controlled deployment. Root owns the fix PR and deployment; no PR is created from this fixture branch.
+
 ## 2026-09-13 — Combined safety release merged; deployment freeze active
 
 Date: 2026-09-13
