@@ -5,6 +5,34 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — VEVO infra healthy; original historical proof cannot complete unchanged
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-aa-history-proof-20260913`
+
+What changed:
+
+- Synchronized the exact clean main worktree with fetch/prune and pull/rebase to `95e4421303a4d8cb3b517a020a93e8af75139f7c`. Other order-automation changes and their runtime were not touched. PR #539 is independently confirmed merged as `c66b0cab05629bd9a28825b1aee87c4c216c8992` at `2026-09-09T07:17:16Z`; its exact-head 316-test Linux execution and all four checks are recorded in the PR verification comment, not pending work to repeat.
+- Rechecked the monitor inventory immediately before one authorized manual fallback: no September 13 run or active earlier monitor existed. Dispatched only the existing result-blind health workflow with `confirm_health=true`. No local AWS client or credential was used.
+- Completed a read-only historical-proof assessment with independent review. The known malformed message in the required receipt context cannot pass the unchanged strict reducer. Re-reading it, waiting for more traffic or fixing future emission cannot make the old proof valid without a separately reviewed change to evidence/acceptance. This is an evidence-contract blocker, not demonstrated data loss, wrong orders or an A/A FAIL. See the September 13 quality-source audit for the configuration-only diagnostic proposal and decision boundary.
+
+What is verified:
+
+- Health run `34744300456` / job `103689226401` succeeded on original main `95e4421303a4d8cb3b517a020a93e8af75139f7c`. Actual marker/parity, evidence, cleanup/revalidation and upload steps passed. Two independent in-memory downloads verified sole artifact `10313755209`, GitHub ZIP SHA-256 `aad0ef5f3c08337df9ba5d0653f61d28b54c192fcf17aa8636419ce35d07f649`, single canonical JSON SHA-256 `4d6a61e9d524d894d02c2056b7a0dc1f3a1dda408a92087d68f94d634c6e115e`, original run/main ownership, original-Git deployment-bound offline validation and latest-due/freshness. Observation `2026-09-13T07:04:24Z` verifies today's 03:45 Bratislava reconciliation. No local artifact/raw file exists. This readback must remain bound to its original main, not this later documentation commit.
+- The actual receipt acquisition begins at the UTC day of the verified-empty foundation (`context_from_utc`), before the A/A start, and filters the receipt marker without selecting an experiment or eligible cohort. The known framing category therefore does not reveal the malformed message's date or cohort. Four-field receipts and unique S3 writes do not independently reconstruct every duplicate attempt or each constituent receipt's time.
+- Current source-run metadata still lists exactly the five historical terminal attempts, with no sixth acquisition. No parser, collector, workflow, evidence manifest, frozen window, source binding or external control changed. Daily infrastructure health is not historical receipt quality or A/A PASS.
+- This documentation-only change passes the full 316-test source/lifecycle suite locally (313 passed, three existing Windows symlink skips), workspace/window/activation/security validators and `git diff --check`. Independent documentation review found no blocking issue and passed all 13 framing/reducer tests. Exact-head Linux CI and actual regression execution are still required before merge; the delivery PR will retain that verification.
+
+Known issues:
+
+- `SOURCE_RECEIPT_CONCATENATED_MARKER_FRAMING` remains closed. With the known retained input and original contract, the historical source is not evaluable; do not label it statistical FAIL/PASS or silently change a manifest to resolve it. GTM compatibility and Clarity privacy are separate unresolved manual-QA gates. A/A was not stopped and Preview was not woken.
+- A new start/end alone is not a repair: the source still includes its older foundation context. A replacement measurement protocol needs explicit owner direction and a separately reviewed evidence/context-generation design that preserves old history, plus prevention and runtime verification. No restart, deletion, retention change or paid action is authorized by this assessment.
+
+Next exact step:
+
+- Finish this documentation-only PR with independent review, exact-head CI and clean-main synchronization. Ask the owner for direction on preparing a replacement A/A protocol after a verified prevention fix; do not infer permission from the daily heartbeat. Until that direction and the relevant reviewed gates exist, continue only the established daily health monitor. The proposed metadata-only deployed-framing readback is not implemented or dispatched. Do not retry source collection, split/skip/recover malformed history, relax parity, query outcomes, change the frozen window, stop/start GrowthBook, wake Preview or open Pro/CTA. No local application service or persistent worker was started; finite checks must finish before handoff.
+
 ## 2026-09-13 — Fixed helper bound to independently promoted native correction
 
 Date: 2026-09-13
