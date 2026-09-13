@@ -524,7 +524,7 @@ class UnpaidOrderCancellationTests(unittest.TestCase):
         self.assertEqual(14, settings.age_days)
         self.assertEqual(74, settings.target_status_id)
         self.assertTrue(settings.recovery_enabled)
-        self.assertIsNone(settings.recovery_target_status_id)
+        self.assertEqual(67, settings.recovery_target_status_id)
         self.assertEqual("Platba online - zaplaten\u00e9", settings.recovery_target_status_name)
         self.assertIn("Stripe - expired", settings.recovery_source_statuses)
         self.assertEqual("roy-unpaid-order-cancellation", settings.schedule_name)

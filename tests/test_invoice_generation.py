@@ -500,7 +500,7 @@ class InvoiceGenerationTests(unittest.TestCase):
         self.assertEqual(["Odoslan\u00e1"], roy["invoice_generation"]["eligible_statuses"])
         self.assertTrue(vevo["invoice_generation"]["send_invoice_email"])
         self.assertTrue(roy["invoice_generation"]["send_invoice_email"])
-        for project_settings in (vevo, roy):
+        for project_settings, expected_target_id in ((vevo, None), (roy, 67)):
             reconciliation = project_settings["invoice_generation"][
                 "existing_invoice_status_reconciliation"
             ]
@@ -509,7 +509,7 @@ class InvoiceGenerationTests(unittest.TestCase):
                 "Platba online - zaplaten\u00e9",
                 reconciliation["target_status_name"],
             )
-            self.assertIsNone(reconciliation["target_status_id"])
+            self.assertEqual(expected_target_id, reconciliation["target_status_id"])
 
         self.assertNotEqual(vevo["report_schedule"]["task_family"], vevo["invoice_generation"]["task_family"])
         self.assertNotEqual(roy["report_schedule"]["task_family"], roy["invoice_generation"]["task_family"])
