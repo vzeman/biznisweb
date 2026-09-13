@@ -1,3 +1,6 @@
 # False positive: this exact line is the public metric identifier
 # "vevo_cls_p75_milli_24h", not an API key or credential.
 projects/vevo/growthbook_workspace.json:generic-api-key:328
+# False positive: this exact historical line is the SHA-256 of a private audit
+# object whose filename contains "api". It is not an API key or credential.
+584d04e481a36b4b1fd439005b16727044de6091:order_status_identity.py:generic-api-key:32
