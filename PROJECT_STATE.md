@@ -5,6 +5,25 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Native-key correction merged; production build pending
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/native-preinvoice-identity-20260913`
+
+What changed:
+
+- PR #548 merged as `47c3da775ff7018a1cf8950024c867310b91ae8a` after all six exact-head checks passed on `0f803d3cfe64c7760e8710df167eb35b5b44b975`. Build `34741199613` is producing the immutable image. This worktree fast-forwarded to the merge without editing main; no deployment has occurred.
+- Independent final email guard review passed all twelve consumed-state/hold/token combinations, preserving the exact journal and making zero API/web/journal requests. The four old incorrect native keys currently match no native document in complete read-only searches; this is current absence only, not historical absence or a resolved old outcome. Private collision proof: `data/roy/order-automation/audits/2026-09-13/reviewed-old-key-collision-check-20260913.json`, SHA-256 `b3faaba354940d0238657696f4a217c2f48f114f02c1e183506139877ebb41fa`.
+
+What is verified:
+
+- 652 exact build tests, smoke, Ruff and independent code reviews pass. Fresh pre-release AWS checks at 05:47:32 UTC retain the four disabled invoice schedules on ROY `:8` / VEVO `:7`; cancellation `:40` and reporting ROY `:71` / VEVO `:33` remain enabled and unchanged. Both shops' leases are free. No actual invoice, email or order-status mutation is claimed for this correction yet.
+
+Next exact step:
+
+- Verify build `34741199613` and the exact `git-47c3da775ff7018a1cf8950024c867310b91ae8a` ECR digest. Recheck current main and absence of another managed release, then dispatch once with incident key `data/roy/order-automation/incidents/2026-09-13/be7322255d3b4464907ccb8348425457.json` and SHA-256 `b5765ba648a1ca5ddb9b1cdfc382c90c36dbc1982c93e4f2580868d4371dda46`. Freeze main during host/drain/promotion or verified pause-preserving restoration. The reconciliation helper may integrate source on its separate branch but must retain its blocked old release gate and must not merge/apply during deployment.
+
 ## 2026-09-13 — Native identity and paused-deployment correction validated
 
 Date: 2026-09-13
