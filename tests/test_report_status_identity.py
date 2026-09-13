@@ -1,6 +1,8 @@
 import copy
 import json
 from datetime import datetime
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -12,7 +14,7 @@ from creditnote_export import (
     fetch_creditnote_orders_by_number,
     order_was_sent_before_creditnote,
 )
-from export_orders import BizniWebExporter
+from export_orders import BizniWebExporter, ORDER_CACHE_SCHEMA_VERSION
 from order_status_identity import canonical_order
 
 
@@ -160,6 +162,28 @@ class ReportStatusIdentityTests(unittest.TestCase):
         self.assertEqual([raw], result)
         self.assertEqual("Shipped", result[0]["status"]["name"])
         self.assertEqual(["catalogue"], exp.client.calls)
+
+    def test_stale_unreviewed_cache_label_refreshes_complete_day_without_guessing_role(self):
+        stale = order("1", "Nová")
+        stale.update(id="102", order_num="synthetic-unrealized")
+        fresh = copy.deepcopy(stale)
+        fresh["status"]["name"] = "New order"
+        exp = exporter(rows=[*CATALOGUE, {"id": "1", "name": "New order"}], orders=[fresh, order()])
+        with TemporaryDirectory() as folder:
+            exp.cache_dir = Path(folder)
+            cached = exp.get_cache_filename(datetime(2026, 9, 1))
+            cached.write_text(json.dumps({"schema_version": ORDER_CACHE_SCHEMA_VERSION, "orders": [stale, order()]}), encoding="utf-8")
+            exp.prepare_reporting_status_identity()
+            self.assertIsNone(exp.load_from_cache(datetime(2026, 9, 1)))
+            with patch.object(exp, "should_use_cache", return_value=True), patch("export_orders.time.sleep"):
+                included = exp.fetch_orders(datetime(2026, 9, 1), datetime(2026, 9, 1))
+            self.assertEqual(["synthetic-order"], [row["order_num"] for row in included])
+            self.assertEqual(["synthetic-unrealized"], [row["order_num"] for row in exp.excluded_status_orders])
+            self.assertEqual("New order", exp.excluded_status_orders[0]["status"]["name"])
+            self.assertEqual(2, len(included) + len(exp.excluded_status_orders))
+            self.assertEqual(["catalogue", "orders"], exp.client.calls)
+            with self.assertRaisesRegex(ValueError, "unreviewed_label_drift"):
+                exp._realized_revenue_decision(stale)  # Fresh-data authority stays strict.
 
     def test_creditnote_detail_acquisition_uses_same_catalogue_and_raw_rows(self):
         exp = exporter()

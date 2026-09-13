@@ -5280,6 +5280,10 @@ class BizniWebExporter:
                     )
                     return None
                 orders = data.get('orders', [])
+                # Validate even payment-complete cached rows before acceptance.
+                # Unknown renames invalidate the day for a fresh ordinary read.
+                for order in orders:
+                    self._reporting_order_context(order)
                 unresolved_candidates = [
                     order
                     for order in orders
