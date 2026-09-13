@@ -5,6 +5,28 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Main recovery helpers integrated into manual-settlement branch
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- Integrated exact main `95e4421303a4d8cb3b517a020a93e8af75139f7c`, including the reviewed invoice-reconciliation helper and post-recovery verifier. Additive project-memory and CI test-list conflicts preserve both branches. The promoted runtime allowlist from main is retained unchanged.
+
+What is verified:
+
+- Helper/verifier sources and their tests match main exactly; manual runtime source matches reviewed `c88356fb`. All 748 combined build-workflow tests (72 + 20 + 656) and reporting smoke pass. Both test collections and runtime module build triggers are retained. No live helper, financial, provider, journal or deployment operation was run here.
+
+Known issues:
+
+- Native creditnote identity/lifecycle correction `9856e847` is the next separate integration. Root owns ongoing financial recovery and subsequent production release decisions.
+
+Next exact step:
+
+- Complete checks and push this main merge, then merge the independently reviewed native creditnote correction and verify the final combined branch.
+
 ## 2026-09-13 — Manual external settlement protection draft
 
 Date: 2026-09-13
@@ -32,6 +54,126 @@ Known issues:
 Next exact step:
 
 - Integrate root's separately reviewed native creditnote correction after its push, resolve only known owned documentation hunks and rerun combined checks. Release and the already-published private confirmation require separately verified root execution; do not run the helper from this branch before that gate.
+
+## 2026-09-13 — Fixed helper bound to independently promoted native correction
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Updated only the helper's immutable runtime allowlist from the failed earlier release to main `47c3da775ff7018a1cf8950024c867310b91ae8a`, image `sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`. Fixed six-case evidence, native-key binding, durable once-only intent, held emails and all live release/lease checks remain unchanged. No preview, financial request or journal mutation has been performed.
+
+What is verified:
+
+- Managed deployment `34741354275` passed independent terminal verification at 06:23:49 UTC. All three actual localhost markers/stopped exits, both 120-second drains, five enabled pins, six policies and protected reporting configurations are verified. Managed receipt: `data/roy/order-automation/deployments/47c3da775ff7018a1cf8950024c867310b91ae8a/4b88d8c4d91943ef871b54b7b19031e3.json`, SHA `ad2cf88569c98325c1ca8a441d61ede97febf5763646a1ec20824d84a8fc06ef`; independent audit SHA `5cb5500db1467854862dadd055b9ac222eb5f3fdfec4c5f657a04b41ced713aa`. Main freeze ended after that signoff.
+- Natural VEVO task `3bec1ef7734842008efd361d067e22da`, Fargate N/A, IP `172.31.4.48`, invoice service :8, `/app`, exact image, completed 15 new native/API-confirmed invoices. ROY task `7653a0a551554f70b9f5af655467b362`, IP `172.31.0.177`, invoice service :9, same image/path, has also created confirmed invoices and is still being observed. Infrastructure proof is now backed by actual native finalization success.
+- Prior full helper validation remains 720 passing build tests with independent 51-test native-binding review. This two-constant release change is receiving focused regression and independent release-binding review before apply.
+
+Known issues:
+
+- One VEVO order without a prepared document produced an unconfirmed `preinvoiceOrder` API error and remains durably `prepare_ambiguous`. That case is outside this helper and is under a separate read-only investigation; no old uncertainty is reset. Four older ROY creation ambiguities and two already-sent email confirmations remain pending this reviewed helper.
+- Gateway-independent manual bank settlement protection and corrected native creditnote identity/lifecycle gates are being prepared on isolated branches. ROY already uses Stripe and VEVO is migrating to Stripe; historical GoPay checks do not define future gateway configuration.
+
+Next exact step:
+
+- Finish focused tests and independent allowlist review, commit/push PR #546 and require all exact-head CI checks before merge. Once natural ROY work finishes and its shared lease is free, preview the two fixed helper actions, confirm the two already-sent email outcomes without sending, and reconcile the four existing native documents one at a time with fresh readback. Then run the original-eleven and all-age post-recovery audits; investigate the separate VEVO preparation case without retrying its uncertain intent.
+
+## 2026-09-13 — Fixed reconciliation now binds native document identities
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Corrected the six-case helper after integrating merged PR #548 in pushed merge `5fe6953c`. It retains original history/outcome evidence and now requires the cross-shop native contract (`a0fa9c33...`) and fixed six-case mapping (`ce520d23...`), replacing the obsolete API-ID-equivalence evidence. Each current read uses the generator's strict bounded native POST to bind both order identities, the retained native preinvoice key and the final number.
+- API association references remain separate from native route keys. Each of the four permitted finalizations uses the reviewed native key, freshly rebound after a schema-2 durable intent storing that key and the new evidence hashes. Fresh API/native final-number agreement is required even when nested API IDs still equal the order ID. Two provider-confirmed email outcomes remain journal-only confirmations; no email is resent. Preview and confirmation now need a native read-only session, but do not call financial endpoints.
+- Changed/legacy intents, native lookup errors, mismatched numbers and missing tokens fail closed; no uncertainty is reset and the original one-attempt/no-preparation/held-email constraints remain. S3 evidence bodies and both transports close explicitly. The post-recovery verifier's executable source is unchanged; its documentation distinguishes API association/backlog facts from the generator/helper's native financial-write confirmation.
+
+What is verified:
+
+- All 720 tests in the three exact build-workflow commands pass (72 + 20 + 628), including 51 helper tests and 17 post-recovery tests. Tests exercise the real generator native lookup with distinct native/API keys, all four route selections, wrong-owner/same-number documents, pre/post-intent native drift, final-number disagreement, exhausted native reads, missing tokens, evidence/legacy-intent drift, storage/lease failures and no replay or email. Reporting smoke, scoped Ruff and whitespace checks pass.
+- Offline hash-verified local loading of all three actual private artifacts successfully bound the six cases: six distinct native keys, all different from their API references. No private order identifiers were printed or committed. No AWS/provider request, live preview/apply, financial operation, journal mutation or PR merge occurred. All finite test processes ended; no persistent service was started.
+- Root independently reviewed the stable helper source and reran all 51 helper tests: PASS with no blocking finding. Review covered all three exact proof hashes, separate API/native binding, six current order/document checks, schema-2 intent before GET, held/no-email behavior, drift/readback-only recovery, CAS/release boundaries and closed S3 bodies.
+
+Known issues:
+
+- The helper's old failed `a97d974f` / `8d06b6c7...` release allowlist is deliberately unchanged and still blocks apply. Incident-aware native-fix deployment `34741354275` is pending under root's supervision; neither a successful build nor this source integration authorizes an allowlist update. Main is frozen on `47c3da775ff7018a1cf8950024c867310b91ae8a` until independently verified release completion or restoration.
+
+Next exact step:
+
+- Commit/push the independently reviewed correction and update PR #546's scope and validation. Keep that PR unmerged and all helper/provider execution stopped until root supplies the actually promoted source, digest and verified private receipt. Then review that explicit release binding before coordinated fixed-case recovery and the final all-age/original-eleven readbacks.
+
+## 2026-09-13 — Native identity release integrated into reconciliation draft
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Integrated merged PR #548 (`47c3da775ff7018a1cf8950024c867310b91ae8a`) into the helper branch from `f0668eaf`. The single additive PROJECT_STATE conflict preserves both histories; the helper and post-recovery verifier are retained. Runtime native binding and pause-preserving deployment support are now available to the draft.
+
+What is verified:
+
+- Source/tracking were clean and current before integration. The existing helper still requires the old failed `a97d974f` / `8d06b6c7...` release; no allowlist, journal, provider, schedule or financial operation has changed.
+
+Known issues:
+
+- Native runtime correction is merged but not yet deployed. The helper still needs its own fixed six-case native binding correction and tests before it can be used. Invoice schedules remain deliberately paused per the incident handoff below.
+
+Next exact step:
+
+- Correct and independently review the helper using the published six-case native proof, retain the blocked release allowlist, rerun the combined suite and push the reviewed fix. Do not preview/apply, merge PR #546 or run provider scans until root coordinates the actual promoted release and recovery sequence.
+
+## 2026-09-13 — Read-only post-recovery verification prepared
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Added `scripts/verify_invoice_post_recovery.py` and the short reproducible procedure in `projects/ORDER_AUTOMATION_POST_RECOVERY.md`. It composes current all-age anchored discovery and invoice filtering with fresh internal/public-ID-bound candidate reads. It neither logs into the web admin nor reads/writes a journal or calls business mutations. The existing discovery verifier's 24-hour/nonempty baseline gates are unchanged.
+- Complete inventory and complete candidate rechecks are separate report facts. An exhausted/unknown candidate read stops further provider requests and retains unchecked identities privately. Invalid amounts/identities, incomplete pages, uncertain final documents and transport failures remain unsuccessful. GraphQL transport and private S3 readback bodies close explicitly.
+- Clean/pushed source, exact project runtime URL, account, bucket, region and privacy gates precede provider reads. Optional publication is create-only AES256 with exact-byte/encryption readback. The initial large stdin recipe was replaced with this tested, tracked CLI so future sessions do not need an untracked helper. Added the module/path to both regression workflows.
+
+What is verified:
+
+- All 681 tests across the 34 build-workflow modules pass, including 17 new offline verifier tests using the real generator/scanner with a query-only fake transport. Independent review passed all 17 plus a trailing logging regression and extra source/account/URL/storage/configuration gate probes, with no remaining concrete blocker. Scoped Ruff and whitespace checks pass. No AWS/provider request, live scan, helper preview/apply, financial action or PR merge was performed. All finite local test processes ended; no persistent service was started.
+
+Known issues:
+
+- Root reports all three new deployment candidates passed and stopped, with final drain/promotion verification still pending. This is not a successful-production claim. The reconciliation helper's old `a97d974f` / `8d06b6c7...` allowlist remains unchanged and blocked because that release was not promoted.
+
+Next exact step:
+
+- Commit/push this independently reviewed verifier, then wait for root's independently verified release proof before a reviewed allowlist update. Do not merge during the active main freeze. After actual financial recovery and root's coordinated no-overlap execution go, run the two all-age snapshots and the existing original-eleven verifier sequentially (ROY six, VEVO five), preserving free-lease/stable-ETag and email-hold gates. Retain private hashes/receipts and investigate any remaining or unverified candidate; never clear uncertainty to force a pass.
+
+## 2026-09-13 — Reconciliation integrated with new main; execution remains blocked
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Integrated verification handoff `d24bdd2a`, including merged PR #547 source `ccf25c799c56bfa3dea1f3a77456f3fabf079732`, into the clean helper branch from `f8d50117`. The single known PROJECT_STATE conflict preserves both histories. The runtime now available to the draft includes coarse cancellation discovery and bounded native response decoding.
+- The reconciliation helper and its tests remain byte-identical to `f8d50117`. Its fixed `a97d974f` / `sha256:8d06b6c7...` allowlist has not changed. Integration does not authorize reconciliation against another release or weaken its host, drain, schedule, lease, evidence or no-replay gates.
+
+What is verified:
+
+- All 664 tests across the 33 build-workflow regression modules pass, including the 37 fixed incident reconciliation tests. Scoped Ruff and staged/unstaged whitespace checks pass. No preview, apply, provider/AWS request, invoice, email or status change was performed; all finite local tests ended.
+
+Known issues:
+
+- Deployment `34735770705` failed its cancellation gate and restored the old schedules and state policies. The allowlisted `a97d974f` / `8d06b6c7...` image was never promoted, so apply remains blocked. The root task reports corrected release `34738085098` now active on exact `ccf25c79` / `sha256:e8e4830c19bfb0e166519d412cfa1e3e8c690f042a6cbc72a88e52369ccdecc5`; main is frozen until independently verified promotion or restoration. An active deployment does not authorize an allowlist update or either helper apply action.
+
+Next exact step:
+
+- Keep PR #546 unmerged and the helper unapplied while the corrected release is built/deployed and independently verified. Only after actual promotion may a separate reviewed source change bind its exact successful source/digest and private deployment proof, rerun CI, and enable the prescribed fixed-case sequence. Never substitute a build result for promotion or broaden the allowlist speculatively.
 
 ## 2026-09-13 — Native identity and paused-deployment correction validated
 
@@ -190,6 +332,31 @@ Known issues:
 Next exact step:
 
 - Verify the bounded live read-only reproduction, review/test the coarse discovery correction and fresh detail guards, commit/push through required PR checks, and build/deploy a new exact release. Do not run the financial helper until its allowlist is deliberately updated to an actually promoted reviewed release. Finish real invoices, all-age verification and the separate guard migration afterward. Production remains on the older failing invoice implementation; do not claim remediation complete.
+
+## 2026-09-13 — Fixed uncertain-outcome reconciliation prepared
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Added a separate preview-first helper for exactly two provider-confirmed emails and four reviewed ROY creation ambiguities, bound to the published private evidence hashes. Email confirmation writes only the journal. One finalization per explicit apply binds the existing preinvoice, forbids preparation/email/status changes, preserves the old attempt and persists an email hold plus consumed intent before one native request.
+- Apply requires the exact reviewed `a97d974f`/`8d06b6c7...` release, its private successful receipt, exact three host markers, both 120-second drains, all five current pins, no old/unverified active writer and the shared lease. Readback alone can complete a document already finalized elsewhere. No ordinary ambiguity guard was weakened.
+- CI includes the helper's focused regressions on both operating systems; the operations runbook records all gates and limits. The worktree fast-forwarded to the synchronized release handoff without rewriting any published branch.
+
+What is verified:
+
+- Complete build regression passes 649 tests; the 72 focused checks include 37 reconciliation tests. Ruff and whitespace checks pass. Storage-failure recovery proves immediate retry remains blocked by the retained lease, then recovers only by readback after expiry without a second financial request. The fixed real private manifest passes schema/binding validation; no live helper preview or apply has occurred yet.
+- Native mapping mitigation evidence is published with AES256, create-only protection and exact readback at `data/roy/order-automation/audits/2026-09-13/stripe-status-mapping-mitigation-20260913.json`, SHA-256 `44bf135730c5bd1f47fd736b9a8689f1612866a6db59e6042ac8dcc122b6782f`. Both failure mappings expose only existing order statuses; no supported selective suppression option was established. No gateway setting or event was changed.
+
+Known issues:
+
+- Invoice deployment `34735770705` is still active; main remains frozen. ROY's new candidate passed its actual full-backlog localhost gate, while later candidates/promotion are pending. Nine original held historical invoices and other recent failures still need actual completion. Native stale-attempt downgrades remain unresolved outside AWS.
+
+Next exact step:
+
+- Complete full regression, commit/push and run required PR checks. Do not merge during the active release. After its complete independent promotion evidence, run read-only previews and the fixed journal-only email confirmations, then one reviewed existing-document correction at a time. Inspect each actual result before continuing, finish remaining held seeds and independently verify all historical documents and natural runs. Preserve unresolved outcomes instead of replaying writes.
 
 ## 2026-09-13 — API cooldown correction merged; exact release pending
 

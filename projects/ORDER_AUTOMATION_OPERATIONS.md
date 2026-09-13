@@ -178,6 +178,73 @@ business data, and fails incomplete or uncertain outcomes. It writes ignored
 JSON/Markdown evidence; the optional flag also saves immutable encrypted copies
 under the same private bucket's project verification prefix.
 
+## Fixed incident reconciliation
+
+After recovery, use the separate [final all-age and original-eleven verification
+procedure](ORDER_AUTOMATION_POST_RECOVERY.md). It uses current anchored discovery
+without an old audit baseline and keeps the original eleven-record journal check
+independent. Run only after verified promotion/recovery and coordinated scan drain.
+
+`scripts/reconcile_reviewed_invoice_outcomes.py` is restricted to the six reviewed
+ROY outcomes in three fixed, hash-verified private evidence objects: the original
+history/outcome proof, the cross-shop native contract, and the fresh six-case
+native mapping. The obsolete API-ID-equivalence proof is not accepted. It does not
+relax the ordinary generator or accept arbitrary orders, evidence or endpoints.
+The `confirm-emails` action records two provider-confirmed sends without email
+transmission. Both actions, including previews, log in solely for bounded native
+read-only POST lookups through the generator's strict `o#` grid query. This proves
+provider sending, not recipient delivery or
+exactly-once sending; each original provider history contains two send events.
+
+The `finalize-one` action handles one deterministic unfinished case from the four
+reviewed creation ambiguities. It can only assign a final number to the existing
+bound preinvoice. It never prepares another document, changes status or sends an
+email. It preserves the original attempt and journals a permanent one-attempt
+intent plus an email hold before the request. The intent stores the reviewed
+native preinvoice key separately from the API association reference, together
+with the new mapping and contract hashes. Repeated fresh API/native reads must
+confirm internal/public order identity, shipped/unblocked/positive eligibility
+and the same native preinvoice key. Finalization uses only that native key.
+A unique API final document with the reviewed order association must have a
+nonempty `invoice_num` equal to the same native row's `inv_id`. Matching API IDs
+or a displayed number belonging to another order do not prove native identity.
+A final document already present is reconciled by readback only. An uncertain
+intent cannot be replayed, including after a crash before transmission.
+Legacy or changed intent schemas are blocked, never reset or silently migrated.
+Native read failures and disagreement after transmission preserve uncertainty.
+
+Both actions default to read-only previews from clean, pushed source:
+
+```powershell
+python scripts/reconcile_reviewed_invoice_outcomes.py confirm-emails --profile codex
+python scripts/reconcile_reviewed_invoice_outcomes.py finalize-one --profile codex
+```
+
+Apply additionally requires `--apply`, `--expected-image-digest`,
+`--expected-source-commit` and `--deployment-evidence-key` for the exact reviewed
+release. The helper rechecks three actual host markers, both complete drains,
+all five current schedule pins and ECR source identity, rejects old/unverified
+active writers and holds the shared ROY lease. A retained lease after storage
+failure must expire normally; never clear it to force progress. Preview checks
+stable journal evidence and reports consumed intents or lease contention.
+
+The fixed release allowlist is intentional. A future release or changed incident
+requires a reviewed source change and new evidence; do not broaden the CLI or clear
+journal phases as a shortcut. The native identity contract supports the existing-
+document operation, but does not establish backend replay/idempotency guarantees.
+Final independent business verification is still required after the helper runs.
+
+The reviewed allowlist now binds the independently promoted native correction
+`47c3da775ff7018a1cf8950024c867310b91ae8a` /
+`sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`.
+Managed deployment `34741354275` passed all actual hosts, drains and promotion
+readbacks; both shops' subsequent natural tasks created native/API-confirmed
+invoices. Its private receipt is
+`data/roy/order-automation/deployments/47c3da775ff7018a1cf8950024c867310b91ae8a/4b88d8c4d91943ef871b54b7b19031e3.json`.
+This source change still requires review before apply. One separate VEVO
+preparation uncertainty is outside the fixed six-case ROY scope and cannot be
+reset or replayed by this helper. Failed earlier releases remain disallowed.
+
 ## Release sequence and rollback
 
 For a previously shipped order whose state was lost, first inspect its authenticated
