@@ -1988,12 +1988,18 @@ def run_invoice_generation(
                     current = generator.fetch_order_for_invoice(number)
                     decision = closure_decision(record, project=project_name, order_num=number, current_order=current)
                 prior_review = record.get("status_review") or {}
-                needs_review = not decision.closed or decision.regression or (
-                    prior_review.get("state") == "open" and prior_review.get("reason", "").startswith("reviewed_closure"))
+                malformed_review = not isinstance(prior_review, dict)
+                previous_reason = prior_review.get("reason") if not malformed_review else None
+                retained_review = malformed_review or (
+                    prior_review.get("state") == "open" and isinstance(previous_reason, str)
+                    and previous_reason.startswith("reviewed_closure"))
+                needs_review = not decision.closed or decision.regression or retained_review
                 summary.reviewed_closed_invoice_obligations += int(decision.closed)
                 summary.reviewed_invoice_obligation_reviews += int(needs_review)
                 if journal and needs_review:
-                    journal.update_order(number, status_review={"state": "open", "reason": decision.reason})
+                    reason = decision.reason if not decision.closed or decision.regression else (
+                        "reviewed_closure_review_invalid" if malformed_review else previous_reason)
+                    journal.update_order(number, status_review={"state": "open", "reason": reason})
             summary.total_orders_fetched = len(orders)
             summary.matched_orders = len(candidates)
             summary.skipped_zero_total_orders = stats["skipped_zero_total_orders"]

@@ -167,3 +167,15 @@ class ReviewedInvoiceRuntimeTests(unittest.TestCase):
                 with self.assertRaisesRegex(AutomationStateError, "preserve original"):
                     journal.update_order(self.number, **{field: "changed"})
             self.assertEqual(before, journal.get_order(self.number))
+
+    def test_regression_review_remains_open_after_order_returns_to_target(self):
+        self.seed()
+        target = deepcopy(self.order["status"])
+        self.order["status"] = {"id": "4", "name": "Odoslaná"}
+        self.assertEqual(1, self.run_fixture().reviewed_invoice_obligation_reviews)
+        self.order["status"] = target
+        for _ in range(3):
+            self.assertEqual(1, self.run_fixture(full_backlog=False).reviewed_invoice_obligation_reviews)
+            self.assertEqual("reviewed_closure_regression",
+                             self.store.read()[0]["orders"][self.number]["status_review"]["reason"])
+        self.assert_original_preserved()

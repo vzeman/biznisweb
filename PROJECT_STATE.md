@@ -20,7 +20,7 @@ What changed:
 
 What is verified:
 
-- Existing invoice/state/status checks and new runtime/pure/backfill cases pass (216 focused tests before the final metrics assertion). Private confirmation raw hash, canonical hash and strict scope validation were replayed locally without provider calls. Tests cover full/incremental/dry selection, status/document/amount regressions, malformed/pending markers, original-field preservation, direct financial calls, stale send intent and legacy read-only use.
+- Existing invoice/state/status checks and new runtime/pure/backfill cases pass (217 focused tests), followed by all 754 tests from the exact build workflow and reporting smoke. A further regression test verifies a closure review stays open across later matching readbacks; the fresh outcome must not overwrite its retained review reason. Private confirmation raw hash, canonical hash and strict scope validation were replayed locally without provider calls. Tests cover full/incremental/dry selection, status/document/amount regressions, malformed/pending markers, original-field preservation, direct financial calls, stale send intent and legacy read-only use.
 
 Known issues:
 

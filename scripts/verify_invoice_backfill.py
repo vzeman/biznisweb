@@ -43,7 +43,7 @@ def assess_order(number: str, record: dict, order: Any, shipped_status_ids: set[
         if record.get("email_policy") != "hold":
             issues.append("historical_email_hold_missing")
         review = record.get("status_review") or {}
-        if isinstance(review, dict) and review.get("state") == "open":
+        if not isinstance(review, dict) or review.get("state") == "open":
             issues.append("reviewed_closure_requires_review")
         result["ok"] = not issues
         result["outcome"] = "reviewed_uncollected_obligation_closed" if result["ok"] else "unverified"
