@@ -26,6 +26,7 @@ Known issues:
 
 - Failed `b417` deployment was restored and is not a live release. Original order image `c3842dda...` remains the last independently verified production authority until the new transaction passes. Closure release pins remain empty; no closure was applied to user-confirmed returned/uncollected VEVO order 2502000712. Its original uncertain financial attempt must remain unchanged.
 - VEVO stale scan/missing completion and separate old reporting status-name handling remain unresolved. Manual bank provenance is recorded, but compatible-consumer runtime proof is still pending. No local persistent processes were started.
+- Separate dashboard audit (source-only, no fresh runtime probe): saved September 4 deployment evidence identifies VEVO App Runner `biznisweb-vevo-production-board`, `/app`, `python live_dashboard_server.py`. The unchanged `production_board.py` name-only paid filter drops current ID31 `Payment online - paid` in a synthetic same-ID test (1 order/2 units becomes 0/0). Its VEVO path reads orders only; this display defect does not block primary invoice deployment and needs its own App Runner correction. The shared server also exposes ROY-only manual pickup status POSTs via `roy_operations_dashboard.py`, with fresh limited read and no transient retry but without the shared automation lease/verified write readback. Do not claim every manual UI writer is covered by this automation release. Existing board pagination/retries/cache may contribute provider load, but no outage cause was established.
 
 Next exact step:
 
