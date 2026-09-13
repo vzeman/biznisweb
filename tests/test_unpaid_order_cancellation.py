@@ -7,6 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from gql.transport.exceptions import TransportQueryError, TransportServerError
+
 from tests.test_order_status_safety import MemoryAutomationStore, money, receipt
 
 from unpaid_order_cancellation import (
@@ -796,7 +798,7 @@ class CancellationInventoryTests(unittest.TestCase):
             rows, _ = self.scan(client, settings=replace(self.settings, page_delay_seconds=2))
         self.assertEqual(1, len(rows))
         waits = [call.args[0] for call in self.sleep.call_args_list]
-        self.assertIn(10, waits)
+        self.assertEqual(2, waits.count(30))
         self.assertTrue(any(0 < delay <= 2 for delay in waits))
         error = RuntimeError("synthetic permanent quota")
         error.code = 429
@@ -804,6 +806,55 @@ class CancellationInventoryTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 self.scan(client)
         self.assertEqual(4, execute.call_count)
+
+    def test_inventory_maintenance_header_is_honored_in_chunks(self):
+        client = self.client(1)
+        client.transport = SimpleNamespace()
+        original = client.execute
+        calls = []
+        def execute(query, variable_values=None):
+            calls.append(True)
+            if len(calls) == 1:
+                client.transport.response_headers = {"Retry-After": "75"}
+                client.transport.response_status_code = 501
+                raise TransportQueryError("synthetic private maintenance")
+            return original(query, variable_values)
+        with patch.object(client, "execute", side_effect=execute):
+            rows, _ = self.scan(client)
+        self.assertEqual(1, len(rows))
+        self.assertEqual([30, 30, 15], [call.args[0] for call in self.sleep.call_args_list])
+        self.assertEqual([], client.mutations)
+
+    def test_data_only_http_failure_cannot_complete_inventory(self):
+        for status in (429, 509, 401, 308):
+            client = self.client(1)
+            client.transport = SimpleNamespace()
+            original = client.execute
+            def execute(query, variable_values=None):
+                client.transport.response_status_code = status
+                return original(query, variable_values)
+            with patch.object(client, "execute", side_effect=execute) as request:
+                with self.assertRaises(TransportServerError):
+                    self.scan(client)
+            self.assertEqual(4 if status == 429 else 1, request.call_count)
+            self.assertEqual([], client.mutations)
+
+    def test_inventory_daily_quota_and_excessive_retry_after_fail_before_writes(self):
+        for status, retry_after, expected_error in ((509, "1", TransportQueryError), (429, "1201", RuntimeError)):
+            with self.subTest(status=status):
+                client = self.client(1)
+                client.transport = SimpleNamespace()
+                def execute(query, variable_values=None):
+                    client.transport.response_headers = {"Retry-After": retry_after}
+                    client.transport.response_status_code = status
+                    raise TransportQueryError("synthetic private quota")
+                self.sleep.reset_mock()
+                with patch.object(client, "execute", side_effect=execute) as request:
+                    with self.assertRaises(expected_error):
+                        self.scan(client)
+                self.assertEqual(1, request.call_count)
+                self.sleep.assert_not_called()
+                self.assertEqual([], client.mutations)
 
     def test_twenty_minute_deadline_covers_entire_inventory_and_retry_wait(self):
         client = self.client(3)

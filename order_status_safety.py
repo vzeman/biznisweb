@@ -13,9 +13,12 @@ from contextlib import contextmanager, ExitStack
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import Any, Iterable, Mapping
+from typing import Any, Callable, Iterable, Mapping
 
 from gql import gql
+from api_read_backoff import (
+    READ_BUDGET_SECONDS, check_read_deadline, check_read_response_status, prepare_query_read, read_retry_delay, wait_before_read,
+)
 
 
 MONEY_FIELDS = "value is_net_price currency { code }"
@@ -338,33 +341,38 @@ def decide_recovery(
     return RecoveryDecision("review", fulfillment.reason)
 
 
-def execute_read(client: Any, query: Any, *, variable_values: dict[str, Any], attempts: int = 3) -> dict[str, Any]:
+def execute_read(client: Any, query: Any, *, variable_values: dict[str, Any], attempts: int = 3,
+                 progress_callback: Callable[[], None] | None = None) -> dict[str, Any]:
     """Retry only an explicitly supplied read, never a mutation or partial data."""
-    from graphql import OperationType
-
-    document = getattr(query, "document", query)
-    operations = [node for node in document.definitions if hasattr(node, "operation")]
-    if not operations or any(node.operation != OperationType.QUERY for node in operations):
-        raise ValueError("execute_read requires a query operation")
+    deadline = time.monotonic() + READ_BUDGET_SECONDS
     for attempt in range(attempts):
+        check_read_deadline(deadline, monotonic=time.monotonic)
+        transport = prepare_query_read(client, query)
+        if progress_callback:
+            progress_callback()
+        check_read_deadline(deadline, monotonic=time.monotonic)
         try:
             result = client.execute(query, variable_values=variable_values)
+            check_read_response_status(transport)
+            check_read_deadline(deadline, monotonic=time.monotonic)
             if not isinstance(result, dict):
                 raise RuntimeError("Order API returned an invalid response")
             return result
         except Exception as exc:
-            code = getattr(exc, "code", None) or getattr(getattr(exc, "response", None), "status_code", None)
-            transient = code in {429, 500, 502, 503, 504} or type(exc).__name__ in {
-                "Timeout", "ReadTimeout", "ConnectTimeout", "ConnectionError", "TransportProtocolError",
-            }
-            if not transient or attempt + 1 == attempts:
+            delay = read_retry_delay(exc, attempt=attempt,
+                                     response_headers=getattr(transport, "response_headers", None),
+                                     response_status_code=getattr(transport, "response_status_code", None))
+            if delay is None or attempt + 1 == attempts:
                 raise
-            time.sleep(min(2 ** attempt, 4))
+            wait_before_read(delay, deadline=deadline, progress_callback=progress_callback,
+                             monotonic=time.monotonic, sleep=time.sleep)
     raise RuntimeError("Order API read was not attempted")
 
 
-def fetch_order_safety_context(client: Any, order_num: str) -> dict[str, Any]:
-    result = execute_read(client, ORDER_SAFETY_QUERY, variable_values={"order_num": str(order_num)})
+def fetch_order_safety_context(client: Any, order_num: str, *,
+                               progress_callback: Callable[[], None] | None = None) -> dict[str, Any]:
+    result = execute_read(client, ORDER_SAFETY_QUERY, variable_values={"order_num": str(order_num)},
+                          progress_callback=progress_callback)
     order = result.get("getOrder")
     if not isinstance(order, dict) or str(order.get("order_num") or "") != str(order_num):
         raise RuntimeError("Order API detail identity does not match the requested order")
@@ -378,6 +386,7 @@ def change_status_verified(
     status_name: str,
     *,
     silent: bool = False,
+    progress_callback: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Make one status write and independently verify it; never replay uncertainty.
 
@@ -397,12 +406,12 @@ def change_status_verified(
         # The request may already have committed. Resolve by a read, never by a
         # second write. If the target cannot be proved, the caller retains its
         # durable pending/uncertain record and requires review on future runs.
-        verified = fetch_order_safety_context(client, order_num)
+        verified = fetch_order_safety_context(client, order_num, progress_callback=progress_callback)
         _validate_target(verified, order_num, status_id, status_name)
         return verified
     changed = result.get("changeOrderStatus") if isinstance(result, dict) else None
     _validate_target(changed, order_num, status_id, status_name)
-    verified = fetch_order_safety_context(client, order_num)
+    verified = fetch_order_safety_context(client, order_num, progress_callback=progress_callback)
     _validate_target(verified, order_num, status_id, status_name)
     return verified
 

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from gql import gql
+from gql.transport.exceptions import TransportQueryError, TransportServerError
 
 from order_status_safety import (
     ORDER_SAFETY_QUERY,
@@ -365,6 +366,82 @@ class VerifiedMutationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 execute_read(client, ORDER_SAFETY_QUERY, variable_values={"order_num": "ORDER-1"})
         self.assertEqual(1, request.call_count)
+
+
+    def test_previous_response_headers_cannot_delay_a_new_connection_failure(self):
+        client = FakeClient()
+        client.transport.response_headers = {"Retry-After": "900"}
+        client.transport.response_status_code = 509
+        with patch.object(client, "execute", side_effect=[ConnectionError("private"), {"getOrder": client.readback}]) as request, \
+                patch("order_status_safety.time.sleep") as sleep:
+            self.assertEqual(client.readback, fetch_order_safety_context(client, "ORDER-1"))
+        self.assertEqual(2, request.call_count)
+        self.assertEqual([10], [call.args[0] for call in sleep.call_args_list])
+
+    def test_readback_cooldown_renews_lease_without_replaying_the_status_write(self):
+        client = FakeClient()
+        clock = [0.0]
+        heartbeat_times = []
+        calls = []
+        def execute(query, variable_values=None):
+            calls.append(variable_values)
+            if "status_id" in variable_values:
+                raise TransportServerError("uncertain mutation response", code=429)
+            if len(calls) == 2:
+                client.transport.response_headers = {"Retry-After": "75"}
+                client.transport.response_status_code = 429
+                raise TransportQueryError("private quota")
+            return {"getOrder": client.readback}
+        def sleep(seconds):
+            clock[0] += seconds
+        with patch.object(client, "execute", side_effect=execute), \
+                patch("order_status_safety.time.monotonic", side_effect=lambda: clock[0]), \
+                patch("order_status_safety.time.sleep", side_effect=sleep) as waiting:
+            result = change_status_verified(client, "ORDER-1", 4, "Odoslaná", silent=True,
+                                            progress_callback=lambda: heartbeat_times.append(clock[0]))
+        self.assertEqual(client.readback, result)
+        self.assertEqual(1, sum("status_id" in values for values in calls))
+        self.assertEqual(3, len(calls))
+        self.assertEqual([30, 30, 15], [call.args[0] for call in waiting.call_args_list])
+        self.assertIn(30, heartbeat_times)
+        self.assertIn(60, heartbeat_times)
+        self.assertIn(75, heartbeat_times)
+
+    def test_data_only_http_failure_never_becomes_status_evidence(self):
+        for status in (429, 509, 401, 308):
+            client = FakeClient()
+            def execute(query, variable_values=None):
+                client.transport.response_status_code = status
+                return {"getOrder": client.readback}
+            with patch.object(client, "execute", side_effect=execute) as request, \
+                    patch("order_status_safety.time.sleep"):
+                with self.assertRaises(TransportServerError):
+                    fetch_order_safety_context(client, "ORDER-1")
+            self.assertEqual(3 if status == 429 else 1, request.call_count)
+
+    def test_structured_forbidden_read_is_not_retried(self):
+        client = FakeClient()
+        error = TransportQueryError("private", errors=[{"extensions": {"code": "FORBIDDEN"}}])
+        with patch.object(client, "execute", side_effect=error) as request, patch("order_status_safety.time.sleep") as sleep:
+            with self.assertRaises(TransportQueryError):
+                fetch_order_safety_context(client, "ORDER-1")
+        self.assertEqual(1, request.call_count)
+        sleep.assert_not_called()
+
+    def test_safety_read_daily_quota_and_out_of_budget_header_are_not_retried(self):
+        for status, retry_after, expected_error in ((509, "1", TransportQueryError), (501, "241", RuntimeError)):
+            with self.subTest(status=status):
+                client = FakeClient()
+                def execute(query, variable_values=None):
+                    client.transport.response_headers = {"Retry-After": retry_after}
+                    client.transport.response_status_code = status
+                    raise TransportQueryError("private")
+                with patch.object(client, "execute", side_effect=execute) as request, \
+                        patch("order_status_safety.time.sleep") as sleep:
+                    with self.assertRaises(expected_error):
+                        fetch_order_safety_context(client, "ORDER-1")
+                self.assertEqual(1, request.call_count)
+                sleep.assert_not_called()
 
 
 class BoundedLeaseAcquisitionTests(unittest.TestCase):
