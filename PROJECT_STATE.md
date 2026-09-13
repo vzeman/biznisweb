@@ -5,6 +5,31 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 - Reporting role adaptation passes offline regression
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/report-status-identity-20260913`
+
+What changed:
+
+- Reporting live/cache acquisition now binds the reviewed VEVO catalogue before classification; period children reuse that verified catalogue. Realized revenue, failed-payment segmentation and shipped-creditnote context use canonical copies while raw display/cache rows remain unchanged. Same-shop/project/transport drift and foreign role collisions reject authority. ROY keeps its existing policy.
+- Added a report-only unpaid lifecycle wrapper; the original frozen GrowthBook classifier and facts-only no-client constructor behavior remain unchanged. Added 20 focused regressions, wired into image-build and both-platform automation CI. Existing provider-query mocks explicitly model an unbound client/catalogue where their tests cover unrelated payment or frozen-facts behavior.
+- Updated `projects/REPORT_STATUS_IDENTITY_AUDIT.md` with implementation boundaries and a release blocker: new Stripe ID 70 is distinct from the reviewed five renames. The current catalogue proves its label, but authoritative same-shop PAID event binding is still required before adding a reporting paid role. The current test records its exclusion; do not claim Stripe compatibility.
+
+What is verified:
+
+- Offline image-build workflow suites: 864 tests pass (72 + 20 + 26 + 746). Full automation workflow: 602 pass. Frozen GrowthBook source/pipeline: 35 pass. Reporting smoke and scoped Ruff pass; exporter Ruff has no new diagnostics relative to the unchanged legacy baseline. Whitespace checks pass. Independent read-only source review found no blocker in binding, cache/period handling, creditnotes or frozen facts; the later twentieth test records the explicit Stripe release limitation.
+- No provider/AWS query, financial/status/email write, runtime change or persistent local process. Main remains frozen for the parent-managed order release. No report/GrowthBook/production-board pin is changed.
+
+Known issues:
+
+- Do not release the report until the Stripe paid-role proof/patch, separate guard migration and managed immutable reporting deployment are reviewed. The independent production-board name-filter regression remains a separate reader/release task. Historical GrowthBook receipts and measurement policy remain unchanged.
+
+Next exact step:
+
+- Finish independent source review, commit/push this bounded report checkpoint, then integrate the parent's exact security-baseline supplements `fd3d0061` and `a7f1bdd9` through Git. Obtain authoritative Stripe event binding or retain the explicit release blocker. Root owns PR merge and all runtime releases.
+
 ## 2026-09-13 — Reporting branch integrates reviewed status identity dependency
 
 Date: 2026-09-13

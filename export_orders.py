@@ -23,6 +23,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import calendar
 import numpy as np
 from logger_config import get_logger
+from order_status_identity import bind_catalogue, bind_status_identity, canonical_order, identity_for
 from weather_client import WeatherClient
 from reporting_core import (
     BASE_DEFAULT_PROJECT,
@@ -811,6 +812,7 @@ class BizniWebExporter:
             timeout=GRAPHQL_TIMEOUT_SEC,
         )
         self.client = None if order_facts_only else Client(transport=transport, fetch_schema_from_transport=False)
+        self._reporting_status_identity = None
         self.api_min_request_interval_sec = env_float(
             "BIZNISWEB_API_MIN_REQUEST_INTERVAL_SEC",
             BIZNISWEB_API_MIN_REQUEST_INTERVAL_SEC,
@@ -1659,6 +1661,7 @@ class BizniWebExporter:
                 artifact_subdir=artifact_subdir,
                 enable_period_bundle=False,
             )
+            self._copy_reporting_status_identity(child_exporter)
             child_exporter._product_inventory_snapshot_cache = (
                 self._product_inventory_snapshot_cache
             )
@@ -3237,8 +3240,49 @@ class BizniWebExporter:
     def _status_name(order: Dict[str, Any]) -> str:
         return str(((order or {}).get("status") or {}).get("name") or "").strip()
 
+    def prepare_reporting_status_identity(self) -> None:
+        """Bind one live catalogue before reading or filtering cached orders."""
+        previous = self._reporting_status_identity
+        if previous is not None:
+            previous.assert_bound(self.client)
+            if previous.project != self.project_name:
+                raise ValueError("report_status_identity_project_changed")
+        if self.client is None or self.project_name != "vevo":
+            return  # The frozen facts-only path stays pure; ROY keeps its policy.
+        from order_status_safety import ensure_status_catalogue
+
+        policy = bind_status_identity(self.client, self.project_name, self.project_settings)
+        self._reporting_status_identity = policy
+        ensure_status_catalogue(self.client)
+
+    def _copy_reporting_status_identity(self, child) -> None:
+        policy = self._reporting_status_identity
+        if policy is None:
+            return
+        policy.assert_bound(self.client)
+        if child.project_name != self.project_name:
+            raise ValueError("report_status_identity_child_project_changed")
+        child._reporting_status_identity = bind_status_identity(
+            child.client, child.project_name, child.project_settings,
+        )
+        bind_catalogue(child.client, list(policy.catalogue.values()))
+
+    def _reporting_order_context(self, order: Dict[str, Any]) -> Dict[str, Any]:
+        """Classify a verified copy; keep provider rows unchanged for display/cache."""
+        previous = self._reporting_status_identity
+        if previous is not None:
+            previous.assert_bound(self.client)
+        policy = identity_for(self.client)
+        if policy is not None:
+            if policy.project != self.project_name:
+                raise ValueError("report_status_identity_project_changed")
+            return canonical_order(self.client, order, inventory=True)
+        if "raw_status" in order or "status_identity_contract" in order:
+            raise ValueError("report_status_identity_evidence_without_binding")
+        return order
+
     def _status_norm(self, order: Dict[str, Any]) -> str:
-        return self._normalize_match_text(self._status_name(order))
+        return self._normalize_match_text(self._status_name(self._reporting_order_context(order)))
 
     @staticmethod
     def _is_price_elements_error(error: Exception) -> bool:
@@ -3371,7 +3415,10 @@ class BizniWebExporter:
         )
 
     def _realized_revenue_decision(self, order: Dict[str, Any]) -> Tuple[bool, str]:
-        status_norm = self._status_norm(order)
+        order = self._reporting_order_context(order)
+        if order.get("status_identity_unbound"):
+            return False, "unbound_status"
+        status_norm = self._normalize_match_text(self._status_name(order))
         settings = self.realized_revenue_settings
 
         if status_norm in settings["paid_statuses_normalized"]:
@@ -4002,6 +4049,14 @@ class BizniWebExporter:
         if any(token in status_norm for token in ("odoslana", "odeslana", "shipped", "dispatch", "exped", "sent")):
             return "shipped_fulfilled", "Shipped / fulfilled", 40
         return "other_unknown", "Other / unknown", 90
+
+    @classmethod
+    def _report_lifecycle_bucket(cls, status_value: Any) -> Tuple[str, str, int]:
+        # Keep the frozen experiment-order classifier unchanged. This correction
+        # belongs to report presentation, not a retroactive measurement rewrite.
+        if "unpaid" in cls._normalize_match_text(status_value).split():
+            return "awaiting_payment", "Awaiting payment", 20
+        return cls._classify_lifecycle_bucket(status_value)
 
     @classmethod
     def _matches_patterns(cls, label: str, patterns: List[str]) -> bool:
@@ -5038,6 +5093,7 @@ class BizniWebExporter:
 
         Note: API filter requires partner token, so we fetch all orders and filter client-side
         """
+        self.prepare_reporting_status_identity()
         all_orders = []
         has_next_page = True
         cursor = None
@@ -5316,6 +5372,7 @@ class BizniWebExporter:
         Returns:
             Tuple of (orders list, next cursor)
         """
+        self.prepare_reporting_status_identity()
         all_orders = []
         has_next_page = True
         cursor = start_cursor
@@ -5384,6 +5441,7 @@ class BizniWebExporter:
 
     def fetch_orders(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         """Fetch all orders within the specified date range, using cache for older data"""
+        self.prepare_reporting_status_identity()
         all_orders = []
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -5635,7 +5693,7 @@ class BizniWebExporter:
             track_excluded: If True, store excluded orders for later segmentation analysis
         """
         # Statuses for failed payment segmentation (subset of excluded)
-        failed_payment_statuses = FAILED_PAYMENT_STATUSES
+        failed_payment_statuses = {self._normalize_match_text(name) for name in FAILED_PAYMENT_STATUSES}
 
         decisions = []
         missing_payment_metadata_order_nums = []
@@ -5659,15 +5717,13 @@ class BizniWebExporter:
         filtered_orders = []
         excluded_counts: Dict[str, int] = {}
         for order, include_order, reason in decisions:
-            status = order.get('status', {}) or {}
-            status_name = status.get('name', '')
             if include_order:
                 filtered_orders.append(order)
             else:
                 excluded_counts[reason] = excluded_counts.get(reason, 0) + 1
                 if track_excluded:
                     self.excluded_status_orders.append(order)
-                if track_excluded and status_name in failed_payment_statuses:
+                if track_excluded and reason != "unbound_status" and self._status_norm(order) in failed_payment_statuses:
                     # Track failed payment orders for segmentation
                     self.excluded_orders.append(order)
 
@@ -5723,11 +5779,13 @@ class BizniWebExporter:
     def _order_was_sent_before_creditnote(self, order: Dict[str, Any], order_num: str = "") -> bool:
         from creditnote_export import order_was_sent_before_creditnote
 
+        self._reporting_order_context(order)
         return order_was_sent_before_creditnote(
             order,
             order_num=order_num,
             status_change_audit=self._creditnote_status_change_audit(),
             shipped_statuses=self._creditnote_shipped_statuses(),
+            status_client=self.client,
         )
 
     def _creditnote_shipping_cost_per_order(self) -> float:
@@ -5835,6 +5893,7 @@ class BizniWebExporter:
             "creditnote_order_errors": {},
             "status_change_audit": self._creditnote_status_change_audit(),
             "shipped_statuses": self._creditnote_shipped_statuses(),
+            "_status_client": self.client,
         }
 
     def analyze_creditnote_reporting_metrics(
@@ -6164,6 +6223,7 @@ class BizniWebExporter:
 
         Note: API filter requires partner token, so we fetch all orders and filter client-side
         """
+        self.prepare_reporting_status_identity()
         all_orders = []
         has_next_page = True
         cursor = None
@@ -15929,7 +15989,7 @@ class BizniWebExporter:
         orders_df = orders_df.merge(status_meta, on="order_num", how="left")
         orders_df["status_name"] = orders_df["status_name"].fillna("").astype(str)
         orders_df["status_name_norm"] = orders_df["status_name"].apply(self._normalize_match_text)
-        lifecycle_meta = orders_df["status_name"].apply(self._classify_lifecycle_bucket)
+        lifecycle_meta = orders_df["status_name"].apply(self._report_lifecycle_bucket)
         orders_df["lifecycle_bucket"] = lifecycle_meta.apply(lambda value: value[0])
         orders_df["lifecycle_label"] = lifecycle_meta.apply(lambda value: value[1])
         orders_df["lifecycle_order"] = lifecycle_meta.apply(lambda value: value[2])
@@ -15975,7 +16035,7 @@ class BizniWebExporter:
         tracked_excluded = []
         for order in getattr(self, "excluded_status_orders", []) or []:
             status_name = ((order or {}).get("status", {}) or {}).get("name", "")
-            bucket_key, bucket_label, bucket_order = self._classify_lifecycle_bucket(status_name)
+            bucket_key, bucket_label, bucket_order = self._report_lifecycle_bucket(status_name)
             tracked_excluded.append(
                 {
                     "lifecycle_bucket": bucket_key,

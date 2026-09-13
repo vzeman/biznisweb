@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 
 from http_client import build_retry_session, resolve_timeout
 from logger_config import get_logger
+from order_status_identity import canonical_order, identity_for
 from reporting_core import (
     derive_biznisweb_base_url,
     load_project_env,
@@ -694,9 +695,11 @@ def order_was_sent_before_creditnote(
     order_num: Any = "",
     status_change_audit: Any = None,
     shipped_statuses: Optional[Sequence[str]] = None,
+    *, status_client: Any = None,
 ) -> bool:
     shipped = set(shipped_statuses or creditnote_shipped_statuses())
-    if order and normalize_status_name(_order_status_name(order)) in shipped:
+    current = canonical_order(status_client, order, inventory=True) if order else order
+    if current and not current.get("status_identity_unbound") and normalize_status_name(_order_status_name(current)) in shipped:
         return True
 
     normalized_order_num = normalize_order_num(order_num or ((order or {}).get("order_num") if order else ""))
@@ -712,6 +715,15 @@ def order_was_sent_before_creditnote(
         or audit_entry.get("from_status")
         or audit_entry.get("previous_status_name")
     )
+    policy = identity_for(status_client)
+    if policy is not None and policy.renamed:
+        if (isinstance(status_change_audit, dict) and status_change_audit.get("project") not in {None, policy.project}
+                or audit_entry.get("project") not in {None, policy.project}):
+            raise ValueError("creditnote_status_audit_project_changed")
+        previous_id = audit_entry.get("previous_status_id")
+        if previous_id is not None:
+            historical = canonical_order(status_client, {"status": {"id": previous_id, "name": previous_status}})
+            previous_status = _order_status_name(historical)
     return normalize_status_name(previous_status) in shipped
 
 
@@ -735,6 +747,9 @@ def _creditnote_order_nums(project_rows: Sequence[Dict[str, Any]]) -> List[str]:
 
 
 def fetch_creditnote_orders_by_number(exporter: Any, order_nums: Sequence[str]) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]], Dict[str, str]]:
+    prepare = getattr(exporter, "prepare_reporting_status_identity", None)
+    if prepare is not None:
+        prepare()
     from gql import gql
 
     query = gql(
@@ -944,6 +959,7 @@ def fetch_project_reporting_order_context(
             "creditnote_order_errors": creditnote_order_errors,
             "status_change_audit": load_creditnote_status_change_audit(project, settings),
             "shipped_statuses": creditnote_shipped_statuses(settings),
+            "_status_client": exporter.client,
             "window_from": window_from,
             "window_to": window_to,
         }
@@ -972,6 +988,7 @@ def build_creditnote_reporting_audit(
     decision_maps: Dict[str, Dict[str, Dict[str, Any]]] = {}
     status_audits: Dict[str, Any] = {}
     shipped_statuses_by_project: Dict[str, Tuple[str, ...]] = {}
+    status_clients: Dict[str, Any] = {}
     denominator_by_carrier: Dict[Tuple[str, str], Dict[str, Any]] = {}
 
     for project, context in order_context_by_project.items():
@@ -990,6 +1007,10 @@ def build_creditnote_reporting_audit(
         decision_maps[project_key] = dict(context.get("creditnote_order_decisions") or {})
         status_audits[project_key] = context.get("status_change_audit") or {}
         shipped_statuses_by_project[project_key] = tuple(context.get("shipped_statuses") or creditnote_shipped_statuses())
+        status_clients[project_key] = context.get("_status_client")
+        policy = identity_for(status_clients[project_key])
+        if policy is not None and policy.project != project.lower():
+            raise ValueError("creditnote_reporting_context_project_changed")
         for order in carrier_denominator_orders:
             order_num = normalize_order_num(order.get("order_num"))
             if not order_num:
@@ -999,6 +1020,7 @@ def build_creditnote_reporting_audit(
                 order_num=order_num,
                 status_change_audit=status_audits.get(project_key),
                 shipped_statuses=shipped_statuses_by_project.get(project_key),
+                status_client=status_clients.get(project_key),
             ):
                 continue
             shipping = _order_shipping_info(order)
@@ -1028,6 +1050,7 @@ def build_creditnote_reporting_audit(
             order_num=order_num,
             status_change_audit=status_audits.get(project),
             shipped_statuses=shipped_statuses_by_project.get(project),
+            status_client=status_clients.get(project),
         )
 
         if order is None:
