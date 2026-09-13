@@ -13,7 +13,7 @@ Branch: `codex/manual-settlement-protection-20260913`
 
 What changed:
 
-- Preparing one combined draft PR for manual external-bank settlement protection and independently reviewed native creditnote identity/lifecycle correction. PR #549's exact correction is included; its supersession will be linked after the combined draft exists. No PR/main merge or deployment is part of this step.
+- Created combined draft [PR #550](https://github.com/vzeman/biznisweb/pull/550) for manual external-bank settlement protection and independently reviewed native creditnote identity/lifecycle correction. PR #549's exact `9856e847` correction is included and that PR now explicitly links the superseding combined draft. PR #549 remains open while the combined draft is under review; neither PR was merged or deployed here.
 - Updated the operations runbook to the verified `47c3da77` / `c3842dda` runtime, five enabled order-automation schedules and 28 confirmed natural invoices. Four historical helper cases and the separate uncollected preparation uncertainty remain pending until root confirms their outcomes.
 - Incorporated only the already-pushed vendor handoff from `3bf3d150`, without replaying historical project memory. Added the current user-confirmed gateway direction (ROY Stripe; VEVO actively GoPay-to-Stripe migration) and exact closed/nonvoided creditnote acceptance criteria. The handoff remains unsent; gateway settings and webhook mappings remain unchanged.
 
@@ -27,7 +27,7 @@ Known issues:
 
 Next exact step:
 
-- Commit/push this documentation, create and verify the combined draft PR, link the contained PR #549 as superseded, and return its URL to root. Preserve the uncollected-order agent's separate files and wait for its explicit reviewed-source handoff before integration.
+- Root continues review and exact-head CI tracking on draft PR #550 before deciding its final release scope. Preserve the uncollected-order agent's separate files and wait for its explicit reviewed-source handoff before integration. No manual proof recording, deployment or main merge has been run from this branch.
 
 ## 2026-09-13 — Creditnote identity and lifecycle integrated with settlement protection
 
