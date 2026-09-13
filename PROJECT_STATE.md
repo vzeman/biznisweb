@@ -14,6 +14,7 @@ Branch: `codex/order-rate-production-verification-20260913`
 What changed:
 
 - PR #545 merged as `a97d974f4d86ac7c1d3fcb3ec7ff5d094245bb3c` after all six exact-head checks passed on `f503bdc569a4244b2f8384c2a28bd58b94d1119c`. Build `34735576536` is producing the immutable release. Production schedules still point to the preceding image until managed host/drain/promotion gates succeed.
+- Build `34735576536` succeeded. Independent ECR readback confirms exact merged source tag and immutable digest `8d06b6c7985b6a25024964653fb292db9c73a9b5eb5dbc0938665fcbc3166e7b`. Managed deployment `34735770705` was dispatched once after fresh unchanged-main and no-active-release checks. Main is frozen until this release finishes promotion or verified restoration; no other PR may merge during that interval. The separate guard preparation is committed/pushed as `166076cc` and remains undeployed.
 - Three fresh private artifacts were published create-only with AES256 and exact-byte/hash readback under `data/roy/order-automation/audits/2026-09-13/`: `runtime-refresh-20260913.json` SHA-256 `09bb3b699226cde7edcbe25bc6ee4a38f7b9451a023919205cb678b283abbd9b`; `uncertain-operations-readback-20260913.json` SHA-256 `b7a4bca333d919c2d7c16cd9269cc45851a8fbd6d7d3d4417cd98264cfa28545`; `final-document-identity-contract-20260913.json` SHA-256 `d3bfb5933e1eb19e5d126f197e3e6226f9d480bb3a193377219d79eaf2f0b5d7`. Bucket ownership, region and all four public-access blocks were verified.
 
 What is verified:
