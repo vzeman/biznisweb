@@ -39,8 +39,8 @@ BUCKET = "biznisweb-reporting-artifacts-919341186960-eu-central-1"
 REGION = "eu-central-1"
 CLUSTER = "vevo-reporting-cluster"
 # Pin only after an independently verified deployment containing these guards.
-REVIEWED_RELEASE_COMMIT = ""
-REVIEWED_RELEASE_DIGEST = ""
+REVIEWED_RELEASE_COMMIT = "fda36b49e7610d289d6dcb1d0affe892d1ba5ce7"
+REVIEWED_RELEASE_DIGEST = "sha256:29c0c8e4106438f204b0afaee097e90fab887a82e71327653e508a20574b90c0"
 RECEIPT_CONTRACT_KEY = "data/vevo/order-automation/audits/2026-09-13/uncollected-native-zero-receipts-contract-20260913.json"
 RECEIPT_CONTRACT_SHA256 = "2104d03fe34ccaac3dd3a3c280a0e807179a959b12c9198ab1e17471613c75db"
 
