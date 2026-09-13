@@ -2,6 +2,7 @@ from copy import deepcopy
 from contextlib import redirect_stdout
 import io
 import json
+from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -93,6 +94,45 @@ class ReviewedContractTests(unittest.TestCase):
         self.client.transport.url = "https://roy.flox.sk/api/graphql"
         with self.assertRaises(ValueError):
             identity.bind_catalogue(self.client, current_catalogue())
+
+
+class ExplicitTargetIdentityTests(unittest.TestCase):
+    def setUp(self):
+        self.label = "Platba online - zaplatené"
+        self.rows = [{"id": "31", "name": self.label}, {"id": "67", "name": self.label}]
+
+    def test_reviewed_id_disambiguates_duplicate_names_independently_of_catalogue_order(self):
+        for rows in (self.rows, list(reversed(self.rows))):
+            self.assertEqual(67, identity.unique_target(rows, self.label, 67))
+            self.assertEqual(31, identity.unique_target(rows, self.label, "31"))
+            with self.assertRaisesRegex(ValueError, "target_missing_or_ambiguous"):
+                identity.unique_target(rows, self.label)
+
+    def test_pinned_id_still_requires_matching_label_and_valid_unique_catalogue(self):
+        for rows, name, target in (
+            (self.rows, self.label, 99),
+            (self.rows, "Odoslaná", 67),
+            (self.rows, self.label, True),
+            (self.rows, self.label, "067"),
+            (self.rows + [self.rows[1]], self.label, 67),
+            ([{"id": "31", "name": self.label}, {"id": "67", "name": "Stripe - unpaid"}], self.label, 67),
+        ):
+            with self.subTest(rows=rows, target=target), self.assertRaises(ValueError):
+                identity.unique_target(rows, name, target)
+
+    def test_both_real_roy_recovery_resolvers_use_reviewed_stripe_target(self):
+        from generate_invoices import _resolve_existing_invoice_target_status_id, resolve_invoice_generation_settings
+        from unpaid_order_cancellation import resolve_recovery_target_status_id, resolve_unpaid_cancellation_settings
+        settings = json.loads((Path(__file__).resolve().parents[1] / "projects/roy/settings.json").read_text(encoding="utf-8"))
+        client = SimpleNamespace(transport=SimpleNamespace(url="https://roy.flox.sk/api/graphql"),
+                                 execute=Mock(return_value={"listOrderStatuses": self.rows}))
+        identity.bind_status_identity(client, "roy", settings)
+        invoice = resolve_invoice_generation_settings(settings)["existing_invoice_status_reconciliation"]
+        cancellation = resolve_unpaid_cancellation_settings(settings)
+        self.assertEqual(67, _resolve_existing_invoice_target_status_id(client, invoice))
+        self.assertEqual(67, resolve_recovery_target_status_id(client, cancellation))
+        self.assertEqual(2, client.execute.call_count)
+        self.assertTrue(all("ListOrderStatuses" in str(call.args[0]) for call in client.execute.call_args_list))
 
 
 class RecorderClientLifecycleTests(unittest.TestCase):

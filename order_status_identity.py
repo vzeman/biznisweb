@@ -209,7 +209,10 @@ def invalidate_catalogue(client) -> None:
 def unique_target(rows, name: str, configured_id=None) -> int:
     rows = validate_catalogue(rows)
     matches = [row for row in rows if normalized(row["name"]) == normalized(valid_label(name))]
-    if len(matches) != 1 or (configured_id is not None and positive_id(matches[0]["id"]) != positive_id(configured_id)):
+    if configured_id is not None:
+        key = positive_id(configured_id)
+        matches = [row for row in matches if positive_id(row["id"]) == key]
+    if len(matches) != 1:
         raise ValueError("status_identity_target_missing_or_ambiguous")
     return int(matches[0]["id"])
 
