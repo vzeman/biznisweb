@@ -186,7 +186,7 @@ def main(argv=None):
             url = secret["BIZNISWEB_API_URL"]
             generator = InvoiceGenerator(
                 url, secret["BIZNISWEB_API_TOKEN"], derive_biznisweb_base_url(url),
-                username=None, password=None, send_invoice_email=False,
+                username=None, password=None, send_invoice_email=False, project=args.project,
                 **{key: configured[key] for key in (
                     "eligible_statuses", "exclude_zero_total_orders", "scan_max_pages",
                     "page_delay_seconds", "read_attempts")})

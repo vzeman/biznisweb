@@ -209,7 +209,7 @@ def main(argv=None):
         configured = resolve_invoice_generation_settings(settings)
         url = secret["BIZNISWEB_API_URL"]
         generator = InvoiceGenerator(url, secret["BIZNISWEB_API_TOKEN"], derive_biznisweb_base_url(url),
-            username=None, password=None, send_invoice_email=False,
+            username=None, password=None, send_invoice_email=False, project=args.project,
             eligible_statuses=configured["eligible_statuses"], exclude_zero_total_orders=configured["exclude_zero_total_orders"],
             scan_max_pages=configured["scan_max_pages"], page_delay_seconds=configured["page_delay_seconds"],
             read_attempts=configured["read_attempts"])

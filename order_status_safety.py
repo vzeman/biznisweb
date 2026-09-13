@@ -17,6 +17,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 from gql import gql
 from manual_settlement import confirmed_proof
+from order_status_identity import bind_catalogue, canonical_order, identity_for, unique_target
 from api_read_backoff import (
     READ_BUDGET_SECONDS, check_read_deadline, check_read_response_status, prepare_query_read, read_retry_delay, wait_before_read,
 )
@@ -57,6 +58,12 @@ mutation ChangeOrderStatusSafely(
 }
 """
 )
+
+STATUS_CATALOGUE_QUERY = gql("""
+query ListOrderStatuses($lang_code: CountryCodeAlpha2!) {
+  listOrderStatuses(lang_code: $lang_code, only_active: true) { id name }
+}
+""")
 
 
 def normalize_status(value: Any) -> str:
@@ -421,14 +428,32 @@ def execute_read(client: Any, query: Any, *, variable_values: dict[str, Any], at
     raise RuntimeError("Order API read was not attempted")
 
 
+def refresh_status_catalogue(client: Any, *, progress_callback=None):
+    """Refresh reviewed rename bindings, never once for every inventory row."""
+    policy = identity_for(client)
+    if policy is None or not policy.renamed:
+        return None
+    policy.catalogue = {}
+    result = execute_read(client, STATUS_CATALOGUE_QUERY, variable_values={"lang_code": "SK"},
+                          progress_callback=progress_callback)
+    return bind_catalogue(client, result.get("listOrderStatuses"))
+
+
+def ensure_status_catalogue(client: Any, *, progress_callback=None) -> None:
+    policy = identity_for(client)
+    if policy is not None and policy.renamed and not policy.catalogue:
+        refresh_status_catalogue(client, progress_callback=progress_callback)
+
+
 def fetch_order_safety_context(client: Any, order_num: str, *,
                                progress_callback: Callable[[], None] | None = None) -> dict[str, Any]:
+    ensure_status_catalogue(client, progress_callback=progress_callback)
     result = execute_read(client, ORDER_SAFETY_QUERY, variable_values={"order_num": str(order_num)},
                           progress_callback=progress_callback)
     order = result.get("getOrder")
     if not isinstance(order, dict) or str(order.get("order_num") or "") != str(order_num):
         raise RuntimeError("Order API detail identity does not match the requested order")
-    return order
+    return canonical_order(client, order)
 
 
 def change_status_verified(
@@ -450,6 +475,11 @@ def change_status_verified(
         raise RuntimeError("Status mutations require a no-retry transport")
     if not isinstance(status_id, int) or isinstance(status_id, bool) or status_id <= 0 or not status_name.strip():
         raise ValueError("Invalid target status")
+    if getattr(transport, "url", None) is not None and identity_for(client) is None:
+        raise RuntimeError("Status mutation requires explicit project identity")
+    catalogue = refresh_status_catalogue(client, progress_callback=progress_callback)
+    if catalogue is not None:
+        unique_target(catalogue, status_name, status_id)
     variables: dict[str, Any] = {"order_num": str(order_num), "status_id": status_id}
     variables["send_notification"] = [{"type": "EMAIL_CUSTOMER", "if": ["NONE"]}] if silent else None
     try:
@@ -458,11 +488,13 @@ def change_status_verified(
         # The request may already have committed. Resolve by a read, never by a
         # second write. If the target cannot be proved, the caller retains its
         # durable pending/uncertain record and requires review on future runs.
+        refresh_status_catalogue(client, progress_callback=progress_callback)
         verified = fetch_order_safety_context(client, order_num, progress_callback=progress_callback)
         _validate_target(verified, order_num, status_id, status_name)
         return verified
     changed = result.get("changeOrderStatus") if isinstance(result, dict) else None
-    _validate_target(changed, order_num, status_id, status_name)
+    refresh_status_catalogue(client, progress_callback=progress_callback)
+    _validate_target(canonical_order(client, changed), order_num, status_id, status_name)
     verified = fetch_order_safety_context(client, order_num, progress_callback=progress_callback)
     _validate_target(verified, order_num, status_id, status_name)
     return verified

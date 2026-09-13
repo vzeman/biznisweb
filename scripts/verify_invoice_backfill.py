@@ -261,7 +261,7 @@ def main(argv=None) -> int:
     store = S3AutomationStateStore(s3, bucket, key, args.project)
     with runtime_environment(args.project, secret, settings):
         url = secret["BIZNISWEB_API_URL"]
-        generator = InvoiceGenerator(url, secret["BIZNISWEB_API_TOKEN"], derive_biznisweb_base_url(url), page_delay_seconds=2)
+        generator = InvoiceGenerator(url, secret["BIZNISWEB_API_TOKEN"], derive_biznisweb_base_url(url), page_delay_seconds=2, project=args.project)
         shipped_ids = generator.resolve_eligible_status_ids()
         report = verify_backfill(store=store, project=args.project, expected_count=args.expected_count,
                                  read_order=generator.fetch_order_for_invoice, shipped_status_ids=shipped_ids,

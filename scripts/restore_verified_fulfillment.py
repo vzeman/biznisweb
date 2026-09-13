@@ -65,8 +65,12 @@ def validate_prior(prior):
 
 
 def restoration_target(client, settings):
+    from order_status_identity import bind_catalogue
     result = execute_read(client, LIST_ORDER_STATUSES_QUERY, variable_values={"lang_code": settings.lang_code})
-    rows = result.get("listOrderStatuses")
+    try:
+        rows = bind_catalogue(client, result.get("listOrderStatuses"))
+    except ValueError as error:
+        raise RestorationBlocked("Status collection is incomplete or ambiguous") from error
     if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
         raise RestorationBlocked("Status collection is incomplete")
     matches = [row for row in rows if normalize_status(row.get("name")) == "odoslana"]

@@ -28,6 +28,8 @@ from order_status_safety import (
 )
 from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_settings, resolve_biznisweb_api_url
 from unpaid_order_cancellation import build_client, change_order_status, normalize_text, resolve_target_status_id
+from order_status_identity import canonical_order, unique_target, status_audit_fields
+from order_status_safety import refresh_status_catalogue
 
 
 logger = get_logger("creditnote_storno_guard")
@@ -367,7 +369,11 @@ def run_creditnote_storno_guard(
                 # Re-read the complete creditnote context and current order before
                 # each write. Explicit injected rows are immutable test evidence.
                 fresh_context = creditnote_context if raw_creditnote_rows is not None else fetch_creditnote_automation_context(project, progress_callback=journal.assert_owned)
+                fresh_catalogue = refresh_status_catalogue(exporter.client, progress_callback=journal.assert_owned)
+                if fresh_catalogue is not None:
+                    unique_target(fresh_catalogue, settings.target_status_name, target_status_id)
                 live_order, reason = inspect(order_num, fresh_context)
+                live_order = canonical_order(exporter.client, live_order)
                 journal.assert_owned()
             except Exception:
                 record_failure(order_num, "creditnote_pre_mutation_recheck_failed")
@@ -391,6 +397,7 @@ def run_creditnote_storno_guard(
                 "target_status_id": target_status_id, "target_status_name": settings.target_status_name,
                 "reason": "full_creditnote", "creditnote_ids": [row["id"] for row in fresh_context[order_num]],
             }
+            mutation_record.update(status_audit_fields(exporter.client, live_order, target_status_id))
             journal.update_order(order_num, status_mutation=mutation_record)
             journal.assert_owned()
             try:

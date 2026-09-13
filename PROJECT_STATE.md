@@ -5,6 +5,33 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Reviewed VEVO status identities integrated
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- Added a pure project/client/transport-bound status contract for only the five proven VEVO renames: shipped, Storno, paid, timeout and rejected payment. IDs 33/34 retain separate canonical roles despite their identical current English label. Historical transliteration is accepted only under the exact reviewed ID; ID 1 is not guessed. ROY retains its own labels. The contract and five evidence hashes are documented in `projects/ORDER_STATUS_IDENTITY_CONTRACT.md`.
+- Wired the catalogue binding into invoice discovery and fresh readers, shared safety reads, cancellation/recovery targets, native creditnote guard, acknowledgement/readback and fixed closure/helper verification. Catalogue reads occur once for scans and freshly before intents, using bounded backoff and lease callbacks. Missing/duplicate identities, canonical-role collisions, unknown mapped labels, cross-project drift and failed refreshes block authority. Unrelated inactive/unlisted inventory statuses remain unbound rows in the complete scan and cannot qualify for a write by name.
+- Canonical copies retain raw provider status and contract metadata. New status/financial intents retain raw binding evidence; available status readback retains the raw verified target. Earlier sealed proofs and consumed intents are unchanged. The manual proof recorder now closes every created AWS client and its API transport on success and failure; it still performs no provider mutation.
+- Updated operational evidence: ROY all-age verification scanned 4,851 orders/169 pages with zero eligible invoice backlog, receipt SHA `d889c1d01166bc6e78f42af1c018900912bb9b0a74112b2c5bdd2bc01efa93ac`. Two later completed natural ROY runs and seven OK alarms are bound by SHA `c35091f30b8f5c8057c3f2c9f4a3e0dc54032e529f5924bbaefe67b685349b0f`; the separately timestamped active task is not claimed completed. The original two ROY cases were rechecked in the live admin on 2026-09-13: shipped with invoices present, without UI writes. Private paths are recorded in the operations runbook; no customer IDs were added to Git.
+
+What is verified:
+
+- All 844 exact build-workflow tests (72 + 20 + 26 + 726), the separate 582-test order-automation workflow and reporting smoke pass. The 26 new tests include 19 independently authored integration tests for actual helper CAS, duplicate visible labels, role collisions, project/transport/catalogue drift and single-attempt acknowledgement/readback. Scoped Ruff and diff checks pass. A pre-existing helper's public exception boundary was preserved after the full suite detected the new catalogue exception leaking through it.
+- This was offline code/test preparation only. No provider scan, payment/invoice/email/status request, journal/schedule write, protected report change, PR/main merge or deployment was made from this worktree. No persistent local process was started.
+
+Known issues:
+
+- The actual English names are proven in both VEVO catalogues; confirmation of the user's naming plan remains optional context, not a reason to guess additional mappings. The source is not deployed and the fixed closure release pins remain empty. Root must verify the exact source with read-only previews, CI and managed deployment gates before recording proof or applying closure.
+- Protected ROY reporting task 71 / VEVO reporting task 33 retain older images. They do not inherit this contract from a standalone guard migration; the independent reporting author is correcting their name-based revenue/segmentation filters separately. No gateway/native callback settings were changed.
+
+Next exact step:
+
+- Commit and push this reviewed source, then integrate documentation-only main `4d5049805f1a8eabd5f7c642ccee7ca6867d3c08` preserving both histories. Hand the clean pushed contract/API head to the reporting author and root. Root owns live preview, PR review/merge, runtime promotion and the later fixed closure/provenance operations; this branch must not deploy or apply them independently.
+
 ## 2026-09-13 — Closure integrated into the combined safety draft
 
 Date: 2026-09-13

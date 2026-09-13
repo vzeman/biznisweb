@@ -23,6 +23,18 @@ invoices and two externally invoiced cases. The independent final six-case
 journal receipt is `data/roy/order-automation/audits/2026-09-13/independent-reviewed-six-case-journal-20260913.json`,
 SHA `ca8547aae179f834de51e45f97fa22835d969e59f0e482afff36225791debc16`.
 
+The final ROY all-age verification scanned 4,851 orders across 169 pages and found
+zero remaining eligible invoice candidates. Private receipt:
+`data/roy/order-automation/verification/invoice-discovery-20260913T073758Z-f0d0fd5be501449685dbda75ff67ef45.json`,
+SHA `d889c1d01166bc6e78f42af1c018900912bb9b0a74112b2c5bdd2bc01efa93ac`.
+Two subsequent completed natural ROY runs exited successfully with no failures,
+pending invoices or status reviews, and seven alarms were OK; a later active task
+is separately timestamped, not claimed completed. Receipt:
+`data/roy/order-automation/audits/2026-09-13/independent-roy-natural-post-recovery-20260913T074854Z.json`,
+SHA `c35091f30b8f5c8057c3f2c9f4a3e0dc54032e529f5924bbaefe67b685349b0f`.
+On 2026-09-13 the original two ROY cases were also rechecked in the live admin:
+both were shipped with invoices present. No order was edited in that UI check.
+
 The user-confirmed uncollected VEVO case still retains its unknown preparation
 outcome. This combined branch now includes the reviewed closure runtime/helper,
 manual-settlement protection and corrected creditnote identity/lifecycle rules.
@@ -36,8 +48,13 @@ Even the explicit SK API catalog argument returns the current English label;
 ROY's current catalogs still agree on the Slovak label. The API secret is unchanged
 since April. A concurrent user request to translate statuses into English was
 identified, so intentional renaming is being checked; this is not established
-as an API translation bug. No translation aliases, canonicalizer, status/settings
-change or deployment is inferred from this difference. Diagnostic preview failures have made zero business writes.
+as an API translation bug. The combined source now includes a narrowly reviewed
+[project/ID status contract](ORDER_STATUS_IDENTITY_CONTRACT.md) for the five proven
+VEVO renames. It preserves raw labels and distinguishes the two identically named
+gateway failure statuses by ID. The source correction is not yet deployed;
+diagnostic preview failures have made zero business writes. Protected older
+reporting images need their separate status-filter correction and do not gain
+this contract merely by moving their inline guard to a standalone schedule.
 
 Earlier on the same date, source `ccf25c79` passed infrastructure gates but its
 first natural ROY run received thirteen explicit finalization refusals. That

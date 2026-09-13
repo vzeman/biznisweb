@@ -121,8 +121,12 @@ def validate_prior(record, document):
 
 
 def resolve_target(generator):
+    from order_status_identity import bind_catalogue
     result = generator.execute_read(LIST_ORDER_STATUSES_QUERY, {"lang_code": "SK"})
-    rows = result.get("listOrderStatuses") if isinstance(result, dict) else None
+    try:
+        rows = bind_catalogue(generator.client, result.get("listOrderStatuses") if isinstance(result, dict) else None)
+    except ValueError:
+        require(False, "status-catalogue-invalid")
     require(isinstance(rows, list) and rows and all(isinstance(row, dict) for row in rows), "status-catalogue-incomplete")
     statuses = [{"id": status_identity(row.get("id")), "name": row.get("name")} for row in rows]
     require(all(isinstance(row["name"], str) and row["name"].strip() for row in statuses)
@@ -265,10 +269,12 @@ def persist(journal, document, marker, *, close_related_review=False):
     require(saved.get(obligations.CLOSURE_FIELD) == marker, "closure-journal-readback-differs")
 
 
-def complete(journal, document, marker):
+def complete(journal, document, marker, current=None):
     marker = {**deepcopy(marker), "state": "verified", "invoice_obligation": "closed",
               "verified_at": journal.store.now().isoformat()}
     marker["status_mutation"]["state"] = "verified"
+    if current is not None and "raw_status" in current:
+        marker["status_mutation"]["verified_raw_status"] = deepcopy(current["raw_status"])
     persist(journal, document, marker, close_related_review=True)
     return marker
 
@@ -313,22 +319,26 @@ def close_obligation(*, store, document, generator_factory, apply=False, source_
                 current = read_bound(generator, document, [document["source_status"], target])
                 at_target = str(current["status"]["id"]) == target["id"]
                 if at_target and marker["state"] != "verified":
-                    complete(journal, document, marker)
+                    complete(journal, document, marker, current)
                 durable_closed = marker["state"] == "verified" or at_target
                 return {"ok": at_target, "dry_run": False, "status_requests": 0,
                         "closed_obligations": int(durable_closed), "regression": not at_target,
                         "consumed_intent": True,
                         "financial_requests": 0, "emailed_invoices": 0}
             release_gate()
+            refreshed_target = resolve_target(generator)
+            require(refreshed_target == target, "closure-target-catalogue-changed")
             current = read_bound(generator, document, [document["source_status"]])
             latest = read_bound(generator, document, [document["source_status"]])
             require(latest == current, "current-context-changed-before-intent")
             marker = initial_marker(record, document, target, source_commit, store.now())
+            from order_status_identity import status_audit_fields
+            marker["status_mutation"].update(status_audit_fields(generator.client, latest, target["id"]))
             persist(journal, document, marker)
             # A crash from this point permanently forbids another status request.
             final = read_bound(generator, document, [document["source_status"], target])
             if str(final["status"]["id"]) == target["id"]:
-                complete(journal, document, marker)
+                complete(journal, document, marker, final)
                 return {"ok": True, "dry_run": False, "status_requests": 0, "closed_obligations": 1,
                         "consumed_intent": True, "financial_requests": 0, "emailed_invoices": 0}
             require(final == latest, "current-context-changed-after-intent")
@@ -347,7 +357,7 @@ def close_obligation(*, store, document, generator_factory, apply=False, source_
             current = read_bound(generator, document, [document["source_status"], target])
             at_target = str(current["status"]["id"]) == target["id"]
             if at_target:
-                complete(journal, document, marker)
+                complete(journal, document, marker, current)
             return {"ok": at_target, "dry_run": False, "status_requests": 1,
                     "closed_obligations": int(at_target), "consumed_intent": True,
                     "financial_requests": 0, "emailed_invoices": 0}
@@ -517,7 +527,7 @@ def main(argv=None):
             require(url == settings["biznisweb_api_url"], "runtime-api-project-changed")
             report = close_obligation(store=store, document=document, apply=args.apply, source_commit=source,
                 generator_factory=lambda: InvoiceGenerator(url, secret["BIZNISWEB_API_TOKEN"], derive_biznisweb_base_url(url),
-                    username=secret["BIZNISWEB_USERNAME"], password=secret["BIZNISWEB_PASSWORD"], send_invoice_email=False),
+                    username=secret["BIZNISWEB_USERNAME"], password=secret["BIZNISWEB_PASSWORD"], send_invoice_email=False, project="vevo"),
                 release_gate=lambda: verify_release(session, digest=args.expected_image_digest,
                     commit=args.expected_source_commit, evidence_key=args.deployment_evidence_key))
     print(json.dumps(report, sort_keys=True), flush=True)
