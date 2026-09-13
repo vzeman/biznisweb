@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import io
 import json
+import os
 import textwrap
 import unittest
 from unittest.mock import Mock, patch
@@ -145,7 +146,7 @@ class RuntimeBindingTests(unittest.TestCase):
         lease = b.MigrationLease(self.s3, owner=self.record["release_id"], now=lambda: NOW).acquire()
         result = b.publish_verified_binding(self.s3, self.record, expected_pointer_etag=None, lease=lease)
         lease.release()
-        return result
+        return {**result, "migration_etag": lease.etag}
 
     def test_baseline_then_isolated_candidate_promotion_exact_readback(self):
         previous = self.establish()
@@ -155,7 +156,7 @@ class RuntimeBindingTests(unittest.TestCase):
         with self.assertRaisesRegex(b.BindingError, "migration-active"):
             b.load_current_binding(self.s3)
         lease.release()
-        self.assertEqual(b.load_current_binding(self.s3), result)
+        self.assertEqual(b.load_current_binding(self.s3), {**result, "migration_etag": lease.etag})
         b.validate_runtime(result, record["schedule"], record["task_definition"])
         self.assertTrue(all(body.closed for body in self.s3.bodies))
         self.assertTrue(all(key.startswith(b.PREFIX) for key in self.s3.writes))
@@ -267,7 +268,7 @@ class RuntimeBindingTests(unittest.TestCase):
         with self.assertRaises(StoreError):
             b.publish_verified_binding(self.s3, promotion(previous), expected_pointer_etag=previous["pointer_etag"], lease=lease)
         self.s3.before_put = None
-        self.assertEqual(b.load_current_binding(self.s3, lease=lease), previous)
+        self.assertEqual(b.load_current_binding(self.s3, lease=lease), {**previous, "migration_etag": lease.etag})
         with self.assertRaises(b.BindingError):
             b.load_current_binding(self.s3)
 
@@ -296,7 +297,7 @@ class RuntimeBindingTests(unittest.TestCase):
         self.assertEqual(len([key for key in self.s3.objects if "/rollbacks/" in key]), 1)
         self.assertIn(current["record_key"], self.s3.objects)
         lease.release()
-        self.assertEqual(b.load_current_binding(self.s3), result)
+        self.assertEqual(b.load_current_binding(self.s3), {**result, "migration_etag": lease.etag})
 
     def test_rollback_cannot_overwrite_unrelated_pointer_or_wrong_readback(self):
         previous = self.establish()
@@ -341,15 +342,33 @@ class RuntimeBindingTests(unittest.TestCase):
         build = {**run, "id": 34700000003, "path": ".github/workflows/build-and-push-ecr.yml", "status": "completed", "conclusion": "success"}
         def fetch(run_id):
             return run if run_id == record["workflow_run_id"] else build
-        b.verify_managed_provenance(loaded(record), fetch_run=fetch)
+        with self.assertRaises(b.BindingError):
+            b.verify_managed_provenance(loaded(record), fetch_run=fetch)
+        with self.assertRaises(b.BindingError):
+            b.verify_managed_provenance(loaded(record), fetch_run=fetch, require_completed=True)
+        with patch.dict(os.environ, {}, clear=True), self.assertRaises(b.BindingError):
+            b.verify_managed_provenance(loaded(record), fetch_run=fetch, require_completed=False)
+        own_run = {"GITHUB_ACTIONS": "true", "GITHUB_REF": "refs/heads/main", "GITHUB_RUN_ID": record["workflow_run_id"],
+                   "GITHUB_SHA": record["source_commit"],
+                   "GITHUB_WORKFLOW_REF": "vzeman/biznisweb/.github/workflows/deploy-vevo-report.yml@refs/heads/main"}
+        with patch.dict(os.environ, own_run, clear=True):
+            b.verify_managed_provenance(loaded(record), fetch_run=fetch, require_completed=False)
         for status, conclusion in (("completed", "failure"), ("completed", "cancelled"), ("queued", None)):
             run.update(status=status, conclusion=conclusion)
             with self.assertRaises(b.BindingError):
                 b.verify_managed_provenance(loaded(record), fetch_run=fetch)
         run.update(status="completed", conclusion="success")
+        b.verify_managed_provenance(loaded(record), fetch_run=fetch)
         build["head_sha"] = "0" * 40
         with self.assertRaises(b.BindingError):
             b.verify_managed_provenance(loaded(record), fetch_run=fetch)
+
+    def test_predecessor_cannot_come_from_same_still_running_workflow(self):
+        previous = loaded(self.record)
+        previous["record"]["workflow_run_id"] = "34700000002"
+        previous["record_sha256"] = b.sha256(previous["record"])
+        with self.assertRaisesRegex(b.BindingError, "separate-run"):
+            promotion(previous)
 
     def test_schema3_binds_current_without_rewriting_old_schema(self):
         record = promotion(loaded(self.record))
@@ -406,6 +425,32 @@ class RuntimeBindingTests(unittest.TestCase):
             bootstrap.bootstrap(self.s3, scheduler, ecs, self.record, apply=True)
         self.assertNotIn(b.CURRENT_KEY, self.s3.objects)
         self.assertEqual(b.read_object(self.s3, b.LOCK_KEY)[0]["state"], "uncertain")
+
+    def test_bootstrap_checks_actual_reviewed_command_and_localhost_log(self):
+        record = self.record
+        source = "# reviewed stdlib identity probe fixture\n"
+        command = b.build_baseline_probe_command(source, b.POLICY["baseline_runner_sha256"], record["image_digest"])
+        record["candidate_proof"]["command"] = command
+        proof = record["candidate_proof"]
+        marker = {"marker": "VEVO_REPORT_BASELINE_HOST_OK", "task_arn": proof["task_arn"], "private_ip": proof["private_ip"],
+                  "image_digest": proof["image_digest"], "path": "/app", "service": b.POLICY["service"], "instance_id": "N/A:Fargate",
+                  "runner_sha256": b.POLICY["baseline_runner_sha256"], "provider_reads": 0}
+        proof["localhost_marker_sha256"] = hashlib.sha256(b.canonical_bytes(marker).rstrip(b"\n")).hexdigest()
+        task = {"taskArn": proof["task_arn"], "taskDefinitionArn": proof["definition_arn"], "clusterArn": b.POLICY["cluster"],
+                "launchType": "FARGATE", "lastStatus": "STOPPED", "containers": [{"name": "reporting", "imageDigest": proof["image_digest"],
+                "exitCode": 0, "networkInterfaces": [{"privateIpv4Address": proof["private_ip"]}]}],
+                "overrides": {"containerOverrides": [{"name": "reporting", "command": command}]}}
+        ecs = Mock(describe_tasks=Mock(return_value={"tasks": [task]}))
+        first = {"events": [{"message": "VEVO_REPORT_BASELINE_HOST_OK " + json.dumps(marker)}], "nextForwardToken": "end"}
+        logs = Mock(get_log_events=Mock(side_effect=[first, {"events": [], "nextForwardToken": "end"}]))
+        with patch.object(bootstrap.Path, "read_text", return_value=source):
+            bootstrap.verify_host(ecs, logs, record)
+            missing = Mock(get_log_events=Mock(return_value={"events": [], "nextForwardToken": "end"}))
+            with self.assertRaisesRegex(b.BindingError, "localhost-marker"):
+                bootstrap.verify_host(ecs, missing, record)
+            record["candidate_proof"]["command"] = ["python", "-c", "print('success')"]
+            with self.assertRaisesRegex(b.BindingError, "source-contract"):
+                bootstrap.verify_host(ecs, logs, record)
 
 
 class RuntimeWorkflowTests(unittest.TestCase):

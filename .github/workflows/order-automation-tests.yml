@@ -65,7 +65,7 @@ jobs:
           tests.test_invoice_generation tests.test_invoice_automation_state tests.test_manual_settlement tests.test_manual_settlement_recovery tests.test_reviewed_invoice_obligations tests.test_reviewed_invoice_runtime tests.test_reviewed_uncollected_closure
           tests.test_order_status_safety tests.test_unpaid_order_cancellation
           tests.test_order_status_identity tests.test_status_identity_integration
-          tests.test_reporting_runtime_binding tests.test_growthbook_aa_infra_health_evidence tests.test_growthbook_aa_infra_health_workflow
+          tests.test_reporting_runtime_binding tests.test_reporting_runtime_binding_review tests.test_growthbook_aa_infra_health_evidence tests.test_growthbook_aa_infra_health_workflow
           tests.test_reporting_migration_host_gate tests.test_vevo_report_deployment
           tests.test_order_inventory
           tests.test_api_read_backoff
