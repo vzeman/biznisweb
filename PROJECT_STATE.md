@@ -5,6 +5,36 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — VEVO false-zero production board fixed and deployed
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-board-deployment-evidence-20260913`
+
+What changed:
+
+- PR #558 merged the user-confirmed `New order` / `Payment online - paid` configuration as `d2728a7783203cd3eec7ba683e13b92e8f20793b`. Successful build `34752509626` bound `git-d2728a7783203cd3eec7ba683e13b92e8f20793b` to immutable image `sha256:2b214e725cd0d2baa59d5f61abf6ef01be4468b562edc3ce29f6d2b747642cb4`.
+- PR #560 passed all six exact-head CI checks and merged the scoped deploy helper/runbook as `0a686331c7bdca50a3e475418f761da5f98f349e`. The actual authenticated CloudShell checkout executed helper commit `94dcb95520fa10d3985fe9eeedcc84cd1dc8589b` with the separately pinned application image above.
+- App Runner image-only operation `647bd73c5b034bf8b13aca8500654268` SUCCEEDED. Service `biznisweb-vevo-production-board/2711a253ae014a8aaf1a37929997496d` is RUNNING on the exact verified image. The complete saved service boundary matches except for its image identifier. No IAM, scheduled business jobs, report artifacts, orders, invoices or payments were changed by this deployment.
+
+What is verified:
+
+- Before promotion, actual Fargate task `2e2e740359a7471abaaeeef2454db436` in `vevo-reporting-cluster`, private IP `172.31.2.176`, `/app`, exact candidate image, ran the in-process HTTP server and curl localhost health/identity marker/production HTML/live production API. It emitted one `VEVO_BOARD_HOST_OK` and one `VEVO_BOARD_HOST_CLOSED`.
+- The same task was re-read before promotion and independently after deployment: STOPPED, exit 0, stopped at `2026-09-13T10:49:37.963Z`. Temporary definition `vevo-board-probe-d2728a778320:1` is INACTIVE. The server thread exited and its port was independently checked closed inside the task.
+- Authenticated production `/health`, `/production/vevo` HTML marker and `/api/production/vevo/live?refresh=1` passed after App Runner terminal success. The live result matches the host probe: **76 active orders, 75 manufacturing orders, 40 products, 169 units to make, 15 ignored units**. Both configured active status labels are correct.
+- This count is within the existing scan: 300 orders / 10 pages, stopped after six empty-active pages; no page maximum hit. It is not an all-age backlog completeness audit. The existing product exclusions and scan/cache settings remain intact.
+- Generated CloudShell receipt `data/vevo-board-deploy.json` phase `deployed`, SHA-256 `45add12c4c598f673fb94d19b63cfb62ba7aab1c344028922ac01fbbe053cc4e`; durable runtime evidence is the exact ECS/CloudWatch/App Runner identity above. Customer order details and credentials are omitted from Git.
+- Eight local focused tests passed; three deployment tests also passed in AWS CloudShell. No local dev server, worker or tunnel was started. The bounded remote probe has stopped; production App Runner intentionally remains running.
+
+Known issues:
+
+- Final Chrome navigation to the correct production URL failed with `net::ERR_BLOCKED_BY_CLIENT`. No browser security setting was changed or workaround used. Visual UI verification remains unavailable on this browser; successful authenticated live HTTP/API and actual host checks are verified separately.
+- AWS authentication is available. Its console tab was explicitly retained after the user's login; do not repeat the earlier claim that the account is inaccessible merely because local CLI credentials are absent.
+
+Next exact step:
+
+- The false-zero defect is resolved in production. When the browser-side block is resolved, open `https://2mhmsmgq3m.eu-central-1.awsapprunner.com/production/vevo` and visually confirm the counters. Future status renames must update the project configuration or use a separately reviewed stable-ID approach; do not deploy an unverified ECR `latest` image.
+
 ## 2026-09-13 — VEVO AWS session recovered; scoped image deployment prepared
 
 Date: 2026-09-13
