@@ -16,10 +16,15 @@ empty, and emits an aggregate completion only after a complete inspection.
 The separate task families are `roy-creditnote-storno-guard` and
 `vevo-creditnote-storno-guard`. Their task roles can access only the respective
 project journal and creditnote audit and publish the established metric namespace.
+Native creditnote reads also require the administrator login. Task definitions
+preserve exactly the four source references for API URL/token and native username/
+password, bound to the same project/account/region/runtime secret and version.
 The original report sources remain pinned: ROY `roy-reporting-daily:71`, VEVO
 `vevo-reporting-daily:33`, with their exact images, commands and reporting times.
-The only report change is `REPORT_SKIP_CREDITNOTE_STORNO_GUARD=true` in its existing
-Scheduler input. Each fresh report task has an empty local order cache; the pinned
+The initial migration requires no existing report Scheduler Input and the exact
+reviewed default report command/project. It adds only
+`REPORT_SKIP_CREDITNOTE_STORNO_GUARD=true` through Scheduler input; wrappers or
+unreviewed command/environment overrides are rejected before pausing. Each fresh report task has an empty local order cache; the pinned
 images have no bundled cache, mounted cache or S3 order-cache restoration.
 
 ## Initial managed migration
@@ -41,7 +46,8 @@ images have no bundled cache, mounted cache or S3 order-cache restoration.
    new image. Each requires actual curl localhost and its bound host marker.
 5. Two actual live guard completions are required before promotion. The deployer
    rechecks current main and all source/schedule snapshots before each live launch,
-   then enables the two new guard schedules, applies the two report flags and
+   and immediately before the initial pause, then enables the two new guard schedules,
+   applies the two report flags and
    restores all five invoice/cancellation schedules exactly.
 6. Independently read back the private receipt, all six host outcomes and the exact
    two-report delta. Verify subsequent natural live guard/report runs. A dry-run

@@ -33,6 +33,7 @@ REPORT_PINS = {
     "roy": (71, "9ff4738f998e3d80e7b76dc543f11bc36413d9d016e72b4a78eb3411433bc541", "fcf6e26341b1e4c1d47f71f6f688b3e09dcbe14b"),
     "vevo": (33, "30a23fcd69eb2d7a41195bffa0bc055d38bc2dd706e9eb07d5126675a21a6add", "e55ccd14b47c660b9b39a5788a1e65a63a98fc1a"),
 }
+GUARD_SECRET_NAMES = {"BIZNISWEB_API_URL", "BIZNISWEB_API_TOKEN", "BIZNISWEB_USERNAME", "BIZNISWEB_PASSWORD"}
 
 
 def family(project):
@@ -89,6 +90,37 @@ def report_override(snapshot):
     return result
 
 
+def verify_report_launch(snapshot, container, project):
+    # Initial migration only: the reviewed schedules have no Input override.
+    # Both pinned Dockerfiles use this exact CMD; no wrapper or additional flags
+    # may bypass the parser/skip branch verified by the diagnostic host probe.
+    require("Input" not in snapshot["Target"], "frozen-report-input-not-reviewed")
+    require(container.get("command") in (None, ["python", "daily_report_runner.py"]), "frozen-report-command-drift")
+    project_env = [row.get("value") for row in container.get("environment", []) if row.get("name") == "REPORT_PROJECT"]
+    require(project_env == [project] and not any(row.get("name") in {"REPORT_PROJECT", SKIP}
+            for row in container.get("secrets", [])), "frozen-report-project-binding-drift")
+
+
+def guard_secret_references(container, project, account):
+    """Copy exact API/native-read references from the selected project's source."""
+    rows = container.get("secrets", [])
+    require(isinstance(rows, list) and all(isinstance(row, dict) for row in rows), "guard-secrets-invalid")
+    selected = [row for row in rows if row.get("name") in GUARD_SECRET_NAMES]
+    require(len(selected) == len(GUARD_SECRET_NAMES) and {row["name"] for row in selected} == GUARD_SECRET_NAMES,
+            "guard-required-secret-missing-or-duplicate")
+    bindings = set()
+    for row in selected:
+        reference = row.get("valueFrom")
+        require(isinstance(reference, str) and reference and reference == reference.strip(), "guard-secret-reference-empty-or-invalid")
+        parts = reference.split(":")
+        require(len(parts) == 10 and parts[:6] == ["arn", "aws", "secretsmanager", "eu-central-1", account, "secret"]
+                and re.fullmatch(re.escape(project) + r"/reporting/runtime-env-[A-Za-z0-9]{6}", parts[6]) is not None
+                and parts[7] == row["name"] and not (parts[8] and parts[9]), "guard-secret-project-binding-drift")
+        bindings.add((parts[6], parts[8], parts[9]))
+    require(len(bindings) == 1, "guard-secret-source-binding-split")
+    return copy.deepcopy(selected)
+
+
 def guard_definition(source, project, image, role, bucket, prefix):
     require(re.fullmatch(r"[0-9]{12}\.dkr\.ecr\.eu-central-1\.amazonaws\.com/vevo-reporting@sha256:[a-f0-9]{64}", image) is not None,
             "guard-image-not-immutable")
@@ -105,8 +137,7 @@ def guard_definition(source, project, image, role, bucket, prefix):
         "REPORT_PROJECT": project, "REPORT_SKIP_PROJECT_ENV": "true", "REPORT_S3_BUCKET": bucket,
         "REPORT_S3_PREFIX": prefix, "ORDER_AUTOMATION_STATE_PREFIX": f"data/{project}/order-automation",
     }.items())]
-    c["secrets"] = [row for row in c.get("secrets", []) if row["name"] in {"BIZNISWEB_API_URL", "BIZNISWEB_API_TOKEN"}]
-    require({row["name"] for row in c["secrets"]} >= {"BIZNISWEB_API_TOKEN"}, "guard-api-secret-missing")
+    c["secrets"] = guard_secret_references(c, project, image.split(".", 1)[0])
     c["logConfiguration"] = {"logDriver": "awslogs", "options": {"awslogs-group": f"/ecs/{family(project)}",
         "awslogs-region": "eu-central-1", "awslogs-stream-prefix": "ecs"}}
     return result
@@ -276,6 +307,7 @@ class CreditnoteDeployment:
             require(len(td["containerDefinitions"]) == 1 and c.get("name") == "reporting" and c["image"].endswith("@sha256:" + digest),
                     "frozen-report-image-drift")
             require(not c.get("entryPoint") and c.get("workingDirectory", "/app") == "/app", "frozen-report-entrypoint-drift")
+            verify_report_launch(report, c, project)
             self.definitions[arn] = {k: td[k] for k in TASK_FIELDS if k in td}
             self.report_sources[project] = report_source_hash(source_commit)
             settings = json.loads((ROOT / "projects" / project / "settings.json").read_text(encoding="utf-8"))
@@ -630,6 +662,9 @@ class CreditnoteDeployment:
         self.alarm_route = established_alarm_route(self.session, self.account)
         live_attempted = False
         self.save("preflight-verified")
+        # Inventory/source fetches may be slow. Reject a stale release before any
+        # schedule write, outside rollback because nothing has been paused yet.
+        require_main(self.commit)
         try:
             self.pause()
             source = (ROOT / "scripts/reporting_guard_identity_probe.py").read_text(encoding="utf-8")

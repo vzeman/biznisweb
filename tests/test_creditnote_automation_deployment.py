@@ -2,6 +2,7 @@ import copy
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
@@ -40,8 +41,10 @@ def source_definition(project="roy"):
             "executionRoleArn": f"arn:aws:iam::{ACCOUNT}:role/existing-execution", "containerDefinitions": [{
                 "name": "reporting", "image": IMAGE, "command": ["python", "invoice_runner.py", "--project", project],
                 "environment": [{"name": "REPORT_INVOICE_DRY_RUN", "value": "true"}],
-                "secrets": [{"name": "BIZNISWEB_API_TOKEN", "valueFrom": "synthetic-secret"},
-                            {"name": "BIZNISWEB_PASSWORD", "valueFrom": "synthetic-password"}]}]}
+                "secrets": [{"name": name,
+                            "valueFrom": f"arn:aws:secretsmanager:eu-central-1:{ACCOUNT}:secret:{project}/reporting/runtime-env-ABC123:{name}::"}
+                            for name in sorted(deploy.GUARD_SECRET_NAMES)] + [
+                            {"name": "EMAIL_PASSWORD", "valueFrom": "synthetic-unrelated-reference"}]}]}
 
 
 class Missing(Exception):
@@ -162,7 +165,7 @@ class CreditnoteDefinitionTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 deploy.report_override(original)
 
-    def test_guard_has_immutable_image_only_api_secret_and_correct_storage(self):
+    def test_guard_has_immutable_image_only_required_api_and_native_secrets_and_correct_storage(self):
         source = source_definition()
         prior = copy.deepcopy(source)
         actual = deploy.guard_definition(source, "roy", IMAGE, "new-scoped-role", "synthetic-bucket", "daily-reports/roy")
@@ -170,7 +173,7 @@ class CreditnoteDefinitionTests(unittest.TestCase):
         self.assertEqual("roy-creditnote-storno-guard", actual["family"])
         container = actual["containerDefinitions"][0]
         self.assertEqual(["python", "creditnote_storno_runner.py", "--project", "roy"], container["command"])
-        self.assertEqual([{"name": "BIZNISWEB_API_TOKEN", "valueFrom": "synthetic-secret"}], container["secrets"])
+        self.assertEqual(prior["containerDefinitions"][0]["secrets"][:-1], container["secrets"])
         self.assertNotIn("REPORT_INVOICE_DRY_RUN", {row["name"] for row in container["environment"]})
         for bad_image in ("latest", IMAGE.replace("@sha256:", ":sha256:")):
             with self.assertRaisesRegex(RuntimeError, "immutable"):
@@ -178,6 +181,115 @@ class CreditnoteDefinitionTests(unittest.TestCase):
         source["containerDefinitions"][0]["entryPoint"] = ["synthetic-unreviewed-entrypoint"]
         with self.assertRaisesRegex(RuntimeError, "entrypoint"):
             deploy.guard_definition(source, "roy", IMAGE, "role", "bucket", "prefix")
+
+    def test_guard_rejects_missing_duplicate_and_empty_required_references(self):
+        for name in deploy.GUARD_SECRET_NAMES:
+            for defect in ("missing", "duplicate", "empty", "whitespace", "not-text"):
+                with self.subTest(name=name, defect=defect):
+                    source = source_definition()
+                    secrets = source["containerDefinitions"][0]["secrets"]
+                    target = next(row for row in secrets if row["name"] == name)
+                    if defect == "missing":
+                        secrets.remove(target)
+                    elif defect == "duplicate":
+                        secrets.append(copy.deepcopy(target))
+                    else:
+                        target["valueFrom"] = {"empty": "", "whitespace": " ", "not-text": None}[defect]
+                    with self.assertRaisesRegex(RuntimeError, "guard-.*secret"):
+                        deploy.guard_definition(source, "roy", IMAGE, "role", "bucket", "prefix")
+
+    def test_guard_rejects_cross_project_account_key_and_version_bindings(self):
+        original = source_definition()["containerDefinitions"][0]["secrets"][0]["valueFrom"]
+        for reference in (original.replace("roy/", "vevo/"), original.replace(ACCOUNT, "999999999999"),
+                          original.replace("eu-central-1", "us-east-1"), original.replace("ABC123", "DEF456"),
+                          original.replace(":BIZNISWEB_API_TOKEN:", ":BIZNISWEB_PASSWORD:"),
+                          original[:-2] + ":AWSPREVIOUS:", original[:-2] + ":AWSCURRENT:synthetic-version"):
+            with self.subTest(reference=reference):
+                source = source_definition()
+                source["containerDefinitions"][0]["secrets"][0]["valueFrom"] = reference
+                with self.assertRaisesRegex(RuntimeError, "guard-secret-.*binding"):
+                    deploy.guard_definition(source, "roy", IMAGE, "role", "bucket", "prefix")
+
+    def test_guard_preserves_existing_common_version_selector_exactly(self):
+        for selector in (":AWSCURRENT:", "::synthetic-version"):
+            source = source_definition("vevo")
+            for row in source["containerDefinitions"][0]["secrets"][:-1]:
+                row["valueFrom"] = row["valueFrom"][:-2] + selector
+            result = deploy.guard_definition(source, "vevo", IMAGE, "role", "bucket", "prefix")
+            self.assertEqual(source["containerDefinitions"][0]["secrets"][:-1], result["containerDefinitions"][0]["secrets"])
+
+    def test_task_secret_contract_reaches_real_creditnote_login_and_complete_scan(self):
+        from creditnote_export import fetch_project_creditnotes
+        from creditnote_storno_runner import _validate_runtime
+
+        for project in deploy.PROJECTS:
+            with self.subTest(project=project):
+                definition = deploy.guard_definition(source_definition(project), project, IMAGE, "role", "bucket", "prefix")
+                container = definition["containerDefinitions"][0]
+                secret_values = {"BIZNISWEB_API_URL": f"https://{project}.flox.sk/api/graphql",
+                                 "BIZNISWEB_API_TOKEN": "synthetic-api-token",
+                                 "BIZNISWEB_USERNAME": "synthetic-admin-user", "BIZNISWEB_PASSWORD": "synthetic-admin-password"}
+                environment = {row["name"]: row["value"] for row in container["environment"]}
+                environment.update({row["name"]: secret_values[row["valueFrom"].split(":")[7]] for row in container["secrets"]})
+                session = Mock()
+                session.get.return_value.text = "?arf=syntheticToken"
+                login, listing = Mock(), Mock()
+                login.json.return_value = {"arf": "syntheticToken"}
+                listing.text = '{"total":1,"rows":[{"creditnote_id":"synthetic-document"}]}'
+                session.post.side_effect = [login, listing]
+                with patch.dict(os.environ, environment, clear=True), \
+                        patch("creditnote_export.build_retry_session", return_value=session):
+                    _validate_runtime(project, {})
+                    rows, total = fetch_project_creditnotes(project)
+                self.assertEqual(1, total)
+                self.assertEqual([{"creditnote_id": "synthetic-document"}], rows)
+                self.assertEqual(f"https://{project}.flox.sk/admin/login/authenticate/", session.post.call_args_list[0].args[0])
+                self.assertEqual("synthetic-admin-user", session.post.call_args_list[0].kwargs["data"]["username"])
+                self.assertEqual("synthetic-admin-password", session.post.call_args_list[0].kwargs["data"]["password"])
+                self.assertEqual(f"https://{project}.flox.sk/erp/orders/creditnotes/getListJson", session.post.call_args_list[1].args[0])
+                self.assertEqual(2, session.post.call_count)
+
+    def test_report_launch_accepts_only_reviewed_default_path_and_plain_project_binding(self):
+        for project in deploy.PROJECTS:
+            original = schedule(f"{project}-daily-report-email", project, f"{project}-reporting-daily")
+            container = {"environment": [{"name": "REPORT_PROJECT", "value": project}]}
+            for command in (None, ["python", "daily_report_runner.py"]):
+                deploy.verify_report_launch(original, {**container, "command": command}, project)
+            for command in ([], ["sh", "-c", "python daily_report_runner.py"], ["python", "creditnote_storno_runner.py"],
+                            ["python", "daily_report_runner.py", "--project", "other"]):
+                with self.subTest(command=command), self.assertRaisesRegex(RuntimeError, "command-drift"):
+                    deploy.verify_report_launch(original, {**container, "command": command}, project)
+            for environment in ([], [{"name": "REPORT_PROJECT", "value": "other"}], container["environment"] * 2):
+                with self.subTest(environment=environment), self.assertRaisesRegex(RuntimeError, "project-binding"):
+                    deploy.verify_report_launch(original, {"environment": environment}, project)
+            for name in ("REPORT_PROJECT", SKIP):
+                with self.assertRaisesRegex(RuntimeError, "project-binding"):
+                    deploy.verify_report_launch(original, {**container, "secrets": [{"name": name, "valueFrom": "unreviewed"}]}, project)
+            for payload in ({}, {"containerOverrides": [{"name": "reporting", "command": ["python", "-c", "unreviewed wrapper"]}]}):
+                with self.subTest(payload=payload), self.assertRaisesRegex(RuntimeError, "input-not-reviewed"):
+                    deploy.verify_report_launch({**original, "Target": {**original["Target"], "Input": json.dumps(payload)}}, container, project)
+
+    def test_inspection_rejects_report_command_override_before_pause(self):
+        value = controller()
+        value.no_capture, value.pause, value.ecs = Mock(), Mock(), Mock()
+        for name, service in deploy.PROTECTED.items():
+            value.scheduler.values[name]["Target"]["EcsParameters"]["TaskDefinitionArn"] = (
+                f"arn:aws:ecs:eu-central-1:{ACCOUNT}:task-definition/{service}:8")
+        project = deploy.PROJECTS[0]
+        report_name = f"{project}-daily-report-email"
+        report = value.scheduler.values[report_name]
+        revision, digest, _ = deploy.REPORT_PINS[project]
+        report["Target"]["EcsParameters"]["TaskDefinitionArn"] = (
+            f"arn:aws:ecs:eu-central-1:{ACCOUNT}:task-definition/{project}-reporting-daily:{revision}")
+        report["Target"]["Input"] = json.dumps({"containerOverrides": [{"name": "reporting", "command": ["python", "-c", "unreviewed"]}]})
+        value.ecs.describe_task_definition.return_value = {"taskDefinition": {"containerDefinitions": [{
+            "name": "reporting", "image": IMAGE.split("@", 1)[0] + "@sha256:" + digest,
+            "environment": [{"name": "REPORT_PROJECT", "value": project}]}]}}
+        with patch.object(deploy, "require_main"), self.assertRaisesRegex(RuntimeError, "input-not-reviewed"):
+            value.apply()
+        value.pause.assert_not_called()
+        value.save.assert_not_called()
+        self.assertEqual([], value.scheduler.writes)
 
     def test_guard_policy_only_allows_own_two_state_objects_and_live_metrics(self):
         policy = deploy.state_policy(ACCOUNT, "synthetic-bucket", "roy", "daily-reports/roy")
@@ -448,6 +560,23 @@ class CreditnoteMigrationSequenceTests(unittest.TestCase):
         self.assertEqual(2, result["live_completions"])
         self.assertTrue(all(row["State"] == "ENABLED" for row in value.scheduler.values.values()))
 
+    def test_main_movement_during_preflight_does_not_pause_or_restore_schedules(self):
+        value, events = self.prepared()
+        value.pause, value.restore = Mock(), Mock()
+        with patch.object(deploy, "require_main", side_effect=[None, RuntimeError("main-moved-during-preflight")]) as gate, \
+                patch.object(deploy, "established_alarm_route", return_value="existing-route"):
+            with self.assertRaisesRegex(RuntimeError, "main-moved-during-preflight"):
+                value.apply()
+        self.assertEqual(2, gate.call_count)
+        value.inspect.assert_called_once()
+        value.pause.assert_not_called()
+        value.restore.assert_not_called()
+        value.provision.assert_not_called()
+        value.task_run.assert_not_called()
+        self.assertEqual([], events)
+        self.assertEqual([], value.scheduler.writes)
+        self.assertEqual(value.originals, value.scheduler.values)
+
     def test_apply_failure_before_live_restores_reports_and_never_starts_live(self):
         value, events = self.prepared(fail_kind="guard-probe")
         with patch.object(deploy, "require_main"), patch.object(deploy, "established_alarm_route", return_value="existing-route"):
@@ -498,7 +627,7 @@ class CreditnoteMigrationSequenceTests(unittest.TestCase):
         value.tasks.assert_not_called()
 
     def test_guard_live_launch_rechecks_main_after_probes_and_after_first_live_task(self):
-        for rejected_call, expected_live_runs in ((2, 0), (3, 1)):
+        for rejected_call, expected_live_runs in ((3, 0), (4, 1)):
             value, events = self.prepared()
             calls = [0]
             def gate(commit):

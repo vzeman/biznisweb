@@ -5,6 +5,22 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Independent guard review corrected runtime prerequisites
+
+What changed:
+
+- Independent review found that creditnote export uses native administrator login as well as GraphQL. The candidate previously copied only API references and would fail at runtime. It now preserves all four exact API/admin secret references, verifies unique nonempty same-project/account/region/version binding and excludes unrelated email credentials. A dependency regression executes the real login/list parser with only native HTTP mocked.
+- The initial report migration now rejects any existing Scheduler Input and any unreviewed effective report command/project before pause. This closes a gap where the diagnostic command could mask a wrapper that bypassed the skip flag. Both pinned historical Dockerfiles were independently confirmed to use the expected direct report CMD.
+- A fresh main check now follows slow preflight and precedes the first pause, outside rollback scope. A stale release performs no schedule write. The runbook records these initial-migration prerequisites.
+
+What is verified:
+
+- 68 focused tests and an independent 12-test correction review pass; Ruff and whitespace checks pass. No remaining concrete source blocker was found in this review. Full integrated regression passed all 669 tests before commit. No guard deployment, AWS mutation or live provider request was made by this review.
+
+Next exact step:
+
+- Commit/push after the full integrated regression, retain the active invoice release freeze and finish real invoice recovery first. Then complete guard PR/CI/build and the separately gated migration; tests do not establish live completion.
+
 ## 2026-09-13 — Separate creditnote guard migration prepared, not deployed
 
 Date: 2026-09-13
