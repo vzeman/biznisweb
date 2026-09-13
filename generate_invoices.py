@@ -17,12 +17,14 @@ from contextlib import nullcontext
 from zoneinfo import ZoneInfo
 
 from order_inventory import InventoryScanBudget, scan_order_inventory
+from reviewed_invoice_obligations import closure_decision, has_reviewed_closure
 from api_read_backoff import (
     READ_BUDGET_SECONDS, check_read_deadline, check_read_response_status, prepare_query_read, read_retry_delay, wait_before_read,
 )
 
 from invoice_automation_state import (
     AutomationLeaseBusy,
+    AutomationJournal,
     AutomationStateError,
     build_automation_state_store,
     iso_utc,
@@ -212,6 +214,8 @@ class InvoiceRunSummary:
     invoice_status_review_required: int = 0
     pending_invoice_operations: int = 0
     full_scan_age_hours: float = 0.0
+    reviewed_closed_invoice_obligations: int = 0
+    reviewed_invoice_obligation_reviews: int = 0
 
 
 @dataclass
@@ -1367,6 +1371,8 @@ class InvoiceGenerator:
     def _prepare_invoice(self, current: Dict[str, Any], order_id: str,
                          result: InvoiceCreationResult) -> Optional[Dict[str, Any]]:
         order_num = str(current["order_num"])
+        if self._reviewed_financial_block(order_num, result):
+            return None
         latest = self.fetch_order_for_invoice(order_num)
         if latest["invoices"] or not self.filter_orders_for_invoice([latest])[0]:
             result.skipped = True
@@ -1436,7 +1442,29 @@ class InvoiceGenerator:
             raise RuntimeError("Native final invoice lacks complete API readback")
         return None, None
 
+    def _financial_journal(self):
+        """Every financial entrypoint requires the owned, project-bound journal."""
+        journal = self.operation_journal
+        if not isinstance(journal, AutomationJournal) or not journal.store.project:
+            raise AutomationStateError("Financial writes require an owned project journal")
+        journal.assert_owned()
+        return journal
+
+    def _reviewed_financial_block(self, order_num: str, result: InvoiceCreationResult) -> bool:
+        journal = self._financial_journal()
+        decision = closure_decision(journal.get_order(order_num), project=journal.store.project, order_num=order_num)
+        if not decision.present:
+            return False
+        result.skipped = decision.closed
+        result.ambiguous = not decision.closed
+        result.email_error = decision.reason
+        result.email_required = False
+        self.last_email_outcome = decision.reason
+        return True
+
     def _send_journaled_email(self, order_num: str, result: InvoiceCreationResult) -> None:
+        if self._reviewed_financial_block(order_num, result):
+            return
         prior = self.operation_journal.get_order(order_num) if self.operation_journal else {}
         if prior.get("email_state") in {"sending", "ambiguous", "sent"}:
             # A missing token or later hold must never turn a consumed send
@@ -1481,7 +1509,8 @@ class InvoiceGenerator:
         if self.operation_journal:
             self.operation_journal.assert_owned()
         self._journal_update(order_num, phase="email", email_state="sending", invoice_id=result.invoice_id,
-                             invoice_num=result.invoice_num)
+                             invoice_num=result.invoice_num, order_id=order_id)
+        self._active_email_intent = (self.operation_journal.token, order_num, order_id)
         result.email_sent = self.send_invoice_email(order_id)
         result.email_error = "" if result.email_sent else self.last_email_outcome
         result.ambiguous = self.last_email_outcome == "ambiguous"
@@ -1494,8 +1523,10 @@ class InvoiceGenerator:
         result = InvoiceCreationResult(email_required=self.send_invoice_email_enabled)
         if not order_num:
             return result
+        if self._reviewed_financial_block(order_num, result):
+            return result
         current = self.fetch_order_for_invoice(order_num)
-        prior = self.operation_journal.get_order(order_num) if self.operation_journal else {}
+        prior = self.operation_journal.get_order(order_num)
         if prior.get("email_policy") == "hold":
             result.email_required = False
         uncertain_phase = prior.get("phase") in {"preparing", "prepare_ambiguous", "creating", "create_ambiguous"}
@@ -1672,7 +1703,17 @@ class InvoiceGenerator:
         return result
 
     def send_invoice_email(self, order_id: str) -> bool:
-        """A single send attempt; HTTP 200 HTML and timeouts remain ambiguous."""
+        """A single journal-intended send; HTTP 200 HTML/timeouts stay ambiguous."""
+        journal = self._financial_journal()
+        identity = self._positive_internal_id(order_id)
+        authorization = getattr(self, "_active_email_intent", None)
+        self._active_email_intent = None
+        records = [record for record in journal.snapshot()["orders"].values()
+                   if str(record.get("order_id")) == identity]
+        if (len(records) != 1 or has_reviewed_closure(records[0])
+                or records[0].get("phase") != "email" or records[0].get("email_state") != "sending"
+                or authorization != (journal.token, records[0].get("order_num"), identity)):
+            raise AutomationStateError("Invoice email requires one newly authorized unclosed durable send intent")
         try:
             self._require_native_token()
         except ValueError:
@@ -1708,6 +1749,8 @@ class InvoiceGenerator:
         if not self.operation_journal:
             return results
         for record in self.operation_journal.pending_orders():
+            if has_reviewed_closure(record):
+                continue
             if record.get("phase") != "email":
                 continue
             result = InvoiceCreationResult(email_required=True, invoice_id=record.get("invoice_id"),
@@ -1731,6 +1774,8 @@ class InvoiceGenerator:
 
     def process_orders(self, date_from: datetime, date_to: datetime, dry_run: bool = False):
         """Main process to generate invoices for matching orders"""
+        if not dry_run:
+            self._financial_journal()
         logger.info(f"Processing orders from {date_from.strftime('%Y-%m-%d')} to {date_to.strftime('%Y-%m-%d')}")
         
         # Check if we have web session for invoice creation
@@ -1928,12 +1973,16 @@ def run_invoice_generation(
             if journal:
                 changed_by_number = {str(row["order_num"]): row for row in changed_orders}
                 for record in state["orders"].values():
+                    if has_reviewed_closure(record):
+                        continue
                     if (record.get("status_review") or {}).get("state") == "open":
                         row = generator.fetch_order_for_invoice(record["order_num"])
                         changed_by_number[str(row["order_num"])] = row
                         by_number[str(row["order_num"])] = row
                 changed_orders = list(changed_by_number.values())
                 for record in journal.pending_orders():
+                    if has_reviewed_closure(record):
+                        continue
                     if record.get("phase") in {"pending", "preparing", "prepare_ambiguous",
                                                "creating", "create_failed", "create_ambiguous"}:
                         row = generator.fetch_order_for_invoice(record["order_num"])
@@ -1952,6 +2001,29 @@ def run_invoice_generation(
             candidates, stats = generator.filter_orders_for_invoice(orders)
             candidate_numbers = {str(row["order_num"]) for row in candidates}
             candidates.extend(row for row in recovered_candidates if str(row["order_num"]) not in candidate_numbers)
+            # Closed obligations remain separately visible, without reactivating the
+            # preserved financial uncertainty. Invalid/pending closures stay review.
+            closure_records = {number: record for number, record in state["orders"].items()
+                               if has_reviewed_closure(record)}
+            candidates = [row for row in candidates if str(row["order_num"]) not in closure_records]
+            for number, record in closure_records.items():
+                decision = closure_decision(record, project=project_name, order_num=number)
+                if decision.closed:
+                    current = generator.fetch_order_for_invoice(number)
+                    decision = closure_decision(record, project=project_name, order_num=number, current_order=current)
+                prior_review = record.get("status_review") or {}
+                malformed_review = not isinstance(prior_review, dict)
+                previous_reason = prior_review.get("reason") if not malformed_review else None
+                retained_review = malformed_review or (
+                    prior_review.get("state") == "open" and isinstance(previous_reason, str)
+                    and previous_reason.startswith("reviewed_closure"))
+                needs_review = not decision.closed or decision.regression or retained_review
+                summary.reviewed_closed_invoice_obligations += int(decision.closed)
+                summary.reviewed_invoice_obligation_reviews += int(needs_review)
+                if journal and needs_review:
+                    reason = decision.reason if not decision.closed or decision.regression else (
+                        "reviewed_closure_review_invalid" if malformed_review else previous_reason)
+                    journal.update_order(number, status_review={"state": "open", "reason": reason})
             summary.total_orders_fetched = len(orders)
             summary.matched_orders = len(candidates)
             summary.skipped_zero_total_orders = stats["skipped_zero_total_orders"]
@@ -2005,7 +2077,7 @@ def run_invoice_generation(
             summary.skipped_invoice_status_reconciliations_after_recheck = reconciliation["skipped_after_recheck"]
             summary.invoice_status_reconciliation_target_name = reconciliation["target_status_name"]
             summary.invoice_status_reconciliation_target_id = reconciliation["target_status_id"]
-            summary.invoice_status_review_required = reconciliation["review_required"]
+            summary.invoice_status_review_required = reconciliation["review_required"] + summary.reviewed_invoice_obligation_reviews
             if dry_run:
                 summary.total_amount = sum(_coerce_order_total_value(row) for row in candidates)
                 return summary
@@ -2021,7 +2093,7 @@ def run_invoice_generation(
                 summary.pending_invoice_emails = sum(record.get("phase") == "email" for record in pending)
                 summary.pending_invoice_operations = sum(record.get("phase") in {
                     "pending", "preparing", "prepare_ambiguous", "creating", "create_failed",
-                    "create_ambiguous", "email"} for record in pending)
+                    "create_ambiguous", "email"} or has_reviewed_closure(record) for record in pending)
             logger.info("Invoice automation finished: scan_complete=%s full_scan=%s pages=%s matched=%s created=%s failed=%s email_failed=%s ambiguous=%s",
                         summary.invoice_scan_complete, summary.invoice_scan_all_ages, summary.invoice_scan_pages,
                         summary.matched_orders, summary.created_invoices, summary.failed_invoices,

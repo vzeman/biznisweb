@@ -14,13 +14,30 @@ on 2026-09-13. All five order-automation schedules are enabled; protected report
 configuration remains unchanged. Subsequent natural ROY/VEVO runs created
 28 invoices with independently matched native/API document identities.
 
-Four historical uncertain creation cases remain under the fixed once-only
-reconciliation procedure until its final readback is confirmed. A separate
-user-confirmed uncollected-order case retains an unknown preparation outcome;
-its obligation closure is being prepared independently. Neither group is claimed
-resolved here, and no uncertain financial intent may be reset or replayed.
-Manual-settlement protection and the corrected creditnote identity/lifecycle
-rules in this branch still require their own reviewed release.
+The fixed six-case ROY reconciliation is complete: two already-sent emails were
+confirmed in the journal without resending; four final-document outcomes were
+verified with three new once-only finalization requests and one readback-only
+completion of an existing document. The creator of that existing document is
+not inferred. The original ROY six-order backfill audit passed with four verified
+invoices and two externally invoiced cases. The independent final six-case
+journal receipt is `data/roy/order-automation/audits/2026-09-13/independent-reviewed-six-case-journal-20260913.json`,
+SHA `ca8547aae179f834de51e45f97fa22835d969e59f0e482afff36225791debc16`.
+
+The user-confirmed uncollected VEVO case still retains its unknown preparation
+outcome. This combined branch now includes the reviewed closure runtime/helper,
+manual-settlement protection and corrected creditnote identity/lifecycle rules.
+They require their own verified release; the closure helper's release pins are
+empty and no closure marker has been applied. See the
+[reviewed noncollection runbook](ORDER_AUTOMATION_REVIEWED_NONCOLLECTION.md).
+
+The current release blocker is a verified VEVO status-name change: API and native
+catalogs now both show `Shipped` for the ID previously observed as `Odoslaná`.
+Even the explicit SK API catalog argument returns the current English label;
+ROY's current catalogs still agree on the Slovak label. The API secret is unchanged
+since April. A concurrent user request to translate statuses into English was
+identified, so intentional renaming is being checked; this is not established
+as an API translation bug. No translation aliases, canonicalizer, status/settings
+change or deployment is inferred from this difference. Diagnostic preview failures have made zero business writes.
 
 Earlier on the same date, source `ccf25c79` passed infrastructure gates but its
 first natural ROY run received thirteen explicit finalization refusals. That
@@ -267,9 +284,12 @@ Managed deployment `34741354275` passed all actual hosts, drains and promotion
 readbacks; both shops' subsequent natural tasks created native/API-confirmed
 invoices. Its private receipt is
 `data/roy/order-automation/deployments/47c3da775ff7018a1cf8950024c867310b91ae8a/4b88d8c4d91943ef871b54b7b19031e3.json`.
-This source change still requires review before apply. One separate VEVO
-preparation uncertainty is outside the fixed six-case ROY scope and cannot be
-reset or replayed by this helper. Failed earlier releases remain disallowed.
+This reviewed migration has completed with final journal/native/API evidence
+and the original ROY backfill audit passing; its fixed helper is not a general
+retry queue. One separate VEVO preparation uncertainty is outside this scope
+and cannot be reset or replayed. Its business obligation uses the separately
+reviewed noncollection closure after a compatible release. Failed earlier
+releases remain disallowed.
 
 ## Release sequence and rollback
 

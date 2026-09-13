@@ -479,6 +479,10 @@ def status_write_block_reason(
     full_creditnote. That legitimate terminal transition must not be blocked by
     an earlier verified payment/fulfillment repair. No uncertain write qualifies.
     """
+    from reviewed_invoice_obligations import has_reviewed_closure
+
+    if has_reviewed_closure(journal_order):
+        return "reviewed_noncollection_requires_manual_review"
     if manual_settlement_sha256:
         from manual_settlement import positive_id, uncertainty_reason
         try:

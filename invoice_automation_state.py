@@ -17,6 +17,7 @@ from typing import Any, Callable, Iterator
 from uuid import uuid4
 
 from reporting_core.storage import resolve_report_s3_location
+from reviewed_invoice_obligations import FINANCIAL_FIELDS, closure_decision, has_reviewed_closure
 
 
 class AutomationStateError(RuntimeError):
@@ -205,13 +206,19 @@ class AutomationJournal:
         record = state["orders"].setdefault(str(order_num), {"order_num": str(order_num)})
         if "order_num" in fields and str(fields["order_num"]) != str(order_num):
             raise AutomationStateError("Invoice journal order identity cannot change")
+        if has_reviewed_closure(record) and any(
+            key in FINANCIAL_FIELDS and value != record.get(key) for key, value in fields.items()
+        ):
+            raise AutomationStateError("Reviewed closure must preserve original financial uncertainty")
         record.update(fields)
         record["updated_at"] = iso_utc(self.store.now())
         self.store.put(state, etag)
 
     def pending_orders(self) -> list[dict[str, Any]]:
         state, _ = self._owned()
-        return [deepcopy(record) for record in state["orders"].values() if record.get("phase") != "complete"]
+        return [deepcopy(record) for number, record in state["orders"].items()
+                if (record.get("phase") != "complete" or has_reviewed_closure(record))
+                and not closure_decision(record, project=self.store.project, order_num=number).closed]
 
     def record_manual_settlement(self, order: dict[str, Any], reference: dict[str, Any]) -> None:
         """Only provenance changes; retain every invoice/email/status field."""
@@ -231,6 +238,8 @@ class AutomationJournal:
         for order in orders:
             number = str(order["order_num"])
             existing = state["orders"].get(number) or {}
+            if has_reviewed_closure(existing):
+                continue
             if existing.get("phase") not in {"preparing", "prepare_ambiguous", "creating", "create_ambiguous", "email"}:
                 state["orders"][number] = {**existing, "order_num": number, "phase": "pending"}
         self.store.put(state, etag)
@@ -244,6 +253,8 @@ class AutomationJournal:
                 continue
             number = str(order["order_num"])
             record = state["orders"].setdefault(number, {"order_num": number, "phase": "complete"})
+            if has_reviewed_closure(record):
+                continue
             record.update(verified_fulfillment_status="Odoslaná", status_observed_at=iso_utc(self.store.now()),
                           status_observation_source="authenticated_order_api")
             changed = True
@@ -258,6 +269,8 @@ class AutomationJournal:
         for order in orders:
             number = str(order["order_num"])
             record = state["orders"].setdefault(number, {"order_num": number, "phase": "complete"})
+            if has_reviewed_closure(record):
+                continue
             if (record.get("status_review") or {}).get("state") != "open":
                 record["status_review"] = {"state": "open", "reason": "pending_evidence_check"}
         self.store.put(state, etag)

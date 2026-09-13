@@ -21,6 +21,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from invoice_automation_state import S3AutomationStateStore, resolve_automation_state_location
 from reporting_core.storage import resolve_report_s3_location
+from reviewed_invoice_obligations import closure_decision, has_reviewed_closure
 from scripts.restore_verified_fulfillment import runtime_environment
 
 SOURCE = "complete_historical_backlog_audit"
@@ -28,10 +29,25 @@ EXTERNAL_REASONS = {"invoice_exists", "invoice_created_elsewhere", "changed_befo
 INELIGIBLE_REASONS = {"eligibility_changed", "changed_before_finalization"}
 
 
-def assess_order(number: str, record: dict, order: Any, shipped_status_ids: set[int]) -> dict:
+def assess_order(number: str, record: dict, order: Any, shipped_status_ids: set[int], *, project: str | None = None) -> dict:
     """Return minimal private evidence; unsupported or unfinished outcomes fail."""
     result = {"order_num": number, "ok": False, "outcome": "unverified", "issues": []}
     issues = result["issues"]
+    if has_reviewed_closure(record):
+        decision = closure_decision(record, project=project, order_num=number, current_order=order)
+        result["journal"] = {key: record.get(key) for key in ("phase", "email_policy", "email_state", "invoice_id")}
+        result["financial_outcome"] = "unknown"
+        result["invoice_obligation"] = "closed" if decision.closed else "unverified"
+        if not decision.closed or decision.regression or order is None:
+            issues.append(decision.reason if order is not None else "fresh_order_missing")
+        if record.get("email_policy") != "hold":
+            issues.append("historical_email_hold_missing")
+        review = record.get("status_review") or {}
+        if not isinstance(review, dict) or review.get("state") == "open":
+            issues.append("reviewed_closure_requires_review")
+        result["ok"] = not issues
+        result["outcome"] = "reviewed_uncollected_obligation_closed" if result["ok"] else "unverified"
+        return result
     if str(record.get("order_num") or "") != number:
         issues.append("journal_order_identity_mismatch")
     if record.get("email_policy") != "hold":
@@ -136,7 +152,7 @@ def verify_backfill(*, store, project: str, expected_count: int, read_order, shi
     for number, record in sorted(selected.items()):
         try:
             order = read_order(number)
-            row = assess_order(number, record, order, shipped_status_ids)
+            row = assess_order(number, record, order, shipped_status_ids, project=project)
         except Exception as error:
             # Never place a raw third-party exception/response in the report.
             row = {"order_num": number, "ok": False, "outcome": "unverified",
