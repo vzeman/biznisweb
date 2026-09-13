@@ -20,6 +20,7 @@ What is verified:
 
 - **920 exact build-workflow tests** and **658 exact automation-workflow tests** pass, including **64 guard runner/deployment tests**. Reporting smoke, `scripts/security_ci.py`, scoped Ruff and whitespace checks pass. Test collection used the committed workflow commands with separate normal Python processes, without disabling logging or changing runtime behavior.
 - Primary runtime is independently confirmed by audit SHA `ada17707d7885aa68b684633f9e0ee9ef4695734fe2b53dc5649b4eec649fb50`: source `fda36b49`, image `sha256:29c0c8e4106438f204b0afaee097e90fab887a82e71327653e508a20574b90c0`, ROY invoice `:11`, VEVO invoice `:9`, cancellation `:42`. Preserve all five current order schedules and reporting `ROY:71` / `VEVO:33` during the future standalone migration.
+- Integration `d57c4016` is pushed and the remote head was re-read exactly. PR #552's description now reflects this final scope and validation; its single `gh pr ready` attempt succeeded. The PR is ready for review, with its own final-head CI still required before root considers a merge. This final handoff changes documentation only.
 - No AWS/provider reads or mutations, helper execution, main merge, image build or deployment occurred in this integration. No persistent local server/worker was started; all finite test processes completed.
 
 Known issues:
@@ -28,7 +29,7 @@ Known issues:
 
 Next exact step:
 
-- Push this integration and refresh PR #552 with the final source/tests. Require its own exact-head CI, make one ready-for-review attempt, and hand control back to root. Only root may merge after VEVO audit/natural evidence is clear; a later managed deployment must perform fresh host, task/IP/service/path, localhost marker, complete live guard and rollback gates.
+- Keep PR #552's final pushed head clean and require its own exact-head CI. Hand control back to root; only root may merge after VEVO audit/natural evidence is clear. A later managed deployment must perform fresh host, task/IP/service/path, localhost marker, complete live guard and rollback gates.
 
 ## 2026-09-13 — Uncollected closure applied; VEVO seeded audit passes
 
