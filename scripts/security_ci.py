@@ -380,10 +380,12 @@ def main() -> int:
         read("scripts/import_product_expenses_excel.py")
 
         if gitleaks_ignore_entries != {
-            "projects/vevo/growthbook_workspace.json:generic-api-key:328"
+            "projects/vevo/growthbook_workspace.json:generic-api-key:328",
+            # Immutable audit-object checksum, scoped to its original commit.
+            "584d04e481a36b4b1fd439005b16727044de6091:order_status_identity.py:generic-api-key:32",
         }:
             raise AssertionError(
-                "Gitleaks ignore must remain limited to the reviewed metric false positive"
+                "Gitleaks ignore must remain limited to the reviewed metric and audit-checksum false positives"
             )
 
         require(

@@ -29,7 +29,7 @@ Known issues:
 
 Next exact step:
 
-- Included subsequent handoff `fd3d0061`: both root live previews passed with zero business writes and the unchanged pinned audit SHA has one exact historical secret-scanner fingerprint exception. Only `.gitleaksignore` and project memory changed; executable source and the 901/639-test result remain unchanged. Keep this integration committed/pushed for root review. Wait for the verified preceding release, refresh the guard source/runtime handoff from authoritative receipts, and only then prepare the separate guard PR/deployment. All finite checks ended; no local server, worker, watcher or tunnel was started.
+- Included subsequent handoffs `fd3d0061` and `a7f1bdd9`: both root live previews passed with zero business writes. The unchanged pinned audit SHA has one exact historical secret-scanner fingerprint exception, and `scripts/security_ci.py` now enforces exactly the two reviewed fingerprints. Independent immutable-line verification and the security baseline passed; broad/future-secret suppression is not allowed. Automation executable source and the 901/639-test result remain unchanged. Keep this integration committed/pushed for root review. Wait for the verified preceding release, refresh the guard source/runtime handoff from authoritative receipts, and only then prepare the separate guard PR/deployment. All finite checks ended; no local server, worker, watcher or tunnel was started.
 
 ## 2026-09-13 — Live settlement preview passed; exact checksum scan exception
 
@@ -41,10 +41,13 @@ What changed:
 
 - PR #550 now describes the combined payment, creditnote, reviewed noncollection and status identity changes and is ready for review. The exact source `10d705ee` integrates documentation-only main `4d504980`.
 - Gitleaks identified one false positive: the SHA-256 of the existing API audit proof in `order_status_identity.py`, not a credential. Added only the exact commit/file/rule/line fingerprint to `.gitleaksignore`; no detector, rule or file-wide exclusion changed.
+- The secret scan passed with that exact exception. The separate baseline intentionally allowed only the previous single metric exception, so its exact-set assertion now permits these two reviewed fingerprints and still rejects any additional entry.
+- Local baseline and Ruff pass; negative checks reject both an added exception and a missing reviewed exception. Independent review confirmed the original immutable source line is the published audit checksum and that no wildcard or general suppression was added.
 
 What is verified:
 
 - The live VEVO manual settlement recorder preview passed with stable journal readback and zero provider writes. No settlement provenance has been applied and no status was changed. One earlier read-only invocation completed without captured terminal output; process absence was verified before the successful captured preview.
+- The fixed uncollected-obligation preview also passed with zero status, financial or email requests and no consumed intent. Its API/native document and receipt checks agree with the sealed confirmation. The finite preview commands have completed.
 - The tested source retains 844 build tests, 582 automation tests and reporting smoke success. Linux PR regression passed; remaining exact-head checks must finish again after this narrowly scoped scan correction.
 
 Known issues:
