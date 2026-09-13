@@ -5,6 +5,29 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Guard draft includes explicit ROY paid target correction
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+What changed:
+
+- Integrated the reviewed corrective PR #554 source `8569a6eb`, including the exact ROY paid ID 67 target and nine independent single-write/readback regressions. One expected project-memory conflict was resolved by retaining all six guard-only historical sections and the complete newer primary handoff; both workflow test unions merged automatically. Guard-owned executable/deployment files are unchanged.
+- The preceding primary deployment failed before promotion and was independently verified restored to old `47c3da77` / `c3842dda...`; its receipt is not a compatible-release proof. No closure or standalone guard migration is authorized by that failed receipt. Corrective PR #554 awaits exact-head GitHub checks. All three initial exact-head workflows subsequently ended with `startup_failure`, zero jobs/checks and no pending deployment; GraphQL and browser ready-for-review operations also returned server errors. One controlled rerun of those checks was accepted through REST. This external release blocker does not justify bypassing CI; billing/global-outage causes are not established.
+
+What is verified:
+
+- The primary correction passed 856 build/594 automation tests and a two-catalogue live read-only check selecting 67. This integration passes all 913 build tests, 651 automation tests, reporting smoke, scoped Ruff and whitespace checks. All eight guard-owned files are unchanged and all six corrective source/settings/test files match `8569a6eb`; CI module lists contain no duplicates. No AWS/provider calls or live changes were performed by this integration.
+
+Known issues:
+
+- PR #552 remains a separate undeployed draft. The fixed closure constants are empty; verified new primary promotion and VEVO historical recovery still precede this migration. ROY :71 / VEVO :33 report pins and the five actual order targets must remain protected.
+
+Next exact step:
+
+- Keep this tested integration committed/pushed in draft PR #552, then wait for primary PR #554 CI/build/promotion and VEVO closure verification. Refresh only the evidenced runtime handoff before a separately gated standalone migration. No local persistent processes were started.
+
 ## 2026-09-13 - Standalone guard includes reviewed status identities and noncollection closure
 
 Date: 2026-09-13
@@ -30,6 +53,178 @@ Known issues:
 Next exact step:
 
 - Included subsequent handoffs `fd3d0061` and `a7f1bdd9`: both root live previews passed with zero business writes. The unchanged pinned audit SHA has one exact historical secret-scanner fingerprint exception, and `scripts/security_ci.py` now enforces exactly the two reviewed fingerprints. Independent immutable-line verification and the security baseline passed; broad/future-secret suppression is not allowed. Automation executable source and the 901/639-test result remain unchanged. Keep this integration committed/pushed for root review. Wait for the verified preceding release, refresh the guard source/runtime handoff from authoritative receipts, and only then prepare the separate guard PR/deployment. All finite checks ended; no local server, worker, watcher or tunnel was started.
+
+## 2026-09-13 — Standalone guard integrated with combined status protection
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+What changed:
+
+- Integrated combined manual-settlement/native-creditnote draft `dbb207b58a37e3a54e1b336fbfa36e7168186004`, which already contains exact main `95e44213`, into the clean standalone guard draft `e131b789`. Additive project-history conflicts and both workflow path/test unions preserve every component. No guard runner, deployer, host probe, dedicated deployment workflow or guard test source was changed.
+- Guard migration remains a separate future release. After the order-automation release containing manual-settlement and reviewed uncollected-obligation protection, its fresh inventory must capture and preserve all five current invoice/cancellation task/image pins; the two fixed report pins remain subject to their existing strict gates. The separate closure implementation is not included yet.
+- Updated current operations documentation: source `47c3da77` / image `c3842dda` is promoted with five enabled automation plans and 28 confirmed natural invoices. Root has resolved the first two historical helper cases (one financial request, one readback-only completion); two remain. Both previously sent email outcomes are confirmed in the journal without resending. The separate uncollected preparation outcome remains unknown while its obligation closure is prepared.
+
+What is verified:
+
+- All guard-owned executable/workflow/test files are byte-identical to `e131b789`; imported manual-settlement, native creditnote and financial helper sources match reviewed `dbb207b5`. All 811 exact build-workflow tests pass (72 helper/seeded + 57 guard + 20 backoff + 662 combined), plus the separate 549-test automation workflow, reporting smoke, scoped Ruff and diff checks. Both CI test/trigger unions contain each required module exactly once.
+- No provider/AWS scan, business/journal/schedule write, helper apply, PR creation/main merge or production deployment occurred from this guard worktree. No local server or persistent worker was started.
+
+Known issues:
+
+- Standalone migration remains undeployed and must not overlap invoice recovery. Root owns financial evidence and deployment sequencing. The uncollected-obligation branch needs its own review before later integration; its author's worktree is untouched.
+
+Next exact step:
+
+- Wait for the reviewed closure-source handoff, integrate it separately with both status guards preserved, and rerun the combined checks. Refresh production/source handoff only after the preceding order-automation release is actually verified; this standalone guard remains undeployed and has no new PR from this integration.
+
+## 2026-09-13 — Guard source synchronized with native identity correction
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+What changed:
+
+- Integrated reviewed main `47c3da775ff7018a1cf8950024c867310b91ae8a` into guard draft `8e540c7b`. The only conflict was additive owned project history; both histories are retained. No guard runner, deployment/host-gate behavior, guard workflow, guard tests or guard runbook changed in this integration.
+- Imported the native invoice key and consumed-email corrections plus incident-aware invoice deployment exactly from main. This is offline source preparation while the separate invoice release runs; it does not start or authorize a guard migration.
+
+What is verified:
+
+- All 709 tests from the four exact build regression commands pass (including 57 standalone guard tests), with reporting smoke, focused Ruff and whitespace checks. Existing guard-owned files are byte-identical to `8e540c7b`; imported invoice source matches `47c3da77`. No AWS/provider access or mutation occurred in this integration. Finite checks ended; no local server, watcher or tunnel was started.
+
+Known issues:
+
+- Invoice deployment `34741354275` is active on frozen main `47c3da77` and image `sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`. Its reviewed incident source has four paused invoice schedules; no invoice recovery is yet claimed. Helper PR #546 and this guard draft must not merge or apply during that release. Guard is still undeployed and invoice business recovery retains priority.
+
+Next exact step:
+
+- Keep this tested integration committed/pushed and wait for independent invoice promotion and actual historical recovery. Only afterward refresh the guard migration's source/runtime handoff, integrate the finalized reconciliation verifier as needed, and complete its PR gates; preserve protected report pins, lease, host gates and capture exclusion.
+
+## 2026-09-13 — Guard draft integrated with the reviewed discovery and native response release
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+What changed:
+
+- Merged verification handoff `d24bdd2a5fd17324b9b8c23e0607b95304ae7f5d`, which includes reviewed main `ccf25c799c56bfa3dea1f3a77456f3fabf079732`, into the pushed guard draft `9eb0f033`. The only conflict was this owned project history; both sets of decisions and runtime evidence were retained.
+- The standalone guard runner, deployer, host probes, tests, dedicated workflow, build/PR test entries and guard runbook remain byte-for-byte unchanged from the preceding guard draft. Imported cancellation discovery, native response handling and their tests match the reviewed verification source exactly. No new guard behavior was introduced.
+
+What is verified:
+
+- All 684 tests from the build workflow's four exact regression commands pass, including the 57 standalone guard/deployment tests. Reporting smoke, focused Ruff and whitespace checks pass. An initial custom combined harness disabled logging globally and therefore broke a diagnostic `assertLogs` expectation; a bounded comparison confirmed the harness error and the unchanged test passes with normal logging. Use the workflow's normal commands for reproducible validation.
+- Source integration used a clean branch after fetch/prune and pull/rebase. No AWS/provider access, production mutation, PR creation, merge to main or deployment occurred in this integration. Finite tests and smoke checks ended; no local service or tunnel remains running.
+
+Known issues:
+
+- Root owns active invoice deployment `34738085098` for exact source `ccf25c79` and image `e8e4830c19bfb0e166519d412cfa1e3e8c690f042a6cbc72a88e52369ccdecc5`. Main is frozen until its independently verified promotion or restoration. This guard draft remains undeployed and must not bypass outstanding invoice recovery.
+
+Next exact step:
+
+- Keep this integration committed and pushed. Wait for verified invoice release and historical recovery, then refresh the guard runtime handoff and required PR checks before any separately authorized guard migration. Preserve the fixed report images/commands, shared lease, host gates and capture exclusion.
+
+## 2026-09-13 — Independent guard review corrected runtime prerequisites
+
+What changed:
+
+- Independent review found that creditnote export uses native administrator login as well as GraphQL. The candidate previously copied only API references and would fail at runtime. It now preserves all four exact API/admin secret references, verifies unique nonempty same-project/account/region/version binding and excludes unrelated email credentials. A dependency regression executes the real login/list parser with only native HTTP mocked.
+- The initial report migration now rejects any existing Scheduler Input and any unreviewed effective report command/project before pause. This closes a gap where the diagnostic command could mask a wrapper that bypassed the skip flag. Both pinned historical Dockerfiles were independently confirmed to use the expected direct report CMD.
+- A fresh main check now follows slow preflight and precedes the first pause, outside rollback scope. A stale release performs no schedule write. The runbook records these initial-migration prerequisites.
+
+What is verified:
+
+- 68 focused tests and an independent 12-test correction review pass; Ruff and whitespace checks pass. No remaining concrete source blocker was found in this review. Full integrated regression passed all 669 tests before commit. No guard deployment, AWS mutation or live provider request was made by this review.
+
+Next exact step:
+
+- Commit/push after the full integrated regression, retain the active invoice release freeze and finish real invoice recovery first. Then complete guard PR/CI/build and the separately gated migration; tests do not establish live completion.
+
+## 2026-09-13 — Separate creditnote guard migration prepared, not deployed
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+What changed:
+
+- Added a standalone entry point for the corrected creditnote rules, aggregate live/dry metrics, mandatory durable state and complete-summary checks. A separate managed deployer provisions isolated roles/tasks, verifies the two unchanged report hosts and both new dry-run hosts, and requires both live guard completions before switching off inline guards. It preserves report images, commands and times, and all five invoice/cancellation schedules.
+- Migration pauses/drains existing writers before probes, uses private CAS receipts and drift-aware restoration, and leaves reports paused after any uncertain live attempt. It is an initial migration, not a blind retry/adoption mechanism. The dedicated workflow shares the production automation concurrency group and has a 300-minute bound with restoration headroom.
+- Added `projects/CREDITNOTE_AUTOMATION_OPERATIONS.md` with exact migration, failure/recovery and monitoring boundaries, including the future report dependency limitation.
+- Capture exclusion now inspects active GitHub source/A/A workflows and all ECS clusters in this account/region. Only genuine unmodified collector service tasks are exempt. Current main and schedule/source snapshots are rechecked before each live guard launch.
+
+What is verified:
+
+- Independent read-only AWS inventory found three clusters: reporting, collector-preview (empty), collector-production (one ordinary collector service); no active capture/reconciler task was found. Both report task definitions retain their expected REPORT_PROJECT and REPORT_SKIP_INVOICES=true environment values.
+- 131 combined tests pass, including 50 independently rerun direct tests; Ruff and whitespace checks pass. No guard role, schedule, task, business mutation or email has been created by this draft.
+
+Known issues:
+
+- This branch now incorporates the merged API cooldown correction and release handoff through `f140f5aa`. The integration preserved both independently added CI test entries and both project-state sections; no customer data or runtime configuration was changed. Invoice recovery takes precedence; do not merge or deploy this draft during the invoice release freeze.
+- Future daily guard completion is monitored, not a strict dependency of the unchanged report images. Guard jobs are scheduled 92 minutes before their report, with completion/failure/review/DLQ alarms. The migration itself requires actual successful completions before resuming reports. Native FLOX stale payment-attempt handling remains a separate provider behavior.
+
+Next exact step:
+
+- After the invoice release and historical recovery finish, update the runtime handoff, run required PR checks, then build and execute the separate managed migration. The integrated full build regression passed all 662 tests before this merge commit. Main remains frozen for invoice deployment `34735770705`; this branch is preparation only. Verify all six host outcomes and exact two-report skip-flag delta, with private receipt readback. Never alter fixed report task/image/command pins as a shortcut.
+
+## 2026-09-13 — Candidate rejected; original runtime restored; explicit ROY target correction
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- Managed run `34747360516` rejected the first candidate before promotion. Actual ROY task `14c69cd06f7d4e298fc9fbf678830620`, IP `172.31.43.249`, service `roy-invoice-daily:10`, `/app`, Fargate instance N/A, exact `a05b6466...` image, stopped with exit 1 at 08:37:13 UTC. Its scan reached reconciliation, where `unique_target` rejected the paid target because ROY has two distinct status IDs with the same name. No localhost success marker or promotion was established.
+- Exact rollback independently passed: five original enabled schedules and ROY :9 / VEVO :8 / cancellation :41 image `c3842dda...`, six IAM policies, both protected reporting definitions/images (:71 / :33), 17 alarm configurations, three encrypted empty queues, stopped candidate and 120-second quiet drain. The deployment freeze is closed by verified restoration, not by success. Main remains `b417caa7`; it has not become the order runtime.
+- The corrective source filters an explicitly configured target by both its validated ID and expected name. Duplicate catalogue IDs, wrong/missing target IDs, changed names and unconfigured duplicate-name targets still fail. VEVO's separate canonical-role collision gate remains unchanged. Both ROY paid-recovery settings now pin ID 67.
+
+What is verified:
+
+- Independent rollback proof: `data/roy/order-automation/audits/2026-09-13/independent-deploy-b417caa7-20260913.json`, SHA `2cdf1786ac63a62760b03b842990da0f84ab69910757af796953549588ce89ef`. Terminal managed receipt SHA `017eb0e0ed3f84509e732656aa4ebcfedb6fc1b24bd1fa11f80d3f4b50e80cb9`. These are failure/restoration evidence, not a release authorization.
+- Existing same-shop API/native catalogue proof `811967d8...` establishes duplicate paid names on 31/67. Fresh read-only native Stripe mapping explicitly shows PAID -> 67. Canonical proof: `data/roy/order-automation/audits/2026-09-13/current-stripe-paid-target-ui-20260913-v2.json`, SHA `befab3a15da05ea71f81cff2faca37949310d38101830c627cf794b23e3bd871`. Version 2 replaces an estimated timestamp with the bounded observed window; mapping content is unchanged. No gateway setting, payment, invoice, status or email was written; the temporary browser tab was closed.
+- All 847 build-workflow tests passed on the corrective source (72 + 20 + 29 + 726), together with the separate 585-test automation suite, scoped Ruff and whitespace checks. Three new regressions cover duplicate-name order independence, invalid target/catalogue rejection and both real ROY recovery resolvers. Two existing settings assertions were updated to the reviewed explicit ID. Independent mutation-pipeline tests, exact-head CI and live zero-write resolver readback remain next.
+- Subsequently imported only the independently authored nine-test fixture from `6b6a2894` and added it to both CI lists. The final local gates pass all 856 build tests, 594 automation tests, reporting smoke, scoped Ruff and whitespace checks. Real resolver -> one silent status request -> exact acknowledgement/readback tests reject same-label wrong ID 31 and never replay timeout uncertainty. Synthetic rename-policy tests are explicitly distinct from ROY's unchanged inner catalogue refresh behavior. No production read/write was used by these tests.
+- Live catalogue-only verification passed on clean pushed `0bed7803`: both actual ROY resolvers selected 67 while both catalogues retained duplicate-name IDs 31/67. Exactly two status-catalogue reads, no order reads or status/financial/email writes. Private proof `data/roy/order-automation/audits/2026-09-13/live-explicit-paid-target-resolution-20260913.json`, SHA `5860a030b21edc642ea3a303e8263af73ee3fe51d3737d465349c13c5bcf14c3`. Corrective PR #554 is open; all six checks passed before the independent fixture was added and must pass again on its final head. Two GraphQL creation failures were checked for absence before one successful REST creation; there is only one corrective PR.
+
+Known issues:
+
+- VEVO still has missing-completion and stale-full-scan alarms; restoration is not successful VEVO execution. Manual bank provenance remains recorded, but its new protection consumer is not live. The fixed uncollected helper's release constants stay empty and no closure has been applied. Do not reuse the failed `b417` receipt as promotion proof.
+- Separate reporting draft #553 is now at `960837f1` with 174 related tests and cache-day refresh for unreviewed stale labels. It remains undeployed; standalone guard #552 and managed reporting work remain later dependencies.
+
+Next exact step:
+
+- Complete the narrow target correction review/tests, commit/push and new PR, then perform read-only live target resolution without another full scan. Require exact-head CI, exact merged-image build and a new managed deployment with independent restoration/promotion proof. Only a successful release permits pinning/applying the fixed uncollected closure and finishing VEVO seeded/all-age verification. No local persistent processes were started.
+
+## 2026-09-13 — Combined safety release merged; deployment freeze active
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/manual-settlement-protection-20260913`
+
+What changed:
+
+- All six PR #550 checks passed on exact head `a7f1bdd9`, including Linux/Windows automation regression and both secret/security checks. PR #550 merged at 08:15:19 UTC as `b417caa736cfbd1f97b20821cacc39b144e1e460`. Main is frozen on this source until managed order deployment is independently verified or restored; image build `34747227117` is running.
+- Image build `34747227117` subsequently passed; direct ECR read binds that source to `sha256:a05b6466883681ff52d143224ed20ce26d82eddf00d5fe3f8f06a6f1457e684e`. Managed deployment `34747360516` started at 08:18:44 UTC. Its private receipt is `data/roy/order-automation/deployments/b417caa736cfbd1f97b20821cacc39b144e1e460/c75ffef0c72542a3815d078ea073887e.json`. Initial 120-second drain passed at 08:21:26 UTC; actual ROY candidate :10, task `14c69cd06f7d4e298fc9fbf678830620`, IP `172.31.43.249`, `/app`, Fargate N/A, is running its full-backlog dry check. Terminal success and promotion are not yet established.
+- Applied the separately verified manual bank-settlement provenance through the shared leased recorder. The exact private proof SHA is `c4b63939914d2e38b0ab0f589cc723b3b6b7e109686a9f8aaa79d8079e164016`; its content-addressed key is under `data/vevo/order-automation/manual-settlements/`. The recorder returned successful journal readback and zero provider writes. It did not create a receipt, mark an invoice paid, change status or send mail.
+
+What is verified:
+
+- Both live previews passed before apply: the manual bank record and the one fixed uncollected closure. The latter remains unconsumed, with zero status, financial and email requests. The old deployed journal implementation preserves additive record fields, so it retains the settlement proof while the compatible consumer is deployed.
+- Independent predeploy inventory verifies all seven schedule snapshots and the additive manual proof: `data/roy/order-automation/audits/2026-09-13/predeploy-order-automation-inventory-20260913T081632Z.json`, SHA `487aa09ab8330a50b5e37f3a39b710ea9d76dafdce0a93d25fab6cd637c8591c`. Old VEVO jobs are still unsuccessful; configuration parity is not represented as runtime health. Both leases were free, with the single known preparation ambiguity retained.
+- Fresh native Stripe UI readback at 08:24:30 UTC establishes current mapping: paid -> 31, cancelled -> 34, expired -> 33, refunded -> 73, unpaid -> 69. This supersedes the other migration task's older paid -> 70 note. Private proof `data/vevo/order-automation/audits/2026-09-13/current-stripe-status-map-ui-20260913.json`, SHA `250a22f46db21b120611adf473ddfaba0d651b813800b688497715a0c4f68b2f`, preserves only event/ID/label fields; no credentials or page content. No configuration was saved. Mapping readback does not prove a completed payment callback. The current paid path is covered by the reviewed ID31 contract.
+- Source `b417caa7` includes the independently reviewed 844 build tests, 582 automation tests and smoke checks. Standalone guard draft PR #552 is separately prepared at `3463efb5` with 901 build/639 automation tests; it is not merged or deployed.
+- Separate reporting draft PR #553 is prepared at `c238345a`; all six PR checks passed, including both operating-system regression jobs. Its final 173 reporting/creditnote/GrowthBook tests include unbound-label exclusion and raw/JSON-output preservation. It remains undeployed. The managed reporting migration is being prepared independently and must preserve immutable historical GrowthBook evidence and protected runtime targets; the native current Stripe mapping above is its authority for paid ID 31.
+
+Known issues:
+
+- Production still runs `47c3da77` / `c3842dda...`; the new settlement protection must not be claimed active until the new image is promoted. Closure release pins remain empty and its original preparation outcome stays unknown. Protected reporting task pins remain ROY :71 and VEVO :33; their separate name-based reporting regression is being repaired on its own branch.
+
+Next exact step:
+
+- Verify exact merge-image build, dispatch the managed order deployment and independently verify actual hosts, localhost markers, drains, five schedule pins and protected reporting snapshots. Pin the fixed closure helper only to that verified release, close the uncollected obligation once, and run VEVO seeded plus all-age verification. Then complete the separate standalone guard migration. Do not merge another PR during the deployment freeze. No local persistent processes remain.
 
 ## 2026-09-13 — Live settlement preview passed; exact checksum scan exception
 
@@ -109,78 +304,6 @@ Known issues:
 Next exact step:
 
 - Root reviews the clean pushed integration and resolves the current VEVO status naming/language question using observed evidence and user intent. Do not guess aliases or deploy a speculative canonicalizer. After the supported correction is reviewed and integrated, require exact-head CI, promote the combined runtime with all existing host/drain/pin gates, bind the one-shot helper to that exact release, then verify VEVO's original five cases and all-age backlog. The standalone creditnote migration remains a separate later release. No local server, watcher, tunnel or persistent process was started.
-
-## 2026-09-13 — Standalone guard integrated with combined status protection
-
-Date: 2026-09-13
-Repo: `vzeman/biznisweb`
-Branch: `codex/isolated-creditnote-guard-20260909`
-
-What changed:
-
-- Integrated combined manual-settlement/native-creditnote draft `dbb207b58a37e3a54e1b336fbfa36e7168186004`, which already contains exact main `95e44213`, into the clean standalone guard draft `e131b789`. Additive project-history conflicts and both workflow path/test unions preserve every component. No guard runner, deployer, host probe, dedicated deployment workflow or guard test source was changed.
-- Guard migration remains a separate future release. After the order-automation release containing manual-settlement and reviewed uncollected-obligation protection, its fresh inventory must capture and preserve all five current invoice/cancellation task/image pins; the two fixed report pins remain subject to their existing strict gates. The separate closure implementation is not included yet.
-- Updated current operations documentation: source `47c3da77` / image `c3842dda` is promoted with five enabled automation plans and 28 confirmed natural invoices. Root has resolved the first two historical helper cases (one financial request, one readback-only completion); two remain. Both previously sent email outcomes are confirmed in the journal without resending. The separate uncollected preparation outcome remains unknown while its obligation closure is prepared.
-
-What is verified:
-
-- All guard-owned executable/workflow/test files are byte-identical to `e131b789`; imported manual-settlement, native creditnote and financial helper sources match reviewed `dbb207b5`. All 811 exact build-workflow tests pass (72 helper/seeded + 57 guard + 20 backoff + 662 combined), plus the separate 549-test automation workflow, reporting smoke, scoped Ruff and diff checks. Both CI test/trigger unions contain each required module exactly once.
-- No provider/AWS scan, business/journal/schedule write, helper apply, PR creation/main merge or production deployment occurred from this guard worktree. No local server or persistent worker was started.
-
-Known issues:
-
-- Standalone migration remains undeployed and must not overlap invoice recovery. Root owns financial evidence and deployment sequencing. The uncollected-obligation branch needs its own review before later integration; its author's worktree is untouched.
-
-Next exact step:
-
-- Wait for the reviewed closure-source handoff, integrate it separately with both status guards preserved, and rerun the combined checks. Refresh production/source handoff only after the preceding order-automation release is actually verified; this standalone guard remains undeployed and has no new PR from this integration.
-
-## 2026-09-13 — Guard source synchronized with native identity correction
-
-Date: 2026-09-13
-Repo: `vzeman/biznisweb`
-Branch: `codex/isolated-creditnote-guard-20260909`
-
-What changed:
-
-- Integrated reviewed main `47c3da775ff7018a1cf8950024c867310b91ae8a` into guard draft `8e540c7b`. The only conflict was additive owned project history; both histories are retained. No guard runner, deployment/host-gate behavior, guard workflow, guard tests or guard runbook changed in this integration.
-- Imported the native invoice key and consumed-email corrections plus incident-aware invoice deployment exactly from main. This is offline source preparation while the separate invoice release runs; it does not start or authorize a guard migration.
-
-What is verified:
-
-- All 709 tests from the four exact build regression commands pass (including 57 standalone guard tests), with reporting smoke, focused Ruff and whitespace checks. Existing guard-owned files are byte-identical to `8e540c7b`; imported invoice source matches `47c3da77`. No AWS/provider access or mutation occurred in this integration. Finite checks ended; no local server, watcher or tunnel was started.
-
-Known issues:
-
-- Invoice deployment `34741354275` is active on frozen main `47c3da77` and image `sha256:c3842dda5a831c0ddf4e7d4fc6dd5b8a8507ec4e22c97723e1577023f04c25f3`. Its reviewed incident source has four paused invoice schedules; no invoice recovery is yet claimed. Helper PR #546 and this guard draft must not merge or apply during that release. Guard is still undeployed and invoice business recovery retains priority.
-
-Next exact step:
-
-- Keep this tested integration committed/pushed and wait for independent invoice promotion and actual historical recovery. Only afterward refresh the guard migration's source/runtime handoff, integrate the finalized reconciliation verifier as needed, and complete its PR gates; preserve protected report pins, lease, host gates and capture exclusion.
-
-## 2026-09-13 — Guard draft integrated with the reviewed discovery and native response release
-
-Date: 2026-09-13
-Repo: `vzeman/biznisweb`
-Branch: `codex/isolated-creditnote-guard-20260909`
-
-What changed:
-
-- Merged verification handoff `d24bdd2a5fd17324b9b8c23e0607b95304ae7f5d`, which includes reviewed main `ccf25c799c56bfa3dea1f3a77456f3fabf079732`, into the pushed guard draft `9eb0f033`. The only conflict was this owned project history; both sets of decisions and runtime evidence were retained.
-- The standalone guard runner, deployer, host probes, tests, dedicated workflow, build/PR test entries and guard runbook remain byte-for-byte unchanged from the preceding guard draft. Imported cancellation discovery, native response handling and their tests match the reviewed verification source exactly. No new guard behavior was introduced.
-
-What is verified:
-
-- All 684 tests from the build workflow's four exact regression commands pass, including the 57 standalone guard/deployment tests. Reporting smoke, focused Ruff and whitespace checks pass. An initial custom combined harness disabled logging globally and therefore broke a diagnostic `assertLogs` expectation; a bounded comparison confirmed the harness error and the unchanged test passes with normal logging. Use the workflow's normal commands for reproducible validation.
-- Source integration used a clean branch after fetch/prune and pull/rebase. No AWS/provider access, production mutation, PR creation, merge to main or deployment occurred in this integration. Finite tests and smoke checks ended; no local service or tunnel remains running.
-
-Known issues:
-
-- Root owns active invoice deployment `34738085098` for exact source `ccf25c79` and image `e8e4830c19bfb0e166519d412cfa1e3e8c690f042a6cbc72a88e52369ccdecc5`. Main is frozen until its independently verified promotion or restoration. This guard draft remains undeployed and must not bypass outstanding invoice recovery.
-
-Next exact step:
-
-- Keep this integration committed and pushed. Wait for verified invoice release and historical recovery, then refresh the guard runtime handoff and required PR checks before any separately authorized guard migration. Preserve the fixed report images/commands, shared lease, host gates and capture exclusion.
 
 ## 2026-09-13 — Combined status-protection draft prepared
 
@@ -692,49 +815,6 @@ Known issues:
 Next exact step:
 
 - Verify the bounded live read-only reproduction, review/test the coarse discovery correction and fresh detail guards, commit/push through required PR checks, and build/deploy a new exact release. Do not run the financial helper until its allowlist is deliberately updated to an actually promoted reviewed release. Finish real invoices, all-age verification and the separate guard migration afterward. Production remains on the older failing invoice implementation; do not claim remediation complete.
-
-## 2026-09-13 — Independent guard review corrected runtime prerequisites
-
-What changed:
-
-- Independent review found that creditnote export uses native administrator login as well as GraphQL. The candidate previously copied only API references and would fail at runtime. It now preserves all four exact API/admin secret references, verifies unique nonempty same-project/account/region/version binding and excludes unrelated email credentials. A dependency regression executes the real login/list parser with only native HTTP mocked.
-- The initial report migration now rejects any existing Scheduler Input and any unreviewed effective report command/project before pause. This closes a gap where the diagnostic command could mask a wrapper that bypassed the skip flag. Both pinned historical Dockerfiles were independently confirmed to use the expected direct report CMD.
-- A fresh main check now follows slow preflight and precedes the first pause, outside rollback scope. A stale release performs no schedule write. The runbook records these initial-migration prerequisites.
-
-What is verified:
-
-- 68 focused tests and an independent 12-test correction review pass; Ruff and whitespace checks pass. No remaining concrete source blocker was found in this review. Full integrated regression passed all 669 tests before commit. No guard deployment, AWS mutation or live provider request was made by this review.
-
-Next exact step:
-
-- Commit/push after the full integrated regression, retain the active invoice release freeze and finish real invoice recovery first. Then complete guard PR/CI/build and the separately gated migration; tests do not establish live completion.
-
-## 2026-09-13 — Separate creditnote guard migration prepared, not deployed
-
-Date: 2026-09-13
-Repo: `vzeman/biznisweb`
-Branch: `codex/isolated-creditnote-guard-20260909`
-
-What changed:
-
-- Added a standalone entry point for the corrected creditnote rules, aggregate live/dry metrics, mandatory durable state and complete-summary checks. A separate managed deployer provisions isolated roles/tasks, verifies the two unchanged report hosts and both new dry-run hosts, and requires both live guard completions before switching off inline guards. It preserves report images, commands and times, and all five invoice/cancellation schedules.
-- Migration pauses/drains existing writers before probes, uses private CAS receipts and drift-aware restoration, and leaves reports paused after any uncertain live attempt. It is an initial migration, not a blind retry/adoption mechanism. The dedicated workflow shares the production automation concurrency group and has a 300-minute bound with restoration headroom.
-- Added `projects/CREDITNOTE_AUTOMATION_OPERATIONS.md` with exact migration, failure/recovery and monitoring boundaries, including the future report dependency limitation.
-- Capture exclusion now inspects active GitHub source/A/A workflows and all ECS clusters in this account/region. Only genuine unmodified collector service tasks are exempt. Current main and schedule/source snapshots are rechecked before each live guard launch.
-
-What is verified:
-
-- Independent read-only AWS inventory found three clusters: reporting, collector-preview (empty), collector-production (one ordinary collector service); no active capture/reconciler task was found. Both report task definitions retain their expected REPORT_PROJECT and REPORT_SKIP_INVOICES=true environment values.
-- 131 combined tests pass, including 50 independently rerun direct tests; Ruff and whitespace checks pass. No guard role, schedule, task, business mutation or email has been created by this draft.
-
-Known issues:
-
-- This branch now incorporates the merged API cooldown correction and release handoff through `f140f5aa`. The integration preserved both independently added CI test entries and both project-state sections; no customer data or runtime configuration was changed. Invoice recovery takes precedence; do not merge or deploy this draft during the invoice release freeze.
-- Future daily guard completion is monitored, not a strict dependency of the unchanged report images. Guard jobs are scheduled 92 minutes before their report, with completion/failure/review/DLQ alarms. The migration itself requires actual successful completions before resuming reports. Native FLOX stale payment-attempt handling remains a separate provider behavior.
-
-Next exact step:
-
-- After the invoice release and historical recovery finish, update the runtime handoff, run required PR checks, then build and execute the separate managed migration. The integrated full build regression passed all 662 tests before this merge commit. Main remains frozen for invoice deployment `34735770705`; this branch is preparation only. Verify all six host outcomes and exact two-report skip-flag delta, with private receipt readback. Never alter fixed report task/image/command pins as a shortcut.
 
 ## 2026-09-13 — Fixed uncertain-outcome reconciliation prepared
 
