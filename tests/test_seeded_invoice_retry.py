@@ -32,6 +32,7 @@ class SeededInvoiceRetryTests(unittest.TestCase):
         self.generator = InvoiceGenerator("https://example.test/api/graphql", "synthetic-token", "https://example.test",
                                            page_delay_seconds=0, read_attempts=1)
         self.generator.client = self.api
+        self.generator.arf_token = "arf123"
         self.generator.validate_session = lambda: True
         self.factories = []
         self.create = Mock(wraps=self.generator.create_invoice)
@@ -97,6 +98,7 @@ class SeededInvoiceRetryTests(unittest.TestCase):
         self.assertTrue(all(row["email_policy"] == "hold" for row in state["orders"].values()))
         self.assertTrue(all(row["phase"] == "pending" for number, row in state["orders"].items() if number != "1000"))
         self.assertEqual([], self.api.preparation_calls)
+        self.assertEqual(["https://example.test/erp/orders/invoices/getListJson"] * 3, self.web.post_urls)
         self.assertEqual(1, sum("/finalize/" in url for url in self.web.get_urls))
         self.assertFalse(any("sendEmail" in url for url in self.web.post_urls + getattr(self.web, "get_urls", [])))
         self.web.close.assert_called_once()
