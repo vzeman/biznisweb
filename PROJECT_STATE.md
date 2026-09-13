@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Read-only post-recovery verification prepared
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/order-uncertainty-reconciliation-20260913`
+
+What changed:
+
+- Added `scripts/verify_invoice_post_recovery.py` and the short reproducible procedure in `projects/ORDER_AUTOMATION_POST_RECOVERY.md`. It composes current all-age anchored discovery and invoice filtering with fresh internal/public-ID-bound candidate reads. It neither logs into the web admin nor reads/writes a journal or calls business mutations. The existing discovery verifier's 24-hour/nonempty baseline gates are unchanged.
+- Complete inventory and complete candidate rechecks are separate report facts. An exhausted/unknown candidate read stops further provider requests and retains unchecked identities privately. Invalid amounts/identities, incomplete pages, uncertain final documents and transport failures remain unsuccessful. GraphQL transport and private S3 readback bodies close explicitly.
+- Clean/pushed source, exact project runtime URL, account, bucket, region and privacy gates precede provider reads. Optional publication is create-only AES256 with exact-byte/encryption readback. The initial large stdin recipe was replaced with this tested, tracked CLI so future sessions do not need an untracked helper. Added the module/path to both regression workflows.
+
+What is verified:
+
+- All 681 tests across the 34 build-workflow modules pass, including 17 new offline verifier tests using the real generator/scanner with a query-only fake transport. Independent review passed all 17 plus a trailing logging regression and extra source/account/URL/storage/configuration gate probes, with no remaining concrete blocker. Scoped Ruff and whitespace checks pass. No AWS/provider request, live scan, helper preview/apply, financial action or PR merge was performed. All finite local test processes ended; no persistent service was started.
+
+Known issues:
+
+- Root reports all three new deployment candidates passed and stopped, with final drain/promotion verification still pending. This is not a successful-production claim. The reconciliation helper's old `a97d974f` / `8d06b6c7...` allowlist remains unchanged and blocked because that release was not promoted.
+
+Next exact step:
+
+- Commit/push this independently reviewed verifier, then wait for root's independently verified release proof before a reviewed allowlist update. Do not merge during the active main freeze. After actual financial recovery and root's coordinated no-overlap execution go, run the two all-age snapshots and the existing original-eleven verifier sequentially (ROY six, VEVO five), preserving free-lease/stable-ETag and email-hold gates. Retain private hashes/receipts and investigate any remaining or unverified candidate; never clear uncertainty to force a pass.
+
 ## 2026-09-13 — Reconciliation integrated with new main; execution remains blocked
 
 Date: 2026-09-13

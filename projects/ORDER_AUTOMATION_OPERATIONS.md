@@ -147,6 +147,11 @@ under the same private bucket's project verification prefix.
 
 ## Fixed incident reconciliation
 
+After recovery, use the separate [final all-age and original-eleven verification
+procedure](ORDER_AUTOMATION_POST_RECOVERY.md). It uses current anchored discovery
+without an old audit baseline and keeps the original eleven-record journal check
+independent. Run only after verified promotion/recovery and coordinated scan drain.
+
 `scripts/reconcile_reviewed_invoice_outcomes.py` is restricted to the six reviewed
 ROY outcomes in two fixed, hash-verified private evidence objects. It does not
 relax the ordinary generator or accept arbitrary orders, evidence or endpoints.
