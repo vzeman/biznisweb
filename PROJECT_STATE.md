@@ -5,6 +5,30 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-13 — Reporting status rename audit; implementation dependency pending
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/report-status-identity-20260913`
+
+What changed:
+
+- Created an isolated branch from synchronized main `4d5049805f1a8eabd5f7c642ccee7ca6867d3c08` and recorded the protected VEVO reporting source audit in [REPORT_STATUS_IDENTITY_AUDIT.md](projects/REPORT_STATUS_IDENTITY_AUDIT.md). No production source or runtime was changed.
+- Documented exact private evidence references for the status rename, lost realized revenue and failed-payment segmentation, shipped-creditnote classification, the unpaid substring defect, and five GrowthBook live source-task gates. Historical GrowthBook evidence must remain immutable; a later reporting revision needs a separate current-runtime migration binding.
+
+What is verified:
+
+- Exact `e55ccd14` pure-method probes reproduce three included-to-excluded revenue cases after only a label change, two lost failed-payment segment entries and the unpaid lifecycle misclassification. These are synthetic source checks, not measured live report totals. Git source and existing receipts only; no provider, AWS, financial or message action.
+- The separate guard migration preserves report task/image pins and adds only an inline-guard skip environment override. That protects the mutation boundary but cannot repair name-based report filters.
+
+Known issues:
+
+- The deployed protected VEVO exporter still uses old names. The shared project-scoped status identity contract is being finalized on the independent order-automation branch; implementation here must wait for its clean pushed commit. No report release or `latest`-based smoke deployment is authorized by this audit.
+
+Next exact step:
+
+- Commit/push this documentation checkpoint, then integrate the reviewed status identity dependency and implement the smallest exporter/creditnote classification correction with same-ID rename parity and cross-shop/foreign-ID regressions. Keep provider calls, runtime writes and PR merge out of this branch's current work. Root coordinates the primary order release, separate guard migration and later managed reporting release.
+
 ## 2026-09-13 — VEVO infra healthy; original historical proof cannot complete unchanged
 
 Date: 2026-09-13
