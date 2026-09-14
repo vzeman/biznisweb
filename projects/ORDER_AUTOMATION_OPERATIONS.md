@@ -56,6 +56,12 @@ diagnostic preview failures have made zero business writes. Protected older
 reporting images need their separate status-filter correction and do not gain
 this contract merely by moving their inline guard to a standalone schedule.
 
+The prepared standalone-guard branch now includes the same reviewed status and
+noncollection protection. Its future migration remains separate: it must capture
+and preserve the five freshly verified invoice/cancellation pins, and retain the
+strict two-report image/command/time and live-completion gates. This source merge
+does not deploy either the guard or a reporting status-filter correction.
+
 Earlier on the same date, source `ccf25c79` passed infrastructure gates but its
 first natural ROY run received thirteen explicit finalization refusals. That
 incident's four-invoice pause and private manifest remain historical audit and

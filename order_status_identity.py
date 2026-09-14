@@ -13,11 +13,13 @@ import unicodedata
 from urllib.parse import urlparse
 
 
-CONTRACT_VERSION = "2026-09-13-vevo-reviewed-renames-v1"
+CONTRACT_VERSION = "2026-09-14-vevo-reviewed-renames-v2"
 # Historical API labels and gateway event/ID bindings are separately proven.
 # 31/34 historical evidence is transliterated, so accent normalization is allowed
-# only inside this exact project/ID contract. ID1 has no historical proof here.
+# only inside this exact project/ID contract. The owner confirmed ID1's old
+# meaning on September 14, independently of the already deployed board labels.
 REVIEWED_RENAMES: dict[str, dict[str, tuple[str, tuple[str, ...]]]] = {"vevo": {
+    "1": ("Čaká na vybavenie", ("Čaká na vybavenie", "New order")),
     "4": ("Odoslaná", ("Odoslaná", "Shipped")),
     "17": ("Storno", ("Storno", "Cancelled")),
     "31": ("Platba online - zaplatené", ("Platba online - zaplatene", "Payment online - paid")),
