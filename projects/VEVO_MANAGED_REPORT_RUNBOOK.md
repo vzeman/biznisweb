@@ -1,6 +1,8 @@
 # First managed VEVO report migration
 
-Status: implemented and tested offline; no bootstrap, readiness publication or reporting deployment has been run. The parent-managed primary order release and both standalone guards must finish first. Main is frozen during each managed release. This workflow owns only the VEVO report schedule and its temporary diagnostic resources.
+Status on September 14: primary order release and standalone guards independently verified; baseline bootstrap34803296536 succeeded on08ca37f2. Report promotion34803983075 is in progress; report/email completion is still pending. Main is frozen during each managed release. This workflow owns only the VEVO report schedule and its temporary diagnostic resources. See PROJECT_STATE.md for exact current receipts and final outcome.
+
+Use the repository virtual environment with `pip install -r requirements.txt` for readiness. Boto3/botocore are pinned to1.43.93, the SDK used by the verified image/managed baseline. Local1.42.63 silently omitted new CloudFormation DeploymentConfig and ECS circuit-breaker fields, causing a real protected-snapshot mismatch despite unchanged services. Never remove these fields or relax equality: the CLI rejects an SDK mismatch before AWS access. On Windows invoke `.venv\Scripts\python.exe scripts/reporting_readiness.py ...`; on Unix use `.venv/bin/python ...`.
 
 ## Required evidence and rollout order
 

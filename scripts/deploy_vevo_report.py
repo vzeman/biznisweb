@@ -18,6 +18,7 @@ import re
 import subprocess
 import sys
 import time
+import traceback
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -768,6 +769,11 @@ if __name__ == "__main__":
         main()
     except Exception as exc:
         reason = str(exc)
-        safe_reason = reason if re.fullmatch(r"(?:report|runtime)-[a-z0-9-]+", reason) else type(exc).__name__
+        safe_reason = reason if re.fullmatch(r"(?:report|runtime|readiness)-[a-z0-9-]+", reason) else type(exc).__name__
         print("VEVO_REPORT_DEPLOY_FAILED:" + safe_reason, flush=True)
+        # Source locations only: never exception text, locals, requests or secrets.
+        frames = [{"file": Path(frame.filename).name, "line": frame.lineno, "function": frame.name}
+                  for frame in traceback.extract_tb(exc.__traceback__)
+                  if Path(frame.filename).is_relative_to(ROOT)]
+        print("VEVO_REPORT_FAILURE_SOURCE:" + json.dumps(frames), flush=True)
         raise SystemExit(1) from None

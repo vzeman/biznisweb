@@ -11,6 +11,7 @@ import copy
 from contextlib import ExitStack, closing
 from datetime import datetime, timezone
 import hashlib
+from importlib.metadata import version
 import json
 from pathlib import Path
 import re
@@ -348,6 +349,14 @@ def prepare(session, primary, guards, *, publish=False):
             "verified_primary_hosts": 3, "verified_guard_hosts": 6, "provider_writes": 0, "runtime_writes": 0}
 
 
+def require_sdk_versions():
+    """Older SDK response models silently omit protected AWS configuration."""
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+    for package in ("boto3", "botocore"):
+        pinned = re.search(rf"(?m)^{package}==([0-9.]+)$", requirements)
+        require(pinned is not None and version(package) == pinned[1], "readiness-aws-sdk-version-mismatch-use-repo-venv")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", default="codex")
@@ -356,6 +365,7 @@ def main():
         for field in ("key", "sha256"):
             parser.add_argument(f"--{kind}-{field}", required=True)
     args = parser.parse_args()
+    require_sdk_versions()  # Before creating any AWS session or publishing proof.
     import boto3
     from botocore.config import Config
     with ExitStack() as stack:
