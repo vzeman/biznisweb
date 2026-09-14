@@ -5,6 +5,18 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-14 — Resume required guards/report repair after confirmed VEVO renames
+
+Date: 2026-09-14
+Repo: `vzeman/biznisweb`
+Branch: `codex/isolated-creditnote-guard-20260909`
+
+- User now explicitly requires repairing VEVO reporting, checking other consumers of the renamed statuses, and delivery of the missing report. This supersedes the previous budget-related deferral of the necessary guard/report releases. Optional recorder #559 remains outside this repair. ROY's status names and intentional report-email disablement stay unchanged.
+- Fresh read-only managed preflight passed: both exact report definitions :71/:33, five protected order schedules, no active source capture. Shared journal/payment protections remain required. Actual host/IP, `/app`, curl/marker and terminal checks remain mandatory in the managed release before promotion.
+- Merged current main `6b7e89a6` into this branch as `1725cdd2`. Only PROJECT_STATE conflicted; both histories were preserved. Other-user production-board code/configuration is retained exactly. No live deployment has occurred yet.
+- The user explicitly confirmed VEVO `New order` was `Čaká na vybavenie`; current catalogue binds ID1. Added that exact shop/ID/name pair to the reviewed contract. Existing IDs4/17/31/33/34 retain their distinct roles; new Stripe-unpaid69 gains no paid authority. Detailed incident proof is private `data/vevo/order-automation/audits/2026-09-14/report-alarm-incident-012629Z.json`, SHA `3c730ce0267bac63e37447d875c7669f8b8e959daf928e998b8e89e7ef6b3bed`.
+- Next exact step: pass the affected regression suites and own PR CI, merge/build exact source, run the managed standalone migration and independently verify it, then deploy compatible report classification/current-runtime binding. Finish with a verified VEVO report and intended email delivery. Do not declare reporting repaired from invoice alarm health. No local persistent process has been started.
+
 ## 2026-09-13 - Guard source synchronized with verified primary and completed closure
 
 Date: 2026-09-13
