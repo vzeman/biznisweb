@@ -81,10 +81,9 @@ class VevoOperationsTests(unittest.TestCase):
         self.assertNotIn('__SHOP', html)
         self.assertIn('ROY operations dashboard', build_roy_operations_dashboard_html("roy"))
         self.assertTrue(build_roy_picking_lists_filename([], project="vevo").startswith("vevo-"))
-        from pypdf import PdfReader
-        text = PdfReader(io.BytesIO(build_roy_picking_lists_pdf([], project="vevo"))).pages[0].extract_text()
-        self.assertIn("VEVO operations dashboard", text)
-        self.assertNotIn("ROY operations dashboard", text)
+        pdf = build_roy_picking_lists_pdf([], project="vevo")
+        self.assertIn(b"VEVO operations dashboard", pdf)
+        self.assertNotIn(b"ROY operations dashboard", pdf)
 
     @patch.dict(os.environ, {"REPORT_PROJECT": "vevo"})
     def test_foreign_and_cross_site_posts_stop_before_action(self):
@@ -158,6 +157,45 @@ class InventorySourceTests(unittest.TestCase):
         data = b"order_num,purchase_date,product_sku,item_quantity,realized_revenue\nV,2026-09-01,S,1,False\n"
         with self.assertRaisesRegex(ValueError, "non-realized"):
             inventory.build_inventory_analytics("vevo", self.settings, data)
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "vevo"})
+    def test_live_catalogue_stock_matches_sku_without_fuzzy_titles(self):
+        import pandas as pd
+        import time
+        frame = pd.DataFrame([
+            {"reporting_sku": "V-500", "product_id": "1", "active": True, "quantity_raw": 8, "available_quantity_raw": 6},
+            {"reporting_sku": "V-50", "product_id": "2", "active": True, "quantity_raw": 200, "available_quantity_raw": 198},
+        ])
+        with patch.dict(inventory._CATALOGUE_CACHE, {"vevo": (time.monotonic(), frame)}, clear=True):
+            result, diagnostics = inventory.fetch_catalogue_stock("vevo", self.settings, [
+                {"sku": "V-500", "product": "Vevo 500 ml"},
+                {"sku": "OLD", "product": "Vevo 500 ml"},
+            ])
+        self.assertEqual({"V-500"}, set(result))
+        self.assertEqual(6, result["V-500"]["available_quantity"])
+        self.assertEqual(1, diagnostics["unmatched_count"])
+
+
+class OperationsDeploymentTests(unittest.TestCase):
+    def test_host_proof_binds_image_task_ip_capacity_and_functional_result(self):
+        from scripts.deploy_vevo_board_image import SERVICE, validate_proof
+        receipt = {"mode": "operations", "task_arn": "task", "definition": "definition", "started_by": "probe", "digest": "sha256:reviewed"}
+        task = {"taskArn": "task", "taskDefinitionArn": "definition", "startedBy": "probe", "lastStatus": "STOPPED",
+                "containers": [{"exitCode": 0, "imageDigest": "sha256:reviewed"}],
+                "attachments": [{"details": [{"name": "privateIPv4Address", "value": "172.31.1.2"}]}]}
+        proof = {"mode": "operations", "identity": {"task_arn": "task", "service": SERVICE, "path": "/app", "private_ips": ["172.31.1.2"]},
+                 "summary": {"fulfillable_orders": 1}, "inventory": {"inventory_status": "ok", "inventory_products_total": 2},
+                 "pdf_bytes": 2000, "max_rss_kib": 400000}
+        validate_proof(task, proof, receipt)
+        for changed_task, changed_proof in [
+            ({**task, "taskArn": "other"}, proof),
+            ({**task, "containers": [{"exitCode": 0, "imageDigest": "other"}]}, proof),
+            (task, {**proof, "max_rss_kib": 600000}),
+            (task, {**proof, "identity": {**proof["identity"], "private_ips": ["other"]}}),
+            (task, {**proof, "inventory": {"inventory_status": "error", "inventory_products_total": 0}}),
+        ]:
+            with self.assertRaises(AssertionError):
+                validate_proof(changed_task, changed_proof, receipt)
 
 
 if __name__ == "__main__":

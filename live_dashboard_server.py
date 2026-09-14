@@ -1197,7 +1197,7 @@ def build_roy_operations_dashboard_html(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ROY Operations Dashboard</title>
+  <title>__SHOP_TITLE__ Operations Dashboard</title>
   <style>
     :root {
       --bg:#f6f7f4; --panel:#ffffff; --line:#d9ded5; --text:#18211b; --muted:#657163;
@@ -2499,6 +2499,7 @@ def build_roy_operations_dashboard_html(
         {
             "__BOOTSTRAP_JSON__": bootstrap_json,
             "__SHOP_NAME__": escape(project.upper()),
+            "__SHOP_TITLE__": escape(project.upper()),
             "__SHOP_KEY__": quote(project, safe=""),
             "__SHOP_MAINTENANCE__": escape(project, quote=True),
             "__SHOP_MARKER__": escape(project, quote=True),
@@ -2655,7 +2656,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             try:
                 operations_settings = resolve_roy_operations_settings(load_project_settings(project))
             except Exception as exc:
-                self._send_json({"error": f"Failed to load ROY operations settings: {exc}"}, status=500)
+                self._send_json({"error": f"Failed to load operations settings: {exc}"}, status=500)
                 return
             if not operations_settings["enabled"]:
                 self._send_json({"error": f"Operations dashboard is not enabled for '{project}'."}, status=404)
@@ -2671,7 +2672,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                     )
                 )
             except Exception as exc:
-                self._send_json({"error": f"Failed to load ROY operations data: {exc}"}, status=500)
+                self._send_json({"error": f"Failed to load operations data: {exc}"}, status=500)
             return
 
         if len(parts) == 4 and parts[0] == "api" and parts[1] == "operations" and parts[3] == "picking-lists.pdf":
@@ -2691,7 +2692,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 operations_settings = resolve_roy_operations_settings(project_settings)
             except Exception as exc:
                 self._send_text(
-                    f"Failed to load ROY operations settings: {escape(str(exc))}",
+                    f"Failed to load operations settings: {escape(str(exc))}",
                     content_type="text/plain; charset=utf-8",
                     status=500,
                 )
@@ -2801,7 +2802,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                     operations_settings = resolve_roy_operations_settings(load_project_settings(project))
                 except Exception as exc:
                     self._send_text(
-                        f"Failed to load ROY operations settings: {escape(str(exc))}",
+                        f"Failed to load operations settings: {escape(str(exc))}",
                         content_type="text/plain; charset=utf-8",
                         status=500,
                     )
