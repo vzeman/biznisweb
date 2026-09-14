@@ -11,4 +11,5 @@ google-auth-oauthlib>=1.2.0
 google-auth-httplib2>=0.2.0
 
 # AWS integrations (SES/S3 automation runner)
-boto3>=1.35.0
+boto3==1.43.93
+botocore==1.43.93

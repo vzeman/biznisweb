@@ -3,12 +3,33 @@ from datetime import datetime, timezone, timedelta
 from io import BytesIO
 from types import SimpleNamespace
 import unittest
+import sys
 from unittest.mock import patch
 
 from scripts import reporting_readiness as ready
 from scripts import reporting_runtime_binding as binding
 
 NOW = datetime(2026, 9, 13, 12, 0, tzinfo=timezone.utc)
+
+
+class ReadinessSdkTests(unittest.TestCase):
+    def test_old_response_model_rejects_before_any_aws_session(self):
+        argv = ['reporting_readiness.py', '--primary-key', 'p', '--primary-sha256', 'p',
+                '--guards-key', 'g', '--guards-sha256', 'g']
+        with patch.object(sys, 'argv', argv), patch.object(ready, 'version', return_value='1.42.63'), \
+                patch('boto3.Session') as session:
+            with self.assertRaisesRegex(binding.BindingError, 'aws-sdk-version-mismatch'):
+                ready.main()
+        session.assert_not_called()
+
+    def test_botocore_model_must_match_even_with_correct_boto3(self):
+        with patch.object(ready, 'version', side_effect=lambda p: '1.43.93' if p == 'boto3' else '1.42.63'):
+            with self.assertRaisesRegex(binding.BindingError, 'aws-sdk-version-mismatch'):
+                ready.require_sdk_versions()
+
+    def test_verified_model_pair_matches_repository_pins(self):
+        with patch.object(ready, 'version', return_value='1.43.93'):
+            ready.require_sdk_versions()
 
 
 class ReadinessFixture:

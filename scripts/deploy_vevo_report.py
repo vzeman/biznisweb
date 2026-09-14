@@ -768,6 +768,6 @@ if __name__ == "__main__":
         main()
     except Exception as exc:
         reason = str(exc)
-        safe_reason = reason if re.fullmatch(r"(?:report|runtime)-[a-z0-9-]+", reason) else type(exc).__name__
+        safe_reason = reason if re.fullmatch(r"(?:report|runtime|readiness)-[a-z0-9-]+", reason) else type(exc).__name__
         print("VEVO_REPORT_DEPLOY_FAILED:" + safe_reason, flush=True)
         raise SystemExit(1) from None
