@@ -38,6 +38,10 @@ on:
       - 'scripts/verify_invoice_discovery.py'
       - 'scripts/verify_invoice_post_recovery.py'
       - 'scripts/retry_seeded_invoice.py'
+      - 'scripts/deploy_creditnote_automations.py'
+      - 'scripts/creditnote_automation_host_gate.py'
+      - 'scripts/reporting_guard_identity_probe.py'
+      - '.github/workflows/deploy-creditnote-automations.yml'
       - 'scripts/reconcile_reviewed_invoice_outcomes.py'
       - 'scripts/close_reviewed_uncollected_obligation.py'
       - 'tests/**'
@@ -72,6 +76,7 @@ jobs:
           tests.test_order_inventory
           tests.test_api_read_backoff
           tests.test_seeded_invoice_retry tests.test_reviewed_invoice_reconciliation
+          tests.test_creditnote_storno_runner tests.test_creditnote_automation_deployment
           tests.test_creditnote_storno_guard tests.test_creditnote_export tests.test_report_status_identity
           tests.test_creditnote_automation_context tests.test_automation_runner_health
           tests.test_restore_verified_fulfillment tests.test_invoice_backfill_verification tests.test_invoice_discovery_verification tests.test_invoice_post_recovery_verification tests.test_invoice_backfill_seed tests.test_order_automation_audit tests.test_order_automation_deployment

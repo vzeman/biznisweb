@@ -1,0 +1,46 @@
+name: Deploy Creditnote Automations
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-order-automations
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Six sequential task bounds (6 x 30 min) plus a 30 min writer drain,
+    # owned probe cleanup and API/rollback headroom must finish before job expiry.
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - name: Require current main
+        run: |
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deployment dependencies
+        run: pip install -r requirements.txt
+      - name: Verify deployment imports before AWS access
+        run: python -c "from reporting_core.storage import resolve_report_s3_location"
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify isolated guards and retire inline writers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/deploy_creditnote_automations.py --commit "$GITHUB_SHA" --apply

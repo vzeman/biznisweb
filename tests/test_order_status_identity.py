@@ -14,7 +14,7 @@ from scripts import record_verified_manual_settlement as recorder
 
 def current_catalogue():
     return [{"id": key, "name": labels[-1]} for key, (_, labels) in identity.REVIEWED_RENAMES["vevo"].items()] + [
-        {"id": "1", "name": "New order"}, {"id": "80", "name": "Untouched"}]
+        {"id": "80", "name": "Untouched"}]
 
 
 class Client:
@@ -36,12 +36,12 @@ class ReviewedContractTests(unittest.TestCase):
         self.client = Client()
         identity.bind_status_identity(self.client, "vevo")
 
-    def test_actual_five_proven_ids_and_distinct_gateway_roles(self):
+    def test_confirmed_roles_and_distinct_gateway_identities(self):
         rows = identity.bind_catalogue(self.client, current_catalogue())
-        self.assertEqual({"4", "17", "31", "33", "34"}, set(identity.REVIEWED_RENAMES["vevo"]))
+        self.assertEqual({"1", "4", "17", "31", "33", "34"}, set(identity.REVIEWED_RENAMES["vevo"]))
         self.assertEqual("Platba online - platnosť vypršala", next(row["name"] for row in rows if row["id"] == "33"))
         self.assertEqual("Platba online - platba zamietnutá", next(row["name"] for row in rows if row["id"] == "34"))
-        self.assertEqual("New order", next(row["name"] for row in rows if row["id"] == "1"))
+        self.assertEqual("Čaká na vybavenie", next(row["name"] for row in rows if row["id"] == "1"))
         self.assertEqual(4, identity.unique_target(rows, "Odoslaná"))
 
     def test_only_observed_label_or_documented_transliteration_is_accepted(self):
