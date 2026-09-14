@@ -1,5 +1,12 @@
 # PROJECT_STATE
 
+## 2026-09-14 — Standalone guards promoted and independently verified
+
+- Managed run34800432093 completed SUCCESS on main28583066d6afaad6fc141eed98d97bee698d0cdc, using successful exact build34800298836. Terminal receipt is `data/roy/order-automation/creditnote-deployments/28583066d6afaad6fc141eed98d97bee698d0cdc/fe3a2692e3f34fcd9cfd8ab4e923fc6a.json`, phase promotion-readback-verified with six successful host outcomes and no rollback. ROY and VEVO dry/live guards checked168 and301 creditnoted orders respectively, with complete scans and zero updated/failed/review/audit-error orders.
+- The committed independent observer passed preview and then repeated all actual ECS/log/schedule/definition/source/run/image/primary-proof/readiness checks before publishing: `data/roy/order-automation/audits/2026-09-14/independent-creditnote-e7c72301bbbe4b0694ccf6207b82c298.json`, SHA `62e33c648031a993a802ac26aed7fca64595939fefc6a60c46aa61ef3637179a`. The full semantic validator accepted the six independent terminal tasks and actual markers, not merely managed success fields.
+- Both standalone schedules are enabled; all five existing invoice/cancellation schedules retain their exact pins. ROY report71 and VEVO report33 retain their images/definitions and add only the reviewed inline-guard skip to Scheduler Input. This completes the standalone prerequisite. It does not yet fix VEVO report calculation or deliver the missing email.
+- Report chart correction41f8299c passed all six own CI checks. Next exact step: after checks on this documentation update, merge/build PR556, bootstrap the current report authority, generate/publish readiness using the independent primary reference and the guard reference above, then promote the isolated report candidate and run the configured-owner recovery email once. Reconcile the two report alarm namespaces against the actual promoted definition. No local persistent process was started.
+
 ## 2026-09-14 — Report status chart also binds the reviewed New order ID
 
 - Final source audit found the report's lifecycle chart still classified raw `New order` as Other/unknown although revenue already used confirmed ID1. The chart now classifies a project-bound canonical copy using the existing status_id column, while its visible status rows keep raw provider names. Excluded-order lifecycle rows use the same identity path; Stripe-unpaid remains awaiting payment. ROY and the frozen experiment classifier are unchanged.
