@@ -36,6 +36,37 @@ requires the separately requested reviewed wake transition documented in
   device identifiers, customer or order data, or downloaded temporary
   artifacts in Git.
 
+## Current Monitoring Evidence Blocker — September 14
+
+The ordinary-report migration introduced a separate current-reporting authority
+and health schema 3. Its managed gate reads only the runtime-control S3 prefix
+and STS/Scheduler/ECS/ECR/GitHub metadata; it does not read experiment data or
+change the frozen A/A classifier, source window or historical runtime evidence.
+The historical description below must not be used to force today's source
+schedule back to revision 33 or to rewrite old evidence.
+
+Schema 3 is currently **not independently consumable from the permitted sole
+canonical artifact**. The offline validator requires the full private
+`current_binding.record`; the workflow uploads only its hash with the health
+JSON and deletes its private snapshots. No approved sanitized dependency exists.
+The existing local/source consumers correctly reject it without that record.
+Record `HEALTH_SCHEMA3_OFFLINE_DEPENDENCY_UNAVAILABLE` and report infrastructure
+health as independently unverified, even if the managed job succeeds. Do not download the raw record, use local AWS,
+invent a record from public fields, accept the hash alone, reuse an earlier
+artifact or weaken/skip the validator. The ordinary report's separate successful
+deployment is not today's independent GrowthBook health proof.
+
+Repair requires a separately reviewed privacy-preserving current-health evidence
+contract plus a real producer-to-archive-to-offline-consumer regression. Retain
+full private-record validation and independent live configuration/managed
+provenance checks inside GitHub, stable entry/exit authority, exact cleanup,
+canonical-only output and historical schema/source compatibility. Missing,
+altered or mismatched public proof must fail closed. Until this contract is
+implemented, tested and reviewed, do not dispatch another manual health run
+merely to produce another independently unusable schema-3 artifact; do not
+disable or interrupt existing scheduled jobs. No source/A/A/Pro/CTA gate opens.
+The owner decision on replacement A/A from September 13 is still separate.
+
 ## Current Frozen A/A Boundary
 
 The authoritative state is

@@ -1,5 +1,28 @@
 # PROJECT_STATE
 
+## 2026-09-14 — GrowthBook monitor schema-3 offline dependency blocked
+
+Date: 2026-09-14
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-health-schema3-handoff-20260914`
+
+What changed / verified:
+
+- Started from the exact clean main worktree, fetched/pruned and pulled/rebased from `4d504980` to `8ed822aedb29daf5e4edef4b56e7124df24a97ce`. Preserved all intervening reporting/order work. The managed report migration changed the daily GrowthBook monitor and health validator, so their new contract was inspected before dispatch rather than assuming yesterday's artifact procedure still worked.
+- The new managed current-reporting gate is read-only and result-blind: STS, runtime-control S3 objects, Scheduler/ECS/ECR configuration and independent successful GitHub release/build provenance. It checks stable authority/pointer/lease and exact configuration before/after; no experiment, provider/token or outcome reads were added. Current reporting authority is deliberately separate from the frozen A/A runtime contract.
+- Confirmed `HEALTH_SCHEMA3_OFFLINE_DEPENDENCY_UNAVAILABLE`: schema 3 requires the complete independent `current_binding.record` to validate its hash and configuration, but the workflow uploads only the canonical health JSON/hash and deletes both private binding snapshots. There is no approved identity-free dependency export. Existing offline health/source consumers supply no binding and correctly reject this format. A synthetic schema-3 call reproduced exactly `independent current reporting binding required`; no AWS client, network, artifact file, private record or raw payload was used for that reproduction.
+- Independent read-only review confirms the gap and passed 43 focused runtime-binding/health tests. Workspace/window/activation validators pass. The last inspected monitor inventory contained only earlier runs, with no September 14 run; no manual fallback was dispatched after this known required evidence gate failed. Scheduled jobs were not disabled or interrupted. No fresh health artifact was accepted, and yesterday's or ordinary-report health is not substituted for today's GrowthBook proof.
+- This documentation-only change passes the full 318-test source/lifecycle suite locally (315 passed, three existing Windows symlink skips), security and whitespace checks. Independent documentation review approved the fail-closed boundary with no blocking issue. Exact-head CI and actual Linux regression execution must pass before merge; no code or evidence schema is changed by this handoff.
+
+Known issues / boundaries:
+
+- Today's independently verified GrowthBook infrastructure health remains unavailable; this is a monitoring-evidence dependency failure, not proof that reconciliation or the restored ordinary report failed. A successful future schema-3 job alone cannot clear it.
+- Historical A/A `SOURCE_RECEIPT_CONCATENATED_MARKER_FRAMING` and manual-QA blockers remain separate. Owner direction requested September 13 for a replacement measurement protocol has not been supplied here. No source retry, historical rewrite, parser/manifest change, A/A start/stop, Preview wake, Pro/CTA action, commerce mutation or runtime deployment occurred. No persistent local service was started.
+
+Next exact step:
+
+- Complete this documentation-only PR with review/checks and clean-main synchronization. Separately implement/review a privacy-preserving current-health evidence contract that the independent offline consumer can actually validate from the permitted sole canonical artifact. Preserve full managed private-record/live-runtime/GitHub checks, stable entry/exit authority, exact cleanup and all historical schemas/source gates; do not solve the gap with a raw binding export, hash-only acceptance, reconstructed fake record, local AWS credentials or an optional-validation bypass. Add end-to-end producer/archive/offline-consumer and tampering regressions, update the coordination runbook, and require exact-head CI before a fresh managed health readback. Recheck scheduled/manual inventory and never duplicate an active run. Replacement A/A still requires the owner's separate direction.
+
 ## 2026-09-14 — VEVO report restored and delivered; all 24 VEVO alarms OK
 
 Date: 2026-09-14, 05:27 UTC
