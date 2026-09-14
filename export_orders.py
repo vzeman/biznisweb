@@ -12361,8 +12361,15 @@ class BizniWebExporter:
         orders_df: Optional[pd.DataFrame] = None,
         item_df: Optional[pd.DataFrame] = None,
         revenue_col: Optional[str] = None,
+        *,
+        operations_inventory: bool = False,
     ) -> dict:
-        if self.project_name != "roy":
+        if operations_inventory and not (
+            self.project_name == "vevo"
+            and self.project_settings.get("operations_dashboard", {}).get("inventory_source") == "archived_export"
+        ):
+            raise ValueError("Unconfigured operations inventory project")
+        if self.project_name != "roy" and not operations_inventory:
             return {
                 "summary": {},
                 "growing_rows": pd.DataFrame(),

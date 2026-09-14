@@ -1,0 +1,164 @@
+import copy
+import hashlib
+import io
+import json
+import os
+import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+import operations_inventory as inventory
+import roy_operations_dashboard as operations
+from live_dashboard_server import LiveDashboardHandler, build_roy_operations_dashboard_html
+from order_status_identity import REVIEWED_RENAMES, bind_status_identity, canonical_order
+from reporting_core import load_project_settings
+from roy_picking_lists_pdf import build_roy_picking_lists_filename, build_roy_picking_lists_pdf
+from tests.test_roy_operations_dashboard import make_order, price_element
+
+
+class VevoOperationsTests(unittest.TestCase):
+    def setUp(self):
+        self.project_settings = load_project_settings("vevo")
+        self.settings = operations.resolve_roy_operations_settings(self.project_settings)
+        self.client = SimpleNamespace(transport=SimpleNamespace(url=self.project_settings["biznisweb_api_url"]))
+        self.catalogue = [{"id": key, "name": aliases[-1]} for key, (_, aliases) in REVIEWED_RENAMES["vevo"].items()]
+        self.catalogue += [{"id": "69", "name": "Stripe - unpaid"}, {"id": "70", "name": "Stripe - paid"}]
+        bind_status_identity(self.client, "vevo", self.project_settings).bind_catalogue(self.client, self.catalogue)
+
+    def row(self, status_id, payment_id="18", pickup=False):
+        name = next(row["name"] for row in self.catalogue if row["id"] == str(status_id))
+        order = make_order("V-TEST", name,
+                           price_element("payment", "Dobierkou" if payment_id == "7" else "Bankovym prevodom", payment_id),
+                           price_element("shipping", "Osobný odber na sklade BB" if pickup else "DPD", "11" if pickup else "8"))
+        order["status"]["id"] = str(status_id)
+        return operations._public_order_row(canonical_order(self.client, order), self.settings)
+
+    def test_paid_by_bank_and_both_gateways_remain_fulfillable(self):
+        for status_id, payment in [(31, "6"), (31, "1"), (70, "18")]:
+            self.assertTrue(self.row(status_id, payment)["fulfillable"])
+        self.assertEqual("Payment online - paid", self.row(31)["status"])
+
+    def test_unpaid_expired_cancelled_shipped_cannot_be_picked(self):
+        for status_id in [69, 33, 34, 17, 4]:
+            for payment in ["6", "7", "18"]:
+                self.assertFalse(self.row(status_id, payment)["fulfillable"])
+        self.assertFalse(self.row(1, "18")["fulfillable"])
+        self.assertFalse(self.row(1, "6")["fulfillable"])
+        self.assertTrue(self.row(1, "7")["fulfillable"])
+
+    def test_paid_label_on_foreign_id_is_not_paid(self):
+        raw = make_order("V", "Payment online - paid", price_element("payment", "Online", "18"), {})
+        raw["status"]["id"] = "777"
+        with self.assertRaises(ValueError):
+            canonical_order(self.client, raw)
+        self.assertFalse(operations._is_paid_online(raw, self.settings))
+
+    def test_no_invented_pickup_ready_status(self):
+        row = self.row(31, "6", pickup=True)
+        self.assertTrue(row["pickup_ship_action_allowed"])
+        self.assertFalse(row["pickup_ready_action_allowed"])
+        self.assertFalse(self.row(69, pickup=True)["pickup_ship_action_allowed"])
+        self.assertEqual(4, operations._resolve_shipped_status_id(self.client, self.settings))
+        with self.assertRaises(ValueError):
+            operations._resolve_pickup_ready_status_id(self.client, self.settings)
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "vevo"})
+    def test_project_state_and_credentials_fail_closed(self):
+        with self.assertRaises(ValueError):
+            operations._state_s3_location("roy", load_project_settings("roy"))
+        with self.assertRaises(ValueError):
+            operations._build_client("roy", load_project_settings("roy"))
+        _, key, _ = operations._state_s3_location("vevo", self.project_settings)
+        self.assertEqual("daily-reports/vevo/operations/state.json", key)
+
+    def test_html_pdf_and_manufacturing_link_are_project_specific(self):
+        html = build_roy_operations_dashboard_html("vevo")
+        self.assertIn("VEVO operations dashboard", html)
+        self.assertIn('data-marker="vevo-operations-dashboard"', html)
+        self.assertIn('href="/manufacturing/vevo"', html)
+        self.assertIn('href="/api/operations/vevo/picking-lists.pdf', html)
+        self.assertNotIn('/api/operations/roy/', html)
+        self.assertNotIn('__SHOP', html)
+        self.assertIn('ROY operations dashboard', build_roy_operations_dashboard_html("roy"))
+        self.assertTrue(build_roy_picking_lists_filename([], project="vevo").startswith("vevo-"))
+        from pypdf import PdfReader
+        text = PdfReader(io.BytesIO(build_roy_picking_lists_pdf([], project="vevo"))).pages[0].extract_text()
+        self.assertIn("VEVO operations dashboard", text)
+        self.assertNotIn("ROY operations dashboard", text)
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "vevo"})
+    def test_foreign_and_cross_site_posts_stop_before_action(self):
+        handler = object.__new__(LiveDashboardHandler)
+        handler._send_json = Mock()
+        for path, headers, expected in [
+            ("/api/operations/roy/inbound/SKU", {}, 409),
+            ("/api/operations/vevo/inbound/SKU", {}, 403),
+            ("/api/operations/vevo/pickup/123/ship", {
+                "Content-Type": "application/json", "X-Operations-Action": "dashboard-action",
+                "Sec-Fetch-Site": "cross-site"}, 403),
+        ]:
+            handler.path, handler.headers = path, headers
+            with patch("live_dashboard_server.live_dashboard_auth_credentials", return_value=None), patch("live_dashboard_server.set_inbound_stock_order") as action:
+                handler.do_POST()
+                self.assertEqual(expected, handler._send_json.call_args.kwargs["status"])
+                action.assert_not_called()
+
+
+class InventorySourceTests(unittest.TestCase):
+    def setUp(self):
+        self.settings = load_project_settings("vevo")
+        self.payload = {"project": "vevo", "generated_at": "2026-09-14T05:19:21Z",
+                        "date_from": "2026-08-01", "date_to": "2026-09-13"}
+        self.prefix = "daily-reports/vevo/20260914T051922Z/"
+        self.raw = json.dumps(self.payload).encode()
+        self.manifest = {"project": "vevo", "schema_version": 1, "generation_id": "20260914T051922Z",
+                         "artifacts": {"dashboard_payload_latest.json": {
+                             "key": self.prefix + "dashboard_payload_latest.json", "size": len(self.raw),
+                             "sha256": hashlib.sha256(self.raw).hexdigest()}}}
+        self.data = b"realized_revenue,order_num\nTrue,example\n"
+
+    def read(self, manifest=None, payload=None):
+        objects = {"daily-reports/vevo/latest/generation.json": json.dumps(manifest or self.manifest).encode(),
+                   self.prefix + "dashboard_payload_latest.json": self.raw,
+                   self.prefix + "export_20260801-20260913.csv": self.data}
+        s3 = Mock()
+        s3.get_object.side_effect = lambda **kw: {"Body": io.BytesIO(objects[kw["Key"]]), "ContentLength": len(objects[kw["Key"]])}
+        return inventory.read_inventory_export(s3, "vevo", self.settings, payload or self.payload)
+
+    def test_exact_generation_export_and_digest(self):
+        data, source = self.read()
+        self.assertEqual(data, self.data)
+        self.assertEqual(hashlib.sha256(data).hexdigest(), source["export_sha256"])
+
+    def test_project_path_hash_and_generation_mismatch_rejected(self):
+        for change in ["project", "key", "sha256", "generation_id"]:
+            manifest = copy.deepcopy(self.manifest)
+            if change in {"key", "sha256"}:
+                manifest["artifacts"]["dashboard_payload_latest.json"][change] = "foreign"
+            else:
+                manifest[change] = "roy"
+            with self.assertRaises(ValueError):
+                self.read(manifest)
+        with self.assertRaises(ValueError):
+            self.read(payload={**self.payload, "generated_at": "old"})
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "vevo"})
+    def test_project_model_costs_are_loaded_and_constants_restored_on_failure(self):
+        import export_orders as model
+        previous = copy.deepcopy(model.PRODUCT_EXPENSES)
+        with self.assertRaisesRegex(RuntimeError, "test interruption"):
+            with inventory.configured_model("vevo", self.settings):
+                exporter = model.BizniWebExporter(self.settings["biznisweb_api_url"], "", project_name="vevo", order_facts_only=True)
+                self.assertIn("Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)", exporter.product_expenses_exact)
+                self.assertIsNone(exporter.fb_client)
+                raise RuntimeError("test interruption")
+        self.assertEqual(previous, model.PRODUCT_EXPENSES)
+
+    def test_non_realized_export_cannot_enter_stock_model(self):
+        data = b"order_num,purchase_date,product_sku,item_quantity,realized_revenue\nV,2026-09-01,S,1,False\n"
+        with self.assertRaisesRegex(ValueError, "non-realized"):
+            inventory.build_inventory_analytics("vevo", self.settings, data)
+
+
+if __name__ == "__main__":
+    unittest.main()

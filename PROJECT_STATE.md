@@ -1,5 +1,21 @@
 # PROJECT_STATE
 
+## 2026-09-14 — VEVO operations dashboard implementation
+
+Date: 2026-09-14
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-operations-dashboard`
+
+- Clean isolated worktree from origin/main `a8df8a24`, after fetch/prune and pull/rebase. Target verified via AWS API: account919341186960/eu-central-1, App Runner `biznisweb-vevo-production-board`, ARN suffix2711a253ae014a8aaf1a37929997496d, originhttps://2mhmsmgq3m.eu-central-1.awsapprunner.com, `/app`, port8080, command `python live_dashboard_server.py --host 0.0.0.0 --port 8080`. Instance/IP are App Runner managed; isolated Fargate host must prove its actual task/IP, localhost and marker before promotion/UI. Previous image `sha256:2b214e725cd0d2baa59d5f61abf6ef01be4468b562edc3ce29f6d2b747642cb4`.
+- Reuse the existing operations backend, UI and PDF with project-bound credentials/state/branding. `/production/vevo` becomes the operations dashboard; preserve the existing manufacturing panel at `/manufacturing/vevo`. ROY deployment/configuration remains separate.
+- Live SK catalogue confirms paid31/Payment online-paid and70/Stripe-paid, new1, shipped4, COD payment7/Dobierkou, bank6, online1/18, pickup shipping11/Osobný odber na sklade BB. No pickup-ready status exists: do not invent one or reuse ROY23. VEVO offers handed-over action from paid pickup only; ready action disabled. Reviewed rename contract validates IDs/labels and raw labels remain visible. Stripe-unpaid69 and expired33/34 cannot qualify.
+- Existing VEVO generation20260914T051922Z has complete KPI/export data but empty operations inventory. Use its realized-sales CSV and current catalogue through the shared inventory demand calculation, cached per project/generation. No ordinary report image/schedule/authority change, report regeneration, email send, experiment evidence change or stock/order write is required. Generic model defaults are advisory; no ROY brand/bundle rules are copied.
+- Current runtime role already has VEVO-only report GetObject and operations-prefix PutObject. New empty operations/maintenance records must be initialized conditionally before the actual role probe; preserve any concurrent existing state. Extend the narrow image-only deploy helper, not the legacy all-in-one report workflow.
+
+What is verified: account/service/path/current digest, exact status/payment/shipping catalogue, source generation and CSV shape (14,112 realized item rows), current role scope. 105 targeted tests passed. Read-only real model run passed in33.3s:241 warehouse rows,252 inventory identities,45 products with stock. Initially the adapter omitted the normal project runtime expense map; fixed by scoped load/restore, with regression. Stock cost coverage is47.22% by retail value and34 negative-stock products; the same decision gate correctly leaves recommendations advisory. Complete seven-page catalogue refresh uses exact reporting SKU (no fuzzy product match). Not deployed yet.
+Known issues: first-run inventory/512MB runtime must be measured on the candidate; source errors must remain visible. No synthetic zero stock or unsafe mutation is acceptable.
+Next exact step: finish shared implementation, project/isolation and model regressions; commit/push, PR/checks/build, actual Fargate localhost probe, isolated App Runner promotion and browser verification. No persistent local process has been started.
+
 ## 2026-09-14 — GrowthBook monitor schema-3 offline dependency blocked
 
 Date: 2026-09-14

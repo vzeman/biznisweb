@@ -367,12 +367,12 @@ def _is_personal_pickup_order(order: Dict[str, Any]) -> bool:
     return "osobny odber" in shipping_title
 
 
-def _draw_footer(canvas: Any, width: float, page_no: int, fonts: Dict[str, str]) -> None:
+def _draw_footer(canvas: Any, width: float, page_no: int, fonts: Dict[str, str], project: str = "roy") -> None:
     from reportlab.lib.units import mm
 
     canvas.setFont(fonts["regular"], 8)
     canvas.setFillColorRGB(0.35, 0.39, 0.35)
-    canvas.drawString(16 * mm, 10 * mm, f"ROY operations dashboard · strana {page_no}")
+    canvas.drawString(16 * mm, 10 * mm, f"{project.upper()} operations dashboard · strana {page_no}")
     canvas.drawRightString(width - 16 * mm, 10 * mm, datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
     canvas.setFillColorRGB(0, 0, 0)
 
@@ -381,7 +381,7 @@ def _order_items(order: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [item for item in (order.get("items") or []) if isinstance(item, dict)]
 
 
-def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
+def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]], *, project: str = "roy") -> bytes:
     try:
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
@@ -403,7 +403,7 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
     def new_page() -> None:
         nonlocal page_no
         if page_no:
-            _draw_footer(canvas, width, page_no, fonts)
+            _draw_footer(canvas, width, page_no, fonts, project)
             canvas.showPage()
         page_no += 1
 
@@ -413,7 +413,7 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
         canvas.drawString(margin_x, top_y, "Vyskladňovacie listy")
         canvas.setFont(fonts["regular"], 11)
         canvas.drawString(margin_x, top_y - 18 * mm, "Aktuálne nie sú žiadne objednávky na odoslanie.")
-        _draw_footer(canvas, width, page_no, fonts)
+        _draw_footer(canvas, width, page_no, fonts, project)
         canvas.save()
         return buffer.getvalue()
 
@@ -561,7 +561,7 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
             product_lines = _wrap_text(item.get("label"), col_product - 4 * mm, fonts["regular"], 8)
             row_height = max(14 * mm, (len(product_lines[:3]) * 4.2 * mm) + 5 * mm)
             if y - row_height < 22 * mm:
-                _draw_footer(canvas, width, page_no, fonts)
+                _draw_footer(canvas, width, page_no, fonts, project)
                 canvas.showPage()
                 page_no += 1
                 y = top_y
@@ -604,12 +604,12 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]]) -> bytes:
         canvas.drawString(margin_x, y, "Skontroloval: ____________________________")
         canvas.drawRightString(width - margin_x, y, "Dátum: __________________")
 
-    _draw_footer(canvas, width, page_no, fonts)
+    _draw_footer(canvas, width, page_no, fonts, project)
     canvas.save()
     return buffer.getvalue()
 
 
-def build_roy_picking_lists_filename(orders: Iterable[Dict[str, Any]]) -> str:
+def build_roy_picking_lists_filename(orders: Iterable[Dict[str, Any]], *, project: str = "roy") -> str:
     order_rows = [order for order in orders if isinstance(order, dict)]
     stamp = datetime.now().strftime("%Y%m%d-%H%M")
-    return f"roy-vyskladnovacie-listy-{len(order_rows)}-{stamp}.pdf"
+    return f"{project}-vyskladnovacie-listy-{len(order_rows)}-{stamp}.pdf"
