@@ -1142,8 +1142,7 @@ def _is_pickup_ready_status(order: Dict[str, Any], settings: Dict[str, Any]) -> 
 def _is_cod_fulfillable(order: Dict[str, Any], settings: Dict[str, Any]) -> bool:
     return (
         (not settings.get("cod_status_ids") or _status_id(order) in settings["cod_status_ids"])
-        and
-        _normalize_text(_status_name(order)) in settings["cod_statuses_normalized"]
+        and _normalize_text(_status_name(order)) in settings["cod_statuses_normalized"]
         and _is_cod_payment(order, settings)
     )
 
@@ -3419,6 +3418,15 @@ query GetOrderForPickupAction($order_num: String!) {
         retry_transient=False,
     )
     _clear_operations_cache(project)
+    if project == "vevo":
+        readback = _execute_graphql(client, gql("""
+query VerifyPickupStatus($order_num: String!) {
+  getOrder(order_num: $order_num) { order_num status { id name } }
+}
+"""), variable_values={"order_num": order_num})
+        observed = canonical_order(client, readback.get("getOrder"))
+        if not observed or str(observed.get("order_num")) != order_num or _status_id(observed) != str(status_id):
+            raise RuntimeError("Pickup status change requires verification; refresh the order before another action.")
     return {
         "ok": True,
         "project": project,

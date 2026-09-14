@@ -177,6 +177,15 @@ class InventorySourceTests(unittest.TestCase):
 
 
 class OperationsDeploymentTests(unittest.TestCase):
+    def test_schedule_comparison_preserves_configuration_but_ignores_request_id(self):
+        from datetime import datetime, timezone
+        from scripts.deploy_vevo_board_image import schedule_boundary
+        original = {"Name": "vevo-daily-report-email", "State": "ENABLED", "Target": {"Input": "report-only"},
+                    "LastModificationDate": datetime(2026, 9, 14, tzinfo=timezone.utc), "ResponseMetadata": {"RequestId": "one"}}
+        self.assertEqual(schedule_boundary(original), schedule_boundary({**original, "ResponseMetadata": {"RequestId": "two"}}))
+        self.assertNotEqual(schedule_boundary(original), schedule_boundary({**original, "State": "DISABLED"}))
+        self.assertEqual(schedule_boundary(original), json.loads(json.dumps(schedule_boundary(original))))
+
     def test_host_proof_binds_image_task_ip_capacity_and_functional_result(self):
         from scripts.deploy_vevo_board_image import SERVICE, validate_proof
         receipt = {"mode": "operations", "task_arn": "task", "definition": "definition", "started_by": "probe", "digest": "sha256:reviewed"}

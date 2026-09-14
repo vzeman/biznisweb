@@ -98,12 +98,19 @@ def check_service(service, expected_image):
 
 
 def service_boundary(service):
-    return {key: service.get(key) for key in (
+    return json.loads(json.dumps({key: service.get(key) for key in (
         'ServiceArn', 'ServiceName', 'ServiceUrl', 'SourceConfiguration',
         'InstanceConfiguration', 'HealthCheckConfiguration',
         'AutoScalingConfigurationSummary', 'NetworkConfiguration',
         'EncryptionConfiguration', 'ObservabilityConfiguration',
-    )}
+    )}, default=str))
+
+
+def schedule_boundary(schedule):
+    # Request IDs describe the read, not the schedule; every configuration field
+    # and its persisted timestamps still participate in the comparison.
+    return json.loads(json.dumps({key: value for key, value in schedule.items()
+                                  if key != 'ResponseMetadata'}, default=str))
 
 
 def image_update(service, image):
@@ -232,7 +239,7 @@ def main():
         assert container['logConfiguration']['logDriver'] == 'awslogs'
         receipt = {'source_sha': args.source_sha, 'digest': digest, 'previous': previous,
                    'baseline': service_boundary(current), 'started_by': 'vevo-board-' + args.source_sha[:12],
-                   'cluster': target['Arn'], 'phase': 'registering', 'host_code_sha256': hashlib.sha256(host_code.encode()).hexdigest(), 'mode': 'operations' if args.operations else 'manufacturing', 'report_schedule': json.loads(json.dumps(schedule, default=str))}
+                   'cluster': target['Arn'], 'phase': 'registering', 'host_code_sha256': hashlib.sha256(host_code.encode()).hexdigest(), 'mode': 'operations' if args.operations else 'manufacturing', 'report_schedule': schedule_boundary(schedule)}
         save(receipt)
         registered = ecs.register_task_definition(
             family='vevo-board-probe-' + args.source_sha[:12], executionRoleArn=source['executionRoleArn'],
@@ -286,7 +293,7 @@ def main():
     proof = read_proof(receipt)
     assert proof == receipt['proof']
     validate_proof(read_task(receipt), proof, receipt)
-    assert json.loads(json.dumps(clients['scheduler'].get_schedule(Name='vevo-daily-report-email'), default=str)) == receipt['report_schedule'], 'Report schedule drift'
+    assert schedule_boundary(clients['scheduler'].get_schedule(Name='vevo-daily-report-email')) == receipt['report_schedule'], 'Report schedule drift'
     update = image_update(current, image)
     receipt['phase'] = 'promoting'
     save(receipt)
@@ -326,7 +333,7 @@ def main():
         assert data['inventory']['summary']['inventory_status'] == 'ok'
         assert data['inventory']['summary']['inventory_products_total'] > 0
         assert live('/api/operations/vevo/picking-lists.pdf?preview=1&include_printed=1').startswith(b'%PDF-')
-        assert json.loads(json.dumps(clients['scheduler'].get_schedule(Name='vevo-daily-report-email'), default=str)) == receipt['report_schedule']
+        assert schedule_boundary(clients['scheduler'].get_schedule(Name='vevo-daily-report-email')) == receipt['report_schedule']
         receipt.update({'phase': 'deployed', 'live_summary': data['orders']['summary'], 'live_inventory': data['inventory']['summary']})
         save(receipt)
         print('VEVO_OPERATIONS_DEPLOYED ' + json.dumps({'image': image, 'operation_id': receipt['operation_id'], 'summary': data['orders']['summary'], 'inventory': data['inventory']['summary']}), flush=True)
