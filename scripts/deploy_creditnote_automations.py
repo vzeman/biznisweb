@@ -432,6 +432,11 @@ class CreditnoteDeployment:
         require(not failures, "rollback-incomplete-review-private-evidence")
 
     def create_role(self, name, service, policy, *, source_arn=None):
+        # A failed migration may retain an unused role. Never adopt, overwrite or
+        # delete it implicitly; each managed attempt owns distinct infrastructure.
+        attempt = self.key.rsplit("/", 1)[-1].removesuffix(".json")
+        require(re.fullmatch(r"[a-f0-9]{32}", attempt) is not None, "role-attempt-invalid")
+        name = f"{name}-{attempt[:12]}"
         iam = self.session.client("iam")
         statement = {"Effect": "Allow", "Principal": {"Service": service}, "Action": "sts:AssumeRole",
                      "Condition": {"StringEquals": {"aws:SourceAccount": self.account}}}
@@ -456,6 +461,17 @@ class CreditnoteDeployment:
                 "guard-policy-readback-failed")
         self.evidence.setdefault("created_roles", []).append(arn)
         self.save("guard-role-created")
+        # GetRole visibility alone does not prove that ECS/Scheduler can yet
+        # assume a new role. Allow IAM propagation before any consumer starts,
+        # then revalidate without widening trust or retrying an uncertain launch.
+        for _ in range(6):
+            self.sleep(10)
+        actual = iam.get_role(RoleName=name)["Role"]
+        require(actual.get("Arn") == arn and actual.get("AssumeRolePolicyDocument") == trust,
+                "guard-role-post-propagation-drift")
+        require(iam.get_role_policy(RoleName=name, PolicyName="CreditnoteAutomation")["PolicyDocument"] == policy,
+                "guard-policy-post-propagation-drift")
+        self.save("guard-role-propagation-wait-complete")
         return arn
 
     def provision(self, project, image):
