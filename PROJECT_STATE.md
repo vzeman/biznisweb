@@ -1,5 +1,10 @@
 # PROJECT_STATE
 
+## 2026-09-14 — VEVO operations build test isolation correction
+
+- PR569 merged as `c60531eeaae5a01aecb9cbb70dc12c98ede8d0c0` after all six exact-head checks passed. Build34848717764 stopped before ECR/AWS deployment: its broader 776-test combined suite exposed ambient REPORT_PROJECT left as VEVO by earlier exporter tests. Three ROY HTTP tests correctly received409 instead of their expected same-shop responses, and a ROY cache test hit the new project guard. This is test fixture leakage; retain the production isolation guard.
+- Clean branch `codex/vevo-operations-test-isolation` from exact main after pull/rebase. ROY operations/auth fixtures now bind and restore their own REPORT_PROJECT for every test. No AWS mutation, seed, report run, email or local persistent process has occurred. All eight complete build regression groups now pass locally in the exact workflow grouping/order, including the formerly failing776-test group; Ruff/whitespace checks pass. Next exact step: commit/push/PR, then successful exact-main build and the recorded candidate-host/promotion/UI procedure.
+
 ## 2026-09-14 — VEVO operations dashboard implementation
 
 Date: 2026-09-14

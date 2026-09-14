@@ -1,6 +1,7 @@
 import copy
 import io
 import json
+import os
 import shutil
 import subprocess
 import unittest
@@ -152,6 +153,11 @@ class FakePickupActionClient:
 
 
 class RoyOperationsDashboardTests(unittest.TestCase):
+    def setUp(self):
+        project = patch.dict(os.environ, {"REPORT_PROJECT": "roy"})
+        project.start()
+        self.addCleanup(project.stop)
+
     def test_live_graphql_retries_non_json_response_with_shared_cooldown(self) -> None:
         class FakeClient:
             def __init__(self) -> None:

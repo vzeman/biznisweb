@@ -21,6 +21,11 @@ def basic_header(user: str, password: str) -> str:
 
 
 class LiveDashboardAuthTests(unittest.TestCase):
+    def setUp(self):
+        project = patch.dict(os.environ, {"REPORT_PROJECT": "roy"})
+        project.start()
+        self.addCleanup(project.stop)
+
     @patch.dict(os.environ, {}, clear=True)
     def test_auth_is_disabled_when_credentials_are_unset(self) -> None:
         self.assertIsNone(live_dashboard_auth_credentials())
