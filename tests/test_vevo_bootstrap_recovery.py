@@ -42,6 +42,7 @@ class BootstrapRecoveryTests(unittest.TestCase):
         def put(**request):
             import json
             storage[request['Key']] = json.loads(request['Body'])
+            self.assertEqual(recovery.binding.canonical_bytes(storage[request['Key']]), request['Body'])
         obj.s3.put_object.side_effect = put
         def read(_s3, key, **_):
             if key == recovery.binding.CURRENT_KEY:

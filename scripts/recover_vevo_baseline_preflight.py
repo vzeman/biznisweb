@@ -16,7 +16,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from scripts.deploy_vevo_report import ACCOUNT, BUCKET, Deployment, canonical, gh, require, sha  # noqa: E402
+from scripts.deploy_vevo_report import ACCOUNT, BUCKET, Deployment, gh, require, sha  # noqa: E402
 from scripts import reporting_runtime_binding as binding  # noqa: E402
 
 RUN = "34802278958"
@@ -71,7 +71,7 @@ def recover(deployment, *, apply=False):
         return {"verified": True, "applied": False, "owner": OWNER}
     key = binding.PREFIX + "recovery/" + OWNER + "-" + uuid.uuid4().hex
     def audit(suffix, value):
-        raw = canonical(binding.normalized(value))
+        raw = binding.canonical_bytes(binding.normalized(value))
         deployment.s3.put_object(Bucket=BUCKET, Key=key + suffix, Body=raw,
             ExpectedBucketOwner=ACCOUNT, ServerSideEncryption="AES256", IfNoneMatch="*")
         observed, _ = binding.read_object(deployment.s3, key + suffix)
