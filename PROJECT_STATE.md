@@ -230,6 +230,113 @@ Known issues:
 Next exact step:
 
 - Commit/push this specification for root review, then wait for an explicit implementation scope. Do not implement a current-binding pointer, change historical evidence, run a candidate, or repoint any schedule from this branch.
+## 2026-09-13 — VEVO false-zero production board fixed and deployed
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-board-deployment-evidence-20260913`
+
+What changed:
+
+- PR #558 merged the user-confirmed `New order` / `Payment online - paid` configuration as `d2728a7783203cd3eec7ba683e13b92e8f20793b`. Successful build `34752509626` bound `git-d2728a7783203cd3eec7ba683e13b92e8f20793b` to immutable image `sha256:2b214e725cd0d2baa59d5f61abf6ef01be4468b562edc3ce29f6d2b747642cb4`.
+- PR #560 passed all six exact-head CI checks and merged the scoped deploy helper/runbook as `0a686331c7bdca50a3e475418f761da5f98f349e`. The actual authenticated CloudShell checkout executed helper commit `94dcb95520fa10d3985fe9eeedcc84cd1dc8589b` with the separately pinned application image above.
+- App Runner image-only operation `647bd73c5b034bf8b13aca8500654268` SUCCEEDED. Service `biznisweb-vevo-production-board/2711a253ae014a8aaf1a37929997496d` is RUNNING on the exact verified image. The complete saved service boundary matches except for its image identifier. No IAM, scheduled business jobs, report artifacts, orders, invoices or payments were changed by this deployment.
+
+What is verified:
+
+- Before promotion, actual Fargate task `2e2e740359a7471abaaeeef2454db436` in `vevo-reporting-cluster`, private IP `172.31.2.176`, `/app`, exact candidate image, ran the in-process HTTP server and curl localhost health/identity marker/production HTML/live production API. It emitted one `VEVO_BOARD_HOST_OK` and one `VEVO_BOARD_HOST_CLOSED`.
+- The same task was re-read before promotion and independently after deployment: STOPPED, exit 0, stopped at `2026-09-13T10:49:37.963Z`. Temporary definition `vevo-board-probe-d2728a778320:1` is INACTIVE. The server thread exited and its port was independently checked closed inside the task.
+- Authenticated production `/health`, `/production/vevo` HTML marker and `/api/production/vevo/live?refresh=1` passed after App Runner terminal success. The live result matches the host probe: **76 active orders, 75 manufacturing orders, 40 products, 169 units to make, 15 ignored units**. Both configured active status labels are correct.
+- This count is within the existing scan: 300 orders / 10 pages, stopped after six empty-active pages; no page maximum hit. It is not an all-age backlog completeness audit. The existing product exclusions and scan/cache settings remain intact.
+- Generated CloudShell receipt `data/vevo-board-deploy.json` phase `deployed`, SHA-256 `45add12c4c598f673fb94d19b63cfb62ba7aab1c344028922ac01fbbe053cc4e`; durable runtime evidence is the exact ECS/CloudWatch/App Runner identity above. Customer order details and credentials are omitted from Git.
+- Eight local focused tests passed; three deployment tests also passed in AWS CloudShell. No local dev server, worker or tunnel was started. The bounded remote probe has stopped; production App Runner intentionally remains running.
+
+Known issues:
+
+- Final Chrome navigation to the correct production URL failed with `net::ERR_BLOCKED_BY_CLIENT`. No browser security setting was changed or workaround used. Visual UI verification remains unavailable on this browser; successful authenticated live HTTP/API and actual host checks are verified separately.
+- AWS authentication is available. Its console tab was explicitly retained after the user's login; do not repeat the earlier claim that the account is inaccessible merely because local CLI credentials are absent.
+
+Next exact step:
+
+- The false-zero defect is resolved in production. When the browser-side block is resolved, open `https://2mhmsmgq3m.eu-central-1.awsapprunner.com/production/vevo` and visually confirm the counters. Future status renames must update the project configuration or use a separately reviewed stable-ID approach; do not deploy an unverified ECR `latest` image.
+
+## 2026-09-13 — VEVO AWS session recovered; scoped image deployment prepared
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-board-image-deploy-20260913`
+
+What changed:
+
+- The user had completed AWS login after the prior sign-in check. The temporary browser tab was automatically closed because it was not retained. Reopened and explicitly retained the AWS tab; authenticated account `919341186960` is now verified. The earlier access blocker is resolved.
+- PR #558 passed all six exact-head CI checks and merged as `d2728a7783203cd3eec7ba683e13b92e8f20793b`; ECR build `34752509626` succeeded. The status-name correction is in main; runtime promotion is still pending at this checkpoint.
+- Added a repository-local two-phase image deployer and runbook. It probes in a temporary Fargate task with no task role and only the API secret, verifies curl localhost/marker and actual task/IP/image/exit, then allows an image-only App Runner update if the saved service configuration is unchanged. Existing IAM, business schedules and report data are not mutated. This avoids the older dashboard workflow's wider IAM/reporting reconciliation.
+
+What is verified:
+
+- Fresh AWS UI identity: App Runner service `biznisweb-vevo-production-board`, ARN suffix `2711a253ae014a8aaf1a37929997496d`, RUNNING, manual deployment, image `sha256:19ab8ab8b1313dbf627808eafff42dffe557d12891fb401149fd0cd27aa2f3fd`; command `python live_dashboard_server.py --host 0.0.0.0 --port 8080`, Docker WORKDIR `/app`, instance/private host IP N/A (managed).
+- Origin `https://2mhmsmgq3m.eu-central-1.awsapprunner.com`, dynamic DNS IPs `3.126.244.1`, `35.157.121.17`, `3.74.221.100`; project env is VEVO with its own existing runtime role and S3 prefix.
+- Eight focused tests pass, including rejection of wrong task/owner/image/exit/IP/path/status/zero-count proof, image-only payload preservation and redirect blocking. Python syntax and diff whitespace checks pass. No local persistent process was started.
+
+Known issues:
+
+- New deploy helper and host probe are prepared but not yet exercised against AWS. No production update has occurred at this checkpoint.
+
+Next exact step:
+
+- Push the helper/runbook, run the pinned d2728a77 image probe from a verified Git checkout in the authenticated CloudShell, inspect actual host proof, then promote the same digest, verify live API and browser UI, and record final process/task cleanup. Preserve the AWS tab across turns.
+
+## 2026-09-13 — VEVO board configuration corrected for confirmed status renames
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-production-board-audit-20260913`
+
+What changed:
+
+- The user confirmed both exact replacements: `Čaká na vybavenie` → `New order`; `Platba online - zaplatené` → `Payment online - paid`. Updated only VEVO's production-board active-status configuration to those two names. The generic defaults and other consumers are unchanged.
+- Chose the existing project configuration mechanism for this bounded rename correction. Stable-ID filtering remains a possible later hardening task, not a prerequisite or an implemented feature of this patch. Product exclusions and scan/cache settings are preserved.
+
+What is verified:
+
+- Five focused production-board/mobile tests pass, and `git diff --check` is clean. The new regression exercises actual VEVO configuration with new and paid orders, excludes shipped/cancelled/Stripe-unpaid orders, and preserves brand/product exclusions: two eligible orders, one product, four manufacturing units, fourteen excluded units.
+- This is fixture-based verification, not a current live backlog count. No persistent local service was started or needs cleanup.
+
+Known issues:
+
+- Production deployment is pending. AWS CLI has no configured credentials; fresh Chrome navigation to App Runner redirects to the AWS IAM sign-in form. No authenticated current service/image inspection or host localhost/marker gate is available in this session. GitHub is authenticated, so the tested patch can be pushed and reviewed without changing production.
+- The existing App Runner workflow uses GitHub AWS secrets, but dispatching it is a deployment with additional runtime/IAM actions, not a read-only identity probe. It was not used to bypass the user's pre-deploy identity gate.
+
+Next exact step:
+
+- Review the narrow configuration PR and its exact-head CI. With authenticated AWS access, establish service `biznisweb-vevo-production-board`, instance/private IP N/A for managed App Runner, current ARN/image, dynamic DNS and runtime `/app`; inspect the documented deployment's scope, deploy the merged correction, verify actual host curl/marker, then verify production UI and reconcile live demand counts.
+
+## 2026-09-13 — VEVO production board false-zero diagnosis
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-production-board-audit-20260913`
+
+What changed:
+
+- Read-only investigation of the user's production-board screenshot: all demand KPIs zero after 300 scanned orders. No application code, shop data, or runtime was changed. This entry preserves the diagnosis.
+- Used a clean isolated worktree from `origin/main` at `eb89ea90`, after fetch/prune and pull/rebase; unrelated root-worktree files were untouched.
+
+What is verified:
+
+- Fresh VEVO connector reads returned a paid order with status ID `31`, name `Payment online - paid`, and two VEVO item units. Customer details and order identifiers are intentionally omitted here.
+- `production_board.py::_is_active_order` checks normalized status names only. VEVO settings allow only `Čaká na vybavenie` and `Platba online - zaplatené`; the current English paid label is excluded before item aggregation.
+- Executed the unchanged snapshot builder with the observed status and sanitized item fields: active orders/products/units = `0/0/0`. Changing only the input label to the configured Slovak paid name, preserving status ID `31` and items, produces `1/2/2`. Marker: `VEVO_STATUS_LABEL_DROP_REPRODUCED`. This proves the filter defect, not a complete live backlog count.
+- Configured origin is `https://2mhmsmgq3m.eu-central-1.awsapprunner.com`; DNS resolved to `3.74.6.217`, `3.68.0.57`, and `3.66.161.94` (dynamic frontend addresses, not host IPs).
+
+Known issues:
+
+- Fresh AWS identity/service inspection failed with `NoCredentials`. Historical evidence names App Runner `biznisweb-vevo-production-board`, runtime `/app`, command `python live_dashboard_server.py`; current service/image/host identity and localhost marker were NOT verified. Do not present the repository reproduction as a direct probe of the deployed image.
+- Work stopped at the confirmed defect in accordance with the user's stop-on-error instruction. No repair, deployment, or post-deploy UI test occurred. No local server, worker, watcher, or tunnel was started; no process cleanup was needed.
+
+Next exact step:
+
+- In a repair task, establish fresh AWS service identity and deployed image first, validate VEVO's active status IDs against the live catalogue, and replace localized-name eligibility with project-scoped stable status identity. Add rename/localization regression coverage, use branch + PR and the documented protected App Runner deployment, verify actual host curl/marker before UI, then reconcile the board against the live active-order set. Preserve existing product exclusions; a 300-order scan is not proof of a complete backlog.
 
 ## 2026-09-13 — Primary promotion independently verified; one uncollected closure pinned
 
