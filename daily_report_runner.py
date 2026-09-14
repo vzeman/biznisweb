@@ -131,6 +131,10 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         help="Skip email sending",
     )
     parser.add_argument(
+        "--email-recipient",
+        help="For a one-off rerun, send only to this existing configured recipient.",
+    )
+    parser.add_argument(
         "--skip-invoices",
         action="store_true",
         default=env_bool("REPORT_SKIP_INVOICES", True),
@@ -1526,6 +1530,12 @@ def main() -> None:
     load_project_env(bootstrap_project)
 
     args = parse_args()
+    if args.email_recipient is not None:
+        recipient = args.email_recipient.strip()
+        configured = [value.strip() for value in os.getenv("REPORT_EMAIL_TO", "").split(",") if value.strip()]
+        if not recipient or recipient not in configured:
+            raise ValueError("One-off report recipient must already be configured")
+        os.environ["REPORT_EMAIL_TO"] = recipient
     project = (args.project or bootstrap_project).strip() or DEFAULT_PROJECT
     output_tag = sanitize_output_tag(args.output_tag)
     os.environ["REPORT_PROJECT"] = project

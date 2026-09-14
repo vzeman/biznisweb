@@ -52,6 +52,27 @@ class EventuallyConsistentIam:
 
 
 class IndependentRoleReviewTests(unittest.TestCase):
+    def test_confirmed_role_waits_then_rechecks_exact_policy(self):
+        for drift in (False, True):
+            obj = self.deployment(["owned", "owned"])
+            def create(**request):
+                obj.iam.role = {"Arn": f"arn:aws:iam::{deploy.ACCOUNT}:role/" + request["RoleName"],
+                    "Tags": request["Tags"], "AssumeRolePolicyDocument": json.loads(request["AssumeRolePolicyDocument"])}
+            obj.iam.create_role.side_effect = create
+            policy = deploy.diagnostic_policy(obj.release_id)
+            obj.iam.put_role_policy = Mock()
+            obj.iam.get_role_policy = Mock(side_effect=[{"PolicyDocument": policy},
+                {"PolicyDocument": {} if drift else policy}])
+            obj.iam.list_role_policies.return_value = {"PolicyNames": ["IsolatedProbe"]}
+            with self.subTest(drift=drift):
+                if drift:
+                    with self.assertRaisesRegex(RuntimeError, "post-propagation-drift"):
+                        obj.create_role()
+                else:
+                    obj.create_role()
+                self.assertEqual([((10,), {})] * 6, obj.sleep.call_args_list)
+                self.assertEqual(2, obj.iam.get_role_policy.call_count)
+
     def deployment(self, visibility):
         obj = object.__new__(deploy.Deployment)
         obj.release_id = "d" * 32

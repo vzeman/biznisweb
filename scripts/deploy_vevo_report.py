@@ -455,6 +455,13 @@ class Deployment:
                 "report-probe-policy-readback")
         require(self.iam.list_attached_role_policies(RoleName=name)["AttachedPolicies"] == []
                 and self.iam.list_role_policies(RoleName=name)["PolicyNames"] == ["IsolatedProbe"], "report-probe-extra-policy")
+        # A visible IAM role may not yet be assumable by ECS. The September14
+        # guard rollout demonstrated this four seconds after role creation.
+        for _ in range(6):
+            self.sleep(10)
+        self.validate_probe_role(self.probe_role() or {})
+        require(self.iam.get_role_policy(RoleName=name, PolicyName="IsolatedProbe")["PolicyDocument"] == policy,
+                "report-probe-policy-post-propagation-drift")
 
     def probe_role(self):
         try:

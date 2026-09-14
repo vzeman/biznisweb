@@ -1,5 +1,11 @@
 # PROJECT_STATE
 
+## 2026-09-14 — Report recovery recipient and IAM propagation checks
+
+- The separate guard deployment failed before its first dry task: ECS could not assume a role four seconds after creation. All seven original schedules were independently verified restored/enabled; no live guard or report resend ran. Guard correction is PR562. The report probe also now allows60 seconds for IAM propagation and rechecks exact owned trust/policy before ECS launch; this preserves its restricted permissions and uncertain-create/cleanup rules.
+- Added `--email-recipient` for the requested missing report. It may select only one already configured recipient and affects that invocation's environment only. Recovery will select the requesting owner's mailbox, while scheduled recipient configuration stays unchanged. Unknown recipients reject before report export. Tests cover default preservation, the narrowed recipient and foreign-recipient rejection, plus probe policy drift after propagation.
+- Next exact step: require own checks for these additional changes; integrate the successful guard source before merging reporting. No bootstrap, report promotion or email has happened yet. No persistent local process was started.
+
 Last updated: 2026-09-13
 Owner: Patrik
 Repository scope: BizniWeb reporting only

@@ -13,6 +13,24 @@ import daily_report_runner as runner
 
 
 class DailyReportEmailTests(unittest.TestCase):
+    def test_rerun_restricts_delivery_to_an_existing_recipient_only(self) -> None:
+        configured = "owner@example.test, second@example.test"
+        for selected, expected in ((None, configured), ("owner@example.test", "owner@example.test"),
+                                   ("foreign@example.test", None)):
+            argv = ["daily_report_runner.py", "--project", "vevo"]
+            if selected is not None:
+                argv += ["--email-recipient", selected]
+            with self.subTest(selected=selected), patch.dict(os.environ, {"REPORT_EMAIL_TO": configured}), \
+                    patch.object(sys, "argv", argv), patch.object(runner, "load_dotenv"), \
+                    patch.object(runner, "load_project_env"), \
+                    patch.object(runner, "load_project_settings", side_effect=RuntimeError("stop-before-export")) as settings:
+                with self.assertRaisesRegex(ValueError if expected is None else RuntimeError,
+                                            "already be configured" if expected is None else "stop-before-export"):
+                    runner.main()
+                self.assertEqual(configured if expected is None else expected, os.environ["REPORT_EMAIL_TO"])
+                if expected is None:
+                    settings.assert_not_called()
+
     def test_large_html_is_zipped_before_ses_send(self) -> None:
         sent = {}
 
