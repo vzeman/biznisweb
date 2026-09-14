@@ -92,6 +92,40 @@ def controller():
 
 
 class CreditnoteSummaryAndProbeTests(unittest.TestCase):
+    def test_new_role_waits_for_propagation_and_retains_attempt_ownership(self):
+        value = controller()
+        value.key = "private/" + "c" * 32 + ".json"
+        value.session, value.sleep = Mock(), Mock()
+        iam = value.session.client.return_value
+        name = "BiznisWebCreditnoteGuard-roy-" + "c" * 12
+        arn = f"arn:aws:iam::{ACCOUNT}:role/{name}"
+        trust = {"Version": "2012-10-17", "Statement": [{"Effect": "Allow",
+            "Principal": {"Service": "ecs-tasks.amazonaws.com"}, "Action": "sts:AssumeRole",
+            "Condition": {"StringEquals": {"aws:SourceAccount": ACCOUNT}}}]}
+        role = {"Role": {"Arn": arn, "AssumeRolePolicyDocument": trust}}
+        iam.get_role.side_effect = [Missing("NoSuchEntity"), role, role]
+        iam.create_role.return_value = role
+        policy = {"Version": "2012-10-17", "Statement": []}
+        iam.get_role_policy.return_value = {"PolicyDocument": policy}
+        self.assertEqual(arn, value.create_role("BiznisWebCreditnoteGuard-roy", "ecs-tasks.amazonaws.com", policy))
+        self.assertEqual([((10,), {})] * 6, value.sleep.call_args_list)
+        self.assertEqual(name, iam.create_role.call_args.kwargs["RoleName"])
+        self.assertEqual([arn], value.evidence["created_roles"])
+        self.assertEqual(2, iam.get_role_policy.call_count)
+        iam.delete_role.assert_not_called()
+
+    def test_existing_attempt_role_is_not_adopted_or_overwritten(self):
+        value = controller()
+        value.key = "private/" + "d" * 32 + ".json"
+        value.session, value.sleep = Mock(), Mock()
+        iam = value.session.client.return_value
+        iam.get_role.return_value = {"Role": {"Arn": "existing"}}
+        with self.assertRaisesRegex(RuntimeError, "already-exists"):
+            value.create_role("BiznisWebCreditnoteGuard-roy", "ecs-tasks.amazonaws.com", {})
+        iam.create_role.assert_not_called()
+        iam.put_role_policy.assert_not_called()
+        value.sleep.assert_not_called()
+
     def test_host_gate_requires_explicit_success_and_each_failure_counter(self):
         verify_summary(summary(dry_run=True), "roy", dry_run=True)
         for fields in ({"ok": False}, {"ok": None}, {"audit_error_orders": 1}, {"audit_error_orders": None},

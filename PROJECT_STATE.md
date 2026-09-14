@@ -1,5 +1,12 @@
 # PROJECT_STATE
 
+## 2026-09-14 — Guard deployment IAM propagation failure, original schedules restored
+
+- Managed run34796701277 on main `b99d81364b0955f7f28a1e1801ae7c17dcdb52c1` failed before the first dry guard task launched. Both unchanged report identity probes passed real host/localhost gates. CloudTrail records ECS could not assume the new ROY task role four seconds after creation; direct IAM trust matches the documented ECS contract and caller PassRole simulation is allowed. IAM propagation is the supported explanation, not a proven permission deficit.
+- Private final receipt `data/roy/order-automation/creditnote-deployments/b99d81364b0955f7f28a1e1801ae7c17dcdb52c1/6f03335ed0d44ade9edd7c3538ce8e06.json`, SHA `33849e91502779e664567687b64e3c2cd224ea5d21abcbe183961684076af1c3`, records failure-original-schedules-restored, no live attempt and no rollback failures. Independent AWS readback confirms all seven original schedules ENABLED with exact original targets. No report resend has occurred.
+- Narrow correction gives each managed attempt its own role names, preserving strict rejection of existing roles without adoption/deletion. Wait60 seconds after role creation, then reread exact trust/policy before consumers start. No permission is widened and uncertain task launches remain non-retriable. Prior unused role `BiznisWebCreditnoteGuard-roy` and inactive candidate definition `roy-creditnote-storno-guard:1` are retained as failed-attempt evidence and are not used by any schedule.
+- Next exact step: validate this correction, commit/push and merge a separate PR after six own checks; require its exact image build before one new managed guard deployment. Keep main fixed during deployment. Report PR556 already passed its six checks but remains unmerged until standalone success and the documented current-authority maintenance window. No persistent local process was started.
+
 Last updated: 2026-09-13
 Owner: Patrik
 Repository scope: BizniWeb reporting only
