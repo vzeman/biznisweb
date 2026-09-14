@@ -5,6 +5,19 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-14 — VEVO rename repair and report delivery now explicitly requested
+
+Date: 2026-09-14
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-deploy-20260913`
+
+- User explicitly requests the repair, audit of other consumers and delivery of VEVO reporting. The previous deferral is superseded for the necessary report/guard releases, not for unrelated optional work. ROY's status names and intentional email disablement stay unchanged. Fresh incident evidence is private `data/vevo/order-automation/audits/2026-09-14/report-alarm-incident-012629Z.json`, SHA `3c730ce0267bac63e37447d875c7669f8b8e959daf928e998b8e89e7ef6b3bed`.
+- Guard #552 passed all six exact-head checks at `7e4289f6` and merged as `b99d81364b0955f7f28a1e1801ae7c17dcdb52c1`; exact image build34796560598 passed. Managed guard deployment34796701277 has been dispatched. Keep main fixed until its terminal result. No report deployment or resend has happened yet.
+- Integrated both current-main board changes and shared v2 status contract. Only documentation and a test-list merge conflicted; both documentation histories and all distinct test suites were retained. New-order ID1 now uses the owner's explicit old/new meaning. Report regressions cover equal revenue treatment for old/new ID1 COD, alongside paid31/shipped4 and distinct expired33/rejected34. Unreviewed cache-drift testing now uses an unrelated synthetic status instead of pretending confirmed ID1 is unknown. Focused report/revenue/creditnote/board checks passed; full own CI remains required.
+- Additional live audit: `vevo-payment-reminders` code SHA `FViPq5Nsu8T+lqI6cbInilcot2VjkJLb0N0ZNqxNgns=` is Active, modified September13 at10:44 UTC. SSM `/vevo/payment-reminders/config` version2 already binds unpaid ID1/New order and ID69/Stripe-unpaid (plus14/Čaká na úhradu); eligibility also rejects paid invoices and successful other payment attempts. No reminder change or reminder email was made. Production-board configuration already uses the owner's new labels and its prior verified deployment remains intact.
+- Reporting alarms point to `VevoReporting`, while actual `ReportEmailSent` exists under the runner's `BizniswebReporting`. Added a narrow read-only-by-default reconciler for the two existing VEVO report alarms. It requires clean pushed source, exact enabled report definition, exact metric/project identity, preserves every field except Namespace, verifies before/after configuration and never mutes alerts. Three focused tests pass, including foreign-project rejection and preservation/idempotence. Apply only after the verified report release.
+- Next exact step: finish and independently seal managed guard promotion, require this PR's checks/build, bootstrap/promote reporting using the reviewed immutable evidence, then execute the missing VEVO report and independently verify actual output and email. Reconcile the two report alarm namespaces against the successful runtime. No local persistent process was started.
+
 ## 2026-09-13 - Reporting branch synchronizes verified closure source
 
 Date: 2026-09-13

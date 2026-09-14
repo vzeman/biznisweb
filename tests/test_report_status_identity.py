@@ -19,6 +19,7 @@ from order_status_identity import canonical_order
 
 
 CATALOGUE = [
+    {"id": "1", "name": "New order"},
     {"id": "4", "name": "Shipped"},
     {"id": "17", "name": "Cancelled"},
     {"id": "31", "name": "Payment online - paid"},
@@ -74,6 +75,7 @@ class ReportStatusIdentityTests(unittest.TestCase):
         exp = exporter()
         exp.prepare_reporting_status_identity()
         for key, old, new, payment in [
+            ("1", "Čaká na vybavenie", "New order", "7"),
             ("31", "Platba online - zaplatené", "Payment online - paid", "6"),
             ("4", "Odoslaná", "Shipped", "7"),
             ("4", "Odoslaná", "Shipped", "6"),
@@ -164,11 +166,11 @@ class ReportStatusIdentityTests(unittest.TestCase):
         self.assertEqual(["catalogue"], exp.client.calls)
 
     def test_stale_unreviewed_cache_label_refreshes_complete_day_without_guessing_role(self):
-        stale = order("1", "Nová")
+        stale = order("80", "Unreviewed old queue")
         stale.update(id="102", order_num="synthetic-unrealized")
         fresh = copy.deepcopy(stale)
-        fresh["status"]["name"] = "New order"
-        exp = exporter(rows=[*CATALOGUE, {"id": "1", "name": "New order"}], orders=[fresh, order()])
+        fresh["status"]["name"] = "Unreviewed new queue"
+        exp = exporter(rows=[*CATALOGUE, {"id": "80", "name": "Unreviewed new queue"}], orders=[fresh, order()])
         with TemporaryDirectory() as folder:
             exp.cache_dir = Path(folder)
             cached = exp.get_cache_filename(datetime(2026, 9, 1))
@@ -179,7 +181,7 @@ class ReportStatusIdentityTests(unittest.TestCase):
                 included = exp.fetch_orders(datetime(2026, 9, 1), datetime(2026, 9, 1))
             self.assertEqual(["synthetic-order"], [row["order_num"] for row in included])
             self.assertEqual(["synthetic-unrealized"], [row["order_num"] for row in exp.excluded_status_orders])
-            self.assertEqual("New order", exp.excluded_status_orders[0]["status"]["name"])
+            self.assertEqual("Unreviewed new queue", exp.excluded_status_orders[0]["status"]["name"])
             self.assertEqual(2, len(included) + len(exp.excluded_status_orders))
             self.assertEqual(["catalogue", "orders"], exp.client.calls)
             with self.assertRaisesRegex(ValueError, "unreviewed_label_drift"):
