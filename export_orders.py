@@ -4061,6 +4061,11 @@ class BizniWebExporter:
             return "awaiting_payment", "Awaiting payment", 20
         return cls._classify_lifecycle_bucket(status_value)
 
+    def _report_order_lifecycle_bucket(self, order: Dict[str, Any]) -> Tuple[str, str, int]:
+        current = self._reporting_order_context(order)
+        label = None if current.get("status_identity_unbound") else self._status_name(current)
+        return self._report_lifecycle_bucket(label)
+
     @classmethod
     def _matches_patterns(cls, label: str, patterns: List[str]) -> bool:
         if not label or not patterns:
@@ -15988,7 +15993,7 @@ class BizniWebExporter:
             return pd.DataFrame()
 
         status_meta = (
-            df[["order_num", "status_name"]]
+            df[["order_num", "status_name"] + (["status_id"] if "status_id" in df.columns else [])]
             .drop_duplicates(subset=["order_num"])
             .copy()
         )
@@ -15996,7 +16001,9 @@ class BizniWebExporter:
         orders_df = orders_df.merge(status_meta, on="order_num", how="left")
         orders_df["status_name"] = orders_df["status_name"].fillna("").astype(str)
         orders_df["status_name_norm"] = orders_df["status_name"].apply(self._normalize_match_text)
-        lifecycle_meta = orders_df["status_name"].apply(self._report_lifecycle_bucket)
+        lifecycle_meta = orders_df.apply(lambda row: self._report_order_lifecycle_bucket({
+            "status": {"id": row.get("status_id"), "name": row["status_name"]},
+        }), axis=1)
         orders_df["lifecycle_bucket"] = lifecycle_meta.apply(lambda value: value[0])
         orders_df["lifecycle_label"] = lifecycle_meta.apply(lambda value: value[1])
         orders_df["lifecycle_order"] = lifecycle_meta.apply(lambda value: value[2])
@@ -16041,8 +16048,7 @@ class BizniWebExporter:
 
         tracked_excluded = []
         for order in getattr(self, "excluded_status_orders", []) or []:
-            status_name = ((order or {}).get("status", {}) or {}).get("name", "")
-            bucket_key, bucket_label, bucket_order = self._report_lifecycle_bucket(status_name)
+            bucket_key, bucket_label, bucket_order = self._report_order_lifecycle_bucket(order)
             tracked_excluded.append(
                 {
                     "lifecycle_bucket": bucket_key,

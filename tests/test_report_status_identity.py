@@ -258,6 +258,24 @@ class ReportStatusIdentityTests(unittest.TestCase):
         self.assertEqual("paid_processing", BizniWebExporter._report_lifecycle_bucket("Stripe - paid")[0])
         self.assertEqual("paid_processing", BizniWebExporter._classify_lifecycle_bucket("Stripe - unpaid")[0])
 
+    def test_status_chart_uses_new_order_identity_and_preserves_display_label(self):
+        import pandas as pd
+        exp = exporter()
+        exp.prepare_reporting_status_identity()
+        frame = pd.DataFrame([{"order_num": "one", "status_id": "1", "status_name": "New order"}])
+        orders = pd.DataFrame([{"order_num": "one", "order_total": 10.0,
+                               "cm1_profit": 4.0, "cm2_profit": 3.0, "cm3_profit": 2.0}])
+        saved = frame.copy(deep=True)
+        exp.excluded_status_orders = [order("69", "Stripe - unpaid")]
+        with patch.object(exp, "_build_growth_order_item_frames", return_value=(orders, pd.DataFrame(), "order_total")):
+            result = exp.analyze_order_status(frame)
+        self.assertEqual(["New order"], result.loc[result.row_type == "status", "status"].tolist())
+        self.assertEqual({"Paid / processing", "Awaiting payment"}, set(result.loc[result.row_type == "lifecycle", "status"]))
+        pd.testing.assert_frame_equal(saved, frame)
+        self.assertEqual("other_unknown", exp._report_order_lifecycle_bucket(order("999", "New order"))[0])
+        roy = exporter("roy")
+        self.assertEqual("other_unknown", roy._report_order_lifecycle_bucket(order("1", "New order"))[0])
+
     def test_shipped_creditnote_uses_native_identity_and_keeps_raw_label(self):
         exp = exporter()
         exp.prepare_reporting_status_identity()

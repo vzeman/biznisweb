@@ -1,5 +1,11 @@
 # PROJECT_STATE
 
+## 2026-09-14 — Report status chart also binds the reviewed New order ID
+
+- Final source audit found the report's lifecycle chart still classified raw `New order` as Other/unknown although revenue already used confirmed ID1. The chart now classifies a project-bound canonical copy using the existing status_id column, while its visible status rows keep raw provider names. Excluded-order lifecycle rows use the same identity path; Stripe-unpaid remains awaiting payment. ROY and the frozen experiment classifier are unchanged.
+- Added an actual chart aggregation regression covering ID1/New order, excluded ID69/Stripe-unpaid, preservation of raw input/display, foreign-ID rejection and ROY isolation. This closes another consumer of the renamed VEVO status before the report release.
+- Current managed guard run34800432093 uses exact successful-build main28583066 and private receipt `data/roy/order-automation/creditnote-deployments/28583066d6afaad6fc141eed98d97bee698d0cdc/fe3a2692e3f34fcd9cfd8ab4e923fc6a.json`. Main must stay fixed until its terminal result. Report/email remain pending; no local persistent process was started.
+
 ## 2026-09-14 — Failed disabled candidate cleaned; explicit Scheduler default merged
 
 - Managed guard34799318820 verified both report host probes and a successful zero-write ROY dry guard, then stopped solely because its new recurring schedule request omitted AWS's returned `ActionAfterCompletion=NONE`. Seven original schedules were independently restored exactly. The new ROY guard remained disabled and was never run live. PR563 adds the explicit field without weakening comparisons; all six checks passed at4703c2d7 and it merged as28583066d6afaad6fc141eed98d97bee698d0cdc. Exact image build34800298836 is in progress; keep main fixed for the next managed attempt.
