@@ -1,5 +1,32 @@
 # PROJECT_STATE
 
+## 2026-09-14 — VEVO operations dashboard deployed and verified
+
+Date: 2026-09-14, 13:45 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-operations-delivery` (documentation only)
+
+What changed:
+
+- PR569 implements the shared ROY-style operations dashboard for VEVO; PR570 isolates the ROY test fixtures without weakening the production project guard. Both merged after all six checks. Exact runtime source `78de5a37ab50322add83363ac64129958ad314dd`, successful image build34849550675, immutable image `sha256:180d90fb8dc4f8a53a45171f280b5d6366ff4c4a494809a8efa3c6d1e58d0145`.
+- Image-only deployment to the preverified App Runner service `biznisweb-vevo-production-board`, ARN suffix2711a253ae014a8aaf1a37929997496d, `/app`, port8080, preserved command/authentication/role/network/256CPU/512MB. Operation `d0dcec0d637c4a2da6973b81df6c65aa` succeeded. Live URL: https://2mhmsmgq3m.eu-central-1.awsapprunner.com/production/vevo . Existing manufacturing panel remains at `/manufacturing/vevo`, linked as **Vyroba** in the operations header.
+- Orders, pickup controls, picking PDF/print tracking, stock overview, incoming stock controls and executive KPI windows share the existing operations implementation with VEVO-bound credentials/status identity/state. Browser refresh interval90s; operational cache TTL60s. KPI/report source remains the ordinary verified report generation20260914T051922Z, distinct from live order/catalogue refresh.
+
+What is verified:
+
+- Before promotion, actual Fargate host58ad7609fa344a41b01ed0d0a4214959, privateIP172.31.0.92, `/app`, PythonPID1 and localhost46289 emitted the bound identity marker and passed authenticated HTML/live API/KPI/stock/PDF checks, unauthenticated401, cross-project409 and cross-site-write403. Peak RSS227132KiB fits the unchanged512MB allocation. Picking PDF304924bytes; no printed acknowledgement, order status, stock or provider mutation was performed.
+- Actual Chrome UI visually matches the supplied ROY layout, including header controls, nine KPI cards/sparklines, time windows and overview/orders/stock navigation. Independent public API readback at13:45UTC proves production background refresh advanced from the candidate13:34 snapshot to13:44:46UTC, cache **fresh/18.9s**, zero stock API errors. It shows29 fulfillable orders (19 paid/10 COD), total745.12EUR, with original order currencies preserved.
+- Independent final AWS readback confirms VEVO RUNNING on the exact digest, every non-image service field unchanged and the entire VEVO daily-report schedule unchanged. ROY remains RUNNING on its original image06edde28. No ordinary report deployment, report generation/email, IAM or scheduler change was made.
+- Durable encrypted receipt: bucket `biznisweb-reporting-artifacts-919341186960-eu-central-1`, key `daily-reports/vevo/operations/deployments/78de5a37ab50322add83363ac64129958ad314dd/operations-deploy-20260914-78de5a37.json`; SHA256 `933d4a24babf5ea8617f00dd09b61ee11a94dacef6851d9e1a447dd38a120f02`, phase **deployed**. Reproduction and rollback procedure are in `VEVO_OPERATIONS.md` and the committed narrow deploy helper.
+- Test host is independently STOPPED/exit0, probe definition INACTIVE, localhost server closed and port released. No persistent local server, worker or tunnel was started. Production dashboard remains running; the delivered VEVO browser tab remains open.
+
+Known issues:
+
+- Existing VEVO inventory has34 negative-stock products and partial purchase-cost coverage (47.22% by retail value); displayed6931.67EUR stock valuation covers priced items only. The UI discloses these limitations and replenishment recommendations remain advisory. Historical/unmatched product identities and non-stock service lines require catalogue/model curation before treating the recommendations as a purchasing plan. This deployment does not edit the shop's stock or purchase costs.
+- The previously recorded failed build34848717764 was superseded by the successful exact-source build above. Separate GrowthBook evidence work below remains outside this delivery.
+
+Next exact step: complete the documentation-only PR/checks and retain the deployed image; no second deployment or report email is required. VEVO operations dashboard is ready for use with the existing VEVO dashboard login. Future inventory-quality work should first reconcile current product identities, non-stock service exclusions, negative stock and missing purchase costs against the catalogue.
+
 ## 2026-09-14 — VEVO operations build test isolation correction
 
 - PR569 merged as `c60531eeaae5a01aecb9cbb70dc12c98ede8d0c0` after all six exact-head checks passed. Build34848717764 stopped before ECR/AWS deployment: its broader 776-test combined suite exposed ambient REPORT_PROJECT left as VEVO by earlier exporter tests. Three ROY HTTP tests correctly received409 instead of their expected same-shop responses, and a ROY cache test hit the new project guard. This is test fixture leakage; retain the production isolation guard.
