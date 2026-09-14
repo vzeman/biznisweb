@@ -332,7 +332,7 @@ def main():
         assert data['orders']['summary']['fulfillable_orders'] > 0
         assert data['inventory']['summary']['inventory_status'] == 'ok'
         assert data['inventory']['summary']['inventory_products_total'] > 0
-        assert live('/api/operations/vevo/picking-lists.pdf?preview=1&include_printed=1').startswith(b'%PDF-')
+        assert live('/api/operations/vevo/picking-lists.pdf?preview=1&include_printed=1&refresh=0').startswith(b'%PDF-')
         assert schedule_boundary(clients['scheduler'].get_schedule(Name='vevo-daily-report-email')) == receipt['report_schedule']
         receipt.update({'phase': 'deployed', 'live_summary': data['orders']['summary'], 'live_inventory': data['inventory']['summary']})
         save(receipt)

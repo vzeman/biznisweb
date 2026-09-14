@@ -32,7 +32,7 @@ def _item_unit_price_text(item: Dict[str, Any]) -> str:
     for key in ("unit_price_formatted", "unit_price"):
         value = item.get(key)
         if isinstance(value, (int, float)):
-            return f"{value:.2f} EUR"
+            return f"{value:.2f} {item.get('currency') or 'EUR'}"
         text = str(value or "").strip()
         if text:
             return text
@@ -46,7 +46,7 @@ def _item_unit_price_text(item: Dict[str, Any]) -> str:
             value = float(price.get(key))
         except (TypeError, ValueError):
             continue
-        return f"{value:.2f} EUR"
+        return f"{value:.2f} {item.get('currency') or 'EUR'}"
     return ""
 
 

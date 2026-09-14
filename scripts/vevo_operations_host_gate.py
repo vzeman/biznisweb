@@ -84,7 +84,7 @@ def main():
         assert summary["inventory_available_units"] > 0 and summary["inventory_cost_value"] > 0
         assert data["executive_kpis"]["windows"] and data["executive_kpis"]["months"]
         assert summary["live_stock_overlay"]["error_count"] == 0
-        code, pdf = curl("/api/operations/vevo/picking-lists.pdf?preview=1&include_printed=1")
+        code, pdf = curl("/api/operations/vevo/picking-lists.pdf?preview=1&include_printed=1&refresh=0")
         assert code == 200 and pdf.startswith(b"%PDF-") and len(pdf) > 1000
         code, html = curl("/manufacturing/vevo")
         assert code == 200 and b"vevo-production-board" in html

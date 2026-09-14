@@ -295,6 +295,7 @@ query GetRoyOperationsOrders($params: OrderParams) {
       sum {
         value
         formatted
+        currency { code }
       }
     }
     pageInfo {
@@ -1033,6 +1034,7 @@ def resolve_roy_operations_settings(project_settings: Dict[str, Any]) -> Dict[st
 
     return {
         "enabled": bool(raw.get("enabled", False)),
+        "currency_rates_to_eur": project_settings.get("currency_rates_to_eur") or {"EUR": 1.0},
         "paid_statuses": paid_statuses,
         "paid_status_ids": {str(value) for value in raw.get("paid_status_ids", [])},
         "paid_statuses_normalized": {_normalize_text(status) for status in paid_statuses},
@@ -1544,6 +1546,11 @@ def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[s
         paid_pickup_ready
         and status_norm in settings["pickup_ship_action_statuses_normalized"]
     )
+    currency = str(((order.get("sum") or {}).get("currency") or {}).get("code") or "EUR").upper()
+    rate = settings["currency_rates_to_eur"].get(currency)
+    if rate is None or not math.isfinite(float(rate)) or float(rate) <= 0:
+        raise ValueError(f"Missing reporting currency rate for {currency}")
+    items = [{**item, "currency": currency} for item in _order_items(order, settings)]
     return {
         "id": order.get("id"),
         "order_num": order.get("order_num"),
@@ -1559,10 +1566,11 @@ def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[s
         "status": str((order.get("raw_status") or {}).get("name") or status_name),
         "status_id": _status_id(order),
         "sum": (order.get("sum") or {}).get("formatted"),
-        "sum_value": _to_float((order.get("sum") or {}).get("value")),
+        "sum_value": _to_float((order.get("sum") or {}).get("value")) * float(rate),
+        "currency": currency,
         "payment": payment,
         "shipping": shipping,
-        "items": _order_items(order, settings),
+        "items": items,
         "fulfillable": fulfillable,
         "fulfillment_reason": reason,
         "personal_pickup": is_pickup,

@@ -1332,6 +1332,7 @@ def build_roy_operations_dashboard_html(
     </header>
     <div id="messageBox" class="hidden"></div>
     <section class="alert-grid" id="alertGrid"></section>
+    <p id="inventoryQualityNote" class="muted" hidden></p>
     <section class="panel">
       <div class="panel-head">
         <div>
@@ -1946,6 +1947,14 @@ def build_roy_operations_dashboard_html(
     function renderAlerts(data) {
       const orders = (data.orders || {}).summary || {};
       const inv = (data.inventory || {}).summary || {};
+      const stockNotes = [];
+      if (project === 'vevo') {
+        if (Number(inv.negative_stock_count || 0)) stockNotes.push(`${fmtInt(inv.negative_stock_count)} produktov má záporný sklad.`);
+        if (Number(inv.inventory_cost_coverage_retail_pct || 0) < 99.9) stockNotes.push('Pri časti produktov chýba nákupná cena; hodnota skladu zahŕňa iba ocenené položky.');
+        if (inv.inventory_recommendation_ready === false) stockNotes.push('Návrhy doplnenia sú orientačné a vyžadujú kontrolu.');
+      }
+      el('inventoryQualityNote').textContent = stockNotes.join(' ');
+      el('inventoryQualityNote').hidden = !stockNotes.length;
       const readyPickupActions = fmtInt(orders.pickup_ready_actions_available);
       const shipPickupActions = fmtInt(orders.pickup_ship_actions_available);
       el('alertGrid').innerHTML = [

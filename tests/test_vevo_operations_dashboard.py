@@ -62,6 +62,34 @@ class VevoOperationsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             operations._resolve_pickup_ready_status_id(self.client, self.settings)
 
+    def test_foreign_currency_total_is_converted_only_for_eur_summary(self):
+        raw = make_order("V-HUF", "Stripe - paid", price_element("payment", "Online", "18"), {})
+        raw["status"]["id"] = "70"
+        raw["sum"] = {"value": 10000, "formatted": "10 000 Ft", "currency": {"code": "HUF"}}
+        row = operations._public_order_row(canonical_order(self.client, raw), self.settings)
+        self.assertEqual(25, row["sum_value"])
+        self.assertEqual("10 000 Ft", row["sum"])
+        self.assertEqual("HUF", row["items"][0]["currency"])
+        raw["sum"]["currency"]["code"] = "UNKNOWN"
+        with self.assertRaisesRegex(ValueError, "currency rate"):
+            operations._public_order_row(raw, self.settings)
+
+    @patch.dict(os.environ, {"REPORT_PROJECT": "vevo"})
+    def test_pickup_change_checks_saved_status_without_retrying_mutation(self):
+        order = make_order("V", "Payment online - paid", price_element("payment", "Bank", "6"),
+                           price_element("shipping", "Osobný odber na sklade BB", "11"))
+        order["status"]["id"] = "31"
+        for target, succeeds in [("4", True), ("31", False)]:
+            observed = {"order_num": "V", "status": {"id": target, "name": "Shipped" if succeeds else "Payment online - paid"}}
+            with patch.object(operations, "_build_client", return_value=self.client), patch.object(operations, "load_project_env"), patch.object(operations, "_clear_operations_cache"), patch.object(operations, "_execute_graphql", side_effect=[{"getOrder": order}, {"changeOrderStatus": observed}, {"getOrder": observed}]) as execute:
+                if succeeds:
+                    self.assertTrue(operations.mark_personal_pickup_shipped("vevo", "V")["ok"])
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "requires verification"):
+                        operations.mark_personal_pickup_shipped("vevo", "V")
+                self.assertEqual(3, execute.call_count)
+                self.assertFalse(execute.call_args_list[1].kwargs["retry_transient"])
+
     @patch.dict(os.environ, {"REPORT_PROJECT": "vevo"})
     def test_project_state_and_credentials_fail_closed(self):
         with self.assertRaises(ValueError):

@@ -1,0 +1,17 @@
+# VEVO operations dashboard
+
+Production: https://2mhmsmgq3m.eu-central-1.awsapprunner.com/production/vevo. Existing manufacturing board: `/manufacturing/vevo` with API `/api/production/vevo/live`. Existing authentication is preserved. Shared ROY-named modules retain their names for compatibility; project configuration and deployment guards isolate each shop.
+
+Fulfillment: paid31/Stripe-paid70, or new1 with COD payment7. The reviewed status catalogue binds IDs and labels. Bank-confirmed paid orders qualify independently of a gateway payment. Raw labels and order currencies remain visible; aggregate value uses configured reporting FX rates. VEVO pickup11 has no ready status: only paid-to-shipped4 handing over is offered, with fresh eligibility and saved-status verification. PDF preview never marks orders printed.
+
+Inventory reads the current immutable report generation, hash-verified full payload and its exact realized-sales CSV. Mixed generations, foreign prefixes, partial/failed reports and oversized sources fail closed. The shared model loads/restores normal VEVO costs without ad clients, report regeneration or email. Model results are cached for15 minutes or until a new generation; current stock uses a complete catalogue and exact reporting SKU. Missing costs, negative stock and advisory recommendations are disclosed. Default five-working-day lead time is an estimate; no ROY brand/bundle rules are copied.
+
+## Deploy and verify
+
+1. Merge the reviewed branch PR after exact-head checks. Require a successful `Build and Push ECR` run for the exact main source and immutable `git-<source-sha>` image. Use a clean checkout at that SHA and the pinned dependencies in `requirements.txt`.
+2. Verify account919341186960, regioneu-central-1, App Runner`biznisweb-vevo-production-board`, ARN suffix2711a253ae014a8aaf1a37929997496d, current image, `/app`, port8080 and managed host identity. The helper repeats this gate.
+3. With the authorized AWS_PROFILE, run `python scripts/deploy_vevo_board_image.py probe --operations --source-sha <sha> --expected-current-digest <sha256:digest> --receipt data/vevo/operations-deploy.json`. Only absent operations/maintenance objects are initialized using conditional writes. A finite Fargate task at the current CPU/memory proves actual task/IP/path, localhost marker, authenticated HTML/API/PDF, inventory/KPIs and foreign-route/CSRF rejection. It performs no provider mutation, test transaction, report run or email.
+4. After verified STOPPED/exit0, inactive task definition and closed host test server, run the same arguments with phase`promote`. The fresh receipt is required. Promotion changes only the App Runner image and checks public endpoints plus the unchanged daily-report schedule. Reconcile a failed/nonterminal receipt before retrying.
+5. Verify browser UI after the actual host gate. Record source/image/operation/proof/UI outcome in PROJECT_STATE.md via branch+PR. Private encrypted receipts live under `daily-reports/vevo/operations/deployments/<source-sha>/`; ignored local copies contain no unique source of truth.
+
+No persistent local server, watcher or tunnel is needed. The finite probe closes its own server and verifies its port closed; its stopped definition is deregistered. Production App Runner and existing production schedules remain running. ROY deployment, report40 authority and experiment evidence are outside this image-only deployment.
