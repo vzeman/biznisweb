@@ -1,9 +1,42 @@
 # PROJECT_STATE
 
-Last updated: 2026-09-13
+Last updated: 2026-09-14
 Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
+
+## 2026-09-14 — VEVO missing report confirmed; invoice health is a separate result
+
+Date: 2026-09-14
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-incident-20260914`
+
+What changed:
+
+- User requested inspection of new alarm emails and the missing VEVO report, then explicitly clarified that the renamed statuses belong to **VEVO**, not ROY. Preserve ROY's names. No production configuration, order, invoice, payment or email was changed during this inspection.
+- Fresh VEVO API catalogue plus the user's explicit rename confirmation establish: ID1 `New order` was `Čaká na vybavenie`; ID31 `Payment online - paid` was `Platba online - zaplatené`; ID33 `Payment online - expired` was `Platba online - platnosť vypršala`; ID34 has the same current label but was `Platba online - platba zamietnutá`; ID4 `Shipped` was `Odoslaná`; ID17 `Cancelled` was `Storno`. ID69 `Stripe - unpaid` is an unpaid state. IDs33/34 must remain distinct despite identical labels. Catalogue ID70 `Stripe - paid` exists but is not substituted for the configured paid role31.
+- The previous minimum-repair checkpoint is committed on `codex/reviewed-uncollected-close-20260913` at `2b11531d4195def2814d228f2193ff58ac290b43`: primary invoice runtime was deployed, but report/standalone migrations #552/#556 and optional recorder #559 were explicitly postponed. Do not describe those unmerged releases as deployed or treat invoice alarm health as reporting health.
+
+What is verified:
+
+- At 01:00 Europe/Bratislava on September14, scheduled VEVO report revision **33**, image `sha256:30a23fcd69eb2d7a41195bffa0bc055d38bc2dd706e9eb07d5126675a21a6add`, entered its old inline creditnote guard and failed with `RuntimeError: Target status 'Storno' not found in BizniWeb.` Actual log group `/ecs/vevo-reporting-daily`, stream `ecs/reporting/3a33b6f8c8184badb594bf2065483618`, terminal error 2026-09-13 23:00:45 UTC. Pinned source `e55ccd14b47c660b9b39a5788a1e65a63a98fc1a` resolves an exact configured name; current native/API name for ID17 is `Cancelled`. Failure occurs before export/upload/SES. This is a confirmed failed run, not merely a spam-folder assumption.
+- The report schedule is ENABLED at its unchanged daily 01:00 local time. It will encounter the same name mismatch without a compatible runtime/configuration repair. The inspected old ECS task now returns explicit MISSING; retained logs prove the failure but do not constitute a fresh host identity/curl gate for deployment.
+- Current invoice definitions remain ROY :11 / VEVO :9 on verified `fda36b49` / `29c0c8e4`. Fresh journal readback at about 01:26 UTC: zero active invoice operations in both shops, VEVO zero open status reviews, last VEVO complete incremental scan at 01:15:51 UTC. All seven VEVO invoice alarms are OK. The reviewed identity module already distinguishes VEVO IDs4/17/31/33/34. Source currently leaves ID1 outside that rename contract; the user's new explicit confirmation supplies its previously missing historical meaning for future report mapping work.
+- One ROY invoice run around 01:42 local failed with provider HTTP429 `Too many running tasks`, actual stream `ecs/reporting/2d4cf5a76d244c9392f2482190dded75`. The subsequent 01:51 local run succeeded with zero invoice/email failures or ambiguous operations. Concurrent ROY reporting was observed; its contribution to throttling is an inference, not a proven sole cause.
+- Separate ROY cancellation at 02:10 local completed its discovery but exited for one review case, with zero order changes. Order2677004570 / internal15179 / EUR84.25 has paid invoice2677004163 and an empty Packeta shipment report. Native history confirms accepted Stripe payment on September12 at17:50:51 local and a paid-to-expired transition on September13 at17:38:18 local, with no shipped event observed. The guard correctly retained `shipment_history_unavailable` rather than guessing shipped versus paid. No status repair or bank attestation was applied. ROY review-required remains ALARM; other 16 primary order alarms are OK.
+- Both legacy reporting missing-email-heartbeat alarms are ALARM, with state dates already in April; report run-failed is OK even though the VEVO inline guard failed. These reporting alarms do not establish successful delivery. ROY's actual report completed and explicitly logged email disabled by project configuration; preserve that intentional setting.
+- Private encrypted audit with exact SHA/readback: `data/vevo/order-automation/audits/2026-09-14/report-alarm-incident-012629Z.json`, SHA `3c730ce0267bac63e37447d875c7669f8b8e959daf928e998b8e89e7ef6b3bed`. It binds actual report logs, seven schedules, 21 alarm observations and fresh journal summaries. It contains no credentials. The initial guessed `data/vevo/report_latest.html` HEAD returned404; a later complete root listing at configured `daily-reports/vevo/` had no root-level latest object. Neither lookup is treated as proof that no dated report artifact exists.
+
+Known issues:
+
+- **VEVO reporting remains broken and no missing report has been regenerated or resent.** The current task was an inspection; no broad previously deferred deployment was silently resumed. Renamed labels also affect revenue classification and cache interpretation, so bypassing only the failed guard would not validate report correctness.
+- Existing #556 contains reviewed report role/cache work and managed runtime deployment, but depends on #552 guard separation and shared current-runtime authority because GrowthBook workflows pin the old report. Its offline checks and prior CI are not current production proof. Neither gate nor financial protection was weakened to obtain an email.
+- The reporting alert path needs an end-to-end check: early guard failures and email heartbeats must correspond to current runner emissions. The common `VEVO ALERT` mail prefix is not the shop identity; use the embedded alarm name.
+- Gmail connector search did not return the recent report/alert messages visible in the user's screenshot, so mailbox delivery was not independently verified there. AWS runtime failure is verified independently. Browser ROY history was read on one owned tab, then cancelled/closed without saving. No local server, worker, watcher or tunnel was started; all finite inspection commands ended. Production schedules remain running.
+
+Next exact step:
+
+- Report the confirmed VEVO failure and distinguish it from healthy invoice automation. For the repair, use the explicit VEVO ID/role mapping above, preserve ROY names and confirmed bank-payment protection, and finish a reviewed report-compatible release with its actual AWS host/curl/marker and artifact checks. Verify a successful report generation and the intended email delivery before declaring reporting recovered. Do not blindly rerun revision33, mute the alerts, change order names back, or generate a full-history invoice audit. The retrospective order scope remains August/September2026.
 
 ## 2026-09-13 — VEVO false-zero production board fixed and deployed
 
