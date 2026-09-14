@@ -1,5 +1,11 @@
 # PROJECT_STATE
 
+## 2026-09-14 — Reproducible independent guard observation prepared
+
+- Added `scripts/observe_creditnote_release.py` to retain actual terminal ECS tasks and paginated CloudWatch host/summary markers before AWS ages them out. It rereads schedules, task definitions and the successful GitHub run. Full existing readiness validation checks the locally staged audit against real managed/primary proof, current source/image and protected runtime before an optional create-only encrypted publication. Default is read-only; no task, role, schedule, provider or email mutation exists.
+- Added regressions for complete multi-page marker retention, pagination-cycle rejection and zero publication when semantic readiness rejects the evidence. Observer and recipient email tests are included in both platform/build collections. Initial test expected RuntimeError for the shared validator's ValueError-derived BindingError; corrected only that test expectation.
+- Next exact step remains completion of the existing natural GrowthBook reconciliation, a fresh passing guard preflight, one managed guard retry and independent observation. Report promotion/recovery email are still pending; no local persistent process was started.
+
 ## 2026-09-14 — Exact guard build ready; wait for scheduled reconciliation before retry
 
 - PR562 merged as `0e14d2b6e27f73ed73aafe3ffa316caa6ca96d81`; exact image build34797380258 succeeded. Managed guard run34797532470 failed during its read-only preflight with `active-growthbook-capture-task`, before any deployment receipt, schedule change or task launch. This is a separate observed concurrency gate, not another IAM failure.
