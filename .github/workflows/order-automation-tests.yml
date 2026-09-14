@@ -8,11 +8,27 @@ on:
       - 'unpaid_order_cancellation*.py'
       - 'order_status_safety.py'
       - 'order_status_identity.py'
+      - 'export_orders.py'
       - 'manual_settlement.py'
       - 'scripts/record_verified_manual_settlement.py'
       - 'order_inventory.py'
       - 'api_read_backoff.py'
       - 'daily_report_runner.py'
+      - requirements-runtime-control.txt
+      - scripts/reporting_runtime_binding.py
+      - scripts/reporting_readiness.py
+      - scripts/deploy_vevo_report.py
+      - scripts/reporting_identity_probe.py
+      - scripts/reporting_migration_host_gate.py
+      - .github/workflows/deploy-vevo-report.yml
+      - scripts/bootstrap_reporting_runtime.py
+      - scripts/validate_growthbook_aa_infra_health_evidence.py
+      - projects/vevo/reporting_runtime_policy.json
+      - .github/workflows/monitor-vevo-growthbook-production-aa-infra.yml
+      - .github/workflows/check-vevo-growthbook-production-aa-window.yml
+      - .github/workflows/check-vevo-growthbook-production-cta-window.yml
+      - .github/workflows/check-vevo-growthbook-production-cta-safety.yml
+      - .github/workflows/build-vevo-growthbook-production-cta-final-snapshot.yml
       - 'reporting_core/**'
       - 'projects/*/settings.json'
       - 'scripts/*order_automation*.py'
@@ -54,10 +70,13 @@ jobs:
           tests.test_invoice_generation tests.test_invoice_automation_state tests.test_manual_settlement tests.test_manual_settlement_recovery tests.test_reviewed_invoice_obligations tests.test_reviewed_invoice_runtime tests.test_reviewed_uncollected_closure
           tests.test_order_status_safety tests.test_unpaid_order_cancellation
           tests.test_order_status_identity tests.test_status_identity_integration tests.test_explicit_target_integration
+          tests.test_reporting_runtime_binding tests.test_reporting_runtime_binding_review tests.test_growthbook_aa_infra_health_evidence tests.test_growthbook_aa_infra_health_workflow tests.test_growthbook_aa_infra_health_log_cli
+          tests.test_growthbook_aa_window_checkpoint_workflow tests.test_growthbook_cta_window_checkpoint_workflow tests.test_growthbook_managed_quality_source
+          tests.test_reporting_migration_host_gate tests.test_vevo_report_deployment tests.test_reporting_readiness tests.test_managed_report_independent_review tests.test_reporting_environment_order_review
           tests.test_order_inventory
           tests.test_api_read_backoff
           tests.test_seeded_invoice_retry tests.test_reviewed_invoice_reconciliation
           tests.test_creditnote_storno_runner tests.test_creditnote_automation_deployment
-          tests.test_creditnote_storno_guard tests.test_creditnote_export
+          tests.test_creditnote_storno_guard tests.test_creditnote_export tests.test_report_status_identity tests.test_vevo_report_alarm_binding tests.test_daily_report_email tests.test_creditnote_release_observer
           tests.test_creditnote_automation_context tests.test_automation_runner_health
           tests.test_restore_verified_fulfillment tests.test_invoice_backfill_verification tests.test_invoice_discovery_verification tests.test_invoice_post_recovery_verification tests.test_invoice_backfill_seed tests.test_order_automation_audit tests.test_order_automation_deployment

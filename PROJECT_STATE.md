@@ -1,5 +1,51 @@
 # PROJECT_STATE
 
+## 2026-09-14 — Standalone guards promoted and independently verified
+
+- Managed run34800432093 completed SUCCESS on main28583066d6afaad6fc141eed98d97bee698d0cdc, using successful exact build34800298836. Terminal receipt is `data/roy/order-automation/creditnote-deployments/28583066d6afaad6fc141eed98d97bee698d0cdc/fe3a2692e3f34fcd9cfd8ab4e923fc6a.json`, phase promotion-readback-verified with six successful host outcomes and no rollback. ROY and VEVO dry/live guards checked168 and301 creditnoted orders respectively, with complete scans and zero updated/failed/review/audit-error orders.
+- The committed independent observer passed preview and then repeated all actual ECS/log/schedule/definition/source/run/image/primary-proof/readiness checks before publishing: `data/roy/order-automation/audits/2026-09-14/independent-creditnote-e7c72301bbbe4b0694ccf6207b82c298.json`, SHA `62e33c648031a993a802ac26aed7fca64595939fefc6a60c46aa61ef3637179a`. The full semantic validator accepted the six independent terminal tasks and actual markers, not merely managed success fields.
+- Both standalone schedules are enabled; all five existing invoice/cancellation schedules retain their exact pins. ROY report71 and VEVO report33 retain their images/definitions and add only the reviewed inline-guard skip to Scheduler Input. This completes the standalone prerequisite. It does not yet fix VEVO report calculation or deliver the missing email.
+- Report chart correction41f8299c passed all six own CI checks. Next exact step: after checks on this documentation update, merge/build PR556, bootstrap the current report authority, generate/publish readiness using the independent primary reference and the guard reference above, then promote the isolated report candidate and run the configured-owner recovery email once. Reconcile the two report alarm namespaces against the actual promoted definition. No local persistent process was started.
+
+## 2026-09-14 — Report status chart also binds the reviewed New order ID
+
+- Final source audit found the report's lifecycle chart still classified raw `New order` as Other/unknown although revenue already used confirmed ID1. The chart now classifies a project-bound canonical copy using the existing status_id column, while its visible status rows keep raw provider names. Excluded-order lifecycle rows use the same identity path; Stripe-unpaid remains awaiting payment. ROY and the frozen experiment classifier are unchanged.
+- Added an actual chart aggregation regression covering ID1/New order, excluded ID69/Stripe-unpaid, preservation of raw input/display, foreign-ID rejection and ROY isolation. This closes another consumer of the renamed VEVO status before the report release.
+- Current managed guard run34800432093 uses exact successful-build main28583066 and private receipt `data/roy/order-automation/creditnote-deployments/28583066d6afaad6fc141eed98d97bee698d0cdc/fe3a2692e3f34fcd9cfd8ab4e923fc6a.json`. Main must stay fixed until its terminal result. Report/email remain pending; no local persistent process was started.
+
+## 2026-09-14 — Failed disabled candidate cleaned; explicit Scheduler default merged
+
+- Managed guard34799318820 verified both report host probes and a successful zero-write ROY dry guard, then stopped solely because its new recurring schedule request omitted AWS's returned `ActionAfterCompletion=NONE`. Seven original schedules were independently restored exactly. The new ROY guard remained disabled and was never run live. PR563 adds the explicit field without weakening comparisons; all six checks passed at4703c2d7 and it merged as28583066d6afaad6fc141eed98d97bee698d0cdc. Exact image build34800298836 is in progress; keep main fixed for the next managed attempt.
+- Recovery checked the exact terminal failed receipt SHA0352e9451f0f088daf4cf18358cc772dbce7bd73afcf17c7af39ed8c4add9a25, actual failed GitHub run, absence of any live guard attempt, all seven original schedules, zero active guard tasks, the exact disabled revision2/scheduler role49d519acdcfc and all four alarm configurations. A read-only check initially counted retained STOPPED tasks; direct readback confirmed the sole guard task was STOPPED, and the recovery correctly required zero non-stopped tasks.
+- After an encrypted before snapshot, deleted only that disabled failed schedule and its four unused new alarms. Verified schedule/alarms absent, all seven original schedules exact and enabled, zero active guards, zero provider writes/emails. Complete proof `data/roy/order-automation/audits/2026-09-14/failed-guard-cleanup-cfd78d8f8cae49968c6034233b5e8127-complete.json`, SHAef979e8086688dac2e02ffa0d95276815e45fd84a1140772b196d8724120a269; before proof same basename-before.json, SHA6bba1189bc0d5ece8507e70ff49f183d911054f5e1f4a961914a1ef8277d0c28. Existing invoice/report alarms were untouched. Unused roles and task definitions remain documented failed-attempt resources.
+- Next exact step: exact build success, fresh passing no-capture/source/runtime preflight, then a single managed guard deployment on28583066. Follow successful six-host promotion with the committed independent observer, report PR556 merge/build/bootstrap/readiness/promotion and one configured-recipient recovery email. No report email has been resent. No local persistent process was started.
+
+## 2026-09-14 — Scheduled reconciliation finished; guard deployment resumed
+
+- Natural reconciliation task `f61c8eea5503491f9876b220ff6a8b0e` completed with exit0 and reached STOPPED at the02:27:52 UTC independent readback. It was never interrupted. Fresh guard preflight then passed with no active capture and the same two frozen report-definition hashes. Main remains `0e14d2b6e27f73ed73aafe3ffa316caa6ca96d81`.
+- Dispatched managed guard run34799318820 on that exact successful-build source after the passing preflight. Keep main fixed until terminal promotion/rollback. The preceding attempt34797532470 made no mutation; its concurrency blocker is now resolved. All six report PR checks passed on675c7e59 before this documentation-only update.
+- Recovery remains urgent because VEVO reporting is already unavailable. If the first report merge/bootstrap falls within the usual02:00–04:00 UTC check window, use a verified gap between active capture jobs and record the explicit reporting maintenance: current checks may fail closed during a missing/active authority generation. Do not disable those checks, alter experiment evidence, stop the collector or bypass any runtime gate to conceal maintenance. This is an operational exception to the preferred rollout timing, not a relaxed proof contract.
+- Next exact step: independently observe successful guard run34799318820 using the committed observer while all six ECS tasks remain readable; then merge/build report PR556, bootstrap its current authority, publish verified readiness, promote the isolated report candidate and send the missing report once to the configured owner recipient. Reconcile report alarms only after the exact new definition is verified. No local persistent process was started.
+
+## 2026-09-14 — Reproducible independent guard observation prepared
+
+- Added `scripts/observe_creditnote_release.py` to retain actual terminal ECS tasks and paginated CloudWatch host/summary markers before AWS ages them out. It rereads schedules, task definitions and the successful GitHub run. Full existing readiness validation checks the locally staged audit against real managed/primary proof, current source/image and protected runtime before an optional create-only encrypted publication. Default is read-only; no task, role, schedule, provider or email mutation exists.
+- Added regressions for complete multi-page marker retention, pagination-cycle rejection and zero publication when semantic readiness rejects the evidence. Observer and recipient email tests are included in both platform/build collections. Initial test expected RuntimeError for the shared validator's ValueError-derived BindingError; corrected only that test expectation.
+- Next exact step remains completion of the existing natural GrowthBook reconciliation, a fresh passing guard preflight, one managed guard retry and independent observation. Report promotion/recovery email are still pending; no local persistent process was started.
+
+## 2026-09-14 — Exact guard build ready; wait for scheduled reconciliation before retry
+
+- PR562 merged as `0e14d2b6e27f73ed73aafe3ffa316caa6ca96d81`; exact image build34797380258 succeeded. Managed guard run34797532470 failed during its read-only preflight with `active-growthbook-capture-task`, before any deployment receipt, schedule change or task launch. This is a separate observed concurrency gate, not another IAM failure.
+- Existing scheduled task `f61c8eea5503491f9876b220ff6a8b0e`, definition `vevo-growthbook-reconcile-production:3`, started01:46:07 UTC from the normal03:45 Bratislava schedule. It remains running and is not owned by this repair; do not stop it or weaken the capture gate. Main stays at0e14 for the next managed attempt after a fresh passing read-only preflight. Report branch integrated this source as0d49a0fb and all six checks passed there.
+- Additional local recovery checks passed150 tests. Changed report deployer/tests pass Ruff; the daily runner has the same22 pre-existing findings as its prior Git blob, with no new findings. The email recipient option is tested and has not sent mail.
+- Other-consumer audit: reminder Lambda/config and production-board labels already match VEVO. The frozen GrowthBook acquisition deliberately retains its historical name-based calculator, while the ordinary exporter gets the new ID contract. Its experiment measurement needs a separately versioned correction if reinterpreting current renamed orders; do not silently rewrite frozen evidence or claim that the report rollout changes the reconciliation image.
+- Next exact step: allow the existing reconciliation task to finish, verify a fresh no-capture preflight, then dispatch the unchanged guard release once. After actual successful six-host promotion, seal independent proof and proceed with report bootstrap/promotion and one recipient-scoped recovery run. No local persistent process was started.
+
+## 2026-09-14 — Report recovery recipient and IAM propagation checks
+
+- The separate guard deployment failed before its first dry task: ECS could not assume a role four seconds after creation. All seven original schedules were independently verified restored/enabled; no live guard or report resend ran. Guard correction is PR562. The report probe also now allows60 seconds for IAM propagation and rechecks exact owned trust/policy before ECS launch; this preserves its restricted permissions and uncertain-create/cleanup rules.
+- Added `--email-recipient` for the requested missing report. It may select only one already configured recipient and affects that invocation's environment only. Recovery will select the requesting owner's mailbox, while scheduled recipient configuration stays unchanged. Unknown recipients reject before report export. Tests cover default preservation, the narrowed recipient and foreign-recipient rejection, plus probe policy drift after propagation.
+- Next exact step: require own checks for these additional changes; integrate the successful guard source before merging reporting. No bootstrap, report promotion or email has happened yet. No persistent local process was started.
 ## 2026-09-14 — Explicit Scheduler default required; failed candidate remains disabled
 
 - The natural reconciliation completed successfully at02:27 UTC. A fresh preflight passed and managed run34799318820 used exact main0e14d2b6/image `sha256:d9f2f8cf367f9977d97e395fe27749fb5ad4c9918227caa8932e5184f68d54ab`. Both old report localhost probes passed. The ROY guard now started successfully and its dry run completed with168 checked creditnoted orders, zero eligible/updated/failed/review/audit errors. IAM propagation repair is verified in AWS.
@@ -20,6 +66,244 @@ Owner: Patrik
 Repository scope: BizniWeb reporting only
 Purpose: repo-scoped handoff and execution state for this codebase.
 
+## 2026-09-14 — VEVO rename repair and report delivery now explicitly requested
+
+Date: 2026-09-14
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-deploy-20260913`
+
+- User explicitly requests the repair, audit of other consumers and delivery of VEVO reporting. The previous deferral is superseded for the necessary report/guard releases, not for unrelated optional work. ROY's status names and intentional email disablement stay unchanged. Fresh incident evidence is private `data/vevo/order-automation/audits/2026-09-14/report-alarm-incident-012629Z.json`, SHA `3c730ce0267bac63e37447d875c7669f8b8e959daf928e998b8e89e7ef6b3bed`.
+- Guard #552 passed all six exact-head checks at `7e4289f6` and merged as `b99d81364b0955f7f28a1e1801ae7c17dcdb52c1`; exact image build34796560598 passed. Managed guard deployment34796701277 has been dispatched. Keep main fixed until its terminal result. No report deployment or resend has happened yet.
+- Integrated both current-main board changes and shared v2 status contract. Only documentation and a test-list merge conflicted; both documentation histories and all distinct test suites were retained. New-order ID1 now uses the owner's explicit old/new meaning. Report regressions cover equal revenue treatment for old/new ID1 COD, alongside paid31/shipped4 and distinct expired33/rejected34. Unreviewed cache-drift testing now uses an unrelated synthetic status instead of pretending confirmed ID1 is unknown. Focused report/revenue/creditnote/board checks passed; full own CI remains required.
+- Additional live audit: `vevo-payment-reminders` code SHA `FViPq5Nsu8T+lqI6cbInilcot2VjkJLb0N0ZNqxNgns=` is Active, modified September13 at10:44 UTC. SSM `/vevo/payment-reminders/config` version2 already binds unpaid ID1/New order and ID69/Stripe-unpaid (plus14/Čaká na úhradu); eligibility also rejects paid invoices and successful other payment attempts. No reminder change or reminder email was made. Production-board configuration already uses the owner's new labels and its prior verified deployment remains intact.
+- Reporting alarms point to `VevoReporting`, while actual `ReportEmailSent` exists under the runner's `BizniswebReporting`. Added a narrow read-only-by-default reconciler for the two existing VEVO report alarms. It requires clean pushed source, exact enabled report definition, exact metric/project identity, preserves every field except Namespace, verifies before/after configuration and never mutes alerts. Three focused tests pass, including foreign-project rejection and preservation/idempotence. Apply only after the verified report release.
+- Next exact step: finish and independently seal managed guard promotion, require this PR's checks/build, bootstrap/promote reporting using the reviewed immutable evidence, then execute the missing VEVO report and independently verify actual output and email. Reconcile the two report alarm namespaces against the successful runtime. No local persistent process was started.
+
+## 2026-09-13 - Reporting branch synchronizes verified closure source
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-deploy-20260913`
+
+- Integrated main `eb89ea90` from PR 557 into this branch only. The sole conflict was additive project memory; all section headings from both histories are preserved. The closure helper remains byte-identical to main, including its verified release pin. Reporting implementation and reviewed environment-order changes are unchanged by the merge.
+- GitHub correctly deferred PR 556 checks while that memory conflict existed. Require six checks on the resulting synchronized head; do not reuse acceptance from Windows correction `e2002eff` as proof for later source.
+- Parent reports the fixed one-case closure succeeded with one silent status update, zero financial requests and zero emails. VEVO's five reviewed seed obligations pass (four verified invoices and one reviewed closure); its all-age read audit is in progress. These are parent-reported live outcomes, not provider operations executed by this task. Standalone guard promotion remains a required report-migration prerequisite.
+- Next: finish local checks, commit/push the integration and require exact-head CI. The committed baseline/readiness runbook is ready for parent sequencing; do not run live bootstrap/readiness publication while standalone verification remains outstanding.
+
+## 2026-09-13 - Reporting definition comparison accepts verified environment ordering
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-deploy-20260913`
+
+What changed:
+
+- Windows correction `e2002eff` passed all six own GitHub checks, including Windows regression and security-baseline. The next separately authorized source correction handles the actual AWS definition readback: only explicitly present, unique environment name/value entries are sorted in a copied definition snapshot. Exact row keys and string types are required; duplicate names reject. Absent environment remains distinct from explicit empty. Commands, secrets, volumes, mount points and container order remain exact.
+- Readiness applies that same comparison to the requested and actual task definition while retaining rejection of unexpected request fields or a supplied definition ARN. The managed report registration guard already calls the shared snapshot on both sides; its source and actual host gates are unchanged. Existing evidence files, byte hashes and schema are untouched.
+- Added nine independent regressions to the build, automation and managed pre-AWS test collections. Production current-binding comparisons accept reordered environment only; malformed/value/missing/other-field changes still reject. The real managed transaction reaches its probe on equivalent registration results and restores the known prior configuration before any probe on drift.
+
+What is verified:
+
+- Final local build collection: **1,067 tests PASS**; automation collection: **805 PASS**; the full formerly failing security A/A group: **318 PASS**. Smoke, repository security checks, scoped Ruff and whitespace checks pass. Independent combined authority/host/deployer/readiness suite: **99 PASS**, including nine new environment tests and 21 altered actual-proof variants that must reject.
+- Offline conformance directly verified the exact independent primary proof bytes (SHA `ada17707d7885aa68b684633f9e0ee9ef4695734fe2b53dc5649b4eec649fb50`). Its complete `managed_latest` is the parsed receipt whose raw SHA `40ba6e2debaf3286948cb248ce0538f9e236d91c7813a709f771e933e47a5c7c` was verified by the independent AWS observer. This task did not repeat that S3 read or claim a separate local raw receipt. All three actual/request definition pairs now match, with 8/8/9 unique environment rows, and all input objects/private bytes remain unchanged.
+- Independent reviewed source SHA-256: binding `5fe4841f129e1ace68763fb91e3571b2dcf9ee54feefdcebc98a3371aae6ef1d`; readiness `cc55b6e22859c87553c4f2064f1818b75cee8f613b3d0f3537a15913f94c2c20`; new tests `749a2ad501f83fdaf5fb93e1857350b008f56ea08e66f51620a34ef6ce8831f9`. No provider/AWS query, runtime mutation, main merge or deployment.
+
+Known issues:
+
+- The environment comparison change requires six own checks on its new exact PR 556 head, separately from `e2002eff` acceptance. Parent owns the distinct standalone-guard comparison correction and subsequent integration; do not silently copy that worktree or change its source here.
+- Report readiness/promotion remains dependent on reviewed closure, VEVO historical verification and independently completed standalone migration. No future runtime state is inferred from these offline tests.
+
+Next exact step:
+
+- Commit/push this reviewed comparison/CI/documentation change, require all six own checks on that head and hand off PR 556. Parent controls branch integration, merge and the documented bootstrap/readiness/report promotion sequence. No report release is dispatched by this task.
+
+## 2026-09-13 - Integrated report PR 556; narrow CI test correction
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-deploy-20260913`
+
+What changed:
+
+- Created non-draft [PR 556](https://github.com/vzeman/biznisweb/pull/556) on verified head `320bdddfb3ff48f25cedeb95830c6148178dfc67` after exact readbacks confirmed that earlier EOF/HTTP 502 attempts had created no PR. All six own checks started. Parent closed narrower PR 553 as superseded; no main merge or report deployment occurred.
+- The first security-baseline run found one outdated broad workflow-text assertion: it rejected the final `always()` cleanup of private current-binding snapshots after publication. Narrowed the test to require success-only conditions on canonical validation, current-authority recheck, artifact upload and summary. A negative matrix changes each to `always()` and must fail. A separate test executes the actual final cleanup snippet, removes only its two private snapshots, preserves unrelated evidence and accepts already-absent snapshots. The production workflow, authority and validation code are unchanged by this correction.
+- Added the health-log CLI test module to image-build and automation regression collections so the affected boundary is included in the normal local release checks.
+- On corrected head `d8488393`, security-baseline and four other checks passed; Windows then exposed checkout assumptions in newly included modules. Git had converted LF JSON to CRLF: the frozen deployment blob hash `21fb2aab84f4839ccff04ca1a479e2ba2de4fef516a86b748a061957459baacb` became exactly the failing `4fa3633f7f92ef050beb084fb5688787b0359ed501eefdc3f954ce6a8e8842fc`. All 38 tracked JSON blobs already use LF. The repository now declares JSON LF checkouts without changing any evidence blob or expected hash. An actual isolated Git `core.autocrlf=true` checkout test preserves the pinned bytes. The other Windows error was a synthetic temporary root lacking `resolve()`; its fixture now matches the unchanged production resolved-root contract.
+
+What is verified:
+
+- The complete previously failing security A/A source/lifecycle group now passes **318 tests**. Related health modules pass **61 tests** with three existing platform skips. Exact updated image-build and automation collections pass **1,058** and **796** tests respectively. The additional checkout/path collection passes **91 tests**. Reporting smoke, repository security checks, scoped Ruff and whitespace checks pass.
+- Independent review confirmed the actual 15-step workflow AST, four success-only gates, one artifact upload and no `continue-on-error`. It rejected 32 unsafe condition variants and verified the exact private-file cleanup behavior. Reviewed test SHA-256: `9cdb0e835407d3a8e44a3e7b3b7e2b98b90f3201c03ac6bd0398a76cb54ea78e`. The corrected pushed head still requires all six own GitHub checks before handoff; a local suite is not a replacement for CI.
+- Parent reports primary deployment `34749213122` completed successfully at 10:01:48 UTC. Its independent observer published actual proof `data/roy/order-automation/audits/2026-09-13/independent-deploy-fda36b49-20260913.json`, SHA-256 `ada17707d7885aa68b684633f9e0ee9ef4695734fe2b53dc5649b4eec649fb50`. This is the observer's handoff, not a fresh runtime check performed by this reporting task.
+- No AWS/provider call, runtime write or persistent local process in the PR/CI correction task. GitHub PR/check reads and the single confirmed PR creation are the only external actions.
+
+Known issues:
+
+- Reviewed noncollection closure, VEVO historical verification and both standalone guards remain under parent control before report readiness. The actual primary proof observer notes AWS may reorder unique named environment entries in returned task definitions; separately check readiness compatibility against that real proof before first publication. This test-only CI repair does not loosen runtime proof comparisons.
+- Both observed CI failures are diagnosed above. Neither fix weakens byte hashes, runtime validation or publication guards. Require six checks on the final corrected head; do not blindly rerun an older failing SHA or combine results from different heads.
+
+Next exact step:
+
+- Commit/push this reviewed test/collection/documentation correction and require all six checks on the new PR 556 head. Parent controls any merge and the subsequent primary/closure/guard/report release sequence. Preserve the documented reporting maintenance window and the distinct fresh-versus-historical host requirements.
+
+## 2026-09-13 - Integrated managed VEVO reporting handoff (offline verified)
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-deploy-20260913`
+
+What changed:
+
+- Integrated the report role/cache correction `960837f1`, hardened shared runtime authority `10f52607`, and frozen primary correction `fda36b49`. Merge `3299aaf8` preserves both additive documentation histories. The six primary correction files remain byte-identical to `fda36b49`; the resulting 35-file diff is confined to reporting code, managed reporting authority/deployment, affected workflow gates, tests and documentation.
+- The managed transaction owns only the VEVO reporting schedule and its finite diagnostic task/role. Separate successful baseline bootstrap verifies the unchanged revision-33 image through task/IP/service/path, the exact old runner hash and an actual localhost/CloudWatch marker. Promotion requires exact main/build/image, previous successful current authority, protected runtime/policy snapshots, complete isolated report artifacts and terminal runtime/pointer/lease-generation readback. Production input reads remain separate from the candidate's restricted output sink; financial/email paths and production metrics are disabled in the probe.
+- `scripts/reporting_readiness.py` is both the reproducible read-only producer and the deployer's semantic validator. It verifies independent full managed-receipt/source/run/image crosslinks, primary five pins/three complete hosts/drains, standalone nine schedules/six hosts/two successful live summaries, the sole post-guard report Input delta, and current schedule/definition/ECR/GitHub identity. Optional publication is create-only, encrypted, private and verified by exact-byte readback; arbitrary hash-bound JSON cannot substitute for successful promotion proof.
+- Historical primary/guard task expiry is handled only after full independent terminal-task and marker validation. An exact ECS `MISSING` for that task may use the durable audit; timeout, denial, mixed/partial responses, absent or contradictory evidence and fresh identity drift fail. The actual fresh report baseline, previous-report-host and candidate gates are unchanged. IAM create/cleanup uses bounded ownership reconciliation, never a second create or a false clean conclusion from `NoSuchEntity`; uncertainty retains the incident lease.
+- Five CURRENT workflows explicitly fail closed during reporting maintenance. Infra checks run at 02:15/03:15 UTC, AA/CTA windows at 02:30/03:30 UTC, CTA safety hourly at :05, and final snapshot is manual only. Coordinate the integrated merge/bootstrap outside 02:00-04:00 UTC and after :05. No two-minute promise, missing-pointer fallback, invoice/guard schedule changes or stopped collector.
+
+What is verified:
+
+- Exact image-build workflow groups: **1,044 tests pass**. Exact automation workflow suite: **782 tests pass**. Reporting smoke, repository security checks, scoped Ruff and whitespace checks pass. The independently reviewed shared/host/deployer/readiness collection has **89 passing tests**, including **21 independent regressions**. Both real readiness producer and deployer entrypoints are exercised, with zero publication in preview.
+- Independent historical-host review found no blocker. Reviewed readiness SHA-256: `92f2f1981ac28352cee04af91004311d4805eff04a84a33b20779c06e5c842ed`; independent test SHA-256: `0a09c7d9235a0d204f361a19db4fbce81db76c7c621409afb9151a650bfac51e`. Tests include full report source/revision/service markers, expired historical tasks, fresh drift, failed/contradictory hash-valid audits, IAM lost acknowledgement/visibility/ownership, and known versus uncertain transaction recovery.
+- No AWS/provider calls, runtime mutation, bootstrap, readiness publication, deployment, PR creation or main merge occurred in this implementation. No persistent local process was started; finite tests close their resources. Operational procedures and official ECS retention/IAM propagation limits are in `projects/VEVO_MANAGED_REPORT_RUNBOOK.md`.
+
+Known issues:
+
+- Actual primary order promotion and both standalone guards must be independently verified before readiness or reporting promotion. Source tests do not establish future production success, report totals, first natural report/email or UI quality. Parent owns the active release freeze and all PR/runtime actions.
+- A long probe may overlap later natural invoice/guard tasks despite clean dispatch-time checks. Keep their schedules intact, record observed overlap and reject incomplete reports; there is no global provider-read lease. A later report migration may require a separately reviewed fresh identity probe if its previous reporting task ages out; the current fresh report-host requirement is intentionally retained.
+- The separate production-board status-name filter issue remains outside this report release. Historical GrowthBook quality receipts and frozen facts behavior remain unchanged.
+
+Next exact step:
+
+- Parent reviews this integrated reporting branch as one PR, potentially superseding report-only draft PR 553. After actual primary and standalone promotion, merge during the documented reporting maintenance window, build exact main, complete the separate bootstrap workflow, generate/publish semantic readiness with the committed CLI, then run and independently verify promotion. Do not dispatch unsafe latest-image smoke or bypass any missing/uncertain authority.
+
+## 2026-09-13 - Reporting role adaptation passes offline regression
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/report-status-identity-20260913`
+
+What changed:
+
+- Reporting live/cache acquisition now binds the reviewed VEVO catalogue before classification; period children reuse that verified catalogue. Realized revenue, failed-payment segmentation and shipped-creditnote context use canonical copies while raw display/cache rows remain unchanged. Same-shop/project/transport drift and foreign role collisions reject authority. ROY keeps its existing policy.
+- A second source-level review reproduced stale unreviewed labels in payment-complete cache rows. Cache acceptance now validates every row; drift invalidates the whole day and the ordinary reader fetches current data. No old VEVO cache was observed in audit worktrees, and Docker excludes data; this is a reproduced source boundary, not a claimed live incident. The real temporary-cache test preserves both included/excluded rows and confirms fresh drift still fails. Final related suite: 174 tests pass. Shared identity/write authority unchanged.
+- Final parent review confirmed no current unbound-ID filter bypass: revenue and failed segmentation were already guarded. `_status_norm` now also returns no classification label for unbound rows. Added actual generic filter/failed-segment/raw-preservation and JSON-output regressions; the bound creditnote client stays internal. Final scoped reporting, creditnote and frozen GrowthBook suite: 173 pass.
+- Added a report-only unpaid lifecycle wrapper; the original frozen GrowthBook classifier and facts-only no-client constructor behavior remain unchanged. Added 23 focused regressions, wired into image-build and both-platform automation CI. Existing provider-query mocks explicitly model an unbound client/catalogue where their tests cover unrelated payment or frozen-facts behavior.
+- Updated `projects/REPORT_STATUS_IDENTITY_AUDIT.md` with fresh parent-verified read-only Stripe settings proof (SHA `250a22f46db21b120611adf473ddfaba0d651b813800b688497715a0c4f68b2f`): current PAID maps to reviewed ID 31, CANCELLED to 34, EXPIRED to 33, REFUNDED to 73 and UNPAID to 69. The repaired paid path is covered. Catalogue ID 70 is unused by that mapping and stays excluded; no historical mapping or successful gateway callback is claimed. No gateway configuration change.
+- Report source checkpoint `4d5008f8` is pushed. Integrated both exact security-baseline supplements `fd3d0061` and `a7f1bdd9` through merge `96be382a`, preserving both additive project histories. Security baseline passes; no production source changed during this integration.
+
+What is verified:
+
+- Offline image-build workflow suites: 864 tests pass (72 + 20 + 26 + 746). Full automation workflow: 602 pass. Frozen GrowthBook source/pipeline: 35 pass. Reporting smoke and scoped Ruff pass; exporter Ruff has no new diagnostics relative to the unchanged legacy baseline. Whitespace checks pass. Independent read-only source review found no blocker in binding, cache/period handling, creditnotes or frozen facts; the twentieth test records the configured Stripe 31 path separately from unused ID 70.
+- No provider/AWS query, financial/status/email write, runtime change or persistent local process. Main remains frozen for the parent-managed order release. No report/GrowthBook/production-board pin is changed.
+
+Known issues:
+
+- Do not release the report until the separate guard migration and managed immutable reporting deployment are reviewed. The independent production-board name-filter regression remains a separate reader/release task. Historical GrowthBook receipts and measurement policy remain unchanged.
+
+Next exact step:
+
+- Commit/push the final unbound-label hardening, then hand off the reviewed report branch for parent-coordinated PR and managed release after the primary order deployment freeze ends. Preserve protected reporting pins and historical GrowthBook proofs until that separately verified migration. Root owns PR merge and all runtime releases.
+
+## 2026-09-13 — Reporting branch integrates reviewed status identity dependency
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/report-status-identity-20260913`
+
+What changed:
+
+- Integrated clean pushed dependency `10d705eeb3d9549dd0383f9460468fa51fe6041d` (reviewed status source `584d04e4`) through Git. The only conflict was additive project memory; both histories are preserved. Dependency runtime, tests and workflow files remain byte-identical.
+
+What is verified:
+
+- The dependency author reports 844 build tests, 582 automation tests and reporting smoke/Ruff passing. This branch's integration changes documentation only; whitespace and source preservation checks pass. No AWS/provider call or runtime write occurred.
+
+Known issues:
+
+- Exporter and report-creditnote role adaptation is still pending. The existing no-I/O `order_facts_only` path is used by frozen GrowthBook evidence acquisition; do not quietly change its measurement contract or introduce provider access there.
+
+Next exact step:
+
+- Commit/push the dependency merge, then implement and independently review only the report/creditnote adaptation and focused regressions. Preserve raw labels, cache/period consistency, offline mode and the separately documented dashboard/release dependencies.
+
+## 2026-09-13 — Reporting status rename audit; implementation dependency pending
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/report-status-identity-20260913`
+
+What changed:
+
+- Created an isolated branch from synchronized main `4d5049805f1a8eabd5f7c642ccee7ca6867d3c08` and recorded the protected VEVO reporting source audit in [REPORT_STATUS_IDENTITY_AUDIT.md](projects/REPORT_STATUS_IDENTITY_AUDIT.md). No production source or runtime was changed.
+- Documented exact private evidence references for the status rename, lost realized revenue and failed-payment segmentation, shipped-creditnote classification, the unpaid substring defect, and five GrowthBook live source-task gates. Historical GrowthBook evidence must remain immutable; a later reporting revision needs a separate current-runtime migration binding.
+
+What is verified:
+
+- Exact `e55ccd14` pure-method probes reproduce three included-to-excluded revenue cases after only a label change, two lost failed-payment segment entries and the unpaid lifecycle misclassification. These are synthetic source checks, not measured live report totals. Git source and existing receipts only; no provider, AWS, financial or message action.
+- The separate guard migration preserves report task/image pins and adds only an inline-guard skip environment override. That protects the mutation boundary but cannot repair name-based report filters.
+- The production board has its own API client and name-based active-order/early-stop predicates; a shared exporter correction alone will not restore renamed paid orders there. The separate live-dashboard reader/release dependency is recorded in the audit and remains outside this branch's deployment scope.
+
+Known issues:
+
+- The deployed protected VEVO exporter still uses old names. The shared project-scoped status identity contract is being finalized on the independent order-automation branch; implementation here must wait for its clean pushed commit. No report release or `latest`-based smoke deployment is authorized by this audit.
+
+Next exact step:
+
+- Commit/push this documentation checkpoint, then integrate the reviewed status identity dependency and implement the smallest exporter/creditnote classification correction with same-ID rename parity and cross-shop/foreign-ID regressions. Keep provider calls, runtime writes and PR merge out of this branch's current work. Root coordinates the primary order release, separate guard migration and later managed reporting release.
+## 2026-09-13 — Current report authority passed independent offline review
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-migration-design-20260913`
+
+What changed:
+
+- Implemented the approved bounded shared VEVO current-runtime policy, strict baseline/promotion builders, private AES256 create-only receipts, conditional current pointer and nonstealable migration lease. Candidate and production definitions are bound separately; the restricted candidate role, exact wrapper command and skip-email environment are the only permitted diagnostic differences. The separate managed deployer/probe remains owned by the reporting author.
+- Added a managed-main bootstrap writer that validates an approved canonical baseline record against current revision-33 schedule/definition and the actual stopped identity-probe host. It launches no tasks and changes no schedule. Preview performs no lease or object write. Failed/uncertain publication retains a blocking lease.
+- Replaced five live workflow revision-suffix checks with the shared full runtime gate at entry and before publication. It independently checks actual AWS configuration, managed GitHub run/build provenance, image digest and unchanged pointer/lease. New health schema 3 binds current authority separately; historical schemas 1/2, frozen activation/reconciliation files, exact validators and fixed quality-source capture behavior remain unchanged.
+- Rollback writes separate immutable audit evidence and restores the exact previous successful current pointer using CAS. A failed deployment's rollback receipt never becomes current authority. No `latest` tag, missing-pointer fallback, expired-lease takeover, financial retry or historical evidence rewrite was added.
+- Corrected the design using the published native Stripe map: paid 31, cancelled 34, expired 33, refunded 73, unpaid 69; unused 70 is not a release blocker. Current primary b417 failure is not authority for any downstream release.
+- Closed the independent review findings: baseline authority now requires the exact reviewed injected identity command, pinned historical runner hash and a unique verified localhost marker from complete logs; bootstrap and promotion require separate runs; external consumers require completed-success provenance. The returned migration generation detects a capture spanning an acquire/release even with no pointer change. Lost release acknowledgements reconcile one exact owner generation without replay or foreign takeover. Publication independently rejects predecessor role/resource/credential/scheduler drift.
+
+What is verified:
+
+- Independent source review found no remaining shared-code blocker. All 105 focused tests, 899 build-workflow tests and 637 automation-workflow tests pass. Reporting smoke, scoped Ruff, `git diff --check` and `scripts/security_ci.py` pass. All five workflows' inline Python blocks compile. The 13 independent failure-boundary regressions are explicitly included in both existing workflows; their file SHA256 is `1670e431cc89beb36465800bb8aa773c365eb2e5640980d094f6f3385a5a9210`.
+- No AWS/provider calls, infrastructure/business mutations, PR/main merge or persistent local process occurred. All work remains offline, on the correctly tracked isolated branch; root's main freeze is respected.
+
+Known issues:
+
+- This is shared-code signoff, not a release or managed-deployer signoff. The separately authored `scripts/reporting_identity_probe.py` is a mandatory bootstrap dependency and must be integrated and reviewed before execution. A separate successful baseline bootstrap must precede promotion and the five switched consumers; absent authority intentionally blocks them. Preserve old live consumers until that transition is ready.
+- A successful compatible primary order release, verified standalone guards and the reporting correction remain deployment prerequisites. No current pointer, migration lease or candidate has been created in AWS from this branch.
+
+Next exact step:
+
+- Push the reviewed shared correction and hand its exact source to the separate managed deployer author. Integrate the exact identity probe, complete that deployer's transaction/protected-scope tests and obtain its independent review. Only root may coordinate the later bootstrap/consumer switch after successful primary release and standalone-guard prerequisites. Do not merge main or execute bootstrap/deployment here.
+
+## 2026-09-13 — VEVO report migration architecture prepared offline
+
+Date: 2026-09-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-managed-migration-design-20260913`
+
+What changed:
+
+- Added `projects/VEVO_MANAGED_REPORT_MIGRATION_DESIGN.md`, a bounded proposal for a VEVO-only immutable-image migration. It names the five current GrowthBook workflow gates, their shared current-runtime authority, candidate host/report checks, protected schedules and conditional rollback. No runtime implementation is included.
+- Historical A/A activation/reconciliation and existing health/source captures remain byte-exact. New current health requires separately versioned evidence; replacing historical revision 33 is explicitly rejected. A frozen managed quality-source capture also has a historical runtime check and must not be silently recaptured under a migrated report image.
+- Identified candidate isolation requirements from actual code: output tags alone do not prevent `s3_upload_outputs` from updating stable aliases; use a separate private probe prefix and separate/suppressed metrics. Both invoice and inline-creditnote skips plus skip-email are mandatory for the candidate. The existing `latest`-based production-reporting-smoke workflow is not a safe deployment mechanism.
+
+What is verified:
+
+- Source-only inspection of the five workflow gates, historical activation/health/source validators, daily report output/metric paths and reviewed order/guard deployment patterns. This branch began clean at main `b417caa736cfbd1f97b20821cacc39b144e1e460` with normal fetch, pull and tracking push. Documentation-only changes require no runtime test expansion.
+- The separate reporting correction passed independent source review and 19 tests before its author added another limitation test. Its code is not changed here. No AWS/provider calls, infrastructure/business writes, PR/main merge, local server or persistent process occurred in this design worktree.
+
+Known issues:
+
+- Main is frozen for root's active primary order deployment `34747360516`; this proposal does not claim that deployment complete. Report revision 33 cannot move safely until root approves the new authority design, the reporting payment-role contract is complete, and both standalone guards have been independently verified before removing the inline guard.
+- Subsequent native proof establishes the active Stripe paid mapping at 31; unused 70 is not a blocker. The implementation checkpoint above supersedes that earlier uncertainty.
+
+Next exact step:
+
+- Commit/push this specification for root review, then wait for an explicit implementation scope. Do not implement a current-binding pointer, change historical evidence, run a candidate, or repoint any schedule from this branch.
 ## 2026-09-14 — Resume required guards/report repair after confirmed VEVO renames
 
 Date: 2026-09-14

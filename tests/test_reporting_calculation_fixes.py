@@ -3318,6 +3318,8 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
     def test_price_elements_page_failure_falls_back_and_enriches_cod_orders(self) -> None:
         exporter = make_exporter()
+        # This fake models payment fallback; catalogue binding is tested separately.
+        exporter.prepare_reporting_status_identity = unittest.mock.Mock()
 
         class FallbackClient:
             def __init__(self) -> None:
@@ -3497,6 +3499,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
     def test_bulk_page_retry_does_not_swallow_payment_metadata_failure(self) -> None:
         exporter = make_exporter()
+        exporter.prepare_reporting_status_identity = unittest.mock.Mock()
         fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
 
         class PermanentlyBrokenPaymentClient:
@@ -3540,6 +3543,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
     def test_all_generic_order_page_retry_loops_propagate_payment_metadata_failure(self) -> None:
         exporter = make_exporter()
+        exporter.prepare_reporting_status_identity = unittest.mock.Mock()
         date_from = datetime(2026, 6, 1)
         date_to = datetime(2026, 6, 1)
         fetch_calls = {

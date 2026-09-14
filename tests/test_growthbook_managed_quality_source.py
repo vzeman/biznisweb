@@ -561,6 +561,7 @@ class ManagedSourceTests(unittest.TestCase):
                         reporting.BizniWebExporter(source.API_URL, "", order_facts_only=invalid)
 
     def test_pii_free_projection_preserves_shared_financial_and_lifecycle_facts(self):
+        from types import SimpleNamespace
         from reporting_core.experiment_orders import build_biznisweb_authoritative_orders
         with patch("dotenv.load_dotenv", return_value=False), patch.dict(os.environ, {"REPORT_PROJECT": "vevo"}):
             import export_orders as reporting
@@ -568,6 +569,7 @@ class ManagedSourceTests(unittest.TestCase):
                  patch.object(reporting, "FacebookAdsClient"), patch.object(reporting, "GoogleAdsClient"), \
                  patch.object(reporting, "WeatherClient"), patch.object(Path, "mkdir"):
                 ordinary = reporting.BizniWebExporter(source.API_URL, "", project_name="vevo")
+                ordinary.client = SimpleNamespace(transport=SimpleNamespace(url=source.API_URL))
                 calculator = reporting.BizniWebExporter(source.API_URL, "", project_name="vevo", order_facts_only=True)
             for status in ("Platba online - zaplatené", "Nová", "Stornovaná"):
                 projected = source_order("123")

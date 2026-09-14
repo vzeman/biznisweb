@@ -1,0 +1,76 @@
+name: Deploy Verified VEVO Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Bootstrap current immutable authority, or promote a verified report candidate
+        required: true
+        type: choice
+        options: [bootstrap, promote]
+      readiness_key:
+        description: Promote only - reviewed private order and standalone guard readiness receipt
+        required: false
+        type: string
+      readiness_sha256:
+        description: Promote only - exact SHA-256 of readiness receipt bytes
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: production-vevo-report-migration
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  managed:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Require synchronized exact main
+        run: |
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          test -z "$(git status --porcelain)"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Test managed report boundaries before AWS access
+        run: python -m unittest tests.test_reporting_runtime_binding tests.test_reporting_runtime_binding_review tests.test_reporting_migration_host_gate tests.test_vevo_report_deployment tests.test_reporting_readiness tests.test_managed_report_independent_review tests.test_reporting_environment_order_review tests.test_report_status_identity
+      - name: Configure managed AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Run only the selected managed transaction
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT_MIGRATION_MODE: ${{ inputs.mode }}
+          REPORT_READINESS_KEY: ${{ inputs.readiness_key }}
+          REPORT_READINESS_SHA256: ${{ inputs.readiness_sha256 }}
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+
+          command = [sys.executable, "scripts/deploy_vevo_report.py", "--commit", os.environ["GITHUB_SHA"],
+                     "--mode", os.environ["REPORT_MIGRATION_MODE"]]
+          if os.environ.get("REPORT_READINESS_KEY") or os.environ.get("REPORT_READINESS_SHA256"):
+              command += ["--readiness-key", os.environ.get("REPORT_READINESS_KEY", ""),
+                          "--readiness-sha256", os.environ.get("REPORT_READINESS_SHA256", "")]
+          subprocess.run(command, check=True)
+          PY
