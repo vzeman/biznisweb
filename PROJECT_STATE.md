@@ -1,5 +1,13 @@
 # PROJECT_STATE
 
+## 2026-09-14 — Exact guard build ready; wait for scheduled reconciliation before retry
+
+- PR562 merged as `0e14d2b6e27f73ed73aafe3ffa316caa6ca96d81`; exact image build34797380258 succeeded. Managed guard run34797532470 failed during its read-only preflight with `active-growthbook-capture-task`, before any deployment receipt, schedule change or task launch. This is a separate observed concurrency gate, not another IAM failure.
+- Existing scheduled task `f61c8eea5503491f9876b220ff6a8b0e`, definition `vevo-growthbook-reconcile-production:3`, started01:46:07 UTC from the normal03:45 Bratislava schedule. It remains running and is not owned by this repair; do not stop it or weaken the capture gate. Main stays at0e14 for the next managed attempt after a fresh passing read-only preflight. Report branch integrated this source as0d49a0fb and all six checks passed there.
+- Additional local recovery checks passed150 tests. Changed report deployer/tests pass Ruff; the daily runner has the same22 pre-existing findings as its prior Git blob, with no new findings. The email recipient option is tested and has not sent mail.
+- Other-consumer audit: reminder Lambda/config and production-board labels already match VEVO. The frozen GrowthBook acquisition deliberately retains its historical name-based calculator, while the ordinary exporter gets the new ID contract. Its experiment measurement needs a separately versioned correction if reinterpreting current renamed orders; do not silently rewrite frozen evidence or claim that the report rollout changes the reconciliation image.
+- Next exact step: allow the existing reconciliation task to finish, verify a fresh no-capture preflight, then dispatch the unchanged guard release once. After actual successful six-host promotion, seal independent proof and proceed with report bootstrap/promotion and one recipient-scoped recovery run. No local persistent process was started.
+
 ## 2026-09-14 — Report recovery recipient and IAM propagation checks
 
 - The separate guard deployment failed before its first dry task: ECS could not assume a role four seconds after creation. All seven original schedules were independently verified restored/enabled; no live guard or report resend ran. Guard correction is PR562. The report probe also now allows60 seconds for IAM propagation and rechecks exact owned trust/policy before ECS launch; this preserves its restricted permissions and uncertain-create/cleanup rules.
