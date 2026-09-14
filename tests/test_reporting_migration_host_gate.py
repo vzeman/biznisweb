@@ -138,27 +138,29 @@ class HostGateTests(unittest.TestCase):
         signal = host.canonical({'phase': 'host-authorized', **identity,
                                  'ready_sha256': host.sha(host.canonical(identity))})
         with patch('scripts.order_automation_host_gate.localhost_marker'), \
-                patch.object(host, 'read_private', side_effect=[denied, signal]) as read:
+                patch.object(host, 'read_private', side_effect=[host.canonical(identity), denied, signal]) as read:
             digest = host.await_authorization(S3(), host.PREFIX + 'a' * 32 + '/', identity,
                                              clock=lambda: 0, sleep=lambda _: None)
-        self.assertEqual(2, read.call_count)
+        self.assertEqual(3, read.call_count)
         self.assertEqual(host.sha(host.canonical(identity)), digest)
 
     def test_persistent_signal_403_times_out_and_never_authorizes(self):
         from botocore.exceptions import ClientError
         ticks = iter([0, 0, 601])
+        identity = {'release_id': 'a' * 32, 'task_arn': 'owned'}
         with patch('scripts.order_automation_host_gate.localhost_marker'), \
-                patch.object(host, 'read_private', side_effect=ClientError({'Error': {'Code': '403'}}, 'GetObject')):
+                patch.object(host, 'read_private', side_effect=[host.canonical(identity), ClientError({'Error': {'Code': '403'}}, 'GetObject')]):
             with self.assertRaisesRegex(RuntimeError, 'authorization-timeout'):
-                host.await_authorization(S3(), 'private/', {'release_id': 'a', 'task_arn': 'owned'},
+                host.await_authorization(S3(), host.PREFIX + 'a' * 32 + '/', identity,
                                          clock=lambda: next(ticks), sleep=lambda _: None)
 
     def test_denied_read_cannot_make_a_foreign_signal_valid(self):
         from botocore.exceptions import ClientError
+        identity = {'release_id': 'a' * 32, 'task_arn': 'owned'}
         with patch('scripts.order_automation_host_gate.localhost_marker'), \
-                patch.object(host, 'read_private', side_effect=[ClientError({'Error': {'Code': 'AccessDenied'}}, 'GetObject'), b'{}']):
+                patch.object(host, 'read_private', side_effect=[host.canonical(identity), ClientError({'Error': {'Code': 'AccessDenied'}}, 'GetObject'), b'{}']):
             with self.assertRaisesRegex(RuntimeError, 'authorization-binding-invalid'):
-                host.await_authorization(S3(), 'private/', {'release_id': 'a', 'task_arn': 'owned'},
+                host.await_authorization(S3(), host.PREFIX + 'a' * 32 + '/', identity,
                                          clock=lambda: 0, sleep=lambda _: None)
 
     def test_missing_encryption_closes_body(self):
