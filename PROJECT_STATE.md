@@ -1,5 +1,12 @@
 # PROJECT_STATE
 
+## 2026-09-14 — Scheduled reconciliation finished; guard deployment resumed
+
+- Natural reconciliation task `f61c8eea5503491f9876b220ff6a8b0e` completed with exit0 and reached STOPPED at the02:27:52 UTC independent readback. It was never interrupted. Fresh guard preflight then passed with no active capture and the same two frozen report-definition hashes. Main remains `0e14d2b6e27f73ed73aafe3ffa316caa6ca96d81`.
+- Dispatched managed guard run34799318820 on that exact successful-build source after the passing preflight. Keep main fixed until terminal promotion/rollback. The preceding attempt34797532470 made no mutation; its concurrency blocker is now resolved. All six report PR checks passed on675c7e59 before this documentation-only update.
+- Recovery remains urgent because VEVO reporting is already unavailable. If the first report merge/bootstrap falls within the usual02:00–04:00 UTC check window, use a verified gap between active capture jobs and record the explicit reporting maintenance: current checks may fail closed during a missing/active authority generation. Do not disable those checks, alter experiment evidence, stop the collector or bypass any runtime gate to conceal maintenance. This is an operational exception to the preferred rollout timing, not a relaxed proof contract.
+- Next exact step: independently observe successful guard run34799318820 using the committed observer while all six ECS tasks remain readable; then merge/build report PR556, bootstrap its current authority, publish verified readiness, promote the isolated report candidate and send the missing report once to the configured owner recipient. Reconcile report alarms only after the exact new definition is verified. No local persistent process was started.
+
 ## 2026-09-14 — Reproducible independent guard observation prepared
 
 - Added `scripts/observe_creditnote_release.py` to retain actual terminal ECS tasks and paginated CloudWatch host/summary markers before AWS ages them out. It rereads schedules, task definitions and the successful GitHub run. Full existing readiness validation checks the locally staged audit against real managed/primary proof, current source/image and protected runtime before an optional create-only encrypted publication. Default is read-only; no task, role, schedule, provider or email mutation exists.
