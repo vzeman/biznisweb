@@ -91,7 +91,10 @@ def await_authorization(s3, prefix, identity, *, clock=time.monotonic, sleep=tim
         try:
             raw = read_private(s3, prefix + "authorize.json")
         except Exception as exc:
-            require(getattr(exc, "response", {}).get("Error", {}).get("Code") in {"NoSuchKey", "404"},
+            # Without ListBucket, S3 reports a not-yet-created object as 403.
+            # A denied read grants nothing: only the exact bound signal below
+            # permits provider access; a persistent denial hits the same deadline.
+            require(getattr(exc, "response", {}).get("Error", {}).get("Code") in {"NoSuchKey", "404", "AccessDenied", "403"},
                     "probe-authorization-read-failed")
             sleep(5)
             continue
