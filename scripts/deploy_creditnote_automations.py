@@ -657,8 +657,9 @@ class CreditnoteDeployment:
         result = schedule_request(self.originals[f"{project}-daily-invoice-generation"])
         result.update(Name=service, GroupName="default", State="DISABLED", Description="Standalone creditnote status guard; completion monitored before pinned daily report.",
                       ScheduleExpression="cron(58 23 * * ? *)" if project == "roy" else "cron(28 23 * * ? *)",
-                      ScheduleExpressionTimezone="Europe/Bratislava", FlexibleTimeWindow={"Mode": "OFF"})
-        for key in ("StartDate", "EndDate", "ActionAfterCompletion", "KmsKeyArn"):
+                      ScheduleExpressionTimezone="Europe/Bratislava", FlexibleTimeWindow={"Mode": "OFF"},
+                      ActionAfterCompletion="NONE")
+        for key in ("StartDate", "EndDate", "KmsKeyArn"):
             result.pop(key, None)
         result["Target"]["EcsParameters"]["TaskDefinitionArn"] = arn
         result["Target"]["RoleArn"] = role

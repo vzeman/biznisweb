@@ -1,5 +1,13 @@
 # PROJECT_STATE
 
+## 2026-09-14 — Explicit Scheduler default required; failed candidate remains disabled
+
+- The natural reconciliation completed successfully at02:27 UTC. A fresh preflight passed and managed run34799318820 used exact main0e14d2b6/image `sha256:d9f2f8cf367f9977d97e395fe27749fb5ad4c9918227caa8932e5184f68d54ab`. Both old report localhost probes passed. The ROY guard now started successfully and its dry run completed with168 checked creditnoted orders, zero eligible/updated/failed/review/audit errors. IAM propagation repair is verified in AWS.
+- Deployment then rejected its newly created disabled Scheduler entry: AWS readback adds `ActionAfterCompletion=NONE`, while the requested snapshot omitted that default. Independent comparison found exactly that single-field difference. The seven original schedules are fully restored/enabled with exact original configurations. No live guard ran. Newly created `roy-creditnote-storno-guard` remains DISABLED at revision2; rollback deliberately refused to overwrite the unexpected field and records that new schedule as unresolved.
+- Terminal private receipt `data/roy/order-automation/creditnote-deployments/0e14d2b6e27f73ed73aafe3ffa316caa6ca96d81/49d519acdcfc400ab0fd2282298c62c8.json`, SHA `0352e9451f0f088daf4cf18358cc772dbce7bd73afcf17c7af39ed8c4add9a25`. The two role names ending49d519acdcfc and four new guard alarms belong to this failed attempt. Existing invoice/report alarms are separate.
+- Corrected the new recurring schedule request to explicitly specify NONE. Exact comparisons remain strict; no general missing-field tolerance is added. Regression requires this value for both shops.
+- Next exact step: pass own checks and merge/build the correction. Before another migration, remove only the proven disabled failed-attempt schedule and its newly created guard alarms after fresh exact identity/no-active-task/original-schedule checks and a private recovery snapshot. Never enable that incomplete candidate or rerun against unresolved state. Report PR556 remains pending; no recovery email was sent. No local persistent process was started.
+
 ## 2026-09-14 — Guard deployment IAM propagation failure, original schedules restored
 
 - Managed run34796701277 on main `b99d81364b0955f7f28a1e1801ae7c17dcdb52c1` failed before the first dry guard task launched. Both unchanged report identity probes passed real host/localhost gates. CloudTrail records ECS could not assume the new ROY task role four seconds after creation; direct IAM trust matches the documented ECS contract and caller PassRole simulation is allowed. IAM propagation is the supported explanation, not a proven permission deficit.
