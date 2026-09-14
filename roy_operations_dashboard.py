@@ -25,6 +25,14 @@ from inventory_demand_model import (
     stockout_business_impact,
 )
 from reporting_core import BASE_DEFAULT_PROJECT, load_project_env, load_project_settings, resolve_biznisweb_api_url
+from order_status_identity import bind_status_identity, canonical_order, identity_for, unique_target
+
+
+def assert_operations_project(project: str) -> None:
+    """Never reuse a deployment's credentials or state for another shop."""
+    deployed = os.getenv("REPORT_PROJECT", "").strip().lower()
+    if project not in {"roy", "vevo"} or (deployed and project != deployed):
+        raise ValueError("Operations project does not match this deployment.")
 
 
 DEFAULT_PAID_STATUSES = ("Platba online - zaplatené",)
@@ -287,6 +295,7 @@ query GetRoyOperationsOrders($params: OrderParams) {
       sum {
         value
         formatted
+        currency { code }
       }
     }
     pageInfo {
@@ -394,6 +403,7 @@ def _local_state_path(project: str) -> Path:
 
 
 def _state_s3_location(project: str, project_settings: Dict[str, Any]) -> Optional[Tuple[str, str, str]]:
+    assert_operations_project(project)
     s3_settings = project_settings.get("live_dashboard_artifacts") or {}
     env_project = _project_env_name(project)
     bucket = (
@@ -446,7 +456,7 @@ def _load_shared_operations_snapshot(
 
         response = boto3.client("s3", region_name=region).get_object(Bucket=bucket, Key=key)
         payload = json.loads(response["Body"].read().decode("utf-8"))
-        if isinstance(payload, dict) and payload.get("marker") == "roy-operations-dashboard":
+        if isinstance(payload, dict) and payload.get("marker") == f"{project}-operations-dashboard" and payload.get("project") == project:
             return payload
     except Exception:
         pass
@@ -757,8 +767,7 @@ def _validate_eta_date(value: Any) -> str:
 
 def acknowledge_loss_product(project: str, sku: str, product: str = "") -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
-    if project != "roy":
-        raise ValueError("Loss product acknowledgement is only enabled for project 'roy'.")
+    assert_operations_project(project)
     sku = str(sku or "").strip()
     if not sku:
         raise ValueError("Missing product SKU.")
@@ -788,8 +797,7 @@ def set_inbound_stock_order(
     baseline_available_quantity: Any = 0.0,
 ) -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
-    if project != "roy":
-        raise ValueError("Inbound stock tracking is only enabled for project 'roy'.")
+    assert_operations_project(project)
     sku = str(sku or "").strip()
     if not sku:
         raise ValueError("Missing product SKU.")
@@ -821,8 +829,7 @@ def set_inbound_stock_order(
 
 def clear_inbound_stock_order(project: str, sku: str) -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
-    if project != "roy":
-        raise ValueError("Inbound stock tracking is only enabled for project 'roy'.")
+    assert_operations_project(project)
     sku = str(sku or "").strip()
     if not sku:
         raise ValueError("Missing product SKU.")
@@ -855,8 +862,7 @@ def _validated_inventory_restock_sku(value: Any) -> str:
 
 def exclude_inventory_restock_alert(project: str, sku: str, product: str = "") -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
-    if project != "roy":
-        raise ValueError("Inventory restock exclusions are only enabled for project 'roy'.")
+    assert_operations_project(project)
     sku = _validated_inventory_restock_sku(sku)
     key = _inventory_restock_exclusion_key(sku)
     project_settings = load_project_settings(project)
@@ -892,8 +898,7 @@ def exclude_inventory_restock_alert(project: str, sku: str, product: str = "") -
 
 def restore_inventory_restock_alert(project: str, sku: str) -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
-    if project != "roy":
-        raise ValueError("Inventory restock exclusions are only enabled for project 'roy'.")
+    assert_operations_project(project)
     sku = _validated_inventory_restock_sku(sku)
     key = _inventory_restock_exclusion_key(sku)
     project_settings = load_project_settings(project)
@@ -1029,9 +1034,12 @@ def resolve_roy_operations_settings(project_settings: Dict[str, Any]) -> Dict[st
 
     return {
         "enabled": bool(raw.get("enabled", False)),
+        "currency_rates_to_eur": project_settings.get("currency_rates_to_eur") or {"EUR": 1.0},
         "paid_statuses": paid_statuses,
+        "paid_status_ids": {str(value) for value in raw.get("paid_status_ids", [])},
         "paid_statuses_normalized": {_normalize_text(status) for status in paid_statuses},
         "cod_statuses": cod_statuses,
+        "cod_status_ids": {str(value) for value in raw.get("cod_status_ids", [])},
         "cod_statuses_normalized": {_normalize_text(status) for status in cod_statuses},
         "cod_payment_patterns": cod_payment_patterns,
         "cod_payment_patterns_normalized": {_normalize_text(pattern) for pattern in cod_payment_patterns},
@@ -1125,7 +1133,8 @@ def _is_cod_payment(order: Dict[str, Any], settings: Dict[str, Any]) -> bool:
 
 
 def _is_paid_online(order: Dict[str, Any], settings: Dict[str, Any]) -> bool:
-    return _normalize_text(_status_name(order)) in settings["paid_statuses_normalized"]
+    ids = settings.get("paid_status_ids")
+    return (not ids or _status_id(order) in ids) and _normalize_text(_status_name(order)) in settings["paid_statuses_normalized"]
 
 
 def _is_pickup_ready_status(order: Dict[str, Any], settings: Dict[str, Any]) -> bool:
@@ -1134,7 +1143,8 @@ def _is_pickup_ready_status(order: Dict[str, Any], settings: Dict[str, Any]) -> 
 
 def _is_cod_fulfillable(order: Dict[str, Any], settings: Dict[str, Any]) -> bool:
     return (
-        _normalize_text(_status_name(order)) in settings["cod_statuses_normalized"]
+        (not settings.get("cod_status_ids") or _status_id(order) in settings["cod_status_ids"])
+        and _normalize_text(_status_name(order)) in settings["cod_statuses_normalized"]
         and _is_cod_payment(order, settings)
     )
 
@@ -1536,6 +1546,11 @@ def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[s
         paid_pickup_ready
         and status_norm in settings["pickup_ship_action_statuses_normalized"]
     )
+    currency = str(((order.get("sum") or {}).get("currency") or {}).get("code") or "EUR").upper()
+    rate = settings["currency_rates_to_eur"].get(currency)
+    if rate is None or not math.isfinite(float(rate)) or float(rate) <= 0:
+        raise ValueError(f"Missing reporting currency rate for {currency}")
+    items = [{**item, "currency": currency} for item in _order_items(order, settings)]
     return {
         "id": order.get("id"),
         "order_num": order.get("order_num"),
@@ -1548,13 +1563,14 @@ def _public_order_row(order: Dict[str, Any], settings: Dict[str, Any]) -> Dict[s
         "customer_note": str(order.get("note") or "").strip(),
         "internal_note": str(order.get("internal_note") or "").strip(),
         "wholesale_pricing": wholesale_pricing,
-        "status": status_name,
+        "status": str((order.get("raw_status") or {}).get("name") or status_name),
         "status_id": _status_id(order),
         "sum": (order.get("sum") or {}).get("formatted"),
-        "sum_value": _to_float((order.get("sum") or {}).get("value")),
+        "sum_value": _to_float((order.get("sum") or {}).get("value")) * float(rate),
+        "currency": currency,
         "payment": payment,
         "shipping": shipping,
-        "items": _order_items(order, settings),
+        "items": items,
         "fulfillable": fulfillable,
         "fulfillment_reason": reason,
         "personal_pickup": is_pickup,
@@ -1615,6 +1631,7 @@ def build_roy_orders_snapshot(
 
 
 def _build_client(project: str, project_settings: Dict[str, Any]) -> Client:
+    assert_operations_project(project)
     api_url = resolve_biznisweb_api_url(project, project_settings)
     api_token = os.getenv("BIZNISWEB_API_TOKEN")
     if not api_token:
@@ -1627,7 +1644,12 @@ def _build_client(project: str, project_settings: Dict[str, Any]) -> Client:
         retries=3,
         timeout=timeout,
     )
-    return Client(transport=transport, fetch_schema_from_transport=False)
+    client = Client(transport=transport, fetch_schema_from_transport=False)
+    if project == "vevo":
+        policy = bind_status_identity(client, project, project_settings)
+        result = _execute_graphql(client, LIST_ORDER_STATUSES_QUERY, variable_values={"lang_code": "SK"})
+        policy.bind_catalogue(client, result.get("listOrderStatuses"))
+    return client
 
 
 def fetch_open_orders_for_roy_operations(project: str, settings: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
@@ -1658,7 +1680,7 @@ def fetch_open_orders_for_roy_operations(project: str, settings: Dict[str, Any])
             variable_values={"params": params},
         )
         payload = result.get("getOrderList") or {}
-        page_orders = [order for order in (payload.get("data") or []) if order]
+        page_orders = [canonical_order(client, order) for order in (payload.get("data") or []) if order]
         orders.extend(page_orders)
         page_count += 1
 
@@ -2340,6 +2362,9 @@ def fetch_current_stock_for_inventory_alerts(
     model = project_settings.get("inventory_model") or {}
     lang_code = str(model.get("lang_code", "SK") or "SK").strip().upper() or "SK"
     targets = _stock_lookup_targets(inventory, state=state)
+    if project == "vevo":
+        from operations_inventory import fetch_catalogue_stock
+        return fetch_catalogue_stock(project, project_settings, targets)
     diagnostics: Dict[str, Any] = {
         "enabled": True,
         "source": "biznisweb_product_search",
@@ -3055,8 +3080,7 @@ def build_inventory_snapshot(
 
 def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
-    if project != "roy":
-        raise ValueError("ROY operations dashboard is only enabled for project 'roy'.")
+    assert_operations_project(project)
 
     load_project_env(project)
     project_settings = load_project_settings(project)
@@ -3064,6 +3088,9 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
     orders, scan = fetch_open_orders_for_roy_operations(project, settings)
     order_snapshot = build_roy_orders_snapshot(project=project, orders=orders, settings=settings, scan=scan)
     payload = report_payload or {}
+    if (project_settings.get("operations_dashboard") or {}).get("inventory_source") == "archived_export":
+        from operations_inventory import enrich_operations_inventory
+        payload = enrich_operations_inventory(project, payload, project_settings)
     operations_state = load_roy_operations_state(
         project,
         project_settings,
@@ -3104,7 +3131,7 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
             require_configured_remote=True,
         )
     return {
-        "marker": "roy-operations-dashboard",
+        "marker": f"{project}-operations-dashboard",
         "project": project,
         "generated_at": order_snapshot["generated_at"],
         "operations_state_revision": str(operations_state.get("_storage_etag") or "").strip(),
@@ -3195,6 +3222,7 @@ def get_cached_roy_operations_snapshot(
     force_refresh: bool = False,
 ) -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
+    assert_operations_project(project)
     project_settings = load_project_settings(project)
     settings = resolve_roy_operations_settings(project_settings)
     if not settings["enabled"]:
@@ -3296,6 +3324,10 @@ def _resolve_order_status_id(
     target_status_name: str,
     target_status_name_normalized: str,
 ) -> int:
+    policy = identity_for(client)
+    if policy is not None:
+        rows = policy.bind_catalogue(client, list(policy.catalogue.values()))
+        return unique_target(rows, target_status_name, configured_id or None)
     configured = int(configured_id or 0)
     if configured > 0:
         return configured
@@ -3330,8 +3362,7 @@ def _resolve_shipped_status_id(client: Client, settings: Dict[str, Any]) -> int:
 
 def _mark_personal_pickup_status(project: str, order_num: str, action: str) -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
-    if project != "roy":
-        raise ValueError("Pickup status action is only enabled for project 'roy'.")
+    assert_operations_project(project)
 
     load_project_env(project)
     project_settings = load_project_settings(project)
@@ -3366,6 +3397,7 @@ query GetOrderForPickupAction($order_num: String!) {
     order = result.get("getOrder")
     if not order:
         raise ValueError(f"Order '{order_num}' not found.")
+    order = canonical_order(client, order)
 
     row = _public_order_row(order, settings)
     if not row["personal_pickup"]:
@@ -3394,6 +3426,15 @@ query GetOrderForPickupAction($order_num: String!) {
         retry_transient=False,
     )
     _clear_operations_cache(project)
+    if project == "vevo":
+        readback = _execute_graphql(client, gql("""
+query VerifyPickupStatus($order_num: String!) {
+  getOrder(order_num: $order_num) { order_num status { id name } }
+}
+"""), variable_values={"order_num": order_num})
+        observed = canonical_order(client, readback.get("getOrder"))
+        if not observed or str(observed.get("order_num")) != order_num or _status_id(observed) != str(status_id):
+            raise RuntimeError("Pickup status change requires verification; refresh the order before another action.")
     return {
         "ok": True,
         "project": project,

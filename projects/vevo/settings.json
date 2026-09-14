@@ -723,5 +723,101 @@
     "safety_buffer_pct": 15,
     "minimum_tier_days": 14,
     "scale_step_pct": 10
+  },
+  "operations_dashboard": {
+    "enabled": true,
+    "inventory_source": "archived_export",
+    "paid_statuses": [
+      "Platba online - zaplatené",
+      "Stripe - paid"
+    ],
+    "paid_status_ids": [
+      31,
+      70
+    ],
+    "cod_statuses": [
+      "Čaká na vybavenie"
+    ],
+    "cod_status_ids": [
+      1
+    ],
+    "cod_payment_ids": [
+      "7"
+    ],
+    "cod_payment_patterns": [
+      "dobierk",
+      "dobirk"
+    ],
+    "personal_pickup_shipping_ids": [
+      "11"
+    ],
+    "personal_pickup_shipping_names": [
+      "Osobný odber na sklade BB"
+    ],
+    "pickup_ready_action_statuses": [],
+    "pickup_ship_action_statuses": [
+      "Platba online - zaplatené",
+      "Stripe - paid"
+    ],
+    "shipped_status_name": "Odoslaná",
+    "shipped_status_id": 4,
+    "scan_max_pages": 30,
+    "scan_min_pages": 10,
+    "stop_after_empty_fulfillable_pages": 3,
+    "cache_ttl_seconds": 60,
+    "auto_refresh_seconds": 90,
+    "wholesale_detection": {
+      "enabled": false
+    }
+  },
+  "inventory_model": {
+    "enabled": true,
+    "lang_code": "SK",
+    "critical_days_of_cover": 14,
+    "warning_days_of_cover": 30,
+    "watch_days_of_cover": 45,
+    "dead_stock_days": 90,
+    "alert_delivery_horizon_days": 30,
+    "primary_value_basis": "cost",
+    "secondary_value_basis": "retail",
+    "robust_demand": {
+      "enabled": true,
+      "model_version": "order-aware-tsb-v1",
+      "minimum_history_days": 90,
+      "lookback_days": 365,
+      "minimum_history_orders": 12,
+      "iqr_multiplier": 1.5,
+      "median_multiplier": 3,
+      "sparse_median_multiplier": 4,
+      "minimum_outlier_units": 5,
+      "intermittent_zero_week_threshold": 0.5,
+      "tsb_size_alpha": 0.05,
+      "tsb_occurrence_beta": 0.05,
+      "trend_window_days": 45,
+      "trend_confirmation_min_orders": 3,
+      "trend_confirmation_min_active_weeks": 2,
+      "trend_growth_ratio": 1.5,
+      "trend_min_units_30d": 4,
+      "persistence_window_runs": 3,
+      "persistence_required_runs": 2,
+      "service_levels": {
+        "strategic": 0.98,
+        "standard": 0.95,
+        "intermittent": 0.9
+      }
+    },
+    "reorder_cover_days": 30,
+    "hero_reorder_cover_days": 45,
+    "default_lead_time_working_days": 5,
+    "decision_gate": {
+      "enabled": true,
+      "minimum_cost_coverage_retail_pct": 80,
+      "minimum_forecast_backtest_products": 20,
+      "maximum_forecast_wape_pct": 40,
+      "minimum_forecast_median_accuracy_pct": 60,
+      "minimum_forecast_within_20_pct": 40,
+      "require_inbound_stock": true,
+      "maximum_negative_stock_products": 0
+    }
   }
 }

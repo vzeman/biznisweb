@@ -11,6 +11,8 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
+import sys
 import time
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -21,6 +23,8 @@ SERVICE_ARN = f"arn:aws:apprunner:{REGION}:{ACCOUNT}:service/{SERVICE}/2711a253a
 ORIGIN = "https://2mhmsmgq3m.eu-central-1.awsapprunner.com"
 REPOSITORY = f"{ACCOUNT}.dkr.ecr.{REGION}.amazonaws.com/vevo-reporting"
 STATUSES = ["New order", "Payment online - paid"]
+OPERATIONS_PROBE = "from scripts.vevo_operations_host_gate import main; main()"
+BUCKET = "biznisweb-reporting-artifacts-919341186960-eu-central-1"
 
 # Sent as the command of the isolated task; versioned here rather than installed
 # into or copied over application files inside the candidate image.
@@ -94,12 +98,19 @@ def check_service(service, expected_image):
 
 
 def service_boundary(service):
-    return {key: service.get(key) for key in (
+    return json.loads(json.dumps({key: service.get(key) for key in (
         'ServiceArn', 'ServiceName', 'ServiceUrl', 'SourceConfiguration',
         'InstanceConfiguration', 'HealthCheckConfiguration',
         'AutoScalingConfigurationSummary', 'NetworkConfiguration',
         'EncryptionConfiguration', 'ObservabilityConfiguration',
-    )}
+    )}, default=str))
+
+
+def schedule_boundary(schedule):
+    # Request IDs describe the read, not the schedule; every configuration field
+    # and its persisted timestamps still participate in the comparison.
+    return json.loads(json.dumps({key: value for key, value in schedule.items()
+                                  if key != 'ResponseMetadata'}, default=str))
 
 
 def image_update(service, image):
@@ -120,8 +131,15 @@ def validate_proof(task, proof, receipt):
     assert proof['identity']['service'] == SERVICE and proof['identity']['path'] == '/app'
     ips = {x['value'] for a in task.get('attachments', []) for x in a.get('details', []) if x['name'] == 'privateIPv4Address'}
     assert ips and set(proof['identity']['private_ips']) == ips
-    assert proof['statuses'] == STATUSES
-    assert proof['summary']['active_orders'] > 0 and proof['summary']['units_to_make'] > 0
+    if receipt.get('mode') == 'operations':
+        assert proof['mode'] == 'operations'
+        assert proof['summary']['fulfillable_orders'] > 0
+        assert proof['inventory']['inventory_status'] == 'ok'
+        assert proof['inventory']['inventory_products_total'] > 0 and proof['pdf_bytes'] > 1000
+        assert proof['max_rss_kib'] < 512 * 1024, 'Candidate exceeds current App Runner memory'
+    else:
+        assert proof['statuses'] == STATUSES
+        assert proof['summary']['active_orders'] > 0 and proof['summary']['units_to_make'] > 0
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -133,15 +151,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('phase', choices=['probe', 'promote'])
     parser.add_argument('--source-sha', required=True)
+    parser.add_argument('--operations', action='store_true', help='Promote the operations dashboard while retaining manufacturing')
     parser.add_argument('--expected-current-digest', required=True)
     parser.add_argument('--receipt', type=Path, required=True)
     args = parser.parse_args()
     assert re.fullmatch(r'[0-9a-f]{40}', args.source_sha)
     assert re.fullmatch(r'sha256:[0-9a-f]{64}', args.expected_current_digest)
+    assert subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip() == args.source_sha
+    assert not subprocess.check_output(['git', 'status', '--porcelain']).strip(), 'Deploy requires a clean exact source checkout'
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     import boto3
     from botocore.config import Config
     session = boto3.Session(region_name=REGION)
-    clients = {name: session.client(name, config=Config(retries={'max_attempts': 0}, connect_timeout=10, read_timeout=30)) for name in ['sts', 'apprunner', 'ecs', 'ecr', 'scheduler', 'logs', 'ssm']}
+    clients = {name: session.client(name, config=Config(retries={'max_attempts': 0}, connect_timeout=10, read_timeout=30)) for name in ['sts', 'apprunner', 'ecs', 'ecr', 'scheduler', 'logs', 'ssm', 's3']}
     assert clients['sts'].get_caller_identity()['Account'] == ACCOUNT
     app, ecs = clients['apprunner'], clients['ecs']
     digest = clients['ecr'].describe_images(repositoryName='vevo-reporting', imageIds=[{'imageTag': 'git-' + args.source_sha}])['imageDetails'][0]['imageDigest']
@@ -152,7 +174,11 @@ def main():
 
     def save(receipt):
         args.receipt.parent.mkdir(parents=True, exist_ok=True)
-        args.receipt.write_text(json.dumps(receipt, indent=2, default=str) + '\n', encoding='utf-8')
+        encoded = (json.dumps(receipt, indent=2, default=str) + '\n').encode()
+        args.receipt.write_bytes(encoded)
+        clients['s3'].put_object(Bucket=BUCKET,
+            Key=f"daily-reports/vevo/operations/deployments/{args.source_sha}/{args.receipt.name}",
+            Body=encoded, ContentType='application/json', ServerSideEncryption='AES256')
 
     def read_task(receipt):
         response = ecs.describe_tasks(cluster=receipt['cluster'], tasks=[receipt['task_arn']])
@@ -185,9 +211,25 @@ def main():
         original = source['containerDefinitions'][0]
         api_secrets = [s for s in original['secrets'] if s['name'] == 'BIZNISWEB_API_TOKEN']
         assert len(api_secrets) == 1
+        if args.operations:
+            from roy_operations_dashboard import _empty_operations_state
+            from live_dashboard_maintenance import build_active_maintenance_state, build_inactive_maintenance_state
+            operation = 'vevo-operations-' + args.source_sha[:12]
+            active = build_active_maintenance_state({}, project='vevo', operation_id=operation, reason_code='deployment')
+            inactive = build_inactive_maintenance_state(active, project='vevo', operation_id=operation)
+            # First deployment: create only absent records, never overwrite an
+            # existing operator's print, inbound or maintenance state.
+            for name, state in [('state.json', _empty_operations_state()), ('maintenance.json', inactive)]:
+                try:
+                    clients['s3'].put_object(Bucket=BUCKET, Key='daily-reports/vevo/operations/' + name,
+                        Body=json.dumps(state).encode(), ContentType='application/json',
+                        ServerSideEncryption='AES256', IfNoneMatch='*')
+                except Exception as exc:
+                    assert getattr(exc, 'response', {}).get('Error', {}).get('Code') == 'PreconditionFailed'
+        host_code = OPERATIONS_PROBE if args.operations else HOST_PROBE
         container = {
             'name': 'vevo-board-probe', 'image': image, 'essential': True,
-            'command': ['python', '-c', HOST_PROBE], 'workingDirectory': '/app',
+            'command': ['python', '-c', host_code], 'workingDirectory': '/app',
             'secrets': api_secrets, 'logConfiguration': original['logConfiguration'],
             'environment': [{'name': k, 'value': v} for k, v in {
                 'REPORT_PROJECT': 'vevo', 'REPORT_SKIP_PROJECT_ENV': 'true',
@@ -197,12 +239,13 @@ def main():
         assert container['logConfiguration']['logDriver'] == 'awslogs'
         receipt = {'source_sha': args.source_sha, 'digest': digest, 'previous': previous,
                    'baseline': service_boundary(current), 'started_by': 'vevo-board-' + args.source_sha[:12],
-                   'cluster': target['Arn'], 'phase': 'registering', 'host_code_sha256': hashlib.sha256(HOST_PROBE.encode()).hexdigest()}
+                   'cluster': target['Arn'], 'phase': 'registering', 'host_code_sha256': hashlib.sha256(host_code.encode()).hexdigest(), 'mode': 'operations' if args.operations else 'manufacturing', 'report_schedule': schedule_boundary(schedule)}
         save(receipt)
         registered = ecs.register_task_definition(
             family='vevo-board-probe-' + args.source_sha[:12], executionRoleArn=source['executionRoleArn'],
             networkMode='awsvpc', requiresCompatibilities=['FARGATE'],
-            cpu=source['cpu'], memory=source['memory'], containerDefinitions=[container])
+            cpu=current['InstanceConfiguration']['Cpu'], memory=current['InstanceConfiguration']['Memory'],
+            **({'taskRoleArn': source['taskRoleArn']} if args.operations else {}), containerDefinitions=[container])
         receipt['definition'] = registered['taskDefinition']['taskDefinitionArn']
         save(receipt)
         raw = target['EcsParameters']['NetworkConfiguration']['awsvpcConfiguration']
@@ -243,12 +286,14 @@ def main():
         return
 
     receipt = json.loads(args.receipt.read_text(encoding='utf-8'))
+    assert (receipt.get('mode') == 'operations') == args.operations
     assert receipt['phase'] == 'verified' and 0 <= time.time() - receipt['verified_at'] < 1800
     assert receipt['source_sha'] == args.source_sha and receipt['digest'] == digest and receipt['previous'] == previous
     assert service_boundary(current) == receipt['baseline'], 'Service configuration drift'
     proof = read_proof(receipt)
     assert proof == receipt['proof']
     validate_proof(read_task(receipt), proof, receipt)
+    assert schedule_boundary(clients['scheduler'].get_schedule(Name='vevo-daily-report-email')) == receipt['report_schedule'], 'Report schedule drift'
     update = image_update(current, image)
     receipt['phase'] = 'promoting'
     save(receipt)
@@ -279,6 +324,20 @@ def main():
             assert response.geturl() == ORIGIN + path, 'Unexpected redirect'
             return response.read()
     assert json.loads(live('/health'))['ok'] is True
+    if args.operations:
+        assert b'vevo-operations-dashboard' in live('/production/vevo')
+        assert b'vevo-production-board' in live('/manufacturing/vevo')
+        data = json.loads(live('/api/operations/vevo/live'))
+        assert data['marker'] == 'vevo-operations-dashboard' and data['project'] == 'vevo'
+        assert data['orders']['summary']['fulfillable_orders'] > 0
+        assert data['inventory']['summary']['inventory_status'] == 'ok'
+        assert data['inventory']['summary']['inventory_products_total'] > 0
+        assert live('/api/operations/vevo/picking-lists.pdf?preview=1&include_printed=1&refresh=0').startswith(b'%PDF-')
+        assert schedule_boundary(clients['scheduler'].get_schedule(Name='vevo-daily-report-email')) == receipt['report_schedule']
+        receipt.update({'phase': 'deployed', 'live_summary': data['orders']['summary'], 'live_inventory': data['inventory']['summary']})
+        save(receipt)
+        print('VEVO_OPERATIONS_DEPLOYED ' + json.dumps({'image': image, 'operation_id': receipt['operation_id'], 'summary': data['orders']['summary'], 'inventory': data['inventory']['summary']}), flush=True)
+        return
     assert b'vevo-production-board' in live('/production/vevo')
     data = json.loads(live('/api/production/vevo/live?refresh=1'))
     assert data['project'] == 'vevo' and data['active_order_statuses'] == STATUSES

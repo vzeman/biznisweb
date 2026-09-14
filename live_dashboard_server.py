@@ -475,7 +475,7 @@ def build_index_html(projects: List[str]) -> str:
         try:
             project_settings = load_project_settings(project)
             production_enabled = bool(resolve_production_board_settings(project_settings)["enabled"])
-            if project == "roy":
+            if project in {"roy", "vevo"}:
                 production_enabled = production_enabled or bool(resolve_roy_operations_settings(project_settings)["enabled"])
         except Exception:
             production_enabled = False
@@ -1197,7 +1197,7 @@ def build_roy_operations_dashboard_html(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ROY Operations Dashboard</title>
+  <title>__SHOP_TITLE__ Operations Dashboard</title>
   <style>
     :root {
       --bg:#f6f7f4; --panel:#ffffff; --line:#d9ded5; --text:#18211b; --muted:#657163;
@@ -1307,7 +1307,7 @@ def build_roy_operations_dashboard_html(
   </style>
 </head>
 <body class="__MAINTENANCE_BODY_CLASS__" data-maintenance-active="__MAINTENANCE_ACTIVE__">
-  <div id="maintenanceOverlay" class="maintenance-overlay" data-marker="roy-maintenance-overlay" role="alertdialog" aria-modal="true" aria-labelledby="maintenanceTitle" aria-describedby="maintenanceMessage" tabindex="-1" __MAINTENANCE_HIDDEN__>
+  <div id="maintenanceOverlay" class="maintenance-overlay" data-marker="__SHOP_MAINTENANCE__-maintenance-overlay" role="alertdialog" aria-modal="true" aria-labelledby="maintenanceTitle" aria-describedby="maintenanceMessage" tabindex="-1" __MAINTENANCE_HIDDEN__>
     <div class="maintenance-card">
       <div class="maintenance-pulse" aria-hidden="true"></div>
       <h1 id="maintenanceTitle">Na dashboarde prebiehajú úpravy</h1>
@@ -1315,15 +1315,16 @@ def build_roy_operations_dashboard_html(
       <div id="maintenanceMeta" class="maintenance-meta">Po dokončení sa dashboard odblokuje automaticky.</div>
     </div>
   </div>
-  <main id="dashboardRoot" data-marker="roy-operations-dashboard" __MAINTENANCE_INERT__>
+  <main id="dashboardRoot" data-marker="__SHOP_MARKER__-operations-dashboard" __MAINTENANCE_INERT__>
     <header>
       <div>
-        <h1>ROY operations dashboard</h1>
+        <h1>__SHOP_NAME__ operations dashboard</h1>
         <p id="subtitle">Načítavam live stav.</p>
       </div>
       <div class="actions">
         <button id="soundToggleBtn" class="sound" type="button" aria-pressed="false">Zvuk vyp.</button>
-        <a id="pickingPdfLink" class="button" href="/api/operations/roy/picking-lists.pdf?refresh=1" target="_blank" rel="noopener">Vysklad. PDF</a>
+        __MANUFACTURING_LINK__
+        <a id="pickingPdfLink" class="button" href="/api/operations/__SHOP_KEY__/picking-lists.pdf?refresh=1" target="_blank" rel="noopener">Vysklad. PDF</a>
         <button id="markPickingPrintedBtn" type="button">Označiť vytlačené</button>
         <button id="refreshBtn" class="primary" type="button">Refresh</button>
         <a class="button" href="/">Dashboardy</a>
@@ -1331,6 +1332,7 @@ def build_roy_operations_dashboard_html(
     </header>
     <div id="messageBox" class="hidden"></div>
     <section class="alert-grid" id="alertGrid"></section>
+    <p id="inventoryQualityNote" class="muted" hidden></p>
     <section class="panel">
       <div class="panel-head">
         <div>
@@ -1945,6 +1947,14 @@ def build_roy_operations_dashboard_html(
     function renderAlerts(data) {
       const orders = (data.orders || {}).summary || {};
       const inv = (data.inventory || {}).summary || {};
+      const stockNotes = [];
+      if (project === 'vevo') {
+        if (Number(inv.negative_stock_count || 0)) stockNotes.push(`${fmtInt(inv.negative_stock_count)} produktov má záporný sklad.`);
+        if (Number(inv.inventory_cost_coverage_retail_pct || 0) < 99.9) stockNotes.push('Pri časti produktov chýba nákupná cena; hodnota skladu zahŕňa iba ocenené položky.');
+        if (inv.inventory_recommendation_ready === false) stockNotes.push('Návrhy doplnenia sú orientačné a vyžadujú kontrolu.');
+      }
+      el('inventoryQualityNote').textContent = stockNotes.join(' ');
+      el('inventoryQualityNote').hidden = !stockNotes.length;
       const readyPickupActions = fmtInt(orders.pickup_ready_actions_available);
       const shipPickupActions = fmtInt(orders.pickup_ship_actions_available);
       el('alertGrid').innerHTML = [
@@ -2312,7 +2322,7 @@ def build_roy_operations_dashboard_html(
       }
       input.disabled = true;
       try {
-        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/pickup/${encodeURIComponent(orderNum)}/ship`, { method:'POST', cache:'no-store' });
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/pickup/${encodeURIComponent(orderNum)}/ship`, { method:'POST', headers:{'Content-Type':'application/json', 'X-Operations-Action':'dashboard-action'}, cache:'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         showMessage(`Objednávka ${orderNum} je zmenená na Odoslaná.`, true);
@@ -2331,7 +2341,7 @@ def build_roy_operations_dashboard_html(
       }
       input.disabled = true;
       try {
-        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/pickup/${encodeURIComponent(orderNum)}/ready`, { method:'POST', cache:'no-store' });
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/pickup/${encodeURIComponent(orderNum)}/ready`, { method:'POST', headers:{'Content-Type':'application/json', 'X-Operations-Action':'dashboard-action'}, cache:'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         showMessage(`Objednávka ${orderNum} je zmenená na Pripravené k odberu.`, true);
@@ -2357,7 +2367,7 @@ def build_roy_operations_dashboard_html(
         const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/inbound/${encodeURIComponent(sku)}`, {
           method:'POST',
           cache:'no-store',
-          headers:{ 'Content-Type':'application/json' },
+          headers:{ 'X-Operations-Action':'dashboard-action', 'Content-Type':'application/json' },
           body: JSON.stringify({
             product: button.dataset.product || '',
             ordered_units: units,
@@ -2379,7 +2389,7 @@ def build_roy_operations_dashboard_html(
       const sku = button.dataset.clearInbound;
       button.disabled = true;
       try {
-        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/inbound/${encodeURIComponent(sku)}/clear`, { method:'POST', cache:'no-store' });
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/inbound/${encodeURIComponent(sku)}/clear`, { method:'POST', headers:{'Content-Type':'application/json', 'X-Operations-Action':'dashboard-action'}, cache:'no-store' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         showMessage(`Inbound objednávka pre ${sku} je zrušená.`, true);
@@ -2407,6 +2417,7 @@ def build_roy_operations_dashboard_html(
           method:'POST',
           cache:'no-store',
           headers:{
+            'X-Operations-Action':'dashboard-action',
             'Content-Type':'application/json',
             'X-ROY-Operations-Action':'inventory-restock-preference',
           },
@@ -2440,7 +2451,7 @@ def build_roy_operations_dashboard_html(
         const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/picking-lists/printed`, {
           method:'POST',
           cache:'no-store',
-          headers:{ 'Content-Type':'application/json' },
+          headers:{ 'X-Operations-Action':'dashboard-action', 'Content-Type':'application/json' },
           body: JSON.stringify({ order_nums: orderNums }),
         });
         const data = await response.json();
@@ -2460,7 +2471,7 @@ def build_roy_operations_dashboard_html(
         const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/loss-product/${encodeURIComponent(sku)}/ack`, {
           method:'POST',
           cache:'no-store',
-          headers:{ 'Content-Type':'application/json' },
+          headers:{ 'X-Operations-Action':'dashboard-action', 'Content-Type':'application/json' },
           body: JSON.stringify({ product: input.dataset.product || '' }),
         });
         const data = await response.json();
@@ -2496,6 +2507,12 @@ def build_roy_operations_dashboard_html(
         html,
         {
             "__BOOTSTRAP_JSON__": bootstrap_json,
+            "__SHOP_NAME__": escape(project.upper()),
+            "__SHOP_TITLE__": escape(project.upper()),
+            "__SHOP_KEY__": quote(project, safe=""),
+            "__SHOP_MAINTENANCE__": escape(project, quote=True),
+            "__SHOP_MARKER__": escape(project, quote=True),
+            "__MANUFACTURING_LINK__": ('<a class="button" href="/manufacturing/vevo">Výroba</a>' if project == "vevo" else ""),
             "__ORDER_PAGINATION_OVERVIEW_TOP__": order_pagination_html,
             "__ORDER_PAGINATION_OVERVIEW_BOTTOM__": order_pagination_html,
             "__ORDER_PAGINATION_ORDERS_TOP__": order_pagination_html,
@@ -2602,7 +2619,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
         # Old bookmarks and shared navigation must never read another project's
         # artifacts using this deployment's S3 prefix or runtime credentials.
         route_project = ""
-        browser_route = len(parts) == 2 and parts[0] in {"report", "dashboard", "production"}
+        browser_route = len(parts) == 2 and parts[0] in {"report", "dashboard", "production", "manufacturing"}
         if browser_route or (len(parts) == 3 and parts[0] == "api" and parts[2] == "latest"):
             route_project = parts[1]
         elif len(parts) >= 3 and parts[0] == "api" and parts[1] in {"operations", "production"}:
@@ -2628,7 +2645,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             if project not in projects:
                 self._send_json({"error": f"Unknown project '{project}'."}, status=404)
                 return
-            if project != "roy":
+            if project not in {"roy", "vevo"}:
                 self._send_json({"error": f"Maintenance status is not enabled for '{project}'."}, status=404)
                 return
             try:
@@ -2642,13 +2659,13 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             if project not in projects:
                 self._send_json({"error": f"Unknown project '{project}'."}, status=404)
                 return
-            if project != "roy":
+            if project not in {"roy", "vevo"}:
                 self._send_json({"error": f"Operations dashboard is not enabled for '{project}'."}, status=404)
                 return
             try:
                 operations_settings = resolve_roy_operations_settings(load_project_settings(project))
             except Exception as exc:
-                self._send_json({"error": f"Failed to load ROY operations settings: {exc}"}, status=500)
+                self._send_json({"error": f"Failed to load operations settings: {exc}"}, status=500)
                 return
             if not operations_settings["enabled"]:
                 self._send_json({"error": f"Operations dashboard is not enabled for '{project}'."}, status=404)
@@ -2664,7 +2681,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                     )
                 )
             except Exception as exc:
-                self._send_json({"error": f"Failed to load ROY operations data: {exc}"}, status=500)
+                self._send_json({"error": f"Failed to load operations data: {exc}"}, status=500)
             return
 
         if len(parts) == 4 and parts[0] == "api" and parts[1] == "operations" and parts[3] == "picking-lists.pdf":
@@ -2672,7 +2689,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             if project not in projects:
                 self._send_text(f"Unknown project '{escape(project)}'.", content_type="text/plain; charset=utf-8", status=404)
                 return
-            if project != "roy":
+            if project not in {"roy", "vevo"}:
                 self._send_text(
                     f"Operations dashboard is not enabled for '{escape(project)}'.",
                     content_type="text/plain; charset=utf-8",
@@ -2684,7 +2701,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                 operations_settings = resolve_roy_operations_settings(project_settings)
             except Exception as exc:
                 self._send_text(
-                    f"Failed to load ROY operations settings: {escape(str(exc))}",
+                    f"Failed to load operations settings: {escape(str(exc))}",
                     content_type="text/plain; charset=utf-8",
                     status=500,
                 )
@@ -2725,8 +2742,8 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                     order_nums=requested_order_nums or None,
                     include_printed=include_printed,
                 )
-                pdf = build_roy_picking_lists_pdf(orders)
-                filename = build_roy_picking_lists_filename(orders)
+                pdf = build_roy_picking_lists_pdf(orders, project=project)
+                filename = build_roy_picking_lists_filename(orders, project=project)
                 self._send_download(pdf, content_type="application/pdf", filename=filename)
             except Exception as exc:
                 self._send_text(
@@ -2784,17 +2801,17 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             )
             return
 
-        if len(parts) == 2 and parts[0] == "production":
+        if len(parts) == 2 and parts[0] in {"production", "manufacturing"}:
             project = parts[1]
             if project not in projects:
                 self._send_text(f"Unknown project '{escape(project)}'.", content_type="text/plain; charset=utf-8", status=404)
                 return
-            if project == "roy":
+            if parts[0] == "production" and project in {"roy", "vevo"}:
                 try:
                     operations_settings = resolve_roy_operations_settings(load_project_settings(project))
                 except Exception as exc:
                     self._send_text(
-                        f"Failed to load ROY operations settings: {escape(str(exc))}",
+                        f"Failed to load operations settings: {escape(str(exc))}",
                         content_type="text/plain; charset=utf-8",
                         status=500,
                     )
@@ -2860,19 +2877,33 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
 
         projects = available_projects()
         parts = [part for part in path.split("/") if part]
-        if len(parts) >= 3 and parts[0] == "api" and parts[1] == "operations" and parts[2] == "roy":
+        if len(parts) >= 3 and parts[:2] == ["api", "operations"]:
+            project = parts[2]
+            deployed = os.getenv("REPORT_PROJECT", "").strip().lower()
+            if deployed and project != deployed:
+                self._send_json({"error": "Open this project in its own dashboard."}, status=409)
+                return
+            if project == "vevo" and not is_trusted_roy_operations_action_request(
+                content_type=self.headers.get("Content-Type"),
+                action_header=("inventory-restock-preference" if self.headers.get("X-Operations-Action") == "dashboard-action" else ""),
+                sec_fetch_site=self.headers.get("Sec-Fetch-Site"),
+                origin=self.headers.get("Origin"), host=self.headers.get("Host"),
+            ):
+                self._send_json({"error": "Untrusted operations action request."}, status=403)
+                return
+        if len(parts) >= 3 and parts[0] == "api" and parts[1] == "operations" and parts[2] in {"roy", "vevo"}:
             try:
                 self._read_json_body()
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=400)
                 return
             try:
-                maintenance = get_live_dashboard_maintenance_status("roy")
+                maintenance = get_live_dashboard_maintenance_status(parts[2])
             except Exception:
                 self._send_json(
                     {
                         "error": "Dashboard maintenance status is unavailable; write actions are temporarily blocked.",
-                        "maintenance": maintenance_fail_closed_status("roy"),
+                        "maintenance": maintenance_fail_closed_status(parts[2]),
                     },
                     status=503,
                 )
@@ -2897,7 +2928,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             if project not in projects:
                 self._send_json({"error": f"Unknown project '{project}'."}, status=404)
                 return
-            if project != "roy":
+            if project not in {"roy", "vevo"}:
                 self._send_json({"error": f"Picking-list printing is not enabled for '{project}'."}, status=404)
                 return
             try:
@@ -2959,7 +2990,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             if project not in projects:
                 self._send_json({"error": f"Unknown project '{project}'."}, status=404)
                 return
-            if project != "roy":
+            if project not in {"roy", "vevo"}:
                 self._send_json(
                     {"error": f"Inventory restock preferences are not enabled for '{project}'."},
                     status=404,
