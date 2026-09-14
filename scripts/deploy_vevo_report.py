@@ -208,6 +208,9 @@ class Deployment:
         current_main(self.commit)
         require(self.session.client("sts").get_caller_identity()["Account"] == ACCOUNT, "report-account-invalid")
         self.binding.require_private_bucket(self.s3)
+        # A competing deployment is a read-only rejection, not an interrupted
+        # migration. Check before taking ownership; repeat before dispatch below.
+        self.exclusion()
         self.lease.acquire()
         try:
             require(self.binding.read_object(self.s3, self.binding.CURRENT_KEY, optional=True) is None,
@@ -764,5 +767,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print("VEVO_REPORT_DEPLOY_FAILED:" + type(exc).__name__, flush=True)
+        reason = str(exc)
+        safe_reason = reason if re.fullmatch(r"(?:report|runtime)-[a-z0-9-]+", reason) else type(exc).__name__
+        print("VEVO_REPORT_DEPLOY_FAILED:" + safe_reason, flush=True)
         raise SystemExit(1) from None

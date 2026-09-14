@@ -48,7 +48,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - name: Test managed report boundaries before AWS access
-        run: python -m unittest tests.test_reporting_runtime_binding tests.test_reporting_runtime_binding_review tests.test_reporting_migration_host_gate tests.test_vevo_report_deployment tests.test_reporting_readiness tests.test_managed_report_independent_review tests.test_reporting_environment_order_review tests.test_report_status_identity
+        run: python -m unittest tests.test_reporting_runtime_binding tests.test_reporting_runtime_binding_review tests.test_reporting_migration_host_gate tests.test_vevo_report_deployment tests.test_vevo_bootstrap_recovery tests.test_reporting_readiness tests.test_managed_report_independent_review tests.test_reporting_environment_order_review tests.test_report_status_identity
       - name: Configure managed AWS credentials
         uses: aws-actions/configure-aws-credentials@v6.1.0
         with:
