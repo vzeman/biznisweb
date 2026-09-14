@@ -758,6 +758,7 @@ class CreditnoteMigrationSequenceTests(unittest.TestCase):
             result = value.monitor_and_schedule(project, arn, source_definition(project))
             self.assertEqual(cron, result["ScheduleExpression"])
             self.assertEqual("DISABLED", result["State"])
+            self.assertEqual("NONE", result["ActionAfterCompletion"])
             self.assertEqual("Europe/Bratislava", result["ScheduleExpressionTimezone"])
             self.assertEqual(4, cloudwatch.put_metric_alarm.call_count)
             for call in cloudwatch.put_metric_alarm.call_args_list:
