@@ -67,6 +67,40 @@ merely to produce another independently unusable schema-3 artifact; do not
 disable or interrupt existing scheduled jobs. No source/A/A/Pro/CTA gate opens.
 The owner decision on replacement A/A from September 13 is still separate.
 
+### September 15: verification semantics, not a missing download
+
+Independent design review confirms a constraint in the proposed repair above:
+the complete private record cannot be revalidated offline from its hash or a
+redacted projection alone. Independently fetched GitHub run/artifact metadata
+can prove the origin and integrity of a producer's output; they do not reveal
+or revalidate omitted configuration. A green job or extra `verified: true`
+fields must not be treated as an equivalent replacement for today's schema-3
+dependency. No such replacement is implemented or authorized here.
+
+The owner must explicitly choose the trust boundary before an acceptance change:
+
+- Keep full independent offline private-record validation, with the private
+  record still forbidden locally: remain blocked unless a separately reviewed
+  stronger privacy-preserving proof becomes available. No such proof is
+  currently implemented; do not fabricate one or export the private record.
+- Authorize design of a **monitoring-only** managed-validation/public-attestation
+  contract: the full private configuration, live runtime, completed managed
+  provenance and stable entry/exit authority remain checked inside GitHub.
+  The separate observer verifies exact reviewed producer source, successful
+  main run, required executed steps, sole canonical artifact, GitHub ZIP digest,
+  freshness and the public contract's semantic consistency. It must disclose
+  that private-value validation is delegated to the managed producer, not
+  independently reproduced on the PC. This is a changed assurance boundary,
+  not a hash-only workaround or proof of unobserved private values.
+
+If the second design is authorized, require separate implementation/review,
+end-to-end producer/archive/offline-consumer tests, rejection of missing,
+altered, mixed-run, stale or mismatched proof, and exact failure cleanup before
+activation. Keep the old health schemas and every frozen source consumer
+unchanged and closed; a monitoring-only attestation must not satisfy an A/A
+quality/source gate or an infrastructure-mutation host gate. This document
+opens no gate and does not authorize a new A/A, paid plan or production change.
+
 ## Current Frozen A/A Boundary
 
 The authoritative state is
