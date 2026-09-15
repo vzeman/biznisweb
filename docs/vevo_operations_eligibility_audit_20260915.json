@@ -1,0 +1,955 @@
+{
+  "observed_at": "2026-09-15T11:12:41.778810+00:00",
+  "scope": [
+    "SK",
+    "CZ",
+    "HU"
+  ],
+  "baseline_source": "78de5a37ab50322add83363ac64129958ad314dd",
+  "catalogues": {
+    "SK": {
+      "listPayments": [
+        {
+          "id": "18",
+          "name": "Okamžitá platba online"
+        },
+        {
+          "id": "1",
+          "name": "Okamžitá platba online"
+        },
+        {
+          "id": "6",
+          "name": "Bankovým prevodom"
+        },
+        {
+          "id": "7",
+          "name": "Dobierkou"
+        }
+      ],
+      "listShippings": [
+        {
+          "id": "17",
+          "name": "SPS Balíkovo -  výdajné miesto/box/alzabox",
+          "store_pickup": false
+        },
+        {
+          "id": "18",
+          "name": "SPS Balíkovo - výdajné miesto/box/alzabox",
+          "store_pickup": false
+        },
+        {
+          "id": "2",
+          "name": "Slovenská pošta - balík na poštu",
+          "store_pickup": false
+        },
+        {
+          "id": "9",
+          "name": "Packeta - výdajné miesto/box",
+          "store_pickup": false
+        },
+        {
+          "id": "10",
+          "name": "Slovenská pošta - kuriér na adresu",
+          "store_pickup": false
+        },
+        {
+          "id": "13",
+          "name": "Slovenská pošta - kuriér na adresu",
+          "store_pickup": false
+        },
+        {
+          "id": "8",
+          "name": "DPD - kuriér na adresu",
+          "store_pickup": false
+        },
+        {
+          "id": "12",
+          "name": "Packeta - výdajné miesto/box",
+          "store_pickup": false
+        },
+        {
+          "id": "14",
+          "name": "Slovenská pošta - balík na poštu",
+          "store_pickup": false
+        },
+        {
+          "id": "15",
+          "name": "DPD - kuriér na adresu",
+          "store_pickup": false
+        }
+      ],
+      "listOrderStatuses": [
+        {
+          "id": "69",
+          "name": "Stripe - unpaid"
+        },
+        {
+          "id": "70",
+          "name": "Stripe - paid"
+        },
+        {
+          "id": "71",
+          "name": "Stripe - cancelled"
+        },
+        {
+          "id": "72",
+          "name": "Stripe - expired"
+        },
+        {
+          "id": "73",
+          "name": "Stripe - refunded"
+        },
+        {
+          "id": "17",
+          "name": "Cancelled"
+        },
+        {
+          "id": "24",
+          "name": "GP WebPay - zaplaceno"
+        },
+        {
+          "id": "25",
+          "name": "GP WebPay - platba selhala"
+        },
+        {
+          "id": "26",
+          "name": "GoPay - zaplaceno"
+        },
+        {
+          "id": "27",
+          "name": "GoPay - čeká se"
+        },
+        {
+          "id": "28",
+          "name": "GoPay - platnost vypršela"
+        },
+        {
+          "id": "29",
+          "name": "GoPay - zrušeno"
+        },
+        {
+          "id": "30",
+          "name": "GoPay - platba selhala"
+        },
+        {
+          "id": "39",
+          "name": "Besteron - úspešná platba"
+        },
+        {
+          "id": "40",
+          "name": "Besteron - platba zlyhala"
+        },
+        {
+          "id": "41",
+          "name": "Besteron - platba expirovala"
+        },
+        {
+          "id": "42",
+          "name": "Besteron - vytvorená"
+        },
+        {
+          "id": "43",
+          "name": "Besteron - čaká na potvrdenie"
+        },
+        {
+          "id": "44",
+          "name": "Besteron - prebieha"
+        },
+        {
+          "id": "45",
+          "name": "Besteron - dokončené"
+        },
+        {
+          "id": "46",
+          "name": "Besteron - potrebná manuálna pozornosť"
+        },
+        {
+          "id": "47",
+          "name": "Besteron - neplatný"
+        },
+        {
+          "id": "48",
+          "name": "Besteron - zrušené"
+        },
+        {
+          "id": "49",
+          "name": "Besteron - vypršal časový limit"
+        },
+        {
+          "id": "50",
+          "name": "Besteron - chyba"
+        },
+        {
+          "id": "51",
+          "name": "24 pay - Zaplatená"
+        },
+        {
+          "id": "52",
+          "name": "24 pay - Nezrealizovaná"
+        },
+        {
+          "id": "53",
+          "name": "24 pay - Platba nebola potvrdená"
+        },
+        {
+          "id": "54",
+          "name": "24 pay - Platba autorizovaná"
+        },
+        {
+          "id": "14",
+          "name": "Čaká na úhradu"
+        },
+        {
+          "id": "1",
+          "name": "New order"
+        },
+        {
+          "id": "18",
+          "name": "Reklamácia"
+        },
+        {
+          "id": "22",
+          "name": "Vrátené"
+        },
+        {
+          "id": "4",
+          "name": "Shipped"
+        },
+        {
+          "id": "13",
+          "name": "Nezaplatená - zrušená objednávka"
+        },
+        {
+          "id": "31",
+          "name": "Payment online - paid"
+        },
+        {
+          "id": "36",
+          "name": "GoPay - platba předautorizována"
+        },
+        {
+          "id": "34",
+          "name": "Payment online - expired"
+        },
+        {
+          "id": "32",
+          "name": "GoPay - platba vytvorená"
+        },
+        {
+          "id": "38",
+          "name": "GoPay - Platba částečne vrácena"
+        },
+        {
+          "id": "35",
+          "name": "GoPay - platebni metoda potvrzena"
+        },
+        {
+          "id": "37",
+          "name": "GoPay - platba vracena"
+        },
+        {
+          "id": "33",
+          "name": "Payment online - expired"
+        },
+        {
+          "id": "66",
+          "name": "dobropis"
+        },
+        {
+          "id": "67",
+          "name": "madfrog stara odoslana"
+        },
+        {
+          "id": "68",
+          "name": "Odoslaná - nezaplatená"
+        }
+      ]
+    },
+    "CZ": {
+      "listPayments": [
+        {
+          "id": "19",
+          "name": "Okamžitá platba online"
+        },
+        {
+          "id": "11",
+          "name": "Okamžitá platba online"
+        },
+        {
+          "id": "10",
+          "name": "Dobírka"
+        }
+      ],
+      "listShippings": [
+        {
+          "id": "23",
+          "name": "Packeta - výdejní místo/box",
+          "store_pickup": false
+        },
+        {
+          "id": "25",
+          "name": "Packeta - výdejní místo/box",
+          "store_pickup": false
+        },
+        {
+          "id": "44",
+          "name": "Packeta - kurýr na adresu",
+          "store_pickup": false
+        },
+        {
+          "id": "45",
+          "name": "Packeta - kurýr na adresu",
+          "store_pickup": false
+        }
+      ],
+      "listOrderStatuses": [
+        {
+          "id": "69",
+          "name": "Stripe - unpaid"
+        },
+        {
+          "id": "70",
+          "name": "Stripe - paid"
+        },
+        {
+          "id": "71",
+          "name": "Stripe - cancelled"
+        },
+        {
+          "id": "72",
+          "name": "Stripe - expired"
+        },
+        {
+          "id": "73",
+          "name": "Stripe - refunded"
+        },
+        {
+          "id": "17",
+          "name": "Cancelled"
+        },
+        {
+          "id": "24",
+          "name": "GP WebPay - zaplaceno"
+        },
+        {
+          "id": "25",
+          "name": "GP WebPay - platba selhala"
+        },
+        {
+          "id": "26",
+          "name": "GoPay - zaplaceno"
+        },
+        {
+          "id": "27",
+          "name": "GoPay - čeká se"
+        },
+        {
+          "id": "28",
+          "name": "GoPay - platnost vypršela"
+        },
+        {
+          "id": "29",
+          "name": "GoPay - zrušeno"
+        },
+        {
+          "id": "30",
+          "name": "GoPay - platba selhala"
+        },
+        {
+          "id": "39",
+          "name": "Besteron - úspešná platba"
+        },
+        {
+          "id": "40",
+          "name": "Besteron - platba zlyhala"
+        },
+        {
+          "id": "41",
+          "name": "Besteron - platba expirovala"
+        },
+        {
+          "id": "42",
+          "name": "Besteron - vytvorená"
+        },
+        {
+          "id": "43",
+          "name": "Besteron - čaká na potvrdenie"
+        },
+        {
+          "id": "44",
+          "name": "Besteron - prebieha"
+        },
+        {
+          "id": "45",
+          "name": "Besteron - dokončené"
+        },
+        {
+          "id": "46",
+          "name": "Besteron - potrebná manuálna pozornosť"
+        },
+        {
+          "id": "47",
+          "name": "Besteron - neplatný"
+        },
+        {
+          "id": "48",
+          "name": "Besteron - zrušené"
+        },
+        {
+          "id": "49",
+          "name": "Besteron - vypršal časový limit"
+        },
+        {
+          "id": "50",
+          "name": "Besteron - chyba"
+        },
+        {
+          "id": "51",
+          "name": "24 pay - Zaplatená"
+        },
+        {
+          "id": "52",
+          "name": "24 pay - Nezrealizovaná"
+        },
+        {
+          "id": "53",
+          "name": "24 pay - Platba nebola potvrdená"
+        },
+        {
+          "id": "54",
+          "name": "24 pay - Platba autorizovaná"
+        },
+        {
+          "id": "14",
+          "name": "Čaká na úhradu"
+        },
+        {
+          "id": "1",
+          "name": "New order"
+        },
+        {
+          "id": "18",
+          "name": "Reklamácia"
+        },
+        {
+          "id": "22",
+          "name": "Vrátené"
+        },
+        {
+          "id": "4",
+          "name": "Odesláno"
+        },
+        {
+          "id": "13",
+          "name": "Nezaplatená - zrušená objednávka"
+        },
+        {
+          "id": "31",
+          "name": "Platba online – zaplaceno"
+        },
+        {
+          "id": "36",
+          "name": "GoPay - platba předautorizována"
+        },
+        {
+          "id": "34",
+          "name": "Platba online – zamítnuto"
+        },
+        {
+          "id": "32",
+          "name": "GoPay - platba vytvorená"
+        },
+        {
+          "id": "38",
+          "name": "GoPay - Platba částečne vrácena"
+        },
+        {
+          "id": "35",
+          "name": "GoPay - platebni metoda potvrzena"
+        },
+        {
+          "id": "37",
+          "name": "GoPay - platba vracena"
+        },
+        {
+          "id": "33",
+          "name": "Platba online – vypršela platnost"
+        },
+        {
+          "id": "66",
+          "name": "dobropis"
+        },
+        {
+          "id": "67",
+          "name": "madfrog stara odoslana"
+        },
+        {
+          "id": "68",
+          "name": "Odoslaná - nezaplatená"
+        }
+      ]
+    },
+    "HU": {
+      "listPayments": [
+        {
+          "id": "20",
+          "name": "Bankkártyás fizetés online"
+        },
+        {
+          "id": "16",
+          "name": "Utánvétes fizetés"
+        },
+        {
+          "id": "17",
+          "name": "Bankkártyás fizetés online"
+        }
+      ],
+      "listShippings": [
+        {
+          "id": "38",
+          "name": "Magyar Posta - a címre",
+          "store_pickup": false
+        },
+        {
+          "id": "39",
+          "name": "Magyar Posta - a címre",
+          "store_pickup": false
+        },
+        {
+          "id": "40",
+          "name": "FoxPost csomagpont",
+          "store_pickup": false
+        },
+        {
+          "id": "41",
+          "name": "FoxPost csomagpont",
+          "store_pickup": false
+        },
+        {
+          "id": "42",
+          "name": "Express One - a címre",
+          "store_pickup": false
+        },
+        {
+          "id": "43",
+          "name": "Express One - a címre",
+          "store_pickup": false
+        }
+      ],
+      "listOrderStatuses": [
+        {
+          "id": "69",
+          "name": "Stripe - unpaid"
+        },
+        {
+          "id": "70",
+          "name": "Stripe - paid"
+        },
+        {
+          "id": "71",
+          "name": "Stripe - cancelled"
+        },
+        {
+          "id": "72",
+          "name": "Stripe - expired"
+        },
+        {
+          "id": "73",
+          "name": "Stripe - refunded"
+        },
+        {
+          "id": "17",
+          "name": "Cancelled"
+        },
+        {
+          "id": "24",
+          "name": "GP WebPay - zaplaceno"
+        },
+        {
+          "id": "25",
+          "name": "GP WebPay - platba selhala"
+        },
+        {
+          "id": "26",
+          "name": "GoPay - zaplaceno"
+        },
+        {
+          "id": "27",
+          "name": "GoPay - čeká se"
+        },
+        {
+          "id": "28",
+          "name": "GoPay - platnost vypršela"
+        },
+        {
+          "id": "29",
+          "name": "GoPay - zrušeno"
+        },
+        {
+          "id": "30",
+          "name": "GoPay - platba selhala"
+        },
+        {
+          "id": "39",
+          "name": "Besteron - úspešná platba"
+        },
+        {
+          "id": "40",
+          "name": "Besteron - platba zlyhala"
+        },
+        {
+          "id": "41",
+          "name": "Besteron - platba expirovala"
+        },
+        {
+          "id": "42",
+          "name": "Besteron - vytvorená"
+        },
+        {
+          "id": "43",
+          "name": "Besteron - čaká na potvrdenie"
+        },
+        {
+          "id": "44",
+          "name": "Besteron - prebieha"
+        },
+        {
+          "id": "45",
+          "name": "Besteron - dokončené"
+        },
+        {
+          "id": "46",
+          "name": "Besteron - potrebná manuálna pozornosť"
+        },
+        {
+          "id": "47",
+          "name": "Besteron - neplatný"
+        },
+        {
+          "id": "48",
+          "name": "Besteron - zrušené"
+        },
+        {
+          "id": "49",
+          "name": "Besteron - vypršal časový limit"
+        },
+        {
+          "id": "50",
+          "name": "Besteron - chyba"
+        },
+        {
+          "id": "51",
+          "name": "24 pay - Zaplatená"
+        },
+        {
+          "id": "52",
+          "name": "24 pay - Nezrealizovaná"
+        },
+        {
+          "id": "53",
+          "name": "24 pay - Platba nebola potvrdená"
+        },
+        {
+          "id": "54",
+          "name": "24 pay - Platba autorizovaná"
+        },
+        {
+          "id": "14",
+          "name": "Čaká na úhradu"
+        },
+        {
+          "id": "1",
+          "name": "New order"
+        },
+        {
+          "id": "18",
+          "name": "Reklamácia"
+        },
+        {
+          "id": "22",
+          "name": "Vrátené"
+        },
+        {
+          "id": "4",
+          "name": "Elküldve"
+        },
+        {
+          "id": "13",
+          "name": "Nezaplatená - zrušená objednávka"
+        },
+        {
+          "id": "31",
+          "name": "Online fizetés – kifizetve"
+        },
+        {
+          "id": "36",
+          "name": "GoPay - platba předautorizována"
+        },
+        {
+          "id": "34",
+          "name": "Online fizetés – elutasítva"
+        },
+        {
+          "id": "32",
+          "name": "GoPay - platba vytvorená"
+        },
+        {
+          "id": "38",
+          "name": "GoPay - Platba částečne vrácena"
+        },
+        {
+          "id": "35",
+          "name": "GoPay - platebni metoda potvrzena"
+        },
+        {
+          "id": "37",
+          "name": "GoPay - platba vracena"
+        },
+        {
+          "id": "33",
+          "name": "Online fizetés – lejárt"
+        },
+        {
+          "id": "66",
+          "name": "dobropis"
+        },
+        {
+          "id": "67",
+          "name": "madfrog stara odoslana"
+        },
+        {
+          "id": "68",
+          "name": "Odoslaná - nezaplatená"
+        }
+      ]
+    }
+  },
+  "complete_status_scans": {
+    "1": {
+      "orders": 25,
+      "pages": 1,
+      "exhausted": true,
+      "groups": [
+        {
+          "language": "cz",
+          "payment_id": "10",
+          "before_eligible": true,
+          "after_eligible": true,
+          "blocked": false,
+          "count": 1
+        },
+        {
+          "language": "hu",
+          "payment_id": "16",
+          "before_eligible": false,
+          "after_eligible": true,
+          "blocked": false,
+          "count": 5
+        },
+        {
+          "language": "sk",
+          "payment_id": "1",
+          "before_eligible": false,
+          "after_eligible": false,
+          "blocked": false,
+          "count": 2
+        },
+        {
+          "language": "sk",
+          "payment_id": "18",
+          "before_eligible": false,
+          "after_eligible": false,
+          "blocked": false,
+          "count": 4
+        },
+        {
+          "language": "sk",
+          "payment_id": "7",
+          "before_eligible": true,
+          "after_eligible": true,
+          "blocked": false,
+          "count": 13
+        }
+      ]
+    },
+    "31": {
+      "orders": 19,
+      "pages": 1,
+      "exhausted": true,
+      "groups": [
+        {
+          "language": "hu",
+          "payment_id": "17",
+          "before_eligible": true,
+          "after_eligible": true,
+          "blocked": false,
+          "count": 1
+        },
+        {
+          "language": "sk",
+          "payment_id": "1",
+          "before_eligible": true,
+          "after_eligible": true,
+          "blocked": false,
+          "count": 8
+        },
+        {
+          "language": "sk",
+          "payment_id": "18",
+          "before_eligible": true,
+          "after_eligible": true,
+          "blocked": false,
+          "count": 9
+        },
+        {
+          "language": "sk",
+          "payment_id": "6",
+          "before_eligible": true,
+          "after_eligible": true,
+          "blocked": false,
+          "count": 1
+        }
+      ]
+    },
+    "70": {
+      "orders": 0,
+      "pages": 1,
+      "exhausted": true,
+      "groups": []
+    },
+    "24": {
+      "orders": 0,
+      "pages": 1,
+      "exhausted": true,
+      "groups": []
+    },
+    "26": {
+      "orders": 0,
+      "pages": 1,
+      "exhausted": true,
+      "groups": []
+    },
+    "39": {
+      "orders": 0,
+      "pages": 1,
+      "exhausted": true,
+      "groups": []
+    },
+    "45": {
+      "orders": 0,
+      "pages": 1,
+      "exhausted": true,
+      "groups": []
+    },
+    "51": {
+      "orders": 0,
+      "pages": 1,
+      "exhausted": true,
+      "groups": []
+    }
+  },
+  "recent_scan": {
+    "orders": 300,
+    "oldest_purchase": "2026-08-31 20:59:37",
+    "missing_eligible_orders": 0,
+    "status_counts": [
+      {
+        "language": "cz",
+        "status_id": "1",
+        "status": "New order",
+        "count": 1
+      },
+      {
+        "language": "cz",
+        "status_id": "4",
+        "status": "Shipped",
+        "count": 1
+      },
+      {
+        "language": "hu",
+        "status_id": "1",
+        "status": "New order",
+        "count": 5
+      },
+      {
+        "language": "hu",
+        "status_id": "31",
+        "status": "Payment online - paid",
+        "count": 1
+      },
+      {
+        "language": "hu",
+        "status_id": "4",
+        "status": "Shipped",
+        "count": 9
+      },
+      {
+        "language": "sk",
+        "status_id": "1",
+        "status": "New order",
+        "count": 19
+      },
+      {
+        "language": "sk",
+        "status_id": "13",
+        "status": "Nezaplatená - zrušená objednávka",
+        "count": 16
+      },
+      {
+        "language": "sk",
+        "status_id": "14",
+        "status": "Čaká na úhradu",
+        "count": 2
+      },
+      {
+        "language": "sk",
+        "status_id": "17",
+        "status": "Cancelled",
+        "count": 1
+      },
+      {
+        "language": "sk",
+        "status_id": "31",
+        "status": "Payment online - paid",
+        "count": 18
+      },
+      {
+        "language": "sk",
+        "status_id": "33",
+        "status": "Payment online - expired",
+        "count": 25
+      },
+      {
+        "language": "sk",
+        "status_id": "34",
+        "status": "Payment online - expired",
+        "count": 5
+      },
+      {
+        "language": "sk",
+        "status_id": "4",
+        "status": "Shipped",
+        "count": 196
+      },
+      {
+        "language": "sk",
+        "status_id": "69",
+        "status": "Stripe - unpaid",
+        "count": 1
+      }
+    ]
+  },
+  "comparison": {
+    "expected_eligible": 38,
+    "live_eligible": 33,
+    "newly_included": 5,
+    "missing_from_live": 5,
+    "unexpected_live": 0,
+    "missing_exactly_hu_cod": true,
+    "newly_included_already_printed": 0,
+    "eligible_older_than_previous_scan": 0,
+    "reported_order_corrected": true,
+    "reported_order_previously_printed": false,
+    "snapshot_generated_at": "2026-09-15T11:09:58Z"
+  }
+}

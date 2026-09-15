@@ -2,13 +2,29 @@
 
 Production: https://2mhmsmgq3m.eu-central-1.awsapprunner.com/production/vevo. Existing manufacturing board: `/manufacturing/vevo` with API `/api/production/vevo/live`. Existing authentication is preserved. Shared ROY-named modules retain their names for compatibility; project configuration and deployment guards isolate each shop.
 
-Fulfillment: paid31/Stripe-paid70, or new1 with COD payment7. The reviewed status catalogue binds IDs and labels. Bank-confirmed paid orders qualify independently of a gateway payment. Raw labels and order currencies remain visible; aggregate value uses configured reporting FX rates. VEVO pickup11 has no ready status: only paid-to-shipped4 handing over is offered, with fresh eligibility and saved-status verification. PDF preview never marks orders printed.
+Fulfillment: paid31/Stripe-paid70, or new1 with reviewed COD payment IDs7 (SK),10 (CZ),16 (HU). The reviewed status catalogue binds IDs and labels. Bank-confirmed paid orders qualify independently of a gateway payment. Raw labels and order currencies remain visible; aggregate value uses configured reporting FX rates. VEVO pickup11 has no ready status: only paid-to-shipped4 handing over is offered, with fresh eligibility and saved-status verification. PDF preview never marks orders printed.
 
 Inventory reads the current immutable report generation, hash-verified full payload and its exact realized-sales CSV. Mixed generations, foreign prefixes, partial/failed reports and oversized sources fail closed. The shared model loads/restores normal VEVO costs without ad clients, report regeneration or email. Model results are cached for15 minutes or until a new generation; current stock uses a complete catalogue and exact reporting SKU. Missing costs, negative stock and advisory recommendations are disclosed. Default five-working-day lead time is an estimate; no ROY brand/bundle rules are copied.
 
-## Deploy and verify
+## SK/CZ/HU eligibility audit — September 15, 2026
 
-Known issue verified September 15: Hungarian COD payment reference ID `16` is not recognized for new orders. Current COD settings accept ID `7` or labels containing `dobierk`/`dobirk`; a Hungarian label does not match. Status ID `1` / `New order` is correctly canonicalized, but payment eligibility returns `not_ready`, so the order never reaches the picking PDF selector. The investigated order also had no printed-state entry. A correction must review localized payment IDs and cover unpaid non-COD exclusions before deployment; this diagnosis changes no runtime behavior.
+The previous configuration excluded five new Hungarian COD orders, including the owner's reported order. Czech COD already passed the normalized `Dobírka` label fallback; its ID is now explicit too. The configuration change accepts verified IDs `7`, `10`, `16` without broadening unpaid online/bank eligibility or changing provider statuses. The candidate-host check uses the same reviewed three-country boundary.
+
+| Storefront | Active payment IDs | Eligible before / after correction at audit time |
+| --- | --- | --- |
+| SK / EUR | COD7; online1/18; bank6 | 31 / 31 (13 COD, 18 paid) |
+| CZ / CZK | COD10; online11/19 | 1 / 1 (COD) |
+| HU / HUF | COD16; online17/20 | 1 / 6 (five COD, one paid) |
+
+Evidence: [sanitized provider catalogue and audit counts](docs/vevo_operations_eligibility_audit_20260915.json). Complete, date-unbounded paginated scans of statuses1/31/70 found44 orders:38 eligible after correction and six new online orders correctly excluded until payment confirmation. Additional paid-labelled gateway statuses24/26/39/45/51 had no orders. Reads included blocked orders; none occurred in these status scans. The independent latest300 scan contained all38 eligible orders. Production snapshot had33, with exactly the five Hungarian COD orders missing; none of those five was already marked printed. No second current exclusion was found in the requested three storefronts.
+
+Reproduce read-only with `listPayments`, `listShippings`, `listOrderStatuses` for each `lang_code: SK/CZ/HU`, then `getOrderList(status: <id>, include_blocking: true, params: {limit: 30, order_by: pur_date, sort: DESC, cursor: <nextCursor>})` until `hasNextPage` is false. Inspect only order number in memory, language, status, blocked flag, date and payment reference. Compare canonicalized eligibility with the reviewed COD IDs and paid statuses, then compare order-number sets against the production snapshot and printed state. Never publish customer records. API order reads without a language argument return the SK status labels even for CZ/HU orders; localized status catalogue labels are not used as arbitrary aliases.
+
+Regression coverage crosses all active payment methods,20 delivery IDs, three currencies and paid/new/unpaid/expired/cancelled/shipped states. It also checks label-independent COD IDs and per-order PDF selection with existing print tracking. CZ online and Stripe-paid paths have test coverage but had no currently open paid example in this audit. Gateway callback settlement itself was not retested. Current scanning remains bounded (minimum10, maximum30 pages, stop after three empty eligible pages); the complete status scan proves no present omission, not unlimited future historical coverage. Storefront checkout settings and provider state remain unchanged. Deployment completion is recorded separately in `PROJECT_STATE.md`.
+
+Official references: [order/status/payment configuration](https://www.biznisweb.sk/a/59/nastavenie-objednavok) and [payment methods](https://www.biznisweb.sk/a/1220/ake-su-najoblubenejsie-platobne-moznosti-v-bizniswebe); exact IDs and findings above come from this installation's fresh API readback.
+
+## Deploy and verify
 
 1. Merge the reviewed branch PR after exact-head checks. Require a successful `Build and Push ECR` run for the exact main source and immutable `git-<source-sha>` image. Use a clean checkout at that SHA and the pinned dependencies in `requirements.txt`.
 2. Verify account919341186960, regioneu-central-1, App Runner`biznisweb-vevo-production-board`, ARN suffix2711a253ae014a8aaf1a37929997496d, current image, `/app`, port8080 and managed host identity. The helper repeats this gate.

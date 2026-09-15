@@ -53,6 +53,44 @@ class VevoOperationsTests(unittest.TestCase):
             canonical_order(self.client, raw)
         self.assertFalse(operations._is_paid_online(raw, self.settings))
 
+    def test_sk_cz_hu_payment_and_shipping_eligibility(self):
+        # Active catalogue read September 15; provider order reads return SK labels
+        # for every storefront. Expected roles are independent of settings.json.
+        shops = [
+            ("EUR", "7", "Dobierkou", ["1", "6", "18"], ["2", "8", "9", "10", "12", "13", "14", "15", "17", "18"]),
+            ("CZK", "10", "Dobírka", ["11", "19"], ["23", "25", "44", "45"]),
+            ("HUF", "16", "Utánvétes fizetés", ["17", "20"], ["38", "39", "40", "41", "42", "43"]),
+        ]
+        for currency, cod_id, cod_title, prepaid_ids, shipping_ids in shops:
+            for payment_id in [cod_id, *prepaid_ids]:
+                for status_id in [1, 31, 70, 69, 33, 34, 17, 4]:
+                    for shipping_id in shipping_ids:
+                        with self.subTest(currency=currency, payment=payment_id, status=status_id, shipping=shipping_id):
+                            name = next(row["name"] for row in self.catalogue if row["id"] == str(status_id))
+                            raw = make_order("V-LOCALIZED", name,
+                                price_element("payment", cod_title if payment_id == cod_id else "Online / bank", payment_id),
+                                price_element("shipping", "Carrier", shipping_id))
+                            raw["status"]["id"] = str(status_id)
+                            raw["sum"] = {"value": 100, "formatted": "100 " + currency, "currency": {"code": currency}}
+                            row = operations._public_order_row(canonical_order(self.client, raw), self.settings)
+                            self.assertEqual(status_id in {31, 70} or (status_id == 1 and payment_id == cod_id), row["fulfillable"])
+
+    def test_reviewed_cod_ids_survive_label_changes(self):
+        for payment_id in ["7", "10", "16"]:
+            raw = {"status": {"id": "1", "name": "New order"},
+                   "price_elements": [price_element("payment", "Localized payment", payment_id)]}
+            self.assertEqual((True, "cod_waiting"), operations._is_fulfillable_order(canonical_order(self.client, raw), self.settings))
+
+    def test_localized_cod_enters_pdf_selection_and_preserves_print_tracking(self):
+        rows = [self.row(1, payment_id) for payment_id in ["7", "10", "16"]]
+        for row, number in zip(rows, ["V-SK", "V-CZ", "V-HU"]):
+            row["order_num"] = number
+            self.assertTrue(row["fulfillable"])
+        state = {"printed_picking_orders": {"V-CZ": {"printed_at": "2026-09-15T10:00:00Z"}}}
+        self.assertEqual(["V-SK", "V-HU"], [row["order_num"] for row in operations.select_picking_orders_for_print(rows, state)])
+        self.assertEqual(["V-HU"], [row["order_num"] for row in operations.select_picking_orders_for_print(rows, state, order_nums=["V-HU"])])
+        self.assertEqual(3, len(operations.select_picking_orders_for_print(rows, state, include_printed=True)))
+
     def test_no_invented_pickup_ready_status(self):
         row = self.row(31, "6", pickup=True)
         self.assertTrue(row["pickup_ship_action_allowed"])
