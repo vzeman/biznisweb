@@ -1,5 +1,28 @@
 # PROJECT_STATE
 
+## 2026-09-15 — VEVO Hungarian COD order excluded from picking PDF (diagnosis)
+
+Date: 2026-09-15
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-pdf-order-audit-20260915` (documentation only)
+
+What changed / verified:
+
+- Created a clean worktree from `origin/main` at `50bc850d` after fetch/prune; pull/rebase was up to date. Existing unrelated worktrees were preserved. No runtime/configuration code changed.
+- Read-only AWS inspection confirmed account `919341186960`, region `eu-central-1`, App Runner `biznisweb-vevo-production-board` RUNNING on digest `sha256:180d90fb8dc4f8a53a45171f280b5d6366ff4c4a494809a8efa3c6d1e58d0145`. Eligibility, status identity, project settings and PDF selection files have no diff from deployed source `78de5a37ab50322add83363ac64129958ad314dd`.
+- Fresh provider lookup of the owner's reported order confirmed status ID `1` / `New order`, HUF currency and Hungarian COD payment reference ID `16`. Customer details and the order identifier are omitted from this public record. The reviewed status identity correctly canonicalizes ID `1`; the English rename is not the cause.
+- Actual eligibility functions returned `cod_payment=false`, `paid=false`, `(false, "not_ready")`. The configured COD IDs contain only `7`; fallback patterns are only `dobierk` and `dobirk`, which do not match the Hungarian payment label. This excludes the order before PDF generation.
+- Read the production S3 operations state and snapshot without mutation. State last modified `2026-09-15T09:27:48Z` has no printed entry for the reported order. Snapshot last modified `2026-09-15T11:04:18Z` omits it from eligible orders: 33 fulfillable, 29 printed, four unprinted; 300 orders scanned back to August 31. The demonstrated exclusion is payment eligibility, not the printed-order filter.
+- No shop mutation, PDF print acknowledgement, deployment, email or local persistent process was performed. Production services remain running.
+
+Known issues:
+
+- New Hungarian COD orders using payment ID `16` are excluded by the current operations configuration. Other unreviewed localized COD methods may have the same gap; their catalogue has not been audited in this diagnosis.
+
+Next exact step:
+
+- Report the confirmed cause to the owner. For a subsequent correction, review the payment catalogue across active languages, bind verified COD IDs (including `16`), add eligibility coverage for localized COD and unpaid non-COD cases, then follow the existing branch/PR and App Runner host-verification deployment gates. Diagnosis alone has not repaired production.
+
 ## 2026-09-15 — GrowthBook monitoring proof boundary requires an explicit decision
 
 Date: 2026-09-15

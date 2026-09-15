@@ -8,6 +8,8 @@ Inventory reads the current immutable report generation, hash-verified full payl
 
 ## Deploy and verify
 
+Known issue verified September 15: Hungarian COD payment reference ID `16` is not recognized for new orders. Current COD settings accept ID `7` or labels containing `dobierk`/`dobirk`; a Hungarian label does not match. Status ID `1` / `New order` is correctly canonicalized, but payment eligibility returns `not_ready`, so the order never reaches the picking PDF selector. The investigated order also had no printed-state entry. A correction must review localized payment IDs and cover unpaid non-COD exclusions before deployment; this diagnosis changes no runtime behavior.
+
 1. Merge the reviewed branch PR after exact-head checks. Require a successful `Build and Push ECR` run for the exact main source and immutable `git-<source-sha>` image. Use a clean checkout at that SHA and the pinned dependencies in `requirements.txt`.
 2. Verify account919341186960, regioneu-central-1, App Runner`biznisweb-vevo-production-board`, ARN suffix2711a253ae014a8aaf1a37929997496d, current image, `/app`, port8080 and managed host identity. The helper repeats this gate.
 3. With the authorized AWS_PROFILE, run `python scripts/deploy_vevo_board_image.py probe --operations --source-sha <sha> --expected-current-digest <sha256:digest> --receipt data/vevo/operations-deploy.json`. Only absent operations/maintenance objects are initialized using conditional writes. A finite Fargate task at the current CPU/memory proves actual task/IP/path, localhost marker, authenticated HTML/API/PDF, inventory/KPIs and foreign-route/CSRF rejection. It performs no provider mutation, test transaction, report run or email.
