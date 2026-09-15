@@ -1,5 +1,33 @@
 # PROJECT_STATE
 
+## 2026-09-15 — VEVO SK/CZ/HU COD correction deployed; target PDF verified
+
+Date: 2026-09-15, 11:31 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cod-deployment-20260915` (deployment evidence only)
+
+What changed:
+
+- PR573 merged after all six exact-head checks at `e23e919edb5218435f54e61e1930541a0898770c`. Linux and Windows each ran988 regression tests successfully (one skip each); focused local suite passed125. Merged runtime source `83aa18646574c03859f06442c0674ae6e1ff98e4`; successful Build and Push ECR run34962595398 produced immutable digest `sha256:e45c8ccef70f303d0473332163eabc10dc3e05f3c81527436d241f09971935d8`.
+- Promoted only that image to App Runner `biznisweb-vevo-production-board`; operation `b8226999fb674a5e895751317cde67f4` SUCCEEDED at11:28:52UTC. Independent readback confirms RUNNING, every non-image service configuration field unchanged, and the VEVO daily-report schedule unchanged. No provider order, payment, stock, email or print acknowledgement was mutated.
+
+What is verified:
+
+- Candidate Fargate task `3f96195d49fc4247b7715666369656bd`, privateIP `172.31.31.49`, `/app`, PythonPID1, localhost port38515 emitted the bound marker and passed authenticated dashboard/API/PDF, project isolation, cross-site-write rejection, stock and KPI checks. It found38 eligible orders (19 paid,19 COD),29 printed and9 unprinted. Bulk preview was361875bytes, peak RSS223860KiB. Task independently STOPPED/exit0; definition INACTIVE; host server closed and port released. No persistent local server, worker or tunnel was started; production App Runner remains running.
+- Initial post-promotion API read returned the old33-order shared cache. This was not accepted as correction proof. Forced refresh produced `generated_at=2026-09-15T11:30:43Z`, independently confirming38 eligible,29 printed,9 unprinted and the reported HU COD order with four items. This matches the complete SK/CZ/HU audit: the only current eligibility omissions were the five HU COD orders; Czech COD already passed by its localized label and now has explicit ID10 recognition.
+- Authenticated targeted PDF preview returns one page,87717bytes, containing the reported order number and all four items. PDF SHA256 `64cb7a0b830bded5813ad58990306071d6e7eb75a90b8e7c74e8358f06038cad`. Production print-state bytes were identical before/after preview. Read-only rendered-page inspection confirmed the items and found the separate long-shipping-label layout issue below; no PDF content was authored or altered.
+- Durable encrypted evidence bucket `biznisweb-reporting-artifacts-919341186960-eu-central-1`, prefix `daily-reports/vevo/operations/deployments/83aa18646574c03859f06442c0674ae6e1ff98e4/`: deployment receipt `operations-cod-deploy-20260915-83aa1864.json`, SHA256 `d0ce55e92319cb93a32a35d20229d6244b1aec51af00f3ce71fbe20c8e99bb30`; independent final readback `operations-cod-live-verification-20260915.json`, SHA256 `c570664bb2a85cd695661ac605fe31914088ecdfa206a31c18577b673b1a4219`. The final readback supersedes the receipt's initial cached33-order live summary. Customer data/PDF remain outside Git and can be regenerated from the authenticated runtime.
+
+Known issues:
+
+- Browser UI verification was attempted after the host gate, but Comet blocked the production URL with `ERR_BLOCKED_BY_CLIENT`. No browser protection was bypassed; browser UI remains unverified. Independent authenticated production API and PDF verification succeeded.
+- Existing PDF header does not wrap the long Hungarian shipping method/pickup-point label; it extends beyond the right page edge. Delivery address and all four item rows render separately. This formatting defect is distinct from the repaired eligibility exclusion; it was recorded without expanding the deployed change.
+- Bounded historical scanning remains as documented in `VEVO_OPERATIONS.md`; the complete active-status audit found no current eligible order outside the latest300.
+
+Next exact step:
+
+- Complete this evidence-only PR. When browser access is available, visually confirm the production orders page. Handle long shipping-label wrapping as a separate PDF layout correction. No further COD eligibility deployment is pending.
+
 ## 2026-09-15 — VEVO SK/CZ/HU COD correction and complete open-order audit
 
 Date: 2026-09-15
