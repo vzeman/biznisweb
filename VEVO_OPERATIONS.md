@@ -24,6 +24,8 @@ Regression coverage crosses all active payment methods,20 delivery IDs, three cu
 
 Official references: [order/status/payment configuration](https://www.biznisweb.sk/a/59/nastavenie-objednavok) and [payment methods](https://www.biznisweb.sk/a/1220/ake-su-najoblubenejsie-platobne-moznosti-v-bizniswebe); exact IDs and findings above come from this installation's fresh API readback.
 
+Deployed September15 at11:28:52UTC, source `83aa18646574c03859f06442c0674ae6e1ff98e4`, image digest `e45c8ccef70f303d0473332163eabc10dc3e05f3c81527436d241f09971935d8`. Fresh11:30:43UTC production data confirms38 eligible and9 unprinted orders. The reported HU COD order generates a one-page PDF with four items without changing print state. The first response after deployment was a stale33-order shared snapshot, so a fresh refresh was required. Browser UI verification was blocked by Comet; API/PDF and actual-host checks passed. Rendered PDF inspection also found existing overflow of the long Hungarian shipping label in the header, a separate layout follow-up.
+
 ## Deploy and verify
 
 1. Merge the reviewed branch PR after exact-head checks. Require a successful `Build and Push ECR` run for the exact main source and immutable `git-<source-sha>` image. Use a clean checkout at that SHA and the pinned dependencies in `requirements.txt`.
