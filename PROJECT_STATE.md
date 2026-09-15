@@ -1,5 +1,47 @@
 # PROJECT_STATE
 
+## 2026-09-15 — VEVO SK/CZ/HU COD correction and complete open-order audit
+
+Date: 2026-09-15
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-pdf-order-audit-20260915` (PR573 expanded to the requested correction)
+
+What changed / verified:
+
+- User authorized correction and a SK/CZ/HU eligibility audit. Rechecked clean branch, fetch/prune and pull/rebase. Runtime identity confirmed account919341186960, App Runner `biznisweb-vevo-production-board`, managed instance/IP (service endpoint `2mhmsmgq3m.eu-central-1.awsapprunner.com`), `/app`, port8080, unchanged production digest `180d90fb8dc4f8a53a45171f280b5d6366ff4c4a494809a8efa3c6d1e58d0145`.
+- Added reviewed COD payment IDs10 (CZ) and16 (HU) alongside7 (SK) in VEVO operations settings; updated the finite host gate's explicit COD allowlist. Czech COD already passed by label. No shared eligibility algorithm, shop settings or status/payment data changed.
+- Fresh active payment/shipping/status catalogues and complete date-unbounded status1/31/70 scans found44 orders: SK31 eligible, CZ1, HU6 after correction, plus six new online orders correctly waiting for payment. Exactly five HU COD orders were excluded before correction, none previously printed. Other paid-labelled gateway status24/26/39/45/51 scans were empty. All status queries included blocking orders; none were present.
+- Independent latest300 scan contained every currently eligible order; production's33 versus expected38 differ only by those five HU COD orders. The new English status names, current shipping IDs, currency handling and print tracking revealed no second current gap. Provider order reads use the SK status labels across languages. Public evidence is sanitized in `docs/vevo_operations_eligibility_audit_20260915.json`; reasoning, reproduction and limits are in `VEVO_OPERATIONS.md`.
+- Focused suite passed125 tests, including the full active SK/CZ/HU payment/shipping/currency/status matrix, COD identity independent of label, targeted PDF selection and preserved printed-order suppression. CZ online and Stripe-paid paths are tested synthetically because there are no currently open paid examples for those paths. No payment transaction was created.
+
+Known issues / next exact step:
+
+- Production still runs the previous configuration until deployment. Complete exact-head CI and PR573, build the immutable merged image, run the recorded App Runner candidate host gate (localhost plus identity marker), promote only the image, then verify the live API, reported-order PDF preview and browser UI. Preserve print state and stop/deregister the finite probe.
+- Current scan limits can still exclude sufficiently old orders in the future; the complete status audit found none missing today. No local persistent process was started.
+
+## 2026-09-15 — VEVO Hungarian COD order excluded from picking PDF (diagnosis)
+
+Date: 2026-09-15
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-pdf-order-audit-20260915` (documentation only)
+
+What changed / verified:
+
+- Created a clean worktree from `origin/main` at `50bc850d` after fetch/prune; pull/rebase was up to date. Existing unrelated worktrees were preserved. No runtime/configuration code changed.
+- Read-only AWS inspection confirmed account `919341186960`, region `eu-central-1`, App Runner `biznisweb-vevo-production-board` RUNNING on digest `sha256:180d90fb8dc4f8a53a45171f280b5d6366ff4c4a494809a8efa3c6d1e58d0145`. Eligibility, status identity, project settings and PDF selection files have no diff from deployed source `78de5a37ab50322add83363ac64129958ad314dd`.
+- Fresh provider lookup of the owner's reported order confirmed status ID `1` / `New order`, HUF currency and Hungarian COD payment reference ID `16`. Customer details and the order identifier are omitted from this public record. The reviewed status identity correctly canonicalizes ID `1`; the English rename is not the cause.
+- Actual eligibility functions returned `cod_payment=false`, `paid=false`, `(false, "not_ready")`. The configured COD IDs contain only `7`; fallback patterns are only `dobierk` and `dobirk`, which do not match the Hungarian payment label. This excludes the order before PDF generation.
+- Read the production S3 operations state and snapshot without mutation. State last modified `2026-09-15T09:27:48Z` has no printed entry for the reported order. Snapshot last modified `2026-09-15T11:04:18Z` omits it from eligible orders: 33 fulfillable, 29 printed, four unprinted; 300 orders scanned back to August 31. The demonstrated exclusion is payment eligibility, not the printed-order filter.
+- No shop mutation, PDF print acknowledgement, deployment, email or local persistent process was performed. Production services remain running.
+
+Known issues:
+
+- New Hungarian COD orders using payment ID `16` are excluded by the current operations configuration. Other unreviewed localized COD methods may have the same gap; their catalogue has not been audited in this diagnosis.
+
+Next exact step:
+
+- Report the confirmed cause to the owner. For a subsequent correction, review the payment catalogue across active languages, bind verified COD IDs (including `16`), add eligibility coverage for localized COD and unpaid non-COD cases, then follow the existing branch/PR and App Runner host-verification deployment gates. Diagnosis alone has not repaired production.
+
 ## 2026-09-15 — GrowthBook monitoring proof boundary requires an explicit decision
 
 Date: 2026-09-15

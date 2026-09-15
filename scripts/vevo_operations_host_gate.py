@@ -78,7 +78,8 @@ def main():
         for order in data["orders"]["orders"]:
             assert order["status_id"] in {"1", "31", "70"}
             if order["status_id"] == "1":
-                assert order["payment"]["reference_id"] == "7"
+                # Reviewed SK, CZ and HU COD methods; do not accept online payments.
+                assert order["payment"]["reference_id"] in {"7", "10", "16"}
         summary = data["inventory"]["summary"]
         assert summary["inventory_status"] == "ok" and summary["inventory_products_total"] > 0
         assert summary["inventory_available_units"] > 0 and summary["inventory_cost_value"] > 0
