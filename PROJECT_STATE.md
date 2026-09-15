@@ -1,5 +1,23 @@
 # PROJECT_STATE
 
+## 2026-09-15 — GrowthBook monitoring proof boundary requires an explicit decision
+
+Date: 2026-09-15
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-health-verification-boundary-20260915` (documentation only)
+
+What changed / verified:
+
+- Verified the exact absolute worktree, clean `main`, fetch/prune and pull/rebase from `a8df8a24` to `5f1cd969a132463da02c657eaa807f7a69c1d2e4`. Preserved the separate operations-dashboard delivery. The monitoring workflow, private binding validator and offline health dependency contract remain unchanged.
+- Today's inspected GitHub inventory contained no September 15 monitor run and no active monitor. Latest observed non-skipped September 14 scheduled run `34819867287`, exact main `a8df8a245d70d7d8336b20c3e4218076371385fe`, is completed/success; its job `103898725920` reports successful entry/exit binding checks and private-snapshot cleanup. Its sole artifact metadata names `vevo-growthbook-production-aa-infra-health`, ID `10338196119`, ZIP digest `798a6eee116585a64a79fc47bde35111cca8e6d565e10c57bd2af8e44de24c90`. These are GitHub metadata observations only: no artifact was downloaded, hash recomputed, schema independently accepted or current health claimed. A successful job is not a substitute for the missing offline dependency.
+- Rechecked `HEALTH_SCHEMA3_OFFLINE_DEPENDENCY_UNAVAILABLE`. Full private-record validation is still required locally, while only the health JSON plus its record hash is published. Independent design review confirms that a public projection and separately read GitHub metadata establish origin/integrity, not independent revalidation of omitted private configuration. Relabelling that as equivalent verification would silently change the acceptance contract.
+- Focused offline runtime-binding/health suite passed 36 tests; the full source/lifecycle suite ran 318 tests (315 passed, three existing Windows symlink skips). Workspace, measurement-window, activation, security and whitespace validators passed. Independent documentation review approved the two-file diff without blockers. Exact-head CI and actual Linux regression execution are still required before merge. The expected noncanonical-JSON rejection is a synthetic negative test, not a live failure. No local AWS, raw/private record, outcome query, manual workflow dispatch, A/A/Preview/GTM/Meta/BiznisWeb/runtime mutation or persistent local service was used.
+
+Known issues / next exact step:
+
+- Current infrastructure health remains independently unverified, not a confirmed outage. Preserve the existing scheduled jobs and do not manually create another known-unusable schema-3 artifact. The historical receipt-framing and manual-QA blockers remain separate; this task neither reopens the resolved sample nor starts a replacement A/A.
+- Complete this documentation-only handoff through exact-head checks and reviewed PR. Then obtain an explicit owner decision on the monitoring trust boundary described in `GROWTHBOOK_MONITORING_AUTOMATION_RUNBOOK.md`: either retain the present full independent private-record requirement (blocked without an approved stronger proof), or authorize design of a monitoring-only managed-validation/public-attestation contract. No new acceptance code/schema/workflow may be activated merely by merging this documentation. A replacement A/A still requires its separate decision and versioned gates.
+
 ## 2026-09-14 — VEVO operations dashboard deployed and verified
 
 Date: 2026-09-14, 13:45 UTC
