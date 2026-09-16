@@ -43,9 +43,11 @@
   "product_name_aliases_file": "product_name_aliases.json",
   "production_board": {
     "enabled": true,
+    "require_fulfillable_payment": true,
     "active_order_statuses": [
       "New order",
-      "Payment online - paid"
+      "Payment online - paid",
+      "Stripe - paid"
     ],
     "manufactured_product_terms": [
       "vevo"

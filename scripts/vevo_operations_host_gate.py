@@ -89,7 +89,15 @@ def main():
         assert code == 200 and pdf.startswith(b"%PDF-") and len(pdf) > 1000
         code, html = curl("/manufacturing/vevo")
         assert code == 200 and b"vevo-production-board" in html
+        code, body = curl("/api/production/vevo/live?refresh=1")
+        manufacturing = json.loads(body)
+        assert code == 200 and manufacturing["eligibility_policy"] == "paid_or_cod"
+        ready_orders = {o["order_num"]: o for o in data["orders"]["orders"]}
+        for order in manufacturing["orders"]:
+            assert order["order_num"] in ready_orders, "Manufacturing contains an order not ready for fulfillment"
+        assert manufacturing["summary"]["active_orders"] > 0
         print("VEVO_BOARD_HOST_OK " + json.dumps({"identity": identity, "mode": "operations",
+              "manufacturing_summary": manufacturing["summary"], "manufacturing_paid_or_cod_verified": True,
               "summary": data["orders"]["summary"], "inventory": summary,
               "scan": data["orders"]["scan"], "statuses": sorted({o["status"] for o in data["orders"]["orders"]}),
               "pdf_bytes": len(pdf), "max_rss_kib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss}), flush=True)

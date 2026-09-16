@@ -22,7 +22,7 @@ SERVICE = "biznisweb-vevo-production-board"
 SERVICE_ARN = f"arn:aws:apprunner:{REGION}:{ACCOUNT}:service/{SERVICE}/2711a253ae014a8aaf1a37929997496d"
 ORIGIN = "https://2mhmsmgq3m.eu-central-1.awsapprunner.com"
 REPOSITORY = f"{ACCOUNT}.dkr.ecr.{REGION}.amazonaws.com/vevo-reporting"
-STATUSES = ["New order", "Payment online - paid"]
+STATUSES = ["New order", "Payment online - paid", "Stripe - paid"]
 OPERATIONS_PROBE = "from scripts.vevo_operations_host_gate import main; main()"
 BUCKET = "biznisweb-reporting-artifacts-919341186960-eu-central-1"
 
@@ -45,7 +45,7 @@ identity = {
     'images': [{'image': c['Image'], 'image_id': c.get('ImageID')} for c in metadata['Containers']],
 }
 assert identity['path'] == '/app' and identity['private_ips']
-assert load_project_settings('vevo')['production_board']['active_order_statuses'] == ['New order', 'Payment online - paid']
+assert load_project_settings('vevo')['production_board']['active_order_statuses'] == ['New order', 'Payment online - paid', 'Stripe - paid']
 os.environ['LIVE_DASHBOARD_AUTH_USER'] = 'host-probe'
 os.environ['LIVE_DASHBOARD_AUTH_PASSWORD'] = secrets.token_urlsafe(32)
 token = base64.b64encode(('host-probe:' + os.environ['LIVE_DASHBOARD_AUTH_PASSWORD']).encode()).decode()
@@ -68,7 +68,7 @@ try:
     print('VEVO_BOARD_HOST_IDENTITY ' + json.dumps({**identity, 'port': port}), flush=True)
     assert b'vevo-production-board' in curl('/production/vevo')
     data = json.loads(curl('/api/production/vevo/live?refresh=1'))
-    assert data['project'] == 'vevo' and data['active_order_statuses'] == ['New order', 'Payment online - paid']
+    assert data['project'] == 'vevo' and data['active_order_statuses'] == ['New order', 'Payment online - paid', 'Stripe - paid']
     assert data['summary']['active_orders'] > 0 and data['summary']['units_to_make'] > 0
     assert {o['status'] for o in data['orders']} <= set(data['active_order_statuses'])
     assert sum(p['quantity_required'] for p in data['products']) == data['summary']['units_to_make']
@@ -133,6 +133,7 @@ def validate_proof(task, proof, receipt):
     assert ips and set(proof['identity']['private_ips']) == ips
     if receipt.get('mode') == 'operations':
         assert proof['mode'] == 'operations'
+        assert proof['manufacturing_paid_or_cod_verified'] is True
         assert proof['summary']['fulfillable_orders'] > 0
         assert proof['inventory']['inventory_status'] == 'ok'
         assert proof['inventory']['inventory_products_total'] > 0 and proof['pdf_bytes'] > 1000

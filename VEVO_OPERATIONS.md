@@ -6,6 +6,12 @@ Fulfillment: paid31/Stripe-paid70, or new1 with reviewed COD payment IDs7 (SK),1
 
 Inventory reads the current immutable report generation, hash-verified full payload and its exact realized-sales CSV. Mixed generations, foreign prefixes, partial/failed reports and oversized sources fail closed. The shared model loads/restores normal VEVO costs without ad clients, report regeneration or email. Model results are cached for15 minutes or until a new generation; current stock uses a complete catalogue and exact reporting SKU. Missing costs, negative stock and advisory recommendations are disclosed. Default five-working-day lead time is an estimate; no ROY brand/bundle rules are copied.
 
+## Manufacturing payment eligibility — September 16, 2026
+
+`/manufacturing/vevo` previously accepted every `New order` by label, including unpaid card orders. `production_board.require_fulfillable_payment=true` now reuses the operations fulfillment configuration and canonical status client. Card/bank orders require paid status31 or70; new orders qualify only with recognized COD. The payment gate applies before pagination's eligible-order count and before all product/unit aggregates. Raw labels stay visible. The UI labels this as `Zaplatené + dobierky`. Other boards retain their existing behavior unless explicitly configured to use this policy.
+
+The same-input live audit removed exactly four unpaid card orders and seven manufactured units (51/99 to47/92); see [sanitized audit](docs/vevo_manufacturing_payment_audit_20260916.json). COD7/10/16 remains eligible. Local tests and CI include manufacturing as well as operations coverage; the AWS host gate compares manufacturing membership with eligible operations orders. Deployment completion and current readback belong in `PROJECT_STATE.md`.
+
 ## SK/CZ/HU eligibility audit — September 15, 2026
 
 The previous configuration excluded five new Hungarian COD orders, including the owner's reported order. Czech COD already passed the normalized `Dobírka` label fallback; its ID is now explicit too. The configuration change accepts verified IDs `7`, `10`, `16` without broadening unpaid online/bank eligibility or changing provider statuses. The candidate-host check uses the same reviewed three-country boundary.

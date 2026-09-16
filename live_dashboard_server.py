@@ -1028,7 +1028,7 @@ def build_production_board_html(project: str) -> str:
       const summary = data.summary || {};
       const scan = data.scan || {};
       el('summary').innerHTML = [
-        metric('Aktívne objednávky', fmtInt(summary.active_orders), 'Čaká + online zaplatené'),
+        metric('Aktívne objednávky', fmtInt(summary.active_orders), data.eligibility_policy === 'paid_or_cod' ? 'Zaplatené + dobierky' : 'Čaká + online zaplatené'),
         metric('Objednávky s výrobou', fmtInt(summary.manufacturing_orders), 'Obsahujú VEVO výrobok'),
         metric('Produkty', fmtInt(summary.manufacturing_products), 'Zoskupené podľa EAN/kódu/názvu'),
         metric('Kusy na výrobu', fmtQty(summary.units_to_make), 'Súčet VEVO položiek'),

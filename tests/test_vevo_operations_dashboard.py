@@ -258,7 +258,7 @@ class OperationsDeploymentTests(unittest.TestCase):
         task = {"taskArn": "task", "taskDefinitionArn": "definition", "startedBy": "probe", "lastStatus": "STOPPED",
                 "containers": [{"exitCode": 0, "imageDigest": "sha256:reviewed"}],
                 "attachments": [{"details": [{"name": "privateIPv4Address", "value": "172.31.1.2"}]}]}
-        proof = {"mode": "operations", "identity": {"task_arn": "task", "service": SERVICE, "path": "/app", "private_ips": ["172.31.1.2"]},
+        proof = {"mode": "operations", "manufacturing_paid_or_cod_verified": True, "identity": {"task_arn": "task", "service": SERVICE, "path": "/app", "private_ips": ["172.31.1.2"]},
                  "summary": {"fulfillable_orders": 1}, "inventory": {"inventory_status": "ok", "inventory_products_total": 2},
                  "pdf_bytes": 2000, "max_rss_kib": 400000}
         validate_proof(task, proof, receipt)
