@@ -1,5 +1,6 @@
 import copy
 import unittest
+from unittest.mock import Mock, patch
 
 from scripts import deploy_vevo_board_image as deploy
 
@@ -49,6 +50,24 @@ class VevoBoardImageDeployTests(unittest.TestCase):
     def test_host_command_is_valid_python_and_blocks_redirects(self):
         compile(deploy.HOST_PROBE, '<host-probe>', 'exec')
         self.assertIsNone(deploy.NoRedirect().redirect_request(None, None, 302, '', {}, 'https://untrusted.invalid'))
+
+    def test_waits_for_running_service_after_successful_update(self):
+        app = Mock()
+        app.describe_service.side_effect = [
+            {'Service': {'Status': 'OPERATION_IN_PROGRESS'}},
+            {'Service': {'Status': 'RUNNING'}},
+        ]
+        with patch.object(deploy, 'check_service') as check, patch.object(deploy.time, 'sleep') as sleep:
+            result = deploy.wait_for_running_service(app, 'candidate', attempts=2, delay_seconds=5)
+        self.assertEqual('RUNNING', result['Status'])
+        check.assert_called_once_with(result, 'candidate')
+        sleep.assert_called_once_with(5)
+
+    def test_rejects_non_transitional_service_state(self):
+        app = Mock()
+        app.describe_service.return_value = {'Service': {'Status': 'CREATE_FAILED'}}
+        with self.assertRaises(AssertionError):
+            deploy.wait_for_running_service(app, 'candidate', attempts=1)
 
 
 if __name__ == '__main__':
