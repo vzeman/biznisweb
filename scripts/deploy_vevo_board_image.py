@@ -97,6 +97,20 @@ def check_service(service, expected_image):
     assert config['RuntimeEnvironmentVariables']['REPORT_PROJECT'] == 'vevo'
 
 
+def wait_for_running_service(app, expected_image, *, attempts=12, delay_seconds=5):
+    """Wait for App Runner's service state after its update operation succeeds."""
+    assert attempts >= 1 and delay_seconds >= 0
+    for attempt in range(attempts):
+        service = app.describe_service(ServiceArn=SERVICE_ARN)['Service']
+        if service.get('Status') == 'RUNNING':
+            check_service(service, expected_image)
+            return service
+        assert service.get('Status') == 'OPERATION_IN_PROGRESS', 'Service did not become RUNNING after successful update'
+        if attempt + 1 < attempts:
+            time.sleep(delay_seconds)
+    raise AssertionError('Service did not become RUNNING after successful update')
+
+
 def service_boundary(service):
     return json.loads(json.dumps({key: service.get(key) for key in (
         'ServiceArn', 'ServiceName', 'ServiceUrl', 'SourceConfiguration',
@@ -311,8 +325,7 @@ def main():
             break
         time.sleep(5)
     assert status == 'SUCCEEDED', 'Inspect recorded App Runner operation; do not repeat promotion'
-    deployed = app.describe_service(ServiceArn=SERVICE_ARN)['Service']
-    check_service(deployed, image)
+    deployed = wait_for_running_service(app, image)
     expected = copy.deepcopy(receipt['baseline'])
     expected['SourceConfiguration'] = update['SourceConfiguration']
     assert service_boundary(deployed) == expected, 'Non-image service configuration changed'
