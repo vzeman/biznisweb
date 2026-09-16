@@ -12,6 +12,8 @@ Inventory reads the current immutable report generation, hash-verified full payl
 
 The same-input live audit removed exactly four unpaid card orders and seven manufactured units (51/99 to47/92); see [sanitized audit](docs/vevo_manufacturing_payment_audit_20260916.json). COD7/10/16 remains eligible. Local tests and CI include manufacturing as well as operations coverage; the AWS host gate compares manufacturing membership with eligible operations orders. Deployment completion and current readback belong in `PROJECT_STATE.md`.
 
+The first candidate host attempt failed closed before promotion when its manufacturing refresh followed the operations refresh immediately. Direct candidate-source readback confirmed the eligibility result; the remaining fault was unpaced GraphQL pagination. Manufacturing now uses the operations dashboard's shared serialized/backoff read boundary. The host gate validates each order's returned eligibility reason against paid status31/70 or new status1 plus COD7/10/16, avoiding a race between two snapshots. The failed task stopped with exit1, its definition is inactive, and production remained unchanged.
+
 ## SK/CZ/HU eligibility audit — September 15, 2026
 
 The previous configuration excluded five new Hungarian COD orders, including the owner's reported order. Czech COD already passed the normalized `Dobírka` label fallback; its ID is now explicit too. The configuration change accepts verified IDs `7`, `10`, `16` without broadening unpaid online/bank eligibility or changing provider statuses. The candidate-host check uses the same reviewed three-country boundary.

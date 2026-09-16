@@ -92,9 +92,13 @@ def main():
         code, body = curl("/api/production/vevo/live?refresh=1")
         manufacturing = json.loads(body)
         assert code == 200 and manufacturing["eligibility_policy"] == "paid_or_cod"
-        ready_orders = {o["order_num"]: o for o in data["orders"]["orders"]}
         for order in manufacturing["orders"]:
-            assert order["order_num"] in ready_orders, "Manufacturing contains an order not ready for fulfillment"
+            if order["eligibility_reason"] == "paid_online":
+                assert order["status_id"] in {"31", "70"}
+            elif order["eligibility_reason"] == "cod_waiting":
+                assert order["status_id"] == "1" and order["payment_id"] in {"7", "10", "16"}
+            else:
+                raise AssertionError("Manufacturing contains an order not ready for fulfillment")
         assert manufacturing["summary"]["active_orders"] > 0
         print("VEVO_BOARD_HOST_OK " + json.dumps({"identity": identity, "mode": "operations",
               "manufacturing_summary": manufacturing["summary"], "manufacturing_paid_or_cod_verified": True,

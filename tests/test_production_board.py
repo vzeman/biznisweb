@@ -136,7 +136,7 @@ class ProductionBoardTests(unittest.TestCase):
             self.assertIn("price_elements", print_ast(getattr(query, "document", query)))
             return {"getOrderList": {"data": [raw], "pageInfo": {"hasNextPage": False}}}
         client.execute = execute
-        with patch.object(board, "_build_client", return_value=client), patch.object(board, "load_project_settings", return_value=config):
+        with patch.object(board, "_build_client", return_value=client), patch.object(board, "load_project_settings", return_value=config), patch.object(board, "_execute_graphql", side_effect=lambda current, query, variable_values: current.execute(query, variable_values)):
             orders, scan = board.fetch_open_orders_for_production("vevo", resolve_production_board_settings(config))
         self.assertEqual("Čaká na vybavenie", orders[0]["status"]["name"])
         self.assertEqual(0, scan["active_orders_seen_during_scan"])
