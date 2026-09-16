@@ -1,8 +1,12 @@
 import json
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
+import production_board as board
 from production_board import build_production_board_snapshot, resolve_production_board_settings
+from order_status_identity import REVIEWED_RENAMES, bind_status_identity, canonical_order
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -49,13 +53,20 @@ def make_item(label: str, quantity: float, ean: str = "", import_code: str = "",
 
 
 class ProductionBoardTests(unittest.TestCase):
+    def vevo_client(self):
+        client = SimpleNamespace(transport=SimpleNamespace(url="https://vevo.flox.sk/api/graphql"))
+        catalogue = [{"id": key, "name": aliases[-1]} for key, (_, aliases) in REVIEWED_RENAMES["vevo"].items()]
+        catalogue += [{"id": "69", "name": "Stripe - unpaid"}, {"id": "70", "name": "Stripe - paid"}]
+        bind_status_identity(client, "vevo").bind_catalogue(client, catalogue)
+        return client
+
     def test_vevo_settings_enable_board_with_current_exclusion(self) -> None:
         project_settings = json.loads((ROOT_DIR / "projects" / "vevo" / "settings.json").read_text(encoding="utf-8"))
         settings = resolve_production_board_settings(project_settings)
 
         self.assertTrue(settings["enabled"])
         self.assertEqual(
-            ["New order", "Payment online - paid"],
+            ["New order", "Payment online - paid", "Stripe - paid"],
             settings["active_order_statuses"],
         )
         self.assertIn("Vevo Ylang Absolute prac\u00ed g\u00e9l 1L", settings["excluded_product_labels"])
@@ -82,7 +93,8 @@ class ProductionBoardTests(unittest.TestCase):
                 ],
             )
             order["status"]["id"] = status_id
-            orders.append(order)
+            order["price_elements"] = [{"type": "payment", "reference_id": "7", "title": "Dobierkou"}]
+            orders.append(canonical_order(self.vevo_client(), order))
 
         snapshot = build_production_board_snapshot(project="vevo", orders=orders, settings=settings)
 
@@ -92,6 +104,42 @@ class ProductionBoardTests(unittest.TestCase):
         self.assertEqual(1, snapshot["summary"]["manufacturing_products"])
         self.assertEqual(4.0, snapshot["summary"]["units_to_make"])
         self.assertEqual(14.0, snapshot["summary"]["ignored_units"])
+
+    def test_unpaid_cards_never_contribute_manufacturing_demand(self):
+        config = json.loads((ROOT_DIR / "projects/vevo/settings.json").read_text(encoding="utf-8"))
+        settings = resolve_production_board_settings(config)
+        client = self.vevo_client()
+        for payment_id in ["1", "18", "11", "19", "17", "20", "6", "", "unknown"]:
+            for status_id, label, included in [("1", "New order", False), ("69", "Stripe - unpaid", False), ("31", "Payment online - paid", True), ("70", "Stripe - paid", True), ("4", "Shipped", False), ("17", "Cancelled", False), ("33", "Payment online - expired", False)]:
+                with self.subTest(payment=payment_id, status=status_id):
+                    raw = make_order("CARD", label, [make_item("Vevo test", 8)])
+                    raw["status"]["id"] = status_id
+                    raw["price_elements"] = [{"type": "payment", "reference_id": payment_id, "title": "Online"}]
+                    snapshot = build_production_board_snapshot(project="vevo", settings=settings, orders=[canonical_order(client, raw)])
+                    self.assertEqual(int(included), snapshot["summary"]["active_orders"])
+                    self.assertEqual(8 if included else 0, snapshot["summary"]["units_to_make"])
+                    self.assertEqual(int(included), len(snapshot["products"]))
+        for payment_id in ["7", "10", "16"]:
+            raw = make_order("COD", "New order", [make_item("Vevo test", 3)])
+            raw["price_elements"] = [{"type": "payment", "reference_id": payment_id, "title": "Localized"}]
+            snapshot = build_production_board_snapshot(project="vevo", settings=settings, orders=[canonical_order(client, raw)])
+            self.assertEqual(3, snapshot["summary"]["units_to_make"])
+            self.assertEqual("New order", snapshot["orders"][0]["status"])
+
+    def test_fetch_uses_payment_fields_and_canonical_status_before_counting(self):
+        config = json.loads((ROOT_DIR / "projects/vevo/settings.json").read_text(encoding="utf-8"))
+        client = self.vevo_client()
+        raw = make_order("CARD", "New order", [make_item("Vevo test", 2)])
+        raw["price_elements"] = [{"type": "payment", "reference_id": "18", "title": "Online"}]
+        def execute(query, variable_values):
+            from graphql import print_ast
+            self.assertIn("price_elements", print_ast(getattr(query, "document", query)))
+            return {"getOrderList": {"data": [raw], "pageInfo": {"hasNextPage": False}}}
+        client.execute = execute
+        with patch.object(board, "_build_client", return_value=client), patch.object(board, "load_project_settings", return_value=config):
+            orders, scan = board.fetch_open_orders_for_production("vevo", resolve_production_board_settings(config))
+        self.assertEqual("Čaká na vybavenie", orders[0]["status"]["name"])
+        self.assertEqual(0, scan["active_orders_seen_during_scan"])
 
     def test_snapshot_filters_active_statuses_and_manufactured_products(self) -> None:
         settings = make_settings()

@@ -1,0 +1,38 @@
+{
+  "observed_at": "2026-09-16T12:07:53.823912+00:00",
+  "orders_scanned": 300,
+  "before": {
+    "active_orders": 51,
+    "manufacturing_orders": 51,
+    "manufacturing_products": 24,
+    "units_to_make": 99.0,
+    "ignored_units": 19.0,
+    "oldest_active_order_at": "2026-09-10 11:14:23",
+    "latest_active_order_at": "2026-09-16 13:58:11"
+  },
+  "after": {
+    "active_orders": 47,
+    "manufacturing_orders": 47,
+    "manufacturing_products": 21,
+    "units_to_make": 92.0,
+    "ignored_units": 18.0,
+    "oldest_active_order_at": "2026-09-10 11:14:23",
+    "latest_active_order_at": "2026-09-16 13:58:11"
+  },
+  "excluded_orders": 4,
+  "excluded_manufacturing_units": 7.0,
+  "excluded_groups": [
+    {
+      "status_id": "1",
+      "payment_id": "1",
+      "payment": "Okamžitá platba online",
+      "orders": 2
+    },
+    {
+      "status_id": "1",
+      "payment_id": "18",
+      "payment": "Okamžitá platba online",
+      "orders": 2
+    }
+  ]
+}

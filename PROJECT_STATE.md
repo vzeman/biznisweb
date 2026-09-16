@@ -1,5 +1,24 @@
 # PROJECT_STATE
 
+## 2026-09-16 — Manufacturing payment gate: unpaid cards incorrectly entered demand
+
+Date: 2026-09-16
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-manufacturing-payment-gate-20260916`
+
+What changed / verified:
+
+- User clarified the incorrect demand comes from unpaid card orders; COD eligibility remains as previously authorized. Verified clean checkout, fetch/prune and pull/rebase, then created this branch from current main `546aa4c4`. Runtime gate confirmed account919341186960, managed App Runner instance/IP (endpoint `2mhmsmgq3m.eu-central-1.awsapprunner.com`), service `biznisweb-vevo-production-board`, `/app`, current digest `e45c8ccef70f303d0473332163eabc10dc3e05f3c81527436d241f09971935d8` RUNNING.
+- Root cause: manufacturing used only status labels and did not query payment metadata. It accepted every `New order`, including unpaid online payment IDs1/18. Yesterday's operations/PDF correction did not change this separate manufacturing filter.
+- VEVO manufacturing now opts into the existing operations fulfillment settings/client and canonical status identity. Both scan stopping and final demand aggregation use the same paid31/70 or new1+recognized-COD rule. Payment metadata is fetched; raw provider status labels remain visible. Legacy boards keep their configured status-only behavior. Missing required fulfillment identities fail closed. UI describes the rule as paid orders plus COD; Stripe-paid is included in the declared status list.
+- Read-only same-input audit at12:07:53UTC:300 scanned; old51 orders/99 manufacturing units, corrected47 orders/92 units. Exactly four unpaid new card orders were removed (two payment1, two payment18), accounting for seven manufactured units. Sanitized aggregate evidence: `docs/vevo_manufacturing_payment_audit_20260916.json`. No order/payment/stock/print state was changed.
+- Focused regression suite passed115 tests. New tests cover SK/CZ/HU card IDs, unpaid bank/unknown/missing methods, paid31/70, pending/expired/cancelled/shipped states, COD7/10/16, raw status display, and payment-aware pagination counts. Initial test-only GraphQL AST inspection failed under installed gql4's request wrapper; fixed to inspect its document while retaining gql3 support, then reran successfully. CI now explicitly includes production-board tests. Candidate-host gate also checks every manufacturing order belongs to the eligible operations set.
+
+Known issues / next exact step:
+
+- Correction is not yet deployed. Complete exact-head PR/CI, build immutable merged image, execute the finite operations+manufacturing localhost/identity host gate, promote only the App Runner image and verify fresh production demand excludes every currently unpaid card order. Preserve the prior COD and PDF fixes.
+- Existing browser Comet block and long PDF shipping-label layout issue are separate. No persistent local process was started.
+
 ## 2026-09-15 — VEVO SK/CZ/HU COD correction deployed; target PDF verified
 
 Date: 2026-09-15, 11:31 UTC

@@ -13,6 +13,13 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from gql import Client, gql
 from gql.transport.requests import RequestsHTTPTransport
 
+from order_status_identity import canonical_order
+from roy_operations_dashboard import (
+    _build_client as build_fulfillment_client,
+    _is_fulfillable_order,
+    resolve_roy_operations_settings,
+)
+
 from reporting_core import (
     BASE_DEFAULT_PROJECT,
     load_project_env,
@@ -44,6 +51,7 @@ query GetProductionOrders($params: OrderParams) {
         name
         color
       }
+      price_elements { type title reference_id }
       items {
         item_label
         ean
@@ -99,9 +107,19 @@ def resolve_production_board_settings(project_settings: Dict[str, Any]) -> Dict[
     manufactured_terms = _as_list(raw.get("manufactured_product_terms"), DEFAULT_MANUFACTURED_TERMS)
     excluded_labels = _as_list(raw.get("excluded_product_labels"), ())
     excluded_patterns = _as_list(raw.get("excluded_product_label_patterns"), ())
+    require_fulfillable_payment = bool(raw.get("require_fulfillable_payment", False))
+    fulfillment_settings = resolve_roy_operations_settings(project_settings) if require_fulfillable_payment else None
+    if require_fulfillable_payment and (
+        not fulfillment_settings["enabled"]
+        or not fulfillment_settings["paid_status_ids"]
+        or not fulfillment_settings["cod_status_ids"]
+        or not fulfillment_settings["cod_payment_ids"]
+    ):
+        raise ValueError("Manufacturing requires configured fulfillment status and payment identities.")
 
     return {
         "enabled": bool(raw.get("enabled", False)),
+        "fulfillment_settings": fulfillment_settings,
         "active_order_statuses": active_statuses,
         "active_order_statuses_normalized": {_normalize_text(status) for status in active_statuses},
         "manufactured_product_terms": manufactured_terms,
@@ -157,6 +175,9 @@ def _manufacturing_decision(label: str, settings: Dict[str, Any]) -> Tuple[bool,
 
 
 def _is_active_order(order: Dict[str, Any], settings: Dict[str, Any]) -> bool:
+    # The same canonical status/payment rule drives picking and manufacturing.
+    if settings.get("fulfillment_settings") is not None:
+        return _is_fulfillable_order(order, settings["fulfillment_settings"])[0]
     status = order.get("status") or {}
     return _normalize_text(status.get("name")) in settings["active_order_statuses_normalized"]
 
@@ -184,7 +205,7 @@ def build_production_board_snapshot(
         if not _is_active_order(order, settings):
             continue
 
-        status = order.get("status") or {}
+        status = order.get("raw_status") or order.get("status") or {}
         status_name = str(status.get("name") or "").strip()
         order_items: List[Dict[str, Any]] = []
         manufacturing_units = 0.0
@@ -292,6 +313,7 @@ def build_production_board_snapshot(
         "project": project,
         "generated_at": generated,
         "active_order_statuses": settings["active_order_statuses"],
+        "eligibility_policy": "paid_or_cod" if settings.get("fulfillment_settings") is not None else "status_only",
         "manufactured_product_terms": settings["manufactured_product_terms"],
         "excluded_product_labels": settings["excluded_product_labels"],
         "auto_refresh_seconds": settings["auto_refresh_seconds"],
@@ -315,6 +337,8 @@ def build_production_board_snapshot(
 
 
 def _build_client(project: str, project_settings: Dict[str, Any]) -> Client:
+    if (project_settings.get("production_board") or {}).get("require_fulfillable_payment"):
+        return build_fulfillment_client(project, project_settings)
     api_url = resolve_biznisweb_api_url(project, project_settings)
     api_token = os.getenv("BIZNISWEB_API_TOKEN")
     if not api_token:
@@ -355,7 +379,7 @@ def fetch_open_orders_for_production(project: str, settings: Dict[str, Any]) -> 
 
         result = client.execute(ORDER_QUERY, variable_values={"params": params})
         payload = result.get("getOrderList") or {}
-        page_orders = [order for order in (payload.get("data") or []) if order]
+        page_orders = [canonical_order(client, order) for order in (payload.get("data") or []) if order]
         orders.extend(page_orders)
         page_count += 1
 

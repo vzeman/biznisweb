@@ -11,6 +11,7 @@ on:
       - 'export_orders.py'
       - 'operations_inventory.py'
       - '*operations_dashboard.py'
+      - 'production_board.py'
       - 'scripts/*vevo*board*.py'
       - 'scripts/vevo_operations_host_gate.py'
       - 'live_dashboard_server.py'
@@ -85,4 +86,4 @@ jobs:
           tests.test_creditnote_storno_guard tests.test_creditnote_export tests.test_report_status_identity tests.test_vevo_report_alarm_binding tests.test_daily_report_email tests.test_creditnote_release_observer
           tests.test_creditnote_automation_context tests.test_automation_runner_health
           tests.test_restore_verified_fulfillment tests.test_invoice_backfill_verification tests.test_invoice_discovery_verification tests.test_invoice_post_recovery_verification tests.test_invoice_backfill_seed tests.test_order_automation_audit tests.test_order_automation_deployment
-          tests.test_vevo_operations_dashboard tests.test_roy_operations_dashboard tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_maintenance
+          tests.test_production_board tests.test_vevo_operations_dashboard tests.test_roy_operations_dashboard tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_maintenance
