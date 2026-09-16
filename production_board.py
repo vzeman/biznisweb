@@ -16,7 +16,9 @@ from gql.transport.requests import RequestsHTTPTransport
 from order_status_identity import canonical_order
 from roy_operations_dashboard import (
     _build_client as build_fulfillment_client,
+    _execute_graphql,
     _is_fulfillable_order,
+    _price_element_info,
     resolve_roy_operations_settings,
 )
 
@@ -207,6 +209,12 @@ def build_production_board_snapshot(
 
         status = order.get("raw_status") or order.get("status") or {}
         status_name = str(status.get("name") or "").strip()
+        payment = _price_element_info(order, "payment")
+        _, eligibility_reason = (
+            _is_fulfillable_order(order, settings["fulfillment_settings"])
+            if settings.get("fulfillment_settings") is not None
+            else (True, "status_only")
+        )
         order_items: List[Dict[str, Any]] = []
         manufacturing_units = 0.0
         ignored_units = 0.0
@@ -285,6 +293,8 @@ def build_production_board_snapshot(
                 "last_change": order.get("last_change"),
                 "status": status_name,
                 "status_id": status.get("id"),
+                "eligibility_reason": eligibility_reason,
+                "payment_id": payment.get("reference_id"),
                 "sum": (order.get("sum") or {}).get("formatted"),
                 "manufacturing_units": manufacturing_units,
                 "ignored_units": ignored_units,
@@ -377,7 +387,7 @@ def fetch_open_orders_for_production(project: str, settings: Dict[str, Any]) -> 
         if cursor is not None:
             params["cursor"] = cursor
 
-        result = client.execute(ORDER_QUERY, variable_values={"params": params})
+        result = _execute_graphql(client, ORDER_QUERY, variable_values={"params": params})
         payload = result.get("getOrderList") or {}
         page_orders = [canonical_order(client, order) for order in (payload.get("data") or []) if order]
         orders.extend(page_orders)

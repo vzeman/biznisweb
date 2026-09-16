@@ -16,7 +16,10 @@ What changed / verified:
 
 Known issues / next exact step:
 
-- Correction is not yet deployed. Complete exact-head PR/CI, build immutable merged image, execute the finite operations+manufacturing localhost/identity host gate, promote only the App Runner image and verify fresh production demand excludes every currently unpaid card order. Preserve the prior COD and PDF fixes.
+- PR575 merged as source `63edd0806a7142a4ba1e2c7fb92895b3228eac4d`; all six checks passed, including994 tests on Linux and Windows (one skip each). Image build35094398463 produced candidate digest `sha256:d511693109e9e1e274652b4c4494f9710b39dca6643106c1748621678dfc2d4c`.
+- First candidate task `649cfb049114476bbb180ab283cda5a2`, privateIP `172.31.6.30`, `/app`, localhost36529 failed closed before promotion. Operations checks completed, then the immediately following manufacturing refresh returned a non-200 response. The host emitted its close marker, stopped/exit1 and its task definition is INACTIVE. App Runner remains on prior digest `e45c8ccef70f303d0473332163eabc10dc3e05f3c81527436d241f09971935d8`; no production change occurred.
+- Direct readback with the same candidate source succeeds at47 orders/92 units. Root cause of the host-only failure was the production board's direct unpaced GraphQL pagination immediately after the operations scan. It now uses the shared serialized/backoff read boundary. Host verification was also made race-safe by checking each returned order's eligibility reason, status ID and payment ID instead of comparing two separately timed snapshots. These additions expose only non-personal eligibility metadata.
+- Correction is not yet deployed. Merge the narrow follow-up, build its immutable image, execute a new finite localhost/identity host gate, promote only after success, then verify fresh production demand excludes every currently unpaid card order. Preserve the prior COD and PDF fixes. Never reuse or overwrite the failed receipt; record the new attempt separately.
 - Existing browser Comet block and long PDF shipping-label layout issue are separate. No persistent local process was started.
 
 ## 2026-09-15 — VEVO SK/CZ/HU COD correction deployed; target PDF verified
