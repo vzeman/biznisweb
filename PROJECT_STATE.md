@@ -11,12 +11,13 @@ What changed / verified:
 - Follow-up PR #576 merged after all six checks at source `3c999bceeee3a6a16c40f5564f2fabad89b54f58`; successful image build 35095642842 created digest `sha256:16d4064aafbf501dd1a493f754c9562d3231e49b0902ea939e5ad34f8e8b805c`. Candidate task `8b8ac6b92361402aab25857214c7e790`, private IP `172.31.28.185`, `/app`, localhost port 39059, passed the complete operations/manufacturing host gate: 47 manufacturing orders, 92 units, all marked paid or recognized COD. It stopped with exit 0; its task definition is inactive and its localhost host server closed.
 - App Runner promotion operation `7225ec2b601647da82b9bf29a107850f` succeeded at 12:34:28 UTC. The image is now running in `biznisweb-vevo-production-board`. Independent final readback at 12:35:55 UTC confirms policy `paid_or_cod`, 47 manufacturing orders and 92 units; all production rows conform to paid status 31/70 or new status 1 with COD 7/10/16. Four current unpaid card orders exist and zero appear in manufacturing. Operations API and picking PDF passed; all non-image service fields and daily-report schedule are unchanged.
 - The helper originally treated successful App Runner operation status as immediately equivalent to RUNNING service status and stopped before its public endpoint checks. The deployment itself succeeded; direct final verification was completed and stored. The helper now waits only through App Runner's documented transitional state before it runs `check_service`, with regression tests for transition and failure state. This helper-only follow-up changes no production runtime behavior.
+- PR #577 merged this helper and documentation correction into `main` as `2e880c09bdefe56eb331642b0a5e7b3344e57128`; all six GitHub checks and the 120 targeted local tests passed.
 - Durable encrypted evidence: `daily-reports/vevo/operations/deployments/3c999bceeee3a6a16c40f5564f2fabad89b54f58/manufacturing-payment-deploy-20260916-3c999bce.json` is the probe/promote receipt; final independent readback `manufacturing-payment-live-verification-20260916.json` has SHA256 `72be46d99c45e87309b7f7c3dae7a9a6d0523674cb4cbf28d77a53e88e9cb5b7`. No customer data, order changes, payment action, stock write, PDF print acknowledgement, email or local persistent process occurred.
 
 Known issues / next exact step:
 
 - Browser UI remains unverified because Comet blocks the production URL; authenticated API/PDF and AWS host checks passed. The long Hungarian PDF shipping-label overflow remains separate.
-- Merge the helper/documentation follow-up after tests. No further dashboard deployment is required.
+- No pending change for the manufacturing payment gate. On the next ordinary dashboard release, verify the public UI after deployment in addition to the existing authenticated API/PDF and host gates.
 
 ## 2026-09-16 — Manufacturing payment gate: unpaid cards incorrectly entered demand
 
