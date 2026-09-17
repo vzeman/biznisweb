@@ -1,5 +1,22 @@
 # PROJECT_STATE
 
+## 2026-09-17 — VEVO live-refresh timeout resilience deployed and verified
+
+Date: 2026-09-17, 11:44 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-live-refresh-deployment-20260917`
+
+What changed / verified:
+
+- VEVO now runs the same reviewed live-refresh resilience implementation as ROY from PR #582: routine Refresh renders the cached operations snapshot first and lets revalidation run in the background. A future plain-text/non-JSON upstream reply is shown as a concise Slovak status error while the last valid dashboard stays visible.
+- The finite Fargate gate ran candidate task `915f1eb23d5c455fb66aad47353b43e0`, private IP `172.31.11.4`, task definition `vevo-board-probe-376e3b68dc4b:1`, runtime `/app`. Its localhost marker, operations, paid-or-COD policy and cached PDF checks passed; the PDF was valid (213,619 bytes) and the task exited 0.
+- App Runner operation `8cd9c1a3251b49ba8345f67505a0a10e` succeeded. Service `biznisweb-vevo-production-board` is RUNNING on immutable image `sha256:1b1146a228fb63e09afea476beec74790603a0fb29d1788894d33e6c77252dd2`; public `/health` returns HTTP 200. The authenticated post-deploy readback also completed its current VEVO operations and PDF validation without a print acknowledgement.
+- Chrome direct verification of the VEVO App Runner URL remains client-blocked with `ERR_BLOCKED_BY_CLIENT`; no bypass was used. The shared behavior was independently browser-tested in ROY, and the VEVO host and authenticated production gates passed. No provider order, payment, stock, email, report schedule or print state changed.
+
+Next exact step:
+
+- No production change is pending. Investigate a future friendly upstream-status banner only if it persists or the dashboard timestamp stops advancing.
+
 ## 2026-09-17 — ROY live-refresh timeout resilience deployed and verified
 
 Date: 2026-09-17, 11:31 UTC
