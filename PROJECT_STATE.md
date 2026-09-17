@@ -1,5 +1,23 @@
 # PROJECT_STATE
 
+## 2026-09-17 — ROY live-refresh timeout resilience deployed and verified
+
+Date: 2026-09-17, 11:31 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-live-refresh-error-20260917`
+
+What changed / verified:
+
+- PR #582 merged as `376e3b68dc4bd977388e47253c530ba0fce452d4` after all six GitHub checks passed. Build `35214388288` produced immutable image `sha256:1b1146a228fb63e09afea476beec74790603a0fb29d1788894d33e6c77252dd2`.
+- The browser error was caused by an App Runner upstream/proxy response that was plain text instead of JSON during a live refresh. The prior snapshot stayed visible, so it was not a data-loss or print failure, but it exposed an operator-facing parser error.
+- Routine Refresh now reads the cached operations snapshot and revalidates in the background instead of forcing a complete synchronous scan. The dashboard handles a future non-JSON upstream response as a concise Slovak status error and retains the latest valid view. State-changing actions keep their immediate readback behavior.
+- Candidate task `92f3b738bf604891828aa5511a0a6978`, private IP `172.31.19.51`, task definition `roy-reporting-daily:78`, runtime `/app`, exited 0 through the deployment localhost/marker/PDF gate. App Runner operation `80be8e3873244533a059f13db5ec186a` succeeded; service `biznisweb-roy-operations-dashboard` is RUNNING on the new image and public `/health` returns HTTP 200.
+- The protected deployment workflow `35214626540` succeeded. It restored the maintenance lock only after its authenticated production checks. Browser reload and an explicit normal Refresh loaded the ROY dashboard without `Unexpected token` or a live-failure banner; data remained visible. No provider order, payment, stock, email or print acknowledgement changed.
+
+Next exact step:
+
+- No production change is pending. Treat a future friendly upstream-timeout banner as a transient source-health signal while the previous snapshot remains visible; investigate it if it persists or the timestamp stops advancing.
+
 ## 2026-09-17 — ROY live-refresh timeout resilience (pending deployment)
 
 Date: 2026-09-17, 11:08 UTC
