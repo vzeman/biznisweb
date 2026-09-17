@@ -677,6 +677,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         html = build_roy_operations_dashboard_html("roy")
 
         self.assertIn("/api/operations/roy/picking-lists.pdf", html)
+        self.assertIn('href="/api/operations/roy/picking-lists.pdf?refresh=0"', html)
+        self.assertIn("pdfUrl.searchParams.set('refresh', '0');", html)
         self.assertIn("/api/operations/${encodeURIComponent(project)}/picking-lists/printed", html)
         self.assertIn("Označiť vytlačené", html)
 

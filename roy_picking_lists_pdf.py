@@ -394,7 +394,7 @@ def build_roy_picking_lists_pdf(orders: Iterable[Dict[str, Any]], *, project: st
     order_rows = [order for order in orders if isinstance(order, dict)]
 
     buffer = io.BytesIO()
-    canvas = pdf_canvas.Canvas(buffer, pagesize=A4, pageCompression=0)
+    canvas = pdf_canvas.Canvas(buffer, pagesize=A4, pageCompression=1)
     width, height = A4
     margin_x = 16 * mm
     top_y = height - 16 * mm

@@ -1,5 +1,6 @@
 import unittest
 from io import BytesIO
+from unittest.mock import patch
 
 from roy_picking_lists_pdf import build_roy_picking_lists_filename, build_roy_picking_lists_pdf
 
@@ -95,6 +96,22 @@ class RoyPickingListsPdfTests(unittest.TestCase):
 
         self.assertTrue(pdf.startswith(b"%PDF-"))
         self.assertGreater(len(pdf), 1000)
+
+    def test_pdf_uses_compression_for_live_downloads(self) -> None:
+        from reportlab.pdfgen import canvas as reportlab_canvas
+
+        original_canvas = reportlab_canvas.Canvas
+        compression_values = []
+
+        def capture_canvas(*args, **kwargs):
+            compression_values.append(kwargs.get("pageCompression"))
+            return original_canvas(*args, **kwargs)
+
+        with patch("reportlab.pdfgen.canvas.Canvas", side_effect=capture_canvas):
+            pdf = build_roy_picking_lists_pdf([{"order_num": "2677009999"}])
+
+        self.assertTrue(pdf.startswith(b"%PDF-"))
+        self.assertEqual([1], compression_values)
 
 
 if __name__ == "__main__":
