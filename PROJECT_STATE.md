@@ -1,5 +1,21 @@
 # PROJECT_STATE
 
+## 2026-09-17 — ROY and VEVO dashboard release persistence verified
+
+Date: 2026-09-17, 11:51 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/dashboard-release-persistence-20260917`
+
+What changed / verified:
+
+- The current ROY and VEVO App Runner services are both RUNNING and each references the same immutable ECR digest `sha256:1b1146a228fb63e09afea476beec74790603a0fb29d1788894d33e6c77252dd2`, rather than a mutable tag. Their automatic App Runner deployments are disabled.
+- That digest is tagged with source `git-376e3b68dc4bd977388e47253c530ba0fce452d4`. The current `main` commit `f87aafc0de1b666b21dee0040b40e81f8cab3033` contains the payment-gate (`83aa1864`), picking-PDF (`ca358480`) and live-refresh (`376e3b68`) changes.
+- AWS Scheduler has 13 schedules and no target that updates either dashboard; EventBridge has no scheduled rules. The only repository App Runner dashboard deploy workflow is `workflow_dispatch` only. Although it resolves an ECR `latest` tag for a future intentional run, a tag update cannot modify the already-running digest-pinned services.
+
+Next exact step:
+
+- No rollback or automatic redeployment is pending. Any intentional dashboard deployment must use a reviewed immutable digest and repeat the candidate host/marker/PDF and production readback gates.
+
 ## 2026-09-17 — VEVO live-refresh timeout resilience deployed and verified
 
 Date: 2026-09-17, 11:44 UTC
