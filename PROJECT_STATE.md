@@ -1,5 +1,24 @@
 # PROJECT_STATE
 
+## 2026-09-17 — ROY picking-PDF reliability deployed and verified
+
+Date: 2026-09-17, 10:36 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-picking-pdf-deployment-20260917`
+
+What changed / verified:
+
+- PR #579 merged as `ca358480baf26e7766737700d20982b728513654`; all six GitHub checks passed. Build `35208209176` produced immutable image `sha256:638e628781783c2b4897f93c97eaec8a2c1db31f96fc18b03a30155e77b7283f`.
+- The finite candidate refresh gate ran in ECS task `d081580405a24bce8e04c840a16f8f5a`, private IP `172.31.0.64`, task definition `roy-reporting-daily:77`, runtime `/app`, local dashboard port `8080`. It completed with exit 0 after its localhost dashboard, pagination and artifact-marker checks. It changed no provider order, payment, stock or print state.
+- App Runner promotion operation `4ad77618ade945bc84d9b0fa0619b1f5` succeeded. Service `biznisweb-roy-operations-dashboard` is RUNNING on that image and its public `/health` endpoint returns HTTP 200.
+- Deployment maintenance was lifted and the live browser dashboard became available after the workflow's authenticated PDF-preview gate. That gate requests `picking-lists.pdf?refresh=0&preview=1` and asserts a valid PDF signature, nontrivial byte size, content type and content-disposition header. The browser board now exposes `Vysklad. PDF` with `refresh=0`; it does not mark an order as printed.
+- The fault was a forced full live scan (`refresh=1`) on every PDF click followed by a client/proxy disconnect during download. Picking links now use the cached snapshot by default; explicit `refresh=1` remains available. PDF compression reduces transfer size, and the response handler treats a disconnected client as terminal rather than sending a second failing response. The new App Runner logs contain no subsequent `BrokenPipeError` after the link check.
+- Focused checks passed (83 tests in the final suite) and the complete local build regression selection passed 784 tests. The rendered synthetic A4 PDF was visually checked before deployment. No local persistent process was started.
+
+Known issue / next exact step:
+
+- The Chrome automation bridge timed out while waiting for its browser download event, so that event is not used as the proof of download completion. The live workflow's direct PDF response gate and the restored browser board validate the endpoint. Perform a routine manual mobile/desktop download smoke test on the next browser verification window; no production code or deployment is pending.
+
 ## 2026-09-17 — ROY picking-PDF reliability (pending deployment)
 
 Date: 2026-09-17, 09:48 UTC
