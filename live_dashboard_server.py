@@ -1548,6 +1548,18 @@ def build_roy_operations_dashboard_html(
     const cssEscape = (value) => window.CSS && CSS.escape ? CSS.escape(String(value)) : String(value).replace(/["\\\\]/g, '\\\\$&');
     const apiUrl = (path) => new URL(path, window.location.origin).toString();
     const fetchApi = (path, options={}) => fetch(apiUrl(path), { credentials:'same-origin', ...options });
+    async function readJsonApi(response, context) {
+      const raw = await response.text();
+      try {
+        return JSON.parse(raw);
+      } catch (_error) {
+        const status = response.status ? `HTTP ${response.status}` : 'bez stavového kódu';
+        if (!response.ok) {
+          throw new Error(`${context} dočasne zlyhalo (${status}); upstream nevrátil údaje. Skúste to o chvíľu.`);
+        }
+        throw new Error(`${context} vrátilo neplatnú odpoveď (${status}).`);
+      }
+    }
     let latestData = null;
     let refreshTimer = null;
     let kpiScope = 'monthly';
@@ -2299,7 +2311,7 @@ def build_roy_operations_dashboard_html(
       el('refreshBtn').disabled = true;
       try {
         const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/live${force ? '?refresh=1' : ''}`, { cache:'no-store' });
-        const data = await response.json();
+        const data = await readJsonApi(response, 'Live načítanie');
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
         clearMessage();
         render(data);
@@ -2484,7 +2496,10 @@ def build_roy_operations_dashboard_html(
         showMessage(error instanceof Error ? error.message : String(error));
       }
     }
-    el('refreshBtn').addEventListener('click', () => loadDashboard(true));
+    // A normal refresh returns the current snapshot promptly and revalidates it
+    // in the background. Full synchronous scans remain reserved for state-changing
+    // dashboard actions that need an immediate readback.
+    el('refreshBtn').addEventListener('click', () => loadDashboard(false));
     el('markPickingPrintedBtn').addEventListener('click', () => markPickingPrinted());
     el('pickingPdfLink').addEventListener('click', (event) => {
       if (!currentUnprintedPickingOrderNums().length) {

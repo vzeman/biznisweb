@@ -1,5 +1,22 @@
 # PROJECT_STATE
 
+## 2026-09-17 — ROY live-refresh timeout resilience (pending deployment)
+
+Date: 2026-09-17, 11:08 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-live-refresh-error-20260917`
+
+What changed / verified:
+
+- The user-visible ROY banner showed that an App Runner upstream/proxy response was plain text rather than JSON during a live refresh. The board correctly retained its previously loaded data, but the browser exposed the unhelpful JSON parser error.
+- The ordinary dashboard Refresh button now reads the current snapshot and starts any needed revalidation in the background, avoiding a complete synchronous order scan for a routine click. State-changing actions retain their explicit immediate readback.
+- Live-dashboard JSON parsing now reads the response once and reports a concise Slovak upstream/status error when a non-JSON proxy response arrives; it no longer displays `Unexpected token` to the operator. A successful non-JSON response remains identified as an invalid server response.
+- `git diff --check` and the focused operations, HTTP and mobile UI suite passed: 61 tests. No production data or state was changed during the audit.
+
+Next exact step:
+
+- Merge, build and deploy this UI-only resilience fix to `biznisweb-roy-operations-dashboard`; first run the finite candidate localhost/marker/PDF gate, then verify public UI/API behavior. Preserve the cached PDF behavior and do not trigger print acknowledgement.
+
 ## 2026-09-17 — VEVO picking-PDF reliability deployed and verified
 
 Date: 2026-09-17, 11:02 UTC
