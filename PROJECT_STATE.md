@@ -1,5 +1,22 @@
 # PROJECT_STATE
 
+## 2026-09-17 — VEVO picking-PDF reliability deployed and verified
+
+Date: 2026-09-17, 11:02 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-picking-pdf-reliability-20260917`
+
+What changed / verified:
+
+- The shared picking-PDF implementation delivered in PR #579 already covers the VEVO operations dashboard: its links select the current cached snapshot with `refresh=0`, PDF output is compressed, and an aborted download terminates cleanly. VEVO was still on an older App Runner image, so this release promoted the already-reviewed immutable image rather than duplicating the implementation.
+- App Runner service `biznisweb-vevo-production-board` was confirmed as managed (instance/IP `N/A`), runtime `/app`, port `8080`, then promoted from digest `sha256:16d4064aafbf501dd1a493f754c9562d3231e49b0902ea939e5ad34f8e8b805c` to `sha256:638e628781783c2b4897f93c97eaec8a2c1db31f96fc18b03a30155e77b7283f`. Promotion operation `10d46abfe6c04b318399b5cec769dde9` succeeded and the service returned to RUNNING; public `/health` returns HTTP 200.
+- Before promotion, finite Fargate task `093e797d60524e7c850ffda1d44cf97d`, private IP `172.31.44.35`, ran in `/app` against localhost and exited 0. It checked VEVO operations, inventory and the cached PDF preview without a print acknowledgement; the PDF had a valid signature and was 208,628 bytes. The task definition became inactive after the gate.
+- The deploy script completed its authenticated public VEVO operations, PDF and manufacturing-policy readback. It found only paid or recognized COD fulfillment rows and changed no provider order, payment, stock, print acknowledgement, email or report schedule.
+
+Known issue / next exact step:
+
+- Chrome visual verification was attempted but the browser extension returned `ERR_BLOCKED_BY_CLIENT` for the VEVO App Runner URL. No protection was bypassed. The authenticated deployment readback and candidate localhost checks prove the endpoint; perform an ordinary browser download smoke test when that client-side block is removed. No code or production deployment remains pending.
+
 ## 2026-09-17 — ROY picking-PDF reliability deployed and verified
 
 Date: 2026-09-17, 10:36 UTC
