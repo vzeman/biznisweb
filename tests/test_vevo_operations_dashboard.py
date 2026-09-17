@@ -148,8 +148,13 @@ class VevoOperationsTests(unittest.TestCase):
         self.assertIn('ROY operations dashboard', build_roy_operations_dashboard_html("roy"))
         self.assertTrue(build_roy_picking_lists_filename([], project="vevo").startswith("vevo-"))
         pdf = build_roy_picking_lists_pdf([], project="vevo")
-        self.assertIn(b"VEVO operations dashboard", pdf)
-        self.assertNotIn(b"ROY operations dashboard", pdf)
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            self.skipTest("pypdf is only used for local PDF text verification")
+        pdf_text = PdfReader(io.BytesIO(pdf)).pages[0].extract_text() or ""
+        self.assertIn("VEVO operations dashboard", pdf_text)
+        self.assertNotIn("ROY operations dashboard", pdf_text)
 
     @patch.dict(os.environ, {"REPORT_PROJECT": "vevo"})
     def test_foreign_and_cross_site_posts_stop_before_action(self):

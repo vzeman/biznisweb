@@ -1,5 +1,24 @@
 # PROJECT_STATE
 
+## 2026-09-17 — ROY picking-PDF reliability (pending deployment)
+
+Date: 2026-09-17, 09:48 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-picking-pdf-reliability-20260917`
+
+What changed / verified:
+
+- Production audit confirmed the managed App Runner identity before the change: instance ID and private IP are `N/A`, service `biznisweb-roy-operations-dashboard`, ARN `arn:aws:apprunner:eu-central-1:919341186960:service/biznisweb-roy-operations-dashboard/ff762bb1c93148638741c62e7abb45b2`, runtime `/app`, start command `python live_dashboard_server.py --host 0.0.0.0 --port 8080`, and current image digest `sha256:06edde2801ddef74c7e4c84f154233575fa8f5715c7724da36c662245f6602ad`.
+- The live board had seven unprinted orders. Its PDF link forced `refresh=1`, causing every click to repeat the full ROY operations scan before building the document. App Runner application logs show the proxy closed the connection while `_send_download` wrote the PDF, producing `BrokenPipeError` and then a second failed error response. The handler built the PDF before that write failure.
+- Picking links and the deployment gate now use the current cached dashboard snapshot by default (`refresh=0`), while an explicit `refresh=1` remains available for controlled refreshes. The PDF writer now uses ReportLab compression and response writers treat a disconnected client as terminal instead of attempting a second response.
+- Focused HTTP/dashboard/PDF checks pass: `85` tests. The PDF endpoint proves default cached and explicit-refresh behavior without marking an order printed; the disconnect regression is covered. A rendered synthetic A4 picking list has readable headings, barcodes, addresses, table rows, footer and page number. Its compressed size was `76,808` bytes versus `140,965` uncompressed (`45.5%` smaller).
+- The complete build regression selection now passes: `784` tests across invoice, credit-note, reporting, production-board, live-dashboard, ROY operations, inventory and product-identity modules; `git diff --check` passes.
+- CI identified one older VEVO test that inspected the raw PDF byte stream. Because compression intentionally encodes visible text in a stream, the test now extracts the generated page text and verifies the same project-specific heading when the optional local `pypdf` verifier is installed; CI keeps the existing dependency boundary and skips that local extraction check. The corrected CI run is pending.
+
+Next exact step:
+
+- Commit, merge, and deploy the reliability fix to `biznisweb-roy-operations-dashboard`; verify on the host with the live API, PDF response headers/content and marker, then verify the browser download without using the print-confirmation action.
+
 ## 2026-09-16 — Manufacturing payment gate deployed and verified
 
 Date: 2026-09-16, 12:36 UTC

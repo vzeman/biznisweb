@@ -1324,7 +1324,7 @@ def build_roy_operations_dashboard_html(
       <div class="actions">
         <button id="soundToggleBtn" class="sound" type="button" aria-pressed="false">Zvuk vyp.</button>
         __MANUFACTURING_LINK__
-        <a id="pickingPdfLink" class="button" href="/api/operations/__SHOP_KEY__/picking-lists.pdf?refresh=1" target="_blank" rel="noopener">Vysklad. PDF</a>
+        <a id="pickingPdfLink" class="button" href="/api/operations/__SHOP_KEY__/picking-lists.pdf?refresh=0" target="_blank" rel="noopener">Vysklad. PDF</a>
         <button id="markPickingPrintedBtn" type="button">Označiť vytlačené</button>
         <button id="refreshBtn" class="primary" type="button">Refresh</button>
         <a class="button" href="/">Dashboardy</a>
@@ -1991,7 +1991,7 @@ def build_roy_operations_dashboard_html(
     function updatePickingControls() {
       const orderNums = currentUnprintedPickingOrderNums();
       const pdfUrl = new URL(`/api/operations/${encodeURIComponent(project)}/picking-lists.pdf`, window.location.origin);
-      pdfUrl.searchParams.set('refresh', '1');
+      pdfUrl.searchParams.set('refresh', '0');
       orderNums.forEach((orderNum) => pdfUrl.searchParams.append('order_num', orderNum));
       const link = el('pickingPdfLink');
       const markButton = el('markPickingPrintedBtn');
@@ -2011,7 +2011,7 @@ def build_roy_operations_dashboard_html(
       const orderNum = String(order.order_num || order.id || '').trim();
       if (!orderNum) return '';
       const pdfUrl = new URL(`/api/operations/${encodeURIComponent(project)}/picking-lists.pdf`, window.location.origin);
-      pdfUrl.searchParams.set('refresh', '1');
+      pdfUrl.searchParams.set('refresh', '0');
       pdfUrl.searchParams.set('include_printed', '1');
       pdfUrl.searchParams.set('order_num', orderNum);
       const label = order.picking_printed ? 'Vytlačiť znova' : 'Vytlačiť';
@@ -2530,25 +2530,34 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
     server_version = "BizniWebLiveDashboard/1.1"
 
     def _send_bytes(self, body: bytes, *, content_type: str, status: int = 200) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            # The App Runner proxy may close an already-aborted client request.
+            # A response cannot be recovered after that connection is gone.
+            return
 
     def _send_download(self, body: bytes, *, content_type: str, filename: str, status: int = 200) -> None:
         ascii_filename = "".join(ch if ch.isalnum() or ch in ".-_" else "_" for ch in filename) or "download.pdf"
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header(
-            "Content-Disposition",
-            f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{quote(filename)}",
-        )
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header(
+                "Content-Disposition",
+                f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{quote(filename)}",
+            )
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            # Do not try to send an HTML error after a download client has gone away.
+            return
 
     def _send_json(self, payload: Dict[str, object], status: int = 200) -> None:
         self._send_bytes(
@@ -2713,7 +2722,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                     status=404,
                 )
                 return
-            force_refresh = (query.get("refresh", ["1"])[0] or "").strip().lower() not in {"0", "false", "no"}
+            force_refresh = (query.get("refresh", [""])[0] or "").strip().lower() in {"1", "true", "yes"}
             include_printed = (
                 (query.get("preview", [""])[0] or "").strip().lower() in {"1", "true", "yes"}
                 or (query.get("include_printed", [""])[0] or "").strip().lower() in {"1", "true", "yes"}

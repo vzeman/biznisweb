@@ -5,7 +5,7 @@ import os
 import threading
 import unittest
 from http.server import ThreadingHTTPServer
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 from live_dashboard_server import (
     LiveDashboardHandler,
@@ -105,6 +105,68 @@ class LiveDashboardAuthTests(unittest.TestCase):
                 **{**trusted, "origin": "https://evil.example", "host": "dashboard.example.test"}
             )
         )
+
+    def test_picking_pdf_uses_cached_snapshot_unless_refresh_is_explicit(self) -> None:
+        class QuietHandler(LiveDashboardHandler):
+            def log_message(self, _format, *_args) -> None:
+                return
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        host, port = server.server_address
+        payload = {"orders": {"orders": [{"order_num": "R-1"}]}}
+        try:
+            with (
+                patch("live_dashboard_server.available_projects", return_value=["roy"]),
+                patch("live_dashboard_server.live_dashboard_auth_credentials", return_value=None),
+                patch("live_dashboard_server.load_project_settings", return_value={}),
+                patch("live_dashboard_server.resolve_roy_operations_settings", return_value={"enabled": True}),
+                patch("live_dashboard_server.read_latest_dashboard_payload", return_value={}),
+                patch("live_dashboard_server.get_cached_roy_operations_snapshot", return_value=payload) as snapshot,
+                patch("live_dashboard_server.load_roy_operations_state", return_value={}),
+                patch("live_dashboard_server.select_picking_orders_for_print", return_value=payload["orders"]["orders"]),
+                patch("live_dashboard_server.build_roy_picking_lists_pdf", return_value=b"%PDF-test"),
+                patch("live_dashboard_server.build_roy_picking_lists_filename", return_value="picking.pdf"),
+            ):
+                for query in ("order_num=R-1", "refresh=1&order_num=R-1"):
+                    connection = http.client.HTTPConnection(host, port, timeout=5)
+                    connection.request("GET", f"/api/operations/roy/picking-lists.pdf?{query}")
+                    response = connection.getresponse()
+                    self.assertEqual(200, response.status)
+                    self.assertEqual("application/pdf", response.getheader("Content-Type"))
+                    self.assertEqual(b"%PDF-test", response.read())
+                    connection.close()
+
+            self.assertEqual(
+                [
+                    call("roy", report_payload={}, force_refresh=False),
+                    call("roy", report_payload={}, force_refresh=True),
+                ],
+                snapshot.call_args_list,
+            )
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_download_does_not_raise_after_client_disconnect(self) -> None:
+        handler = object.__new__(LiveDashboardHandler)
+        handler.send_response = Mock()
+        handler.send_header = Mock()
+        handler.end_headers = Mock()
+        handler.wfile = Mock()
+        handler.wfile.write.side_effect = BrokenPipeError()
+
+        LiveDashboardHandler._send_download(
+            handler,
+            b"%PDF-test",
+            content_type="application/pdf",
+            filename="picking.pdf",
+        )
+
+        handler.send_response.assert_called_once_with(200)
+        handler.wfile.write.assert_called_once_with(b"%PDF-test")
 
     def test_inventory_restock_route_rejects_untrusted_request_and_calls_action(self) -> None:
         class QuietHandler(LiveDashboardHandler):
