@@ -7,8 +7,6 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from pypdf import PdfReader
-
 import operations_inventory as inventory
 import roy_operations_dashboard as operations
 from live_dashboard_server import LiveDashboardHandler, build_roy_operations_dashboard_html
@@ -150,6 +148,10 @@ class VevoOperationsTests(unittest.TestCase):
         self.assertIn('ROY operations dashboard', build_roy_operations_dashboard_html("roy"))
         self.assertTrue(build_roy_picking_lists_filename([], project="vevo").startswith("vevo-"))
         pdf = build_roy_picking_lists_pdf([], project="vevo")
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            self.skipTest("pypdf is only used for local PDF text verification")
         pdf_text = PdfReader(io.BytesIO(pdf)).pages[0].extract_text() or ""
         self.assertIn("VEVO operations dashboard", pdf_text)
         self.assertNotIn("ROY operations dashboard", pdf_text)
