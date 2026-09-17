@@ -12,7 +12,8 @@ What changed / verified:
 - The live board had seven unprinted orders. Its PDF link forced `refresh=1`, causing every click to repeat the full ROY operations scan before building the document. App Runner application logs show the proxy closed the connection while `_send_download` wrote the PDF, producing `BrokenPipeError` and then a second failed error response. The handler built the PDF before that write failure.
 - Picking links and the deployment gate now use the current cached dashboard snapshot by default (`refresh=0`), while an explicit `refresh=1` remains available for controlled refreshes. The PDF writer now uses ReportLab compression and response writers treat a disconnected client as terminal instead of attempting a second response.
 - Focused HTTP/dashboard/PDF checks pass: `85` tests. The PDF endpoint proves default cached and explicit-refresh behavior without marking an order printed; the disconnect regression is covered. A rendered synthetic A4 picking list has readable headings, barcodes, addresses, table rows, footer and page number. Its compressed size was `76,808` bytes versus `140,965` uncompressed (`45.5%` smaller).
-- The complete build regression selection also passes: `435` tests across invoice, credit-note, reporting, production-board, live-dashboard, ROY operations, inventory and product-identity modules; `git diff --check` passes.
+- The complete build regression selection now passes: `784` tests across invoice, credit-note, reporting, production-board, live-dashboard, ROY operations, inventory and product-identity modules; `git diff --check` passes.
+- CI identified one older VEVO test that inspected the raw PDF byte stream. Because compression intentionally encodes visible text in a stream, the test now extracts the generated page text and verifies the same project-specific heading. The corrected CI run is pending.
 
 Next exact step:
 
