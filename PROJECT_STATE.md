@@ -1,3 +1,20 @@
+## 2026-09-18 — VEVO report maturation charts deployed and rerun
+
+Date: 2026-09-18, 03:26 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-maturation-rerun-20260918`
+
+What changed / verified:
+
+- PR #586 merged as `62255f0883fc839498293e34ed1f8ff0cbd791c6`; successful build `35295279080` produced immutable VEVO reporting image `sha256:8b1db0ce85a1696d0f3f4fdb6eaf43db9f8f569f615f5817ae6fb0bc190a4559`.
+- Before promotion, candidate task `c5750c980f0d4eca939fef95ccfffebc` (private IP `172.31.26.7`, task definition `vevo-reporting-daily:42`, service `vevo-daily-report-email`, runtime `/app`) exited 0. Its localhost marker confirmed both new chart IDs, 503 maturation rows and 366 curve points. It skipped email and invoice generation and did not write the live report aliases.
+- The enabled `vevo-daily-report-email` scheduler now references immutable task definition `vevo-reporting-daily:42`. Its previous target was `:40`; all schedule configuration, task networking, input and retry settings were preserved, with the reporting image as the only task-definition difference.
+- A single live rerun task `f6f43fdf626941a7b7a81a8952b33032` (private IP `172.31.18.105`, service `vevo-daily-report-email`, runtime `/app`) exited 0 and sent the configured VEVO email through SES. Live S3 output was written at 03:25 UTC: `report_latest.html` contains `profitMaturationChart` and `profitPaybackCurveChart`; the dashboard payload has available maturation data with 503 rows and 366 curve points.
+- The historical `production-reporting-smoke` / managed-report migration path was not used: it is blocked by an obsolete ROY task-definition pin (`:71` while the actual ROY scheduler is on `:77`) and still relies on mutable `latest`. Repair that release mechanism independently before using it again.
+
+Next exact step:
+
+- No further action is required for today’s VEVO rerun. For a future reporting-image release, use an immutable-digest candidate gate and repair the stale managed-report workflow before relying on it.
 # PROJECT_STATE
 
 ## 2026-09-17 — ROY and VEVO dashboard release persistence verified
