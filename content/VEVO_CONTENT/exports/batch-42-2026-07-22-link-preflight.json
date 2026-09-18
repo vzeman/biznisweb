@@ -1,0 +1,338 @@
+{
+  "checked_count": 42,
+  "failure_count": 0,
+  "links": [
+    {
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-cierne-oblecenie-aby-nevybledlo",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-cierne-oblecenie-aby-nevybledlo"
+    },
+    {
+      "url": "https://www.vevo.sk/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia"
+    },
+    {
+      "url": "https://www.iso.org/standard/51276.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/51276.html"
+    },
+    {
+      "url": "https://www.iso.org/standard/65207.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/65207.html"
+    },
+    {
+      "url": "https://www.iso.org/standard/65209.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/65209.html"
+    },
+    {
+      "url": "https://www.aatcc.org/learn/online-test-method-training/colorfastness-module",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.aatcc.org/learn/online-test-method-training/colorfastness-module"
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols"
+    },
+    {
+      "url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel"
+    },
+    {
+      "url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "kind": "intra_batch_target_precheck",
+      "ok": true,
+      "expected_status": 404,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch"
+    },
+    {
+      "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "kind": "intra_batch_target_precheck",
+      "ok": true,
+      "expected_status": 404,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat"
+    },
+    {
+      "url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch"
+    },
+    {
+      "url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach"
+    },
+    {
+      "url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-so-zipsami-a-suchym-zipsom-bez-zatrhnutia",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-oblecenie-so-zipsami-a-suchym-zipsom-bez-zatrhnutia"
+    },
+    {
+      "url": "https://www.iso.org/standard/88344.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/88344.html"
+    },
+    {
+      "url": "https://www.iso.org/standard/36416.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/36416.html"
+    },
+    {
+      "url": "https://www.iso.org/standard/37219.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/37219.html"
+    },
+    {
+      "url": "https://store.astm.org/d4034_d4034m-26.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://store.astm.org/d4034_d4034m-26.html"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-predist-dierkam-v-trickach-po-prani-a-suseni"
+    },
+    {
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "kind": "intra_batch_target_precheck",
+      "ok": true,
+      "expected_status": 404,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni"
+    },
+    {
+      "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie"
+    },
+    {
+      "url": "https://store.astm.org/d3939_d3939m-26.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://store.astm.org/d3939_d3939m-26.html"
+    },
+    {
+      "url": "https://store.astm.org/d5362-13.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://store.astm.org/d5362-13.html"
+    },
+    {
+      "url": "https://www.iso.org/standard/75376.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/75376.html"
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie"
+    },
+    {
+      "url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori"
+    },
+    {
+      "url": "https://www.vevo.sk/n/bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia"
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost"
+    },
+    {
+      "url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou"
+    },
+    {
+      "url": "https://www.iso.org/standard/86700.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/86700.html"
+    },
+    {
+      "url": "https://store.astm.org/d3775-17.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://store.astm.org/d3775-17.html"
+    },
+    {
+      "url": "https://www.iso.org/standard/74893.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/74893.html"
+    },
+    {
+      "url": "https://cottonworks.com/wp-content/uploads/2021/03/Cotton-Sheets-Buying-Guide_Spreads.pdf",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://cottonworks.com/wp-content/uploads/2021/03/Cotton-Sheets-Buying-Guide_Spreads.pdf"
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo"
+    }
+  ]
+}

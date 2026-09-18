@@ -1,0 +1,252 @@
+{
+  "batch": 28,
+  "verified_at": "2026-06-17",
+  "rss_status": 200,
+  "all_public_urls_200": true,
+  "all_titles_present": true,
+  "all_canonicals_present": true,
+  "all_rss_dates_before_2025_10_12": true,
+  "all_styled_blocks_present": true,
+  "all_product_cards_present": true,
+  "all_category_links_present": true,
+  "all_source_links_200": true,
+  "items": [
+    {
+      "post_id": "2265",
+      "title": "Ako vybrať vôňu do prania na zimu: deky, svetre, šály a sezónne textílie",
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "url": "https://www.vevo.sk/n/ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "status": 200,
+      "rss_pubDate": "Wed, 24 Sep 2025 08:00:00 +0200",
+      "title_present": true,
+      "canonical_present": true,
+      "styled_blocks_present": true,
+      "product_card_present": true,
+      "category_link_present": true,
+      "visible_word_count_page": 5177,
+      "source_link_count": 10,
+      "source_links_all_200": true,
+      "banned_article_words_present": false,
+      "global_layout_banned_word_hits_note": "Full-page HTML contains vevo-sticky-cta from site layout; article source content has no CTA/longtail wording."
+    },
+    {
+      "post_id": "2266",
+      "title": "Ako prevoňať bielizeň v malej kúpeľni: vlhkosť, sušenie a jemná vôňa bez zatuchnutia",
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "url": "https://www.vevo.sk/n/ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "status": 200,
+      "rss_pubDate": "Wed, 24 Sep 2025 08:12:00 +0200",
+      "title_present": true,
+      "canonical_present": true,
+      "styled_blocks_present": true,
+      "product_card_present": true,
+      "category_link_present": true,
+      "visible_word_count_page": 5013,
+      "source_link_count": 10,
+      "source_links_all_200": true,
+      "banned_article_words_present": false,
+      "global_layout_banned_word_hits_note": "Full-page HTML contains vevo-sticky-cta from site layout; article source content has no CTA/longtail wording."
+    },
+    {
+      "post_id": "2267",
+      "title": "Parfum do prania pri citlivej pokožke: kedy voliť jemnú vôňu a kedy radšej bez parfumácie",
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "url": "https://www.vevo.sk/n/parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "status": 200,
+      "rss_pubDate": "Wed, 24 Sep 2025 08:24:00 +0200",
+      "title_present": true,
+      "canonical_present": true,
+      "styled_blocks_present": true,
+      "product_card_present": true,
+      "category_link_present": true,
+      "visible_word_count_page": 5078,
+      "source_link_count": 10,
+      "source_links_all_200": true,
+      "banned_article_words_present": false,
+      "global_layout_banned_word_hits_note": "Full-page HTML contains vevo-sticky-cta from site layout; article source content has no CTA/longtail wording."
+    }
+  ],
+  "link_checks": [
+    {
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "href": "/c/vevo-fragrance/parfum-do-prania",
+      "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "status": 200
+    },
+    {
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "href": "/n/ako-odstranit-solne-mapy-z-nohavic-a-kabata-po-zime",
+      "url": "https://www.vevo.sk/n/ako-odstranit-solne-mapy-z-nohavic-a-kabata-po-zime",
+      "status": 200
+    },
+    {
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "href": "/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "url": "https://www.vevo.sk/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "status": 200
+    },
+    {
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "href": "/n/ako-prat-kuklu-nakrcnik-a-termo-ciapku-po-lyzovani",
+      "url": "https://www.vevo.sk/n/ako-prat-kuklu-nakrcnik-a-termo-ciapku-po-lyzovani",
+      "status": 200
+    },
+    {
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "href": "/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "url": "https://www.vevo.sk/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "status": 200
+    },
+    {
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "href": "/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "url": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "status": 200
+    },
+    {
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "href": "/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+      "url": "https://www.vevo.sk/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+      "status": 200
+    },
+    {
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "href": "https://dermnetnz.org/topics/fragrance-allergy",
+      "url": "https://dermnetnz.org/topics/fragrance-allergy",
+      "status": 200
+    },
+    {
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "href": "https://www.energy.gov/energysaver/laundry",
+      "url": "https://www.energy.gov/energysaver/laundry",
+      "status": 200
+    },
+    {
+      "slug": "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "href": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "status": 200
+    },
+    {
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "href": "/c/vevo-fragrance/parfum-do-prania",
+      "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "status": 200
+    },
+    {
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "href": "/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "status": 200
+    },
+    {
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "href": "/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200
+    },
+    {
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "href": "/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "status": 200
+    },
+    {
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "href": "/n/preco-vona-z-prania-rychlo-vyprcha-a-ako-ju-udrzat-dlhsie",
+      "url": "https://www.vevo.sk/n/preco-vona-z-prania-rychlo-vyprcha-a-ako-ju-udrzat-dlhsie",
+      "status": 200
+    },
+    {
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "href": "/n/smrdi-pracka-ako-vycistit-bubon-gumu-zasuvku-aj-filter",
+      "url": "https://www.vevo.sk/n/smrdi-pracka-ako-vycistit-bubon-gumu-zasuvku-aj-filter",
+      "status": 200
+    },
+    {
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "href": "/p-1621/vevo-essence-sample-set",
+      "url": "https://www.vevo.sk/p-1621/vevo-essence-sample-set",
+      "status": 200
+    },
+    {
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "href": "https://dermnetnz.org/topics/fragrance-allergy",
+      "url": "https://dermnetnz.org/topics/fragrance-allergy",
+      "status": 200
+    },
+    {
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "href": "https://www.energy.gov/energysaver/laundry",
+      "url": "https://www.energy.gov/energysaver/laundry",
+      "status": 200
+    },
+    {
+      "slug": "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "href": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "status": 200
+    },
+    {
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "href": "/c/vevo-home-care/pranie/hypoalergenne-pracie-prostriedky",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/hypoalergenne-pracie-prostriedky",
+      "status": 200
+    },
+    {
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "href": "/n/ako-prat-detske-oblecenie-a-oblecenie-pre-babaetko-bez-podrazdenia-pokozky",
+      "url": "https://www.vevo.sk/n/ako-prat-detske-oblecenie-a-oblecenie-pre-babaetko-bez-podrazdenia-pokozky",
+      "status": 200
+    },
+    {
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200
+    },
+    {
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "href": "/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "status": 200
+    },
+    {
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "href": "/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "url": "https://www.vevo.sk/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "status": 200
+    },
+    {
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "href": "/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "url": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "status": 200
+    },
+    {
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200
+    },
+    {
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "href": "https://dermnetnz.org/topics/fragrance-allergy",
+      "url": "https://dermnetnz.org/topics/fragrance-allergy",
+      "status": 200
+    },
+    {
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "href": "https://dermnetnz.org/topics/textile-contact-dermatitis",
+      "url": "https://dermnetnz.org/topics/textile-contact-dermatitis",
+      "status": 200
+    },
+    {
+      "slug": "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "href": "https://www.energy.gov/energysaver/laundry",
+      "url": "https://www.energy.gov/energysaver/laundry",
+      "status": 200
+    }
+  ],
+  "no_banned_article_words": true
+}

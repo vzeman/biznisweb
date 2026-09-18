@@ -1,0 +1,174 @@
+{
+  "block_id": "765",
+  "record_count": 10,
+  "ok_count": 0,
+  "all_ok": false,
+  "publication_status": "rolled_back_due_to_remote_mcp_generating_111_slugs",
+  "mcp_publish_allowed_for_future": false,
+  "reason": "Remote VEVO MCP add/update news tools do not expose or preserve link/slug; created posts became /n/111... URLs.",
+  "posts": [
+    {
+      "title": "Prečo parfum do prania necítiť po usušení",
+      "slug": "preco-parfum-do-prania-necitit-po-ususeni",
+      "expected_url": "https://www.vevo.sk/n/preco-parfum-do-prania-necitit-po-ususeni",
+      "post_id": "2298",
+      "created_visible": false,
+      "published_by_mcp": true,
+      "expected_url_status_before_cleanup": 404,
+      "expected_url_ok_before_cleanup": false,
+      "rolled_back_deleted": true
+    },
+    {
+      "title": "Parfum do prania pri ručnom praní",
+      "slug": "parfum-do-prania-pri-rucnom-prani",
+      "expected_url": "https://www.vevo.sk/n/parfum-do-prania-pri-rucnom-prani",
+      "post_id": "2299",
+      "created_visible": false,
+      "published_by_mcp": true,
+      "expected_url_status_before_cleanup": 404,
+      "expected_url_ok_before_cleanup": false,
+      "rolled_back_deleted": true
+    },
+    {
+      "title": "Parfum do prania pri praní na 30 stupňov",
+      "slug": "parfum-do-prania-pri-prani-na-30-stupnov",
+      "expected_url": "https://www.vevo.sk/n/parfum-do-prania-pri-prani-na-30-stupnov",
+      "post_id": "2300",
+      "created_visible": false,
+      "published_by_mcp": true,
+      "expected_url_status_before_cleanup": 404,
+      "expected_url_ok_before_cleanup": false,
+      "rolled_back_deleted": true
+    },
+    {
+      "title": "Parfum do prania pri praní na 60 stupňov",
+      "slug": "parfum-do-prania-pri-prani-na-60-stupnov",
+      "expected_url": "https://www.vevo.sk/n/parfum-do-prania-pri-prani-na-60-stupnov",
+      "post_id": "2301",
+      "created_visible": false,
+      "published_by_mcp": true,
+      "expected_url_status_before_cleanup": 404,
+      "expected_url_ok_before_cleanup": false,
+      "rolled_back_deleted": true
+    },
+    {
+      "title": "Prací gél alebo prášok: čo sa hodí na bežné pranie",
+      "slug": "praci-gel-alebo-prasok-co-sa-hodi-na-bezne-pranie",
+      "expected_url": "https://www.vevo.sk/n/praci-gel-alebo-prasok-co-sa-hodi-na-bezne-pranie",
+      "post_id": "2302",
+      "created_visible": false,
+      "published_by_mcp": true,
+      "expected_url_status_before_cleanup": 404,
+      "expected_url_ok_before_cleanup": false,
+      "rolled_back_deleted": true
+    },
+    {
+      "title": "Prací gél na čierne oblečenie",
+      "slug": "praci-gel-na-cierne-oblecenie",
+      "expected_url": "https://www.vevo.sk/n/praci-gel-na-cierne-oblecenie",
+      "post_id": "2303",
+      "created_visible": false,
+      "published_by_mcp": true,
+      "expected_url_status_before_cleanup": null,
+      "expected_url_ok_before_cleanup": null,
+      "rolled_back_deleted": true
+    },
+    {
+      "title": "Prací gél na biele oblečenie",
+      "slug": "praci-gel-na-biele-oblecenie",
+      "expected_url": "https://www.vevo.sk/n/praci-gel-na-biele-oblecenie",
+      "post_id": "2304",
+      "created_visible": false,
+      "published_by_mcp": true,
+      "expected_url_status_before_cleanup": null,
+      "expected_url_ok_before_cleanup": null,
+      "rolled_back_deleted": true
+    },
+    {
+      "title": "Prací gél na farebné oblečenie",
+      "slug": "praci-gel-na-farebne-oblecenie",
+      "expected_url": "https://www.vevo.sk/n/praci-gel-na-farebne-oblecenie",
+      "post_id": "2305",
+      "created_visible": false,
+      "published_by_mcp": true,
+      "expected_url_status_before_cleanup": null,
+      "expected_url_ok_before_cleanup": null,
+      "rolled_back_deleted": true
+    },
+    {
+      "title": "Prací gél pri nízkych teplotách",
+      "slug": "praci-gel-pri-nizkych-teplotach",
+      "expected_url": "https://www.vevo.sk/n/praci-gel-pri-nizkych-teplotach",
+      "post_id": "2306",
+      "created_visible": false,
+      "published_by_mcp": true,
+      "expected_url_status_before_cleanup": null,
+      "expected_url_ok_before_cleanup": null,
+      "rolled_back_deleted": true
+    },
+    {
+      "title": "Preplnená práčka: ako kazí pranie",
+      "slug": "preplnena-pracka-ako-kazi-pranie",
+      "expected_url": "https://www.vevo.sk/n/preplnena-pracka-ako-kazi-pranie",
+      "post_id": "2307",
+      "created_visible": false,
+      "published_by_mcp": true,
+      "expected_url_status_before_cleanup": null,
+      "expected_url_ok_before_cleanup": null,
+      "rolled_back_deleted": true
+    }
+  ],
+  "cleanup_export": "content/VEVO_CONTENT/exports/batch-35-2026-07-08-cleanup.json",
+  "bad_url_checks_after_cleanup": [
+    {
+      "url": "https://www.vevo.sk/n/111",
+      "status": 404,
+      "length": 124013
+    },
+    {
+      "url": "https://www.vevo.sk/n/111111",
+      "status": 404,
+      "length": 124019
+    },
+    {
+      "url": "https://www.vevo.sk/n/111111111",
+      "status": 404,
+      "length": 124025
+    },
+    {
+      "url": "https://www.vevo.sk/n/1111111111",
+      "status": 404,
+      "length": 124027
+    },
+    {
+      "url": "https://www.vevo.sk/n/1111111111111111111",
+      "status": 404,
+      "length": 124045
+    },
+    {
+      "url": "https://www.vevo.sk/n/11111111111111111111",
+      "status": 404,
+      "length": 124047
+    },
+    {
+      "url": "https://www.vevo.sk/n/111111111111111111111",
+      "status": 404,
+      "length": 124049
+    },
+    {
+      "url": "https://www.vevo.sk/n/1111111111111111111111",
+      "status": 404,
+      "length": 124051
+    },
+    {
+      "url": "https://www.vevo.sk/n/11111111111111111111111",
+      "status": 404,
+      "length": 124053
+    },
+    {
+      "url": "https://www.vevo.sk/n/111111111111111111111111",
+      "status": 404,
+      "length": 124055
+    }
+  ]
+}

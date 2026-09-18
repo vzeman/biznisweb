@@ -1,0 +1,459 @@
+{
+  "created_at": "2026-07-14T08:08:16.703235+00:00",
+  "mode": "execute-live",
+  "updates": [
+    {
+      "post_id": "1611",
+      "title": "Ako vzniká parfumová kompozícia: od suroviny po hotovú vôňu",
+      "slug": "vonne-esencie-srdce-kazdeho-parfumu1",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/vonne-esencie-srdce-kazdeho-parfumu1",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Ako vzniká parfumová kompozícia: od suroviny po hotovú vôňu",
+        "slug": "vonne-esencie-srdce-kazdeho-parfumu1",
+        "words": 1595,
+        "h2_count": 19,
+        "table_count": 2,
+        "styled_block_count": 39,
+        "product_link_count": 5,
+        "category_link_count": 2,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1607",
+      "title": "Ako intenzita vône súvisí s koncentráciou, dávkou a použitím",
+      "slug": "koncentracia-parfumu-edp-edt-edc-vysvetlene1",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/koncentracia-parfumu-edp-edt-edc-vysvetlene1",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Ako intenzita vône súvisí s koncentráciou, dávkou a použitím",
+        "slug": "koncentracia-parfumu-edp-edt-edc-vysvetlene1",
+        "words": 1525,
+        "h2_count": 19,
+        "table_count": 2,
+        "styled_block_count": 41,
+        "product_link_count": 5,
+        "category_link_count": 2,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1606",
+      "title": "Prečo uteráky strácajú savosť: nánosy aviváže a obnova vlákien",
+      "slug": "silikony-v-avivazach-skryty-nepriatel-vasho-pradla1",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/silikony-v-avivazach-skryty-nepriatel-vasho-pradla1",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Prečo uteráky strácajú savosť: nánosy aviváže a obnova vlákien",
+        "slug": "silikony-v-avivazach-skryty-nepriatel-vasho-pradla1",
+        "words": 1600,
+        "h2_count": 19,
+        "table_count": 2,
+        "styled_block_count": 42,
+        "product_link_count": 5,
+        "category_link_count": 2,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1604",
+      "title": "Pranie na 30, 40 a 60 °C: vplyv teploty na čistotu a vôňu",
+      "slug": "teplota-prania-a-vona-kompletny-sprievodca1",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/teplota-prania-a-vona-kompletny-sprievodca1",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Pranie na 30, 40 a 60 °C: vplyv teploty na čistotu a vôňu",
+        "slug": "teplota-prania-a-vona-kompletny-sprievodca1",
+        "words": 1557,
+        "h2_count": 19,
+        "table_count": 2,
+        "styled_block_count": 41,
+        "product_link_count": 5,
+        "category_link_count": 2,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1602",
+      "title": "Prečo vôňa po sušičke slabne: presušenie, teplota a správny program",
+      "slug": "susicka-a-vone-ako-zachovat-vonu-po-suseni1",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/susicka-a-vone-ako-zachovat-vonu-po-suseni1",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Prečo vôňa po sušičke slabne: presušenie, teplota a správny program",
+        "slug": "susicka-a-vone-ako-zachovat-vonu-po-suseni1",
+        "words": 1534,
+        "h2_count": 19,
+        "table_count": 2,
+        "styled_block_count": 42,
+        "product_link_count": 5,
+        "category_link_count": 3,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1601",
+      "title": "Citrón, bergamot, grep a mandarínka: ako sa líšia citrusové vône",
+      "slug": "citrusove-vone-sviezost-a-energia-pre-vase-pradlo1",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/citrusove-vone-sviezost-a-energia-pre-vase-pradlo1",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Citrón, bergamot, grep a mandarínka: ako sa líšia citrusové vône",
+        "slug": "citrusove-vone-sviezost-a-energia-pre-vase-pradlo1",
+        "words": 1537,
+        "h2_count": 19,
+        "table_count": 2,
+        "styled_block_count": 42,
+        "product_link_count": 5,
+        "category_link_count": 2,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1579",
+      "title": "Vonné esencie – Srdce každého parfumu",
+      "slug": "vonne-esencie-srdce-kazdeho-parfumu",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/vonne-esencie-srdce-kazdeho-parfumu",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Vonné esencie – Srdce každého parfumu",
+        "slug": "vonne-esencie-srdce-kazdeho-parfumu",
+        "words": 1645,
+        "h2_count": 18,
+        "table_count": 2,
+        "styled_block_count": 22,
+        "product_link_count": 2,
+        "category_link_count": 2,
+        "faq_question_count": 10,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1610",
+      "title": "Koncentrácia parfumu – EdP, EdT, EdC vysvetlené",
+      "slug": "koncentracia-parfumu-edp-edt-edc-vysvetlene",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/koncentracia-parfumu-edp-edt-edc-vysvetlene",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Koncentrácia parfumu – EdP, EdT, EdC vysvetlené",
+        "slug": "koncentracia-parfumu-edp-edt-edc-vysvetlene",
+        "words": 1658,
+        "h2_count": 19,
+        "table_count": 2,
+        "styled_block_count": 41,
+        "product_link_count": 5,
+        "category_link_count": 2,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1609",
+      "title": "Silikóny v avivážach – Skrytý nepriateľ vášho prádla",
+      "slug": "silikony-v-avivazach-skryty-nepriatel-vasho-pradla",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/silikony-v-avivazach-skryty-nepriatel-vasho-pradla",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Silikóny v avivážach – Skrytý nepriateľ vášho prádla",
+        "slug": "silikony-v-avivazach-skryty-nepriatel-vasho-pradla",
+        "words": 1595,
+        "h2_count": 19,
+        "table_count": 2,
+        "styled_block_count": 41,
+        "product_link_count": 5,
+        "category_link_count": 3,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1608",
+      "title": "Teplota prania a vôňa – Kompletný sprievodca",
+      "slug": "teplota-prania-a-vona-kompletny-sprievodca",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/teplota-prania-a-vona-kompletny-sprievodca",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Teplota prania a vôňa – Kompletný sprievodca",
+        "slug": "teplota-prania-a-vona-kompletny-sprievodca",
+        "words": 1632,
+        "h2_count": 20,
+        "table_count": 2,
+        "styled_block_count": 41,
+        "product_link_count": 5,
+        "category_link_count": 2,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1605",
+      "title": "Sušička a vône – Ako zachovať vôňu po sušení",
+      "slug": "susicka-a-vone-ako-zachovat-vonu-po-suseni",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/susicka-a-vone-ako-zachovat-vonu-po-suseni",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Sušička a vône – Ako zachovať vôňu po sušení",
+        "slug": "susicka-a-vone-ako-zachovat-vonu-po-suseni",
+        "words": 1590,
+        "h2_count": 20,
+        "table_count": 2,
+        "styled_block_count": 41,
+        "product_link_count": 5,
+        "category_link_count": 3,
+        "faq_question_count": 11,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    },
+    {
+      "post_id": "1603",
+      "title": "Citrusové vône – Sviežosť a energia pre vaše prádlo",
+      "slug": "citrusove-vone-sviezost-a-energia-pre-vase-pradlo",
+      "action": "already-applied",
+      "public_status": {
+        "checked": true,
+        "url": "https://www.vevo.sk/n/citrusove-vone-sviezost-a-energia-pre-vase-pradlo",
+        "status_code": 200,
+        "location": null
+      },
+      "metrics": {
+        "title": "Citrusové vône – Sviežosť a energia pre vaše prádlo",
+        "slug": "citrusove-vone-sviezost-a-energia-pre-vase-pradlo",
+        "words": 1556,
+        "h2_count": 19,
+        "table_count": 2,
+        "styled_block_count": 42,
+        "product_link_count": 5,
+        "category_link_count": 2,
+        "faq_question_count": 12,
+        "max_short_paragraph_run": 0,
+        "short_paragraph_count": 0
+      },
+      "ok": true
+    }
+  ],
+  "hide": {
+    "post_id": "1520",
+    "action": "hidden",
+    "slug": "111111111111111111",
+    "public_status": {
+      "checked": true,
+      "url": "https://www.vevo.sk/n/111111111111111111",
+      "status_code": 404,
+      "location": null
+    },
+    "ok": true
+  },
+  "link_preflight": [
+    {
+      "url": "https://doi.org/10.1016/j.jics.2024.101197",
+      "status_code": 200,
+      "final_url": "https://linkinghub.elsevier.com/retrieve/pii/S0019452224000773",
+      "ok": true
+    },
+    {
+      "url": "https://ifrafragrance.org/about-fragrance/how-is-fragrance-made",
+      "status_code": 200,
+      "final_url": "https://ifrafragrance.org/about-fragrance/how-is-fragrance-made",
+      "ok": true
+    },
+    {
+      "url": "https://ifrafragrance.org/initiatives-positions/safe-use-fragrance-science/ifra-standards/ifra-code-of-practice",
+      "status_code": 200,
+      "final_url": "https://ifrafragrance.org/initiatives-positions/safe-use-fragrance-science/ifra-standards/ifra-code-of-practice",
+      "ok": true
+    },
+    {
+      "url": "https://pubmed.ncbi.nlm.nih.gov/19125719/",
+      "status_code": 200,
+      "final_url": "https://pubmed.ncbi.nlm.nih.gov/19125719/",
+      "ok": true
+    },
+    {
+      "url": "https://pubmed.ncbi.nlm.nih.gov/33962979/",
+      "status_code": 200,
+      "final_url": "https://pubmed.ncbi.nlm.nih.gov/33962979/",
+      "ok": true
+    },
+    {
+      "url": "https://pubmed.ncbi.nlm.nih.gov/39924526/",
+      "status_code": 200,
+      "final_url": "https://pubmed.ncbi.nlm.nih.gov/39924526/",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-susicky",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-susicky",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-zmaekcit-uteraky",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-zmaekcit-uteraky",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/citrusove-vone-sviezost-a-energia-pre-vase-pradlo",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/citrusove-vone-sviezost-a-energia-pre-vase-pradlo",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/koncentracia-parfumu-edp-edt-edc-vysvetlene",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/koncentracia-parfumu-edp-edt-edc-vysvetlene",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/silikony-v-avivazach-skryty-nepriatel-vasho-pradla",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/silikony-v-avivazach-skryty-nepriatel-vasho-pradla",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/susicka-a-vone-ako-zachovat-vonu-po-suseni",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/susicka-a-vone-ako-zachovat-vonu-po-suseni",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/teplota-prania-a-vona-kompletny-sprievodca",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/teplota-prania-a-vona-kompletny-sprievodca",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/vonne-esencie-srdce-kazdeho-parfumu",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/vonne-esencie-srdce-kazdeho-parfumu",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1609/parfum-do-susicky-vevo-no-07-ylang-absolute",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/p-1609/parfum-do-susicky-vevo-no-07-ylang-absolute",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-249/sada-vsetkych-6-vzoriek-po-1ks",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/p-249/sada-vsetkych-6-vzoriek-po-1ks",
+      "ok": true
+    }
+  ],
+  "all_ok": true
+}

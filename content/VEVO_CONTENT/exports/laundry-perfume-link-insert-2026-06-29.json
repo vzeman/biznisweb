@@ -1,0 +1,2606 @@
+{
+  "created_at": "2026-06-29T13:20:39.900859+00:00",
+  "target_url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+  "target_anchor": "parfumy do prania",
+  "limit": 50,
+  "update_live": true,
+  "write_local": true,
+  "updated_count": 0,
+  "records": [
+    {
+      "post_id": "2162",
+      "title": "Ako odstrániť zvratky z koberca, oblečenia a posteľnej bielizne",
+      "slug": "ako-odstranit-zvratky-z-koberca-oblecenia-a-postelnej-bielizne",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zvratky-z-koberca-oblecenia-a-postelnej-bielizne",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2222",
+      "title": "Ako prať oblečenie pri peľovej alergii po príchode zvonka",
+      "slug": "ako-prat-oblecenie-pri-pelovej-alergii-po-prichode-zvonka",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-pri-pelovej-alergii-po-prichode-zvonka",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17944,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2225",
+      "title": "Polyester vs bavlna: rozdiely pri nosení, praní a vôni",
+      "slug": "polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni",
+      "url": "https://www.vevo.sk/n/polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-20-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-20-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 18743,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2129",
+      "title": "Ako prať futbalový dres, štucne a tréningové veci po zápase",
+      "slug": "ako-prat-futbalovy-dres-stucne-a-treningove-veci-po-zapase",
+      "url": "https://www.vevo.sk/n/ako-prat-futbalovy-dres-stucne-a-treningove-veci-po-zapase",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17519,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2138",
+      "title": "Ako vyprať kakao z pyžama a posteľnej bielizne bez mliečneho zápachu",
+      "slug": "ako-vyprat-kakao-z-pyzama-a-postelnej-bielizne-bez-mliecneho-zapachu",
+      "url": "https://www.vevo.sk/n/ako-vyprat-kakao-z-pyzama-a-postelnej-bielizne-bez-mliecneho-zapachu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2152",
+      "title": "Ako prať vlnený sveter, keď zapácha po nosení",
+      "slug": "ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "url": "https://www.vevo.sk/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 16636,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2235",
+      "title": "Čo je bavlna: vlastnosti, výhody, nevýhody a starostlivosť",
+      "slug": "co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-22-2026-06-11-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-22-2026-06-11-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2238",
+      "title": "Ľan vs bavlna: rozdiely v savosti, krčivosti a starostlivosti",
+      "slug": "lan-vs-bavlna-rozdiely-v-savosti-krcivosti-a-starostlivosti",
+      "url": "https://www.vevo.sk/n/lan-vs-bavlna-rozdiely-v-savosti-krcivosti-a-starostlivosti",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-22-2026-06-11-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-22-2026-06-11-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2130",
+      "title": "Ako prať hokejový dres a textilné vrstvy z výstroja",
+      "slug": "ako-prat-hokejovy-dres-a-textilne-vrstvy-z-vystroja",
+      "url": "https://www.vevo.sk/n/ako-prat-hokejovy-dres-a-textilne-vrstvy-z-vystroja",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2134",
+      "title": "Pustila farba v práčke: čo urobiť s bielym tričkom a ružovou bielizňou",
+      "slug": "pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "url": "https://www.vevo.sk/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2139",
+      "title": "Ako odstrániť mlieko a jogurt z textilu bez kyslého zápachu",
+      "slug": "ako-odstranit-mlieko-a-jogurt-z-textilu-bez-kysleho-zapachu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-mlieko-a-jogurt-z-textilu-bez-kysleho-zapachu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2164",
+      "title": "Ako prať textílie v domácnosti so psom počas pĺznutia",
+      "slug": "ako-prat-textilie-v-domacnosti-so-psom-pocas-plznutia",
+      "url": "https://www.vevo.sk/n/ako-prat-textilie-v-domacnosti-so-psom-pocas-plznutia",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17202,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2184",
+      "title": "Ako vyprať pracovné tričko po záhradkárčení od hliny a potu",
+      "slug": "ako-vyprat-pracovne-tricko-po-zahradkarceni-od-hliny-a-potu",
+      "url": "https://www.vevo.sk/n/ako-vyprat-pracovne-tricko-po-zahradkarceni-od-hliny-a-potu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2189",
+      "title": "Ako prať oblečenie s flitrami, korálkami a aplikáciami",
+      "slug": "ako-prat-oblecenie-s-flitrami-koralkami-a-aplikaciami",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-s-flitrami-koralkami-a-aplikaciami",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2216",
+      "title": "Ako prať cestovné oblečenie po dlhom lete alebo vlaku",
+      "slug": "ako-prat-cestovne-oblecenie-po-dlhom-lete-alebo-vlaku",
+      "url": "https://www.vevo.sk/n/ako-prat-cestovne-oblecenie-po-dlhom-lete-alebo-vlaku",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 18190,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2228",
+      "title": "Čo je merino vlna: výhody, nevýhody a pranie bez zrazenia",
+      "slug": "co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-20-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-20-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2229",
+      "title": "Čo je mikrovlákno: výhody, nevýhody, savosť a pranie",
+      "slug": "co-je-mikrovlakno-vyhody-nevyhody-savost-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-mikrovlakno-vyhody-nevyhody-savost-a-pranie",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-20-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-20-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2244",
+      "title": "Čo je zmesový materiál: prečo sa oblečenie zráža alebo správa inak než čakáte",
+      "slug": "co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-23-2026-06-11-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-23-2026-06-11-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2262",
+      "title": "Extra oplach v práčke: kedy pomôže pri zápachu, tvrdej bielizni a citlivej pokožke",
+      "slug": "extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "url": "https://www.vevo.sk/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-27-2026-06-16-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-27-2026-06-16-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2269",
+      "title": "Ako prevoňať oblečenie do kancelárie: jemná vôňa, košeľa pri krku a prádlo bez ťažkej parfumácie",
+      "slug": "ako-prevonat-oblecenie-do-kancelarie-jemna-vona-kosela-pri-krku-a-pradlo-bez-tazkej-parfumacie",
+      "url": "https://www.vevo.sk/n/ako-prevonat-oblecenie-do-kancelarie-jemna-vona-kosela-pri-krku-a-pradlo-bez-tazkej-parfumacie",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-29-2026-06-17-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-29-2026-06-17-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 16255,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2270",
+      "title": "Vôňa oblečenia v kufri: ako baliť čistú bielizeň na cestu, aby nezatuchla",
+      "slug": "vona-oblecenia-v-kufri-ako-balit-cistu-bielizen-na-cestu-aby-nezatuchla",
+      "url": "https://www.vevo.sk/n/vona-oblecenia-v-kufri-ako-balit-cistu-bielizen-na-cestu-aby-nezatuchla",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-29-2026-06-17-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-29-2026-06-17-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 15989,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2271",
+      "title": "Ako prať kúpeľňovú predložku: guma, vlhkosť, chlpy a zápach po sprchovaní",
+      "slug": "ako-prat-kupelnovu-predlozku-guma-vlhkost-chlpy-a-zapach-po-sprchovani",
+      "url": "https://www.vevo.sk/n/ako-prat-kupelnovu-predlozku-guma-vlhkost-chlpy-a-zapach-po-sprchovani",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-30-2026-06-29-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-30-2026-06-29-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2273",
+      "title": "Ako osviežiť posteľ medzi praniami: vetranie, pyžamo, matrac a jemná vôňa",
+      "slug": "ako-osviezit-postel-medzi-praniami-vetranie-pyzamo-matrac-a-jemna-vona",
+      "url": "https://www.vevo.sk/n/ako-osviezit-postel-medzi-praniami-vetranie-pyzamo-matrac-a-jemna-vona",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-30-2026-06-29-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-30-2026-06-29-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2127",
+      "title": "Ako prať pršiplášť a reflexné nepremokavé nohavice po daždi",
+      "slug": "ako-prat-prsiplast-a-reflexne-nepremokave-nohavice-po-dazdi",
+      "url": "https://www.vevo.sk/n/ako-prat-prsiplast-a-reflexne-nepremokave-nohavice-po-dazdi",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2133",
+      "title": "Ako zabrániť púšťaniu farby pri praní nového oblečenia",
+      "slug": "ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2135",
+      "title": "Ako vyprať kari a kurkumu z bavlneného trička bez žltého tieňa",
+      "slug": "ako-vyprat-kari-a-kurkumu-z-bavlneneho-tricka-bez-zlteho-tiena",
+      "url": "https://www.vevo.sk/n/ako-vyprat-kari-a-kurkumu-z-bavlneneho-tricka-bez-zlteho-tiena",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2140",
+      "title": "Ako odstrániť živicu z nohavíc, bundy a detského oblečenia",
+      "slug": "ako-odstranit-zivicu-z-nohavic-bundy-a-detskeho-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zivicu-z-nohavic-bundy-a-detskeho-oblecenia",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2146",
+      "title": "Ako odstrániť maskaru z uteráka, županu a bielej osušky",
+      "slug": "ako-odstranit-maskaru-z-uteraka-zupanu-a-bielej-osusky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-maskaru-z-uteraka-zupanu-a-bielej-osusky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2150",
+      "title": "Ako prať podprsenku a jemnú spodnú bielizeň bez deformácie",
+      "slug": "ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "url": "https://www.vevo.sk/n/ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2151",
+      "title": "Ako prať kašmírový sveter doma bez zrazenia a žmolkov",
+      "slug": "ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "url": "https://www.vevo.sk/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2155",
+      "title": "Ako prať rifľovú bundu a tmavé džínsy, aby nepúšťali farbu",
+      "slug": "ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "url": "https://www.vevo.sk/n/ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2157",
+      "title": "Ako odstrániť pivo z trička, obrusu a sedačky bez zápachu",
+      "slug": "ako-odstranit-pivo-z-tricka-obrusu-a-sedacky-bez-zapachu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-pivo-z-tricka-obrusu-a-sedacky-bez-zapachu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 16601,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2183",
+      "title": "Ako prať oblečenie po kaderníctve od vlasov, farby a lakov",
+      "slug": "ako-prat-oblecenie-po-kadernictve-od-vlasov-farby-a-lakov",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-po-kadernictve-od-vlasov-farby-a-lakov",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2188",
+      "title": "Ako prať oblečenie so zipsami a suchým zipsom bez zatrhnutia",
+      "slug": "ako-prat-oblecenie-so-zipsami-a-suchym-zipsom-bez-zatrhnutia",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-so-zipsami-a-suchym-zipsom-bez-zatrhnutia",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2208",
+      "title": "Ako prať kuklu, nákrčník a termo čiapku po lyžovaní",
+      "slug": "ako-prat-kuklu-nakrcnik-a-termo-ciapku-po-lyzovani",
+      "url": "https://www.vevo.sk/n/ako-prat-kuklu-nakrcnik-a-termo-ciapku-po-lyzovani",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17765,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2220",
+      "title": "Ako prať látkové rúška a textilné obaly hygienicky",
+      "slug": "ako-prat-latkove-ruska-a-textilne-obaly-hygienicky",
+      "url": "https://www.vevo.sk/n/ako-prat-latkove-ruska-a-textilne-obaly-hygienicky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17927,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2236",
+      "title": "Organická bavlna: čo znamená a či sa perie inak ako bežná bavlna",
+      "slug": "organicka-bavlna-co-znamena-a-ci-sa-perie-inak-ako-bezna-bavlna",
+      "url": "https://www.vevo.sk/n/organicka-bavlna-co-znamena-a-ci-sa-perie-inak-ako-bezna-bavlna",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-22-2026-06-11-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-22-2026-06-11-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2241",
+      "title": "Bambusové vlákno vs bavlna: výhody, nevýhody a pranie pri citlivej pokožke",
+      "slug": "bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-23-2026-06-11-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-23-2026-06-11-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2264",
+      "title": "Koľko bielizne dať do práčky: praktická kapacita podľa uterákov, obliečok a športu",
+      "slug": "kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "url": "https://www.vevo.sk/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-27-2026-06-16-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-27-2026-06-16-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2268",
+      "title": "Najčastejšie chyby pri parfumoch do prania: priveľa vône, zlý oplach a miešanie s avivážou",
+      "slug": "najcastejsie-chyby-pri-parfumoch-do-prania-privela-vone-zly-oplach-a-miesanie-s-avivazou",
+      "url": "https://www.vevo.sk/n/najcastejsie-chyby-pri-parfumoch-do-prania-privela-vone-zly-oplach-a-miesanie-s-avivazou",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-29-2026-06-17-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-29-2026-06-17-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 16373,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2272",
+      "title": "Ako prať župan, aby zostal mäkký, savý a nezatuchol po sprche",
+      "slug": "ako-prat-zupan-aby-zostal-makky-savy-a-nezatuchol-po-sprche",
+      "url": "https://www.vevo.sk/n/ako-prat-zupan-aby-zostal-makky-savy-a-nezatuchol-po-sprche",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-30-2026-06-29-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-30-2026-06-29-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2128",
+      "title": "Ako odstrániť zápach z bežeckých legín po tréningu",
+      "slug": "ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 16394,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2131",
+      "title": "Ako odstrániť zápach z ponožiek a športovej obuvi po tréningu",
+      "slug": "ako-odstranit-zapach-z-ponoziek-a-sportovej-obuvi-po-treningu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-ponoziek-a-sportovej-obuvi-po-treningu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 16413,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2132",
+      "title": "Ako prať biele ponožky, aby nezošedli a nezostali tvrdé",
+      "slug": "ako-prat-biele-ponozky-aby-nezosedli-a-nezostali-tvrde",
+      "url": "https://www.vevo.sk/n/ako-prat-biele-ponozky-aby-nezosedli-a-nezostali-tvrde",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2136",
+      "title": "Ako odstrániť škvrny od horčice z trička, obrusu a utierky",
+      "slug": "ako-odstranit-skvrny-od-horcice-z-tricka-obrusu-a-utierky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-skvrny-od-horcice-z-tricka-obrusu-a-utierky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2137",
+      "title": "Ako odstrániť majonézu a dressing z obrusu bez mastného fľaku",
+      "slug": "ako-odstranit-majonezu-a-dressing-z-obrusu-bez-mastneho-flaku",
+      "url": "https://www.vevo.sk/n/ako-odstranit-majonezu-a-dressing-z-obrusu-bez-mastneho-flaku",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2143",
+      "title": "Ako vyčistiť filter práčky, keď bielizeň zapácha alebo voda odteká pomaly",
+      "slug": "ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2144",
+      "title": "Ako prať menštruačné nohavičky bezpečne a hygienicky",
+      "slug": "ako-prat-menstruacne-nohavicky-bezpecne-a-hygienicky",
+      "url": "https://www.vevo.sk/n/ako-prat-menstruacne-nohavicky-bezpecne-a-hygienicky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2153",
+      "title": "Ako prať viskózovú blúzku, aby nestratila tvar a neostala vyťahaná",
+      "slug": "ako-prat-viskozovu-bluzku-aby-nestratila-tvar-a-neostala-vytahana",
+      "url": "https://www.vevo.sk/n/ako-prat-viskozovu-bluzku-aby-nestratila-tvar-a-neostala-vytahana",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 16348,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2154",
+      "title": "Ako prať ľanovú košeľu, aby nezostala tvrdá a pokrčená",
+      "slug": "ako-prat-lanovu-koselu-aby-nezostala-tvrda-a-pokrcena",
+      "url": "https://www.vevo.sk/n/ako-prat-lanovu-koselu-aby-nezostala-tvrda-a-pokrcena",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2158",
+      "title": "Ako vyprať čierny čaj z bieleho obrusu bez hnedých máp",
+      "slug": "ako-vyprat-cierny-caj-z-bieleho-obrusu-bez-hnedych-map",
+      "url": "https://www.vevo.sk/n/ako-vyprat-cierny-caj-z-bieleho-obrusu-bez-hnedych-map",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2159",
+      "title": "Ako odstrániť čerešne z detského trička a letných šiat",
+      "slug": "ako-odstranit-ceresne-z-detskeho-tricka-a-letnych-siat",
+      "url": "https://www.vevo.sk/n/ako-odstranit-ceresne-z-detskeho-tricka-a-letnych-siat",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2160",
+      "title": "Ako vyprať granátové jablko z oblečenia bez ružových máp",
+      "slug": "ako-vyprat-granatove-jablko-z-oblecenia-bez-ruzovych-map",
+      "url": "https://www.vevo.sk/n/ako-vyprat-granatove-jablko-z-oblecenia-bez-ruzovych-map",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2170",
+      "title": "Ako odstrániť sliz z detského trička a deky bez lepkavých zvyškov",
+      "slug": "ako-odstranit-sliz-z-detskeho-tricka-a-deky-bez-lepkavych-zvyskov",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sliz-z-detskeho-tricka-a-deky-bez-lepkavych-zvyskov",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2171",
+      "title": "Ako vyprať voskovky z peračníka a textilného obalu",
+      "slug": "ako-vyprat-voskovky-z-peracnika-a-textilneho-obalu",
+      "url": "https://www.vevo.sk/n/ako-vyprat-voskovky-z-peracnika-a-textilneho-obalu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2172",
+      "title": "Ako odstrániť zvýrazňovač z rukáva mikiny a školského trička",
+      "slug": "ako-odstranit-zvyraznovac-z-rukava-mikiny-a-skolskeho-tricka",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zvyraznovac-z-rukava-mikiny-a-skolskeho-tricka",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2177",
+      "title": "Ako odstrániť vlasové sérum z uteráka a goliera košele",
+      "slug": "ako-odstranit-vlasove-serum-z-uteraka-a-goliera-kosele",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vlasove-serum-z-uteraka-a-goliera-kosele",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2179",
+      "title": "Ako vyprať suchý šampón z čierneho trička a goliera",
+      "slug": "ako-vyprat-suchy-sampon-z-cierneho-tricka-a-goliera",
+      "url": "https://www.vevo.sk/n/ako-vyprat-suchy-sampon-z-cierneho-tricka-a-goliera",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2190",
+      "title": "Ako prať tylovú sukňu, závoj a jemný tyl bez potrhania",
+      "slug": "ako-prat-tylovu-suknu-zavoj-a-jemny-tyl-bez-potrhania",
+      "url": "https://www.vevo.sk/n/ako-prat-tylovu-suknu-zavoj-a-jemny-tyl-bez-potrhania",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2191",
+      "title": "Ako prať spoločenské šaty doma a kedy zvoliť čistiareň",
+      "slug": "ako-prat-spolocenske-saty-doma-a-kedy-zvolit-cistiaren",
+      "url": "https://www.vevo.sk/n/ako-prat-spolocenske-saty-doma-a-kedy-zvolit-cistiaren",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2200",
+      "title": "Ako vyprať opaľovací olej z plážovej tuniky a uteráka",
+      "slug": "ako-vyprat-opalovaci-olej-z-plazovej-tuniky-a-uteraka",
+      "url": "https://www.vevo.sk/n/ako-vyprat-opalovaci-olej-z-plazovej-tuniky-a-uteraka",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2203",
+      "title": "Ako prať kompresné pančuchy a elastické zdravotné návleky",
+      "slug": "ako-prat-kompresne-pancuchy-a-elasticke-zdravotne-navleky",
+      "url": "https://www.vevo.sk/n/ako-prat-kompresne-pancuchy-a-elasticke-zdravotne-navleky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2204",
+      "title": "Ako prať textilné návleky na kočík po prechádzke v daždi",
+      "slug": "ako-prat-textilne-navleky-na-kocik-po-prechadzke-v-dazdi",
+      "url": "https://www.vevo.sk/n/ako-prat-textilne-navleky-na-kocik-po-prechadzke-v-dazdi",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2214",
+      "title": "Ako prať plážové pareo, šatku a ľahkú tuniku po dovolenke",
+      "slug": "ako-prat-plazove-pareo-satku-a-lahku-tuniku-po-dovolenke",
+      "url": "https://www.vevo.sk/n/ako-prat-plazove-pareo-satku-a-lahku-tuniku-po-dovolenke",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17280,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2215",
+      "title": "Ako odstrániť zápach z cestovného vankúša po lietadle",
+      "slug": "ako-odstranit-zapach-z-cestovneho-vankusa-po-lietadle",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-cestovneho-vankusa-po-lietadle",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 16575,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2227",
+      "title": "Čo je elastan: prečo je v legínach, spodnej bielizni a športovom oblečení",
+      "slug": "co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-20-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-20-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2230",
+      "title": "Recyklovaný polyester: čo znamená, aké má výhody a ako sa oň starať",
+      "slug": "recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+      "url": "https://www.vevo.sk/n/recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-21-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-21-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2233",
+      "title": "Modal v oblečení: čo znamená, prečo je mäkký a ako ho prať",
+      "slug": "modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "url": "https://www.vevo.sk/n/modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-21-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-21-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17379,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2240",
+      "title": "Čo je bambusová viskóza: mäkkosť, marketingové tvrdenia a reálna starostlivosť",
+      "slug": "co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-23-2026-06-11-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-23-2026-06-11-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2257",
+      "title": "Otáčky pri odstreďovaní: ako ovplyvňujú vlhkosť, krčenie a opotrebovanie oblečenia",
+      "slug": "otacky-pri-odstredovani-ako-ovplyvnuju-vlhkost-krcenie-a-opotrebovanie-oblecenia",
+      "url": "https://www.vevo.sk/n/otacky-pri-odstredovani-ako-ovplyvnuju-vlhkost-krcenie-a-opotrebovanie-oblecenia",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-26-2026-06-16-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-26-2026-06-16-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2258",
+      "title": "Preplnená práčka: prečo sa bielizeň nevyperie, neopláchne a zapácha",
+      "slug": "preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "url": "https://www.vevo.sk/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-26-2026-06-16-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-26-2026-06-16-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2263",
+      "title": "Krátky program v práčke: kedy stačí a kedy zhoršuje zvyšky pracieho prostriedku",
+      "slug": "kratky-program-v-pracke-kedy-staci-a-kedy-zhorsuje-zvysky-pracieho-prostriedku",
+      "url": "https://www.vevo.sk/n/kratky-program-v-pracke-kedy-staci-a-kedy-zhorsuje-zvysky-pracieho-prostriedku",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-27-2026-06-16-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-27-2026-06-16-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2141",
+      "title": "Ako odstrániť žuvačku z nohavíc, mikiny a poťahu",
+      "slug": "ako-odstranit-zuvacku-z-nohavic-mikiny-a-potahu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-z-nohavic-mikiny-a-potahu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2142",
+      "title": "Ako vyčistiť zásobník práčky od usadenín pracieho gélu a aviváže",
+      "slug": "ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "url": "https://www.vevo.sk/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2149",
+      "title": "Ako odstrániť parfumový fľak z oblečenia a jemných látok",
+      "slug": "ako-odstranit-parfumovy-flak-z-oblecenia-a-jemnych-latok",
+      "url": "https://www.vevo.sk/n/ako-odstranit-parfumovy-flak-z-oblecenia-a-jemnych-latok",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 16874,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2156",
+      "title": "Ako prať sako doma a kedy ho radšej dať do čistiarne",
+      "slug": "ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2161",
+      "title": "Ako odstrániť moč z matraca, plachty a detského pyžama",
+      "slug": "ako-odstranit-moc-z-matraca-plachty-a-detskeho-pyzama",
+      "url": "https://www.vevo.sk/n/ako-odstranit-moc-z-matraca-plachty-a-detskeho-pyzama",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2163",
+      "title": "Ako odstrániť chlpy z oblečenia pri praní, keď máte psa alebo mačku",
+      "slug": "ako-odstranit-chlpy-z-oblecenia-pri-prani-ked-mate-psa-alebo-macku",
+      "url": "https://www.vevo.sk/n/ako-odstranit-chlpy-z-oblecenia-pri-prani-ked-mate-psa-alebo-macku",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2173",
+      "title": "Ako odstrániť červenú papriku z trička a kuchynskej utierky",
+      "slug": "ako-odstranit-cervenu-papriku-z-tricka-a-kuchynskej-utierky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-cervenu-papriku-z-tricka-a-kuchynskej-utierky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2181",
+      "title": "Ako odstrániť trblietky z šiat, saka a kabáta po oslave",
+      "slug": "ako-odstranit-trblietky-z-siat-saka-a-kabata-po-oslave",
+      "url": "https://www.vevo.sk/n/ako-odstranit-trblietky-z-siat-saka-a-kabata-po-oslave",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17551,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2182",
+      "title": "Ako odstrániť pach z kostýmu po karnevale bez poškodenia látky",
+      "slug": "ako-odstranit-pach-z-kostymu-po-karnevale-bez-poskodenia-latky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-pach-z-kostymu-po-karnevale-bez-poskodenia-latky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17672,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2185",
+      "title": "Ako dostať kúsky papierovej vreckovky z čiernych nohavíc a mikiny",
+      "slug": "ako-dostat-kusky-papierovej-vreckovky-z-ciernych-nohavic-a-mikiny",
+      "url": "https://www.vevo.sk/n/ako-dostat-kusky-papierovej-vreckovky-z-ciernych-nohavic-a-mikiny",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2186",
+      "title": "Ako odstrániť biele šmuhy od pracieho prášku z čierneho oblečenia",
+      "slug": "ako-odstranit-biele-smuhy-od-pracieho-prasku-z-cierneho-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-odstranit-biele-smuhy-od-pracieho-prasku-z-cierneho-oblecenia",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2187",
+      "title": "Ako predísť dierkam v tričkách po praní a sušení",
+      "slug": "ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "url": "https://www.vevo.sk/n/ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2192",
+      "title": "Ako odstrániť hrdzu z oblečenia, obrusu a pracovných nohavíc",
+      "slug": "ako-odstranit-hrdzu-z-oblecenia-obrusu-a-pracovnych-nohavic",
+      "url": "https://www.vevo.sk/n/ako-odstranit-hrdzu-z-oblecenia-obrusu-a-pracovnych-nohavic",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2193",
+      "title": "Ako odstrániť mapy od vody zo sedačky, závesov a čalúnenia",
+      "slug": "ako-odstranit-mapy-od-vody-zo-sedacky-zavesov-a-calunenia",
+      "url": "https://www.vevo.sk/n/ako-odstranit-mapy-od-vody-zo-sedacky-zavesov-a-calunenia",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2194",
+      "title": "Ako odstrániť sadze z oblečenia po sviečke, grile alebo krbe",
+      "slug": "ako-odstranit-sadze-z-oblecenia-po-sviecke-grile-alebo-krbe",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sadze-z-oblecenia-po-sviecke-grile-alebo-krbe",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17097,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2196",
+      "title": "Ako odstrániť vajíčko z oblečenia, obrusu a kuchynskej utierky",
+      "slug": "ako-odstranit-vajicko-z-oblecenia-obrusu-a-kuchynskej-utierky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vajicko-z-oblecenia-obrusu-a-kuchynskej-utierky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2197",
+      "title": "Ako odstrániť vitamínový sirup z detského body a podbradníka",
+      "slug": "ako-odstranit-vitaminovy-sirup-z-detskeho-body-a-podbradnika",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vitaminovy-sirup-z-detskeho-body-a-podbradnika",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2198",
+      "title": "Ako odstrániť jód a dezinfekciu z oblečenia bez zväčšenia fľaku",
+      "slug": "ako-odstranit-jod-a-dezinfekciu-z-oblecenia-bez-zvaecsenia-flaku",
+      "url": "https://www.vevo.sk/n/ako-odstranit-jod-a-dezinfekciu-z-oblecenia-bez-zvaecsenia-flaku",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2201",
+      "title": "Ako vyčistiť bubon práčky po praní pelechu, topánok alebo pracovných vecí",
+      "slug": "ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "url": "https://www.vevo.sk/n/ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2205",
+      "title": "Ako odstrániť soľné mapy z nohavíc a kabáta po zime",
+      "slug": "ako-odstranit-solne-mapy-z-nohavic-a-kabata-po-zime",
+      "url": "https://www.vevo.sk/n/ako-odstranit-solne-mapy-z-nohavic-a-kabata-po-zime",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17778,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2213",
+      "title": "Ako dostať piesok z detských šortiek a trička po pláži pred praním",
+      "slug": "ako-dostat-piesok-z-detskych-sortiek-a-tricka-po-plazi-pred-pranim",
+      "url": "https://www.vevo.sk/n/ako-dostat-piesok-z-detskych-sortiek-a-tricka-po-plazi-pred-pranim",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17833,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2219",
+      "title": "Ako prať poťah na termofor a hrejivý vankúšik bez poškodenia výplne",
+      "slug": "ako-prat-potah-na-termofor-a-hrejivy-vankusik-bez-poskodenia-vyplne",
+      "url": "https://www.vevo.sk/n/ako-prat-potah-na-termofor-a-hrejivy-vankusik-bez-poskodenia-vyplne",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17239,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2226",
+      "title": "Čo je viskóza: vlastnosti, krčivosť, zrážanie a starostlivosť",
+      "slug": "co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-20-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-20-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2231",
+      "title": "Čo je polyamid alebo nylon: vlastnosti, odolnosť a pranie",
+      "slug": "co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-21-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-21-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2234",
+      "title": "Čo je lyocell alebo Tencel: priedušnosť, jemnosť a starostlivosť",
+      "slug": "co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-21-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-21-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17413,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2237",
+      "title": "Čo je ľan: prečo sa krčí, ako ho prať a ako ho zjemniť",
+      "slug": "co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-22-2026-06-11-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-22-2026-06-11-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2239",
+      "title": "Modal vs lyocell vs viskóza: ako sa líšia pri praní a nosení",
+      "slug": "modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "url": "https://www.vevo.sk/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-22-2026-06-11-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-22-2026-06-11-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 18344,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2242",
+      "title": "Čo je akryl: prečo pripomína vlnu a ako sa perie",
+      "slug": "co-je-akryl-preco-pripomina-vlnu-a-ako-sa-perie",
+      "url": "https://www.vevo.sk/n/co-je-akryl-preco-pripomina-vlnu-a-ako-sa-perie",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-23-2026-06-11-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-23-2026-06-11-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2243",
+      "title": "Akryl vs vlna: žmolkovanie, teplo, zápach a starostlivosť",
+      "slug": "akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+      "url": "https://www.vevo.sk/n/akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-23-2026-06-11-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-23-2026-06-11-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17833,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2259",
+      "title": "Prečo je bielizeň po praní tvrdá alebo lepkavá: zvyšky gélu, dávkovanie a oplach",
+      "slug": "preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-26-2026-06-16-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-26-2026-06-16-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2125",
+      "title": "Ako prať softshell bundu a nohavice bez poškodenia membrány",
+      "slug": "ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Pri funkčných a športových textíliách najprv odstráňte pot a zvyšky pracieho prostriedku; ak chcete po vypraní jemnú vôňu, môžu pomôcť <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a> s miernym dávkovaním podľa typu materiálu.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2145",
+      "title": "Ako odstrániť lak na nechty z textilu bez rozmazania škvrny",
+      "slug": "ako-odstranit-lak-na-nechty-z-textilu-bez-rozmazania-skvrny",
+      "url": "https://www.vevo.sk/n/ako-odstranit-lak-na-nechty-z-textilu-bez-rozmazania-skvrny",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2147",
+      "title": "Ako odstrániť podkladový krém z goliera blúzky a košele",
+      "slug": "ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+      "url": "https://www.vevo.sk/n/ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2148",
+      "title": "Ako odstrániť rúž z košele, šálu a látkovej servítky",
+      "slug": "ako-odstranit-ruz-z-kosele-salu-a-latkovej-servitky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-ruz-z-kosele-salu-a-latkovej-servitky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-16-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-16-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2167",
+      "title": "Ako odstrániť akrylovú farbu z trička bez zafixovania",
+      "slug": "ako-odstranit-akrylovu-farbu-z-tricka-bez-zafixovania",
+      "url": "https://www.vevo.sk/n/ako-odstranit-akrylovu-farbu-z-tricka-bez-zafixovania",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2169",
+      "title": "Ako odstrániť plastelínu z teplákov, koberca a poťahu",
+      "slug": "ako-odstranit-plastelinu-z-teplakov-koberca-a-potahu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-plastelinu-z-teplakov-koberca-a-potahu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2174",
+      "title": "Ako odstrániť sójovú omáčku z košele, obrusu a prestierania",
+      "slug": "ako-odstranit-sojovu-omacku-z-kosele-obrusu-a-prestierania",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sojovu-omacku-z-kosele-obrusu-a-prestierania",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2175",
+      "title": "Ako odstrániť balzamikový ocot z bieleho obrusu",
+      "slug": "ako-odstranit-balzamikovy-ocot-z-bieleho-obrusu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-balzamikovy-ocot-z-bieleho-obrusu",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2176",
+      "title": "Ako odstrániť olivový olej z ľanovej košele bez mastnej mapy",
+      "slug": "ako-odstranit-olivovy-olej-z-lanovej-kosele-bez-mastnej-mapy",
+      "url": "https://www.vevo.sk/n/ako-odstranit-olivovy-olej-z-lanovej-kosele-bez-mastnej-mapy",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2178",
+      "title": "Ako odstrániť krém na ruky z rukávov svetra a deky",
+      "slug": "ako-odstranit-krem-na-ruky-z-rukavov-svetra-a-deky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-krem-na-ruky-z-rukavov-svetra-a-deky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2180",
+      "title": "Ako odstrániť lak na vlasy z goliera košele a šatky",
+      "slug": "ako-odstranit-lak-na-vlasy-z-goliera-kosele-a-satky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-lak-na-vlasy-z-goliera-kosele-a-satky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2195",
+      "title": "Ako odstrániť arašidové maslo z trička, obrusu a detskej mikiny",
+      "slug": "ako-odstranit-arasidove-maslo-z-tricka-obrusu-a-detskej-mikiny",
+      "url": "https://www.vevo.sk/n/ako-odstranit-arasidove-maslo-z-tricka-obrusu-a-detskej-mikiny",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2199",
+      "title": "Ako odstrániť repelent z outdoorovej čiapky a návlekov na ruky",
+      "slug": "ako-odstranit-repelent-z-outdoorovej-ciapky-a-navlekov-na-ruky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-repelent-z-outdoorovej-ciapky-a-navlekov-na-ruky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2202",
+      "title": "Ako vyčistiť tesnenie práčky po praní pelechu plného chlpov",
+      "slug": "ako-vycistit-tesnenie-pracky-po-prani-pelechu-plneho-chlpov",
+      "url": "https://www.vevo.sk/n/ako-vycistit-tesnenie-pracky-po-prani-pelechu-plneho-chlpov",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-18-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-18-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2206",
+      "title": "Ako vyčistiť rohožku a textílie v predsieni od posypovej soli",
+      "slug": "ako-vycistit-rohozku-a-textilie-v-predsieni-od-posypovej-soli",
+      "url": "https://www.vevo.sk/n/ako-vycistit-rohozku-a-textilie-v-predsieni-od-posypovej-soli",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17819,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2211",
+      "title": "Ako vyčistiť cyklistické návleky na tretry po daždi a blate",
+      "slug": "ako-vycistit-cyklisticke-navleky-na-tretry-po-dazdi-a-blate",
+      "url": "https://www.vevo.sk/n/ako-vycistit-cyklisticke-navleky-na-tretry-po-dazdi-a-blate",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 18099,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2217",
+      "title": "Ako odstrániť mastnú masť z uteráka, pyžama a trička",
+      "slug": "ako-odstranit-mastnu-mast-z-uteraka-pyzama-a-tricka",
+      "url": "https://www.vevo.sk/n/ako-odstranit-mastnu-mast-z-uteraka-pyzama-a-tricka",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 16574,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2221",
+      "title": "Ako striasť peľ z bundy a mikiny po prechádzke pred praním",
+      "slug": "ako-striast-pel-z-bundy-a-mikiny-po-prechadzke-pred-pranim",
+      "url": "https://www.vevo.sk/n/ako-striast-pel-z-bundy-a-mikiny-po-prechadzke-pred-pranim",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 18032,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2224",
+      "title": "Ako odstrániť hrdzavé fľaky od štipcov a šnúry na bielizeň",
+      "slug": "ako-odstranit-hrdzave-flaky-od-stipcov-a-snury-na-bielizen",
+      "url": "https://www.vevo.sk/n/ako-odstranit-hrdzave-flaky-od-stipcov-a-snury-na-bielizen",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 18129,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2232",
+      "title": "Polyamid vs polyester: ktorý materiál lepšie znáša pot, šport a časté pranie",
+      "slug": "polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "url": "https://www.vevo.sk/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-21-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-21-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17908,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2260",
+      "title": "Ako dávkovať prací gél podľa tvrdosti vody, náplne a znečistenia",
+      "slug": "ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "url": "https://www.vevo.sk/n/ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-27-2026-06-16-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-27-2026-06-16-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2126",
+      "title": "Ako obnoviť impregnáciu softshellu po praní a kedy ju neriešiť",
+      "slug": "ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+      "url": "https://www.vevo.sk/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-15-2026-06-09-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 16574,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2165",
+      "title": "Ako odstrániť lepidlo z oblečenia po tvorení s deťmi",
+      "slug": "ako-odstranit-lepidlo-z-oblecenia-po-tvoreni-s-detmi",
+      "url": "https://www.vevo.sk/n/ako-odstranit-lepidlo-z-oblecenia-po-tvoreni-s-detmi",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2166",
+      "title": "Ako odstrániť sekundové lepidlo z textilu a kedy to nerobiť doma",
+      "slug": "ako-odstranit-sekundove-lepidlo-z-textilu-a-kedy-to-nerobit-doma",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sekundove-lepidlo-z-textilu-a-kedy-to-nerobit-doma",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2168",
+      "title": "Ako odstrániť vodové farby z detskej zástery a rukávov mikiny",
+      "slug": "ako-odstranit-vodove-farby-z-detskej-zastery-a-rukavov-mikiny",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vodove-farby-z-detskej-zastery-a-rukavov-mikiny",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-17-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2210",
+      "title": "Ako vyčistiť textilné vložky do topánok po zime",
+      "slug": "ako-vycistit-textilne-vlozky-do-topanok-po-zime",
+      "url": "https://www.vevo.sk/n/ako-vycistit-textilne-vlozky-do-topanok-po-zime",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17785,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2212",
+      "title": "Ako vyčistiť návlek na autosedačku po zime a posypovej soli",
+      "slug": "ako-vycistit-navlek-na-autosedacku-po-zime-a-posypovej-soli",
+      "url": "https://www.vevo.sk/n/ako-vycistit-navlek-na-autosedacku-po-zime-a-posypovej-soli",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 18222,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2218",
+      "title": "Ako odstrániť zinkovú masť z detského body a prebaľovacej podložky",
+      "slug": "ako-odstranit-zinkovu-mast-z-detskeho-body-a-prebalovacej-podlozky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zinkovu-mast-z-detskeho-body-a-prebalovacej-podlozky",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17988,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2223",
+      "title": "Ako vyčistiť sušiak na bielizeň, aby neprenášal špinu na prádlo",
+      "slug": "ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo",
+      "url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 17755,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2255",
+      "title": "Ako funguje prací gél: tenzidy, enzýmy, pH a dávkovanie pri bežnom praní",
+      "slug": "ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "url": "https://www.vevo.sk/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-26-2026-06-16-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-26-2026-06-16-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 18185,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2256",
+      "title": "Predpieranie v práčke: kedy má zmysel a kedy len míňa vodu, čas a prací prostriedok",
+      "slug": "predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "url": "https://www.vevo.sk/n/predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-26-2026-06-16-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-26-2026-06-16-mapping.json",
+      "sentence": "<p>Pri savých domácich textíliách najprv riešte čistotu, oplach a sušenie; až potom má zmysel jemne doladiť vôňu cez <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>, aby vôňa neprekrývala vlhkosť.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2261",
+      "title": "Prací gél alebo prací prášok: kedy čo funguje lepšie a prečo",
+      "slug": "praci-gel-alebo-praci-prasok-kedy-co-funguje-lepsie-a-preco",
+      "url": "https://www.vevo.sk/n/praci-gel-alebo-praci-prasok-kedy-co-funguje-lepsie-a-preco",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-27-2026-06-16-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-27-2026-06-16-mapping.json",
+      "sentence": "<p>Pri výbere postupu je vždy dôležitejší materiál a štítok než samotná vôňa; ak je textil dobre vypraný, jemný voňavý finiš môžu pridať <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>.</p>",
+      "inserted_live": true,
+      "inserted_local": true,
+      "mcp_update_ok": true,
+      "verify": {
+        "status": 404,
+        "body_length": 0,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      },
+      "ok": false
+    },
+    {
+      "post_id": "2207",
+      "title": "Ako odstrániť soľ a mokrý sneh z lyžiarskych rukavíc s membránou",
+      "slug": "ako-odstranit-sol-a-mokry-sneh-z-lyziarskych-rukavic-s-membranou",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sol-a-mokry-sneh-z-lyziarskych-rukavic-s-membranou",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 18494,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    },
+    {
+      "post_id": "2209",
+      "title": "Ako odstrániť vosk na lyže z lyžiarskej bundy a rukavíc",
+      "slug": "ako-odstranit-vosk-na-lyze-z-lyziarskej-bundy-a-rukavic",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vosk-na-lyze-z-lyziarskej-bundy-a-rukavic",
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-19-2026-06-10-articles.json",
+      "mapping_file": "content\\VEVO_CONTENT\\exports\\batch-19-2026-06-10-mapping.json",
+      "sentence": "<p>Keď je zdroj zápachu vyriešený a textil je naozaj čistý, finálnu sviežosť v praní môžu doplniť aj <a href=\"https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania\">parfumy do prania</a>; používajte ich skôr ako posledný krok, nie ako náhradu prania.</p>",
+      "skipped": "already_has_link",
+      "verify": {
+        "status": 200,
+        "body_length": 18013,
+        "target_link_count": 0,
+        "escaped_html": false,
+        "ok": false
+      }
+    }
+  ],
+  "all_ok": false
+}

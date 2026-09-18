@@ -1,0 +1,77 @@
+{
+  "article_count": 5,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Ako vyčistiť radiátor od prachu: rebrá, zadná strana, mastnota a bezpečná údržba",
+      "slug": "ako-vycistit-radiator-od-prachu-rebra-zadna-strana-mastnota-a-bezpecna-udrzba",
+      "body_length": 17931,
+      "styled_block_count": 6,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 2,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-37-2026-07-14-articles.json"
+    },
+    {
+      "title": "Ako vyčistiť parapety a okenné rámy: prach, peľ, čierne mapy a škvrny",
+      "slug": "ako-vycistit-parapety-a-okenne-ramy-prach-pel-cierne-mapy-a-skvrny",
+      "body_length": 17200,
+      "styled_block_count": 6,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 2,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-37-2026-07-14-articles.json"
+    },
+    {
+      "title": "Ako vyčistiť interiérové dvere a zárubne: odtlačky, mastnota a povrch bez šmúh",
+      "slug": "ako-vycistit-interierove-dvere-a-zarubne-odtlacky-mastnota-a-povrch-bez-smuh",
+      "body_length": 17019,
+      "styled_block_count": 6,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 2,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-37-2026-07-14-articles.json"
+    },
+    {
+      "title": "Ako vyčistiť vypínače a kľučky: dotykové miesta, mastnota a bezpečný postup",
+      "slug": "ako-vycistit-vypinace-a-klucky-dotykove-miesta-mastnota-a-bezpecny-postup",
+      "body_length": 17632,
+      "styled_block_count": 6,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 2,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-37-2026-07-14-articles.json"
+    },
+    {
+      "title": "Ako vyčistiť soklové lišty: prach, šmuhy, chlpy a rohy bez poškodenia",
+      "slug": "ako-vycistit-soklove-listy-prach-smuhy-chlpy-a-rohy-bez-poskodenia",
+      "body_length": 17042,
+      "styled_block_count": 6,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 2,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-37-2026-07-14-articles.json"
+    }
+  ]
+}

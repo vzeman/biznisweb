@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-06-16T04:08:00+00:00",
+  "project": "VEVO_CONTENT",
+  "batch": 25,
+  "issue": "Post 2251 duplicated an existing VEVO laundry-symbol article intent.",
+  "root_cause": "The duplicate guard relied on title token Jaccard similarity. The new title had many specific symbol tokens, so similarity against existing canonical symbol articles was below the review threshold even though the search intent overlapped.",
+  "action_taken": {
+    "news_id": "2251",
+    "title": "Symboly prania na štítku: čo znamená vanička, trojuholník, kruh, štvorec a žehlička",
+    "url": "https://www.vevo.sk/n/symboly-prania-na-stitku-co-znamena-vanicka-trojuholnik-kruh-stvorec-a-zehlicka",
+    "action": "Set visible=false through biznisweb-update_news_post.",
+    "public_status_after_cleanup": 404
+  },
+  "canonical_existing_articles_checked": [
+    {
+      "title": "Symboly prania - Kompletný sprievodca praciím štítkom",
+      "url": "https://www.vevo.sk/n/symboly-prania-kompletny-sprievodca-praciim-stitkom",
+      "public_status": 200
+    },
+    {
+      "title": "Pracie symboly – Kompletný sprievodca",
+      "url": "https://www.vevo.sk/n/pracie-symboly-kompletny-sprievodca"
+    },
+    {
+      "title": "Čo znamenajú symboly prania na oblečení - vysvetlivky na pranie",
+      "url": "https://www.vevo.sk/n/co-znamenaju-symboly-prania-na-obleceni"
+    }
+  ],
+  "remaining_batch_25_public_status": [
+    {
+      "news_id": "2250",
+      "status": 200
+    },
+    {
+      "news_id": "2252",
+      "status": 200
+    },
+    {
+      "news_id": "2253",
+      "status": 200
+    },
+    {
+      "news_id": "2254",
+      "status": 200
+    }
+  ],
+  "guard_change": "Added canonical_intent_duplicate blocking for laundry-symbol head terms such as symboly prania, pracie symboly, praci stitok, and vysvetlivky na pranie."
+}

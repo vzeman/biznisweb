@@ -1,0 +1,23 @@
+{
+  "batch": "21",
+  "status": "prepared_not_imported",
+  "date": "2026-06-10",
+  "candidate_file": "content/VEVO_CONTENT/batches/batch-21-candidates-2026-06-10.txt",
+  "article_export": "content/VEVO_CONTENT/imports/batch-21-2026-06-10-articles.json",
+  "xls_generated_at": "C:\\Users\\Patrik jankech\\AppData\\Local\\Temp\\vevo-batch-21-material-guides-clean-urls.xls",
+  "planned_news_block_id": "765",
+  "planned_date_posted": "2025-10-01",
+  "duplicate_guard": "OK for all 5 final candidates against 724 RSS articles",
+  "preflight": {
+    "links_checked": 17,
+    "fixed_prices": "none",
+    "customer_facing_cta_wording": "none"
+  },
+  "blocker": "Cannot safely import/publish because the in-app browser is at https://vevo.flox.sk/erp/main/login/, no logged-in user browser tab is available, no local .env with BiznisWeb credentials exists, and the available BiznisWeb MCP tools do not expose XLS import/upload or date/link fields.",
+  "retry_2026_06_10": {
+    "admin_session": "Login page is still shown and username/password fields are empty.",
+    "flowhunt_tools_list": "Direct tools/list against the Flowhunt endpoint returned 22 tools and no import/upload/XLS tool.",
+    "hidden_field_probe": "Direct tools/call probe on biznisweb-update_news_post with link/date_posted/time_posted returned No fields to update provided, confirming those fields are ignored by the wrapper."
+  },
+  "safety_decision": "Direct biznisweb_add_news_post was intentionally not used because it cannot set clean URL slugs or date_posted/time_posted and would repeat the earlier bad-URL problem."
+}

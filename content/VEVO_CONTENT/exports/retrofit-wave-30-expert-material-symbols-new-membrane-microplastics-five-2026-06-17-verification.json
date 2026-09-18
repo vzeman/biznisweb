@@ -1,0 +1,223 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-17T13:57:09.976492+00:00",
+  "wave_file": "content\\VEVO_CONTENT\\exports\\retrofit-wave-30-expert-material-symbols-new-membrane-microplastics-five-2026-06-17-live-public.json",
+  "article_count": 4,
+  "link_count": 17,
+  "all_ok": true,
+  "articles": [
+    {
+      "post_id": "2237",
+      "slug": "co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie z VEVO",
+        "Detailnejší pohľad",
+        "Kontrolný checklist"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2253",
+      "slug": "ako-prat-nove-oblecenie-prvykrat-farby-chemicky-pach-zrazanie-a-stitok",
+      "url": "https://www.vevo.sk/n/ako-prat-nove-oblecenie-prvykrat-farby-chemicky-pach-zrazanie-a-stitok",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-nove-oblecenie-prvykrat-farby-chemicky-pach-zrazanie-a-stitok",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie z VEVO",
+        "Detailnejší pohľad",
+        "Kontrolný checklist"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2247",
+      "slug": "co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "url": "https://www.vevo.sk/n/co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie z VEVO",
+        "Detailnejší pohľad",
+        "Kontrolný checklist"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2249",
+      "slug": "mikroplasty-z-oblecenia-ako-prat-syntetiku-zodpovednejsie-bez-paniky",
+      "url": "https://www.vevo.sk/n/mikroplasty-z-oblecenia-ako-prat-syntetiku-zodpovednejsie-bez-paniky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/mikroplasty-z-oblecenia-ako-prat-syntetiku-zodpovednejsie-bez-paniky",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie z VEVO",
+        "Detailnejší pohľad",
+        "Kontrolný checklist"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    }
+  ],
+  "links": [
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-sol-a-mokry-sneh-z-lyziarskych-rukavic-s-membranou",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sol-a-mokry-sneh-z-lyziarskych-rukavic-s-membranou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-sol-a-mokry-sneh-z-lyziarskych-rukavic-s-membranou",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-prsiplast-a-reflexne-nepremokave-nohavice-po-dazdi",
+      "url": "https://www.vevo.sk/n/ako-prat-prsiplast-a-reflexne-nepremokave-nohavice-po-dazdi",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-prsiplast-a-reflexne-nepremokave-nohavice-po-dazdi",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "url": "https://www.vevo.sk/n/ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "ok": true
+    },
+    {
+      "href": "/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+      "url": "https://www.vevo.sk/n/co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+      "url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "ok": true
+    },
+    {
+      "href": "/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "url": "https://www.vevo.sk/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    }
+  ]
+}

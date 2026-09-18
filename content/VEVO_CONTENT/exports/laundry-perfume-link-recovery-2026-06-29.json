@@ -1,0 +1,1983 @@
+{
+  "created_at": "2026-06-29T13:48:12.099570+00:00",
+  "source_report": "content\\VEVO_CONTENT\\exports\\laundry-perfume-link-insert-2026-06-29.json",
+  "record_count": 94,
+  "recovered_count": 94,
+  "all_ok": true,
+  "records": [
+    {
+      "post_id": "2162",
+      "slug": "ako-odstranit-zvratky-z-koberca-oblecenia-a-postelnej-bielizne",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zvratky-z-koberca-oblecenia-a-postelnej-bielizne",
+      "before": {
+        "status": 200,
+        "body_length": 17044,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17044,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2138",
+      "slug": "ako-vyprat-kakao-z-pyzama-a-postelnej-bielizne-bez-mliecneho-zapachu",
+      "url": "https://www.vevo.sk/n/ako-vyprat-kakao-z-pyzama-a-postelnej-bielizne-bez-mliecneho-zapachu",
+      "before": {
+        "status": 200,
+        "body_length": 16995,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16995,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2235",
+      "slug": "co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "before": {
+        "status": 200,
+        "body_length": 18149,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18149,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2238",
+      "slug": "lan-vs-bavlna-rozdiely-v-savosti-krcivosti-a-starostlivosti",
+      "url": "https://www.vevo.sk/n/lan-vs-bavlna-rozdiely-v-savosti-krcivosti-a-starostlivosti",
+      "before": {
+        "status": 200,
+        "body_length": 18916,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18916,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2130",
+      "slug": "ako-prat-hokejovy-dres-a-textilne-vrstvy-z-vystroja",
+      "url": "https://www.vevo.sk/n/ako-prat-hokejovy-dres-a-textilne-vrstvy-z-vystroja",
+      "before": {
+        "status": 200,
+        "body_length": 17698,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17698,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2134",
+      "slug": "pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "url": "https://www.vevo.sk/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "before": {
+        "status": 200,
+        "body_length": 16516,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16516,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2139",
+      "slug": "ako-odstranit-mlieko-a-jogurt-z-textilu-bez-kysleho-zapachu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-mlieko-a-jogurt-z-textilu-bez-kysleho-zapachu",
+      "before": {
+        "status": 200,
+        "body_length": 17009,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17009,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2184",
+      "slug": "ako-vyprat-pracovne-tricko-po-zahradkarceni-od-hliny-a-potu",
+      "url": "https://www.vevo.sk/n/ako-vyprat-pracovne-tricko-po-zahradkarceni-od-hliny-a-potu",
+      "before": {
+        "status": 200,
+        "body_length": 18118,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18118,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2189",
+      "slug": "ako-prat-oblecenie-s-flitrami-koralkami-a-aplikaciami",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-s-flitrami-koralkami-a-aplikaciami",
+      "before": {
+        "status": 200,
+        "body_length": 17678,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17678,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2228",
+      "slug": "co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "before": {
+        "status": 200,
+        "body_length": 18995,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18995,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2229",
+      "slug": "co-je-mikrovlakno-vyhody-nevyhody-savost-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-mikrovlakno-vyhody-nevyhody-savost-a-pranie",
+      "before": {
+        "status": 200,
+        "body_length": 23035,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 23035,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2244",
+      "slug": "co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "before": {
+        "status": 200,
+        "body_length": 18286,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18286,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2262",
+      "slug": "extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "url": "https://www.vevo.sk/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "before": {
+        "status": 200,
+        "body_length": 16909,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16909,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2271",
+      "slug": "ako-prat-kupelnovu-predlozku-guma-vlhkost-chlpy-a-zapach-po-sprchovani",
+      "url": "https://www.vevo.sk/n/ako-prat-kupelnovu-predlozku-guma-vlhkost-chlpy-a-zapach-po-sprchovani",
+      "before": {
+        "status": 200,
+        "body_length": 15039,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 15039,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2273",
+      "slug": "ako-osviezit-postel-medzi-praniami-vetranie-pyzamo-matrac-a-jemna-vona",
+      "url": "https://www.vevo.sk/n/ako-osviezit-postel-medzi-praniami-vetranie-pyzamo-matrac-a-jemna-vona",
+      "before": {
+        "status": 200,
+        "body_length": 16102,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16102,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2127",
+      "slug": "ako-prat-prsiplast-a-reflexne-nepremokave-nohavice-po-dazdi",
+      "url": "https://www.vevo.sk/n/ako-prat-prsiplast-a-reflexne-nepremokave-nohavice-po-dazdi",
+      "before": {
+        "status": 200,
+        "body_length": 17834,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17834,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2133",
+      "slug": "ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "before": {
+        "status": 200,
+        "body_length": 17743,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17743,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2135",
+      "slug": "ako-vyprat-kari-a-kurkumu-z-bavlneneho-tricka-bez-zlteho-tiena",
+      "url": "https://www.vevo.sk/n/ako-vyprat-kari-a-kurkumu-z-bavlneneho-tricka-bez-zlteho-tiena",
+      "before": {
+        "status": 200,
+        "body_length": 17763,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17763,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2140",
+      "slug": "ako-odstranit-zivicu-z-nohavic-bundy-a-detskeho-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zivicu-z-nohavic-bundy-a-detskeho-oblecenia",
+      "before": {
+        "status": 200,
+        "body_length": 18178,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18178,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2146",
+      "slug": "ako-odstranit-maskaru-z-uteraka-zupanu-a-bielej-osusky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-maskaru-z-uteraka-zupanu-a-bielej-osusky",
+      "before": {
+        "status": 200,
+        "body_length": 16861,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16861,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2150",
+      "slug": "ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "url": "https://www.vevo.sk/n/ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "before": {
+        "status": 200,
+        "body_length": 17830,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17830,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2151",
+      "slug": "ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "url": "https://www.vevo.sk/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "before": {
+        "status": 200,
+        "body_length": 17420,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17420,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2155",
+      "slug": "ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "url": "https://www.vevo.sk/n/ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "before": {
+        "status": 200,
+        "body_length": 17463,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17463,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2183",
+      "slug": "ako-prat-oblecenie-po-kadernictve-od-vlasov-farby-a-lakov",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-po-kadernictve-od-vlasov-farby-a-lakov",
+      "before": {
+        "status": 200,
+        "body_length": 18277,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18277,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2188",
+      "slug": "ako-prat-oblecenie-so-zipsami-a-suchym-zipsom-bez-zatrhnutia",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-so-zipsami-a-suchym-zipsom-bez-zatrhnutia",
+      "before": {
+        "status": 200,
+        "body_length": 17667,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17667,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2236",
+      "slug": "organicka-bavlna-co-znamena-a-ci-sa-perie-inak-ako-bezna-bavlna",
+      "url": "https://www.vevo.sk/n/organicka-bavlna-co-znamena-a-ci-sa-perie-inak-ako-bezna-bavlna",
+      "before": {
+        "status": 200,
+        "body_length": 18315,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18315,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2241",
+      "slug": "bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "before": {
+        "status": 200,
+        "body_length": 19052,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 19052,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2264",
+      "slug": "kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "url": "https://www.vevo.sk/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "before": {
+        "status": 200,
+        "body_length": 16776,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16776,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2272",
+      "slug": "ako-prat-zupan-aby-zostal-makky-savy-a-nezatuchol-po-sprche",
+      "url": "https://www.vevo.sk/n/ako-prat-zupan-aby-zostal-makky-savy-a-nezatuchol-po-sprche",
+      "before": {
+        "status": 200,
+        "body_length": 16401,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16401,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2132",
+      "slug": "ako-prat-biele-ponozky-aby-nezosedli-a-nezostali-tvrde",
+      "url": "https://www.vevo.sk/n/ako-prat-biele-ponozky-aby-nezosedli-a-nezostali-tvrde",
+      "before": {
+        "status": 200,
+        "body_length": 18343,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18343,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2136",
+      "slug": "ako-odstranit-skvrny-od-horcice-z-tricka-obrusu-a-utierky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-skvrny-od-horcice-z-tricka-obrusu-a-utierky",
+      "before": {
+        "status": 200,
+        "body_length": 17682,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17682,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2137",
+      "slug": "ako-odstranit-majonezu-a-dressing-z-obrusu-bez-mastneho-flaku",
+      "url": "https://www.vevo.sk/n/ako-odstranit-majonezu-a-dressing-z-obrusu-bez-mastneho-flaku",
+      "before": {
+        "status": 200,
+        "body_length": 18406,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18406,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2143",
+      "slug": "ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "before": {
+        "status": 200,
+        "body_length": 16199,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16199,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2144",
+      "slug": "ako-prat-menstruacne-nohavicky-bezpecne-a-hygienicky",
+      "url": "https://www.vevo.sk/n/ako-prat-menstruacne-nohavicky-bezpecne-a-hygienicky",
+      "before": {
+        "status": 200,
+        "body_length": 17889,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17889,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2154",
+      "slug": "ako-prat-lanovu-koselu-aby-nezostala-tvrda-a-pokrcena",
+      "url": "https://www.vevo.sk/n/ako-prat-lanovu-koselu-aby-nezostala-tvrda-a-pokrcena",
+      "before": {
+        "status": 200,
+        "body_length": 17416,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17416,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2158",
+      "slug": "ako-vyprat-cierny-caj-z-bieleho-obrusu-bez-hnedych-map",
+      "url": "https://www.vevo.sk/n/ako-vyprat-cierny-caj-z-bieleho-obrusu-bez-hnedych-map",
+      "before": {
+        "status": 200,
+        "body_length": 17691,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17691,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2159",
+      "slug": "ako-odstranit-ceresne-z-detskeho-tricka-a-letnych-siat",
+      "url": "https://www.vevo.sk/n/ako-odstranit-ceresne-z-detskeho-tricka-a-letnych-siat",
+      "before": {
+        "status": 200,
+        "body_length": 18419,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18419,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2160",
+      "slug": "ako-vyprat-granatove-jablko-z-oblecenia-bez-ruzovych-map",
+      "url": "https://www.vevo.sk/n/ako-vyprat-granatove-jablko-z-oblecenia-bez-ruzovych-map",
+      "before": {
+        "status": 200,
+        "body_length": 17540,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17540,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2170",
+      "slug": "ako-odstranit-sliz-z-detskeho-tricka-a-deky-bez-lepkavych-zvyskov",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sliz-z-detskeho-tricka-a-deky-bez-lepkavych-zvyskov",
+      "before": {
+        "status": 200,
+        "body_length": 17875,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17875,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2171",
+      "slug": "ako-vyprat-voskovky-z-peracnika-a-textilneho-obalu",
+      "url": "https://www.vevo.sk/n/ako-vyprat-voskovky-z-peracnika-a-textilneho-obalu",
+      "before": {
+        "status": 200,
+        "body_length": 17654,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17654,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2172",
+      "slug": "ako-odstranit-zvyraznovac-z-rukava-mikiny-a-skolskeho-tricka",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zvyraznovac-z-rukava-mikiny-a-skolskeho-tricka",
+      "before": {
+        "status": 200,
+        "body_length": 18166,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18166,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2177",
+      "slug": "ako-odstranit-vlasove-serum-z-uteraka-a-goliera-kosele",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vlasove-serum-z-uteraka-a-goliera-kosele",
+      "before": {
+        "status": 200,
+        "body_length": 17044,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17044,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2179",
+      "slug": "ako-vyprat-suchy-sampon-z-cierneho-tricka-a-goliera",
+      "url": "https://www.vevo.sk/n/ako-vyprat-suchy-sampon-z-cierneho-tricka-a-goliera",
+      "before": {
+        "status": 200,
+        "body_length": 17760,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17760,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2190",
+      "slug": "ako-prat-tylovu-suknu-zavoj-a-jemny-tyl-bez-potrhania",
+      "url": "https://www.vevo.sk/n/ako-prat-tylovu-suknu-zavoj-a-jemny-tyl-bez-potrhania",
+      "before": {
+        "status": 200,
+        "body_length": 17339,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17339,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2191",
+      "slug": "ako-prat-spolocenske-saty-doma-a-kedy-zvolit-cistiaren",
+      "url": "https://www.vevo.sk/n/ako-prat-spolocenske-saty-doma-a-kedy-zvolit-cistiaren",
+      "before": {
+        "status": 200,
+        "body_length": 17742,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17742,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2200",
+      "slug": "ako-vyprat-opalovaci-olej-z-plazovej-tuniky-a-uteraka",
+      "url": "https://www.vevo.sk/n/ako-vyprat-opalovaci-olej-z-plazovej-tuniky-a-uteraka",
+      "before": {
+        "status": 200,
+        "body_length": 17023,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17023,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2203",
+      "slug": "ako-prat-kompresne-pancuchy-a-elasticke-zdravotne-navleky",
+      "url": "https://www.vevo.sk/n/ako-prat-kompresne-pancuchy-a-elasticke-zdravotne-navleky",
+      "before": {
+        "status": 200,
+        "body_length": 17966,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17966,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2204",
+      "slug": "ako-prat-textilne-navleky-na-kocik-po-prechadzke-v-dazdi",
+      "url": "https://www.vevo.sk/n/ako-prat-textilne-navleky-na-kocik-po-prechadzke-v-dazdi",
+      "before": {
+        "status": 200,
+        "body_length": 18412,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18412,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2227",
+      "slug": "co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "before": {
+        "status": 200,
+        "body_length": 19038,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 19038,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2230",
+      "slug": "recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+      "url": "https://www.vevo.sk/n/recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+      "before": {
+        "status": 200,
+        "body_length": 18360,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18360,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2240",
+      "slug": "co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "before": {
+        "status": 200,
+        "body_length": 18486,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18486,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2257",
+      "slug": "otacky-pri-odstredovani-ako-ovplyvnuju-vlhkost-krcenie-a-opotrebovanie-oblecenia",
+      "url": "https://www.vevo.sk/n/otacky-pri-odstredovani-ako-ovplyvnuju-vlhkost-krcenie-a-opotrebovanie-oblecenia",
+      "before": {
+        "status": 200,
+        "body_length": 12475,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 12475,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2258",
+      "slug": "preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "url": "https://www.vevo.sk/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "before": {
+        "status": 200,
+        "body_length": 12343,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 12343,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2263",
+      "slug": "kratky-program-v-pracke-kedy-staci-a-kedy-zhorsuje-zvysky-pracieho-prostriedku",
+      "url": "https://www.vevo.sk/n/kratky-program-v-pracke-kedy-staci-a-kedy-zhorsuje-zvysky-pracieho-prostriedku",
+      "before": {
+        "status": 200,
+        "body_length": 16822,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16822,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2141",
+      "slug": "ako-odstranit-zuvacku-z-nohavic-mikiny-a-potahu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-z-nohavic-mikiny-a-potahu",
+      "before": {
+        "status": 200,
+        "body_length": 17179,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17179,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2142",
+      "slug": "ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "url": "https://www.vevo.sk/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "before": {
+        "status": 200,
+        "body_length": 16602,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16602,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2156",
+      "slug": "ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "before": {
+        "status": 200,
+        "body_length": 17238,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17238,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2161",
+      "slug": "ako-odstranit-moc-z-matraca-plachty-a-detskeho-pyzama",
+      "url": "https://www.vevo.sk/n/ako-odstranit-moc-z-matraca-plachty-a-detskeho-pyzama",
+      "before": {
+        "status": 200,
+        "body_length": 16844,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16844,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2163",
+      "slug": "ako-odstranit-chlpy-z-oblecenia-pri-prani-ked-mate-psa-alebo-macku",
+      "url": "https://www.vevo.sk/n/ako-odstranit-chlpy-z-oblecenia-pri-prani-ked-mate-psa-alebo-macku",
+      "before": {
+        "status": 200,
+        "body_length": 17504,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17504,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2173",
+      "slug": "ako-odstranit-cervenu-papriku-z-tricka-a-kuchynskej-utierky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-cervenu-papriku-z-tricka-a-kuchynskej-utierky",
+      "before": {
+        "status": 200,
+        "body_length": 17708,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17708,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2185",
+      "slug": "ako-dostat-kusky-papierovej-vreckovky-z-ciernych-nohavic-a-mikiny",
+      "url": "https://www.vevo.sk/n/ako-dostat-kusky-papierovej-vreckovky-z-ciernych-nohavic-a-mikiny",
+      "before": {
+        "status": 200,
+        "body_length": 18024,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18024,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2186",
+      "slug": "ako-odstranit-biele-smuhy-od-pracieho-prasku-z-cierneho-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-odstranit-biele-smuhy-od-pracieho-prasku-z-cierneho-oblecenia",
+      "before": {
+        "status": 200,
+        "body_length": 17796,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17796,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2187",
+      "slug": "ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "url": "https://www.vevo.sk/n/ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "before": {
+        "status": 200,
+        "body_length": 17609,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17609,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2192",
+      "slug": "ako-odstranit-hrdzu-z-oblecenia-obrusu-a-pracovnych-nohavic",
+      "url": "https://www.vevo.sk/n/ako-odstranit-hrdzu-z-oblecenia-obrusu-a-pracovnych-nohavic",
+      "before": {
+        "status": 200,
+        "body_length": 17760,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17760,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2193",
+      "slug": "ako-odstranit-mapy-od-vody-zo-sedacky-zavesov-a-calunenia",
+      "url": "https://www.vevo.sk/n/ako-odstranit-mapy-od-vody-zo-sedacky-zavesov-a-calunenia",
+      "before": {
+        "status": 200,
+        "body_length": 17726,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17726,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2196",
+      "slug": "ako-odstranit-vajicko-z-oblecenia-obrusu-a-kuchynskej-utierky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vajicko-z-oblecenia-obrusu-a-kuchynskej-utierky",
+      "before": {
+        "status": 200,
+        "body_length": 17837,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17837,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2197",
+      "slug": "ako-odstranit-vitaminovy-sirup-z-detskeho-body-a-podbradnika",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vitaminovy-sirup-z-detskeho-body-a-podbradnika",
+      "before": {
+        "status": 200,
+        "body_length": 18248,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18248,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2198",
+      "slug": "ako-odstranit-jod-a-dezinfekciu-z-oblecenia-bez-zvaecsenia-flaku",
+      "url": "https://www.vevo.sk/n/ako-odstranit-jod-a-dezinfekciu-z-oblecenia-bez-zvaecsenia-flaku",
+      "before": {
+        "status": 200,
+        "body_length": 18021,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18021,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2201",
+      "slug": "ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "url": "https://www.vevo.sk/n/ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "before": {
+        "status": 200,
+        "body_length": 16091,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16091,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2226",
+      "slug": "co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "before": {
+        "status": 200,
+        "body_length": 19128,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 19128,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2231",
+      "slug": "co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "before": {
+        "status": 200,
+        "body_length": 17934,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17934,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2237",
+      "slug": "co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "before": {
+        "status": 200,
+        "body_length": 18539,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18539,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2242",
+      "slug": "co-je-akryl-preco-pripomina-vlnu-a-ako-sa-perie",
+      "url": "https://www.vevo.sk/n/co-je-akryl-preco-pripomina-vlnu-a-ako-sa-perie",
+      "before": {
+        "status": 200,
+        "body_length": 18253,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18253,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2259",
+      "slug": "preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "before": {
+        "status": 200,
+        "body_length": 12454,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 12454,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2125",
+      "slug": "ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "before": {
+        "status": 200,
+        "body_length": 16922,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16922,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2145",
+      "slug": "ako-odstranit-lak-na-nechty-z-textilu-bez-rozmazania-skvrny",
+      "url": "https://www.vevo.sk/n/ako-odstranit-lak-na-nechty-z-textilu-bez-rozmazania-skvrny",
+      "before": {
+        "status": 200,
+        "body_length": 18115,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18115,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2147",
+      "slug": "ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+      "url": "https://www.vevo.sk/n/ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+      "before": {
+        "status": 200,
+        "body_length": 18099,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18099,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2148",
+      "slug": "ako-odstranit-ruz-z-kosele-salu-a-latkovej-servitky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-ruz-z-kosele-salu-a-latkovej-servitky",
+      "before": {
+        "status": 200,
+        "body_length": 18128,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18128,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2167",
+      "slug": "ako-odstranit-akrylovu-farbu-z-tricka-bez-zafixovania",
+      "url": "https://www.vevo.sk/n/ako-odstranit-akrylovu-farbu-z-tricka-bez-zafixovania",
+      "before": {
+        "status": 200,
+        "body_length": 17220,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17220,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2169",
+      "slug": "ako-odstranit-plastelinu-z-teplakov-koberca-a-potahu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-plastelinu-z-teplakov-koberca-a-potahu",
+      "before": {
+        "status": 200,
+        "body_length": 18071,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18071,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2174",
+      "slug": "ako-odstranit-sojovu-omacku-z-kosele-obrusu-a-prestierania",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sojovu-omacku-z-kosele-obrusu-a-prestierania",
+      "before": {
+        "status": 200,
+        "body_length": 17630,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17630,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2175",
+      "slug": "ako-odstranit-balzamikovy-ocot-z-bieleho-obrusu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-balzamikovy-ocot-z-bieleho-obrusu",
+      "before": {
+        "status": 200,
+        "body_length": 17659,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17659,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2176",
+      "slug": "ako-odstranit-olivovy-olej-z-lanovej-kosele-bez-mastnej-mapy",
+      "url": "https://www.vevo.sk/n/ako-odstranit-olivovy-olej-z-lanovej-kosele-bez-mastnej-mapy",
+      "before": {
+        "status": 200,
+        "body_length": 17806,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17806,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2178",
+      "slug": "ako-odstranit-krem-na-ruky-z-rukavov-svetra-a-deky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-krem-na-ruky-z-rukavov-svetra-a-deky",
+      "before": {
+        "status": 200,
+        "body_length": 17908,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17908,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2180",
+      "slug": "ako-odstranit-lak-na-vlasy-z-goliera-kosele-a-satky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-lak-na-vlasy-z-goliera-kosele-a-satky",
+      "before": {
+        "status": 200,
+        "body_length": 18427,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18427,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2195",
+      "slug": "ako-odstranit-arasidove-maslo-z-tricka-obrusu-a-detskej-mikiny",
+      "url": "https://www.vevo.sk/n/ako-odstranit-arasidove-maslo-z-tricka-obrusu-a-detskej-mikiny",
+      "before": {
+        "status": 200,
+        "body_length": 16829,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16829,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2199",
+      "slug": "ako-odstranit-repelent-z-outdoorovej-ciapky-a-navlekov-na-ruky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-repelent-z-outdoorovej-ciapky-a-navlekov-na-ruky",
+      "before": {
+        "status": 200,
+        "body_length": 18414,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18414,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2202",
+      "slug": "ako-vycistit-tesnenie-pracky-po-prani-pelechu-plneho-chlpov",
+      "url": "https://www.vevo.sk/n/ako-vycistit-tesnenie-pracky-po-prani-pelechu-plneho-chlpov",
+      "before": {
+        "status": 200,
+        "body_length": 16032,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 16032,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2260",
+      "slug": "ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "url": "https://www.vevo.sk/n/ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "before": {
+        "status": 200,
+        "body_length": 17443,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17443,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2165",
+      "slug": "ako-odstranit-lepidlo-z-oblecenia-po-tvoreni-s-detmi",
+      "url": "https://www.vevo.sk/n/ako-odstranit-lepidlo-z-oblecenia-po-tvoreni-s-detmi",
+      "before": {
+        "status": 200,
+        "body_length": 18067,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18067,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2166",
+      "slug": "ako-odstranit-sekundove-lepidlo-z-textilu-a-kedy-to-nerobit-doma",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sekundove-lepidlo-z-textilu-a-kedy-to-nerobit-doma",
+      "before": {
+        "status": 200,
+        "body_length": 18137,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18137,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2168",
+      "slug": "ako-odstranit-vodove-farby-z-detskej-zastery-a-rukavov-mikiny",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vodove-farby-z-detskej-zastery-a-rukavov-mikiny",
+      "before": {
+        "status": 200,
+        "body_length": 18408,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 18408,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2256",
+      "slug": "predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "url": "https://www.vevo.sk/n/predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "before": {
+        "status": 200,
+        "body_length": 12631,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 12631,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    },
+    {
+      "post_id": "2261",
+      "slug": "praci-gel-alebo-praci-prasok-kedy-co-funguje-lepsie-a-preco",
+      "url": "https://www.vevo.sk/n/praci-gel-alebo-praci-prasok-kedy-co-funguje-lepsie-a-preco",
+      "before": {
+        "status": 200,
+        "body_length": 17969,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "skipped": "already_ok",
+      "after": {
+        "status": 200,
+        "body_length": 17969,
+        "target_link_count": 1,
+        "escaped_html": false,
+        "ok": true
+      },
+      "ok": true
+    }
+  ]
+}

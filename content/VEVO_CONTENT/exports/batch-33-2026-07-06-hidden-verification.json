@@ -1,0 +1,53 @@
+{
+  "record_count": 3,
+  "all_hidden": true,
+  "records": [
+    {
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "target_url": "https://www.vevo.sk/n/ako-umyt-podlahu-bez-smuh-laminat-vinyl-dlazba-a-mopovanie-v-praxi",
+      "status": 404,
+      "ok_hidden": true
+    },
+    {
+      "title": "Ako vyčistiť kuchynskú linku od mastnoty, prachu a šmúh bez poškodenia povrchu",
+      "target_url": "https://www.vevo.sk/n/ako-vycistit-kuchynsku-linku-od-mastnoty-prachu-a-smuh-bez-poskodenia-povrchu",
+      "status": 404,
+      "ok_hidden": true
+    },
+    {
+      "title": "Ako vyčistiť drez a batériu: vodný kameň, mastnota, zápach a bezpečné čistenie",
+      "target_url": "https://www.vevo.sk/n/ako-vycistit-drez-a-bateriu-vodny-kamen-mastnota-zapach-a-bezpecne-cistenie",
+      "status": 404,
+      "ok_hidden": true
+    }
+  ],
+  "drafts": [
+    {
+      "post_id": "2291",
+      "title": "Ako umyť podlahu bez šmúh: laminát, vinyl, dlažba a mopovanie v praxi",
+      "slug": "ako-umyt-podlahu-bez-smuh-laminat-vinyl-dlazba-a-mopovanie-v-praxi",
+      "target_date": "2025-09-19",
+      "target_time": "08:00:00",
+      "visible": false,
+      "created_by": "manual_tool_call_before_importer"
+    },
+    {
+      "post_id": "2292",
+      "title": "Ako vyčistiť kuchynskú linku od mastnoty, prachu a šmúh bez poškodenia povrchu",
+      "slug": "ako-vycistit-kuchynsku-linku-od-mastnoty-prachu-a-smuh-bez-poskodenia-povrchu",
+      "target_date": "2025-09-19",
+      "target_time": "08:12:00",
+      "visible": false,
+      "created_by": "create_batch_33_hidden_drafts.py"
+    },
+    {
+      "post_id": "2293",
+      "title": "Ako vyčistiť drez a batériu: vodný kameň, mastnota, zápach a bezpečné čistenie",
+      "slug": "ako-vycistit-drez-a-bateriu-vodny-kamen-mastnota-zapach-a-bezpecne-cistenie",
+      "target_date": "2025-09-19",
+      "target_time": "08:24:00",
+      "visible": false,
+      "created_by": "create_batch_33_hidden_drafts.py"
+    }
+  ]
+}

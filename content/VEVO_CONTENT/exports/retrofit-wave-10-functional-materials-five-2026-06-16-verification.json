@@ -1,0 +1,282 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-16T15:54:50.884744+00:00",
+  "wave_file": "content\\VEVO_CONTENT\\exports\\retrofit-wave-10-functional-materials-five-2026-06-16.json",
+  "article_count": 5,
+  "link_count": 23,
+  "all_ok": true,
+  "articles": [
+    {
+      "post_id": "2125",
+      "slug": "ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2234",
+      "slug": "co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+        "/p-1621/vevo-essence-sample-set"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel",
+        "/c/vzorky/parfum-do-prania-vzorky"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2231",
+      "slug": "co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2233",
+      "slug": "modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "url": "https://www.vevo.sk/n/modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+        "/p-1621/vevo-essence-sample-set"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel",
+        "/c/vzorky/parfum-do-prania-vzorky"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2232",
+      "slug": "polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "url": "https://www.vevo.sk/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    }
+  ],
+  "links": [
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "href": "/c/vzorky/parfum-do-prania-vzorky",
+      "url": "https://www.vevo.sk/c/vzorky/parfum-do-prania-vzorky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vzorky/parfum-do-prania-vzorky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-casto-prat-postelne-pradlo",
+      "url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "url": "https://www.vevo.sk/n/ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+      "url": "https://www.vevo.sk/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-mastnu-mast-z-uteraka-pyzama-a-tricka",
+      "url": "https://www.vevo.sk/n/ako-odstranit-mastnu-mast-z-uteraka-pyzama-a-tricka",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-mastnu-mast-z-uteraka-pyzama-a-tricka",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-pouzivat-parfum-do-prania-pri-sportovom-obleceni",
+      "url": "https://www.vevo.sk/n/ako-pouzivat-parfum-do-prania-pri-sportovom-obleceni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-pouzivat-parfum-do-prania-pri-sportovom-obleceni",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-gore-tex",
+      "url": "https://www.vevo.sk/n/ako-prat-gore-tex",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-gore-tex",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "url": "https://www.vevo.sk/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+      "url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "ok": true
+    },
+    {
+      "href": "/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "url": "https://www.vevo.sk/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "ok": true
+    },
+    {
+      "href": "/n/modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "url": "https://www.vevo.sk/n/modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "ok": true
+    },
+    {
+      "href": "/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "url": "https://www.vevo.sk/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "href": "/p-1621/vevo-essence-sample-set",
+      "url": "https://www.vevo.sk/p-1621/vevo-essence-sample-set",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1621/vevo-essence-sample-set",
+      "ok": true
+    }
+  ]
+}

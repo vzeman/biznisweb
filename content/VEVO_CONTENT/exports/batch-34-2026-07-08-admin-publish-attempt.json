@@ -1,0 +1,32 @@
+{
+  "batch": 34,
+  "attempted_at": "2026-07-08",
+  "admin_url": "https://vevo.flox.sk/erp/main/pages",
+  "blog_page_id": "309",
+  "news_block_id": "765",
+  "status": "prepared_not_published",
+  "public_posts_created": 0,
+  "reason": "Admin form was reachable and first article fields could be partially filled, but date_posted_xdate did not synchronize to the hidden date_posted field. Direct save was stopped to avoid wrong publish date. Direct visible MCP create remains blocked because it cannot set link/date_posted/time_posted.",
+  "prepared_files": {
+    "candidate_file": "content/VEVO_CONTENT/batches/batch-34-candidates-2026-07-08.txt",
+    "plan_file": "content/VEVO_CONTENT/content-plan/batch-34-bathroom-odor-cleaning-2026-07-08.md",
+    "generator": "content/VEVO_CONTENT/imports/build_batch_34_bathroom_cleaning.py",
+    "articles_json": "content/VEVO_CONTENT/imports/batch-34-2026-07-08-articles.json",
+    "temp_xls": "C:/Users/Patrik jankech/AppData/Local/Temp/vevo-batch-34-bathroom-cleaning-clean-urls.xls"
+  },
+  "verification": {
+    "duplicate_guard": "content/VEVO_CONTENT/exports/batch-34-2026-07-08-duplicate-guard.json",
+    "public_content_guard": "content/VEVO_CONTENT/exports/batch-34-2026-07-08-public-content-guard.json",
+    "depth_guard": "content/VEVO_CONTENT/exports/batch-34-2026-07-08-depth-guard.json",
+    "link_preflight": "content/VEVO_CONTENT/exports/batch-34-2026-07-08-link-preflight.json",
+    "link_preflight_checked_links": 32,
+    "link_preflight_failed_links": 0,
+    "depth_guard_failure_count": 0,
+    "public_content_remaining_hit_count": 0
+  },
+  "article_slugs": [
+    "ako-vycistit-sprchovy-kut-vodny-kamen-mydlove-usadeniny-skary-a-sklo-bez-smuh",
+    "ako-vycistit-skary-v-kupelni-plesen-vodny-kamen-a-zazltnute-miesta-bez-poskodenia",
+    "ako-vycistit-sprchovu-hlavicu-vodny-kamen-slaby-prud-a-hygienicka-udrzba"
+  ]
+}

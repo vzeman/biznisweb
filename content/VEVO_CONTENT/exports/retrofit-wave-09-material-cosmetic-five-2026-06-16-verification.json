@@ -1,0 +1,282 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-16T15:37:38.238776+00:00",
+  "wave_file": "content\\VEVO_CONTENT\\exports\\retrofit-wave-09-material-cosmetic-five-2026-06-16.json",
+  "article_count": 5,
+  "link_count": 23,
+  "all_ok": true,
+  "articles": [
+    {
+      "post_id": "2146",
+      "slug": "ako-odstranit-maskaru-z-uteraka-zupanu-a-bielej-osusky",
+      "url": "https://www.vevo.sk/n/ako-odstranit-maskaru-z-uteraka-zupanu-a-bielej-osusky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-maskaru-z-uteraka-zupanu-a-bielej-osusky",
+      "title_present": true,
+      "required_fragments": [
+        "Detailnejší postup"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2217",
+      "slug": "ako-odstranit-mastnu-mast-z-uteraka-pyzama-a-tricka",
+      "url": "https://www.vevo.sk/n/ako-odstranit-mastnu-mast-z-uteraka-pyzama-a-tricka",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-mastnu-mast-z-uteraka-pyzama-a-tricka",
+      "title_present": true,
+      "required_fragments": [
+        "Detailnejší postup"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2153",
+      "slug": "ako-prat-viskozovu-bluzku-aby-nestratila-tvar-a-neostala-vytahana",
+      "url": "https://www.vevo.sk/n/ako-prat-viskozovu-bluzku-aby-nestratila-tvar-a-neostala-vytahana",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-viskozovu-bluzku-aby-nestratila-tvar-a-neostala-vytahana",
+      "title_present": true,
+      "required_fragments": [
+        "Detailnejší postup"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+        "/p-1621/vevo-essence-sample-set"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel",
+        "/c/vzorky/parfum-do-prania-vzorky"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2167",
+      "slug": "ako-odstranit-akrylovu-farbu-z-tricka-bez-zafixovania",
+      "url": "https://www.vevo.sk/n/ako-odstranit-akrylovu-farbu-z-tricka-bez-zafixovania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-akrylovu-farbu-z-tricka-bez-zafixovania",
+      "title_present": true,
+      "required_fragments": [
+        "Detailnejší postup"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2126",
+      "slug": "ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+      "url": "https://www.vevo.sk/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+      "title_present": true,
+      "required_fragments": [
+        "Detailnejší postup"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+        "/p-1621/vevo-essence-sample-set"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel",
+        "/c/vzorky/parfum-do-prania-vzorky"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    }
+  ],
+  "links": [
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "href": "/c/vzorky/parfum-do-prania-vzorky",
+      "url": "https://www.vevo.sk/c/vzorky/parfum-do-prania-vzorky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vzorky/parfum-do-prania-vzorky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-olejove-a-mastne-skvrny-z-oblecenia-po-prani",
+      "url": "https://www.vevo.sk/n/ako-odstranit-olejove-a-mastne-skvrny-z-oblecenia-po-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-olejove-a-mastne-skvrny-z-oblecenia-po-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+      "url": "https://www.vevo.sk/n/ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-prach-z-textilii-po-malovani-alebo-rekonstrukcii",
+      "url": "https://www.vevo.sk/n/ako-odstranit-prach-z-textilii-po-malovani-alebo-rekonstrukcii",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-prach-z-textilii-po-malovani-alebo-rekonstrukcii",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-skvrny-od-make-upu-z-obliecok-a-uterakov",
+      "url": "https://www.vevo.sk/n/ako-odstranit-skvrny-od-make-upu-z-obliecok-a-uterakov",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-skvrny-od-make-upu-z-obliecok-a-uterakov",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-vlasove-serum-z-uteraka-a-goliera-kosele",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vlasove-serum-z-uteraka-a-goliera-kosele",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-vlasove-serum-z-uteraka-a-goliera-kosele",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-gore-tex",
+      "url": "https://www.vevo.sk/n/ako-prat-gore-tex",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-gore-tex",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-oblecenie-po-malovani-a-renovacii",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-po-malovani-a-renovacii",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-oblecenie-po-malovani-a-renovacii",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-satenove-obliecky-a-jemne-postelne-pradlo",
+      "url": "https://www.vevo.sk/n/ako-prat-satenove-obliecky-a-jemne-postelne-pradlo",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-satenove-obliecky-a-jemne-postelne-pradlo",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-uteraky-rady-a-tipy-na-ciste-a-maekke-uteraky",
+      "url": "https://www.vevo.sk/n/ako-prat-uteraky-rady-a-tipy-na-ciste-a-maekke-uteraky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-uteraky-rady-a-tipy-na-ciste-a-maekke-uteraky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-farbu-na-vlasy-z-uteraka-a-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-vyprat-farbu-na-vlasy-z-uteraka-a-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-farbu-na-vlasy-z-uteraka-a-oblecenia",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-stare-skvrny-kompletny-sprievodca-pre-ciste-oblecenie",
+      "url": "https://www.vevo.sk/n/ako-vyprat-stare-skvrny-kompletny-sprievodca-pre-ciste-oblecenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-stare-skvrny-kompletny-sprievodca-pre-ciste-oblecenie",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-temperove-farby-z-oblecenia-kompletny-sprievodca",
+      "url": "https://www.vevo.sk/n/ako-vyprat-temperove-farby-z-oblecenia-kompletny-sprievodca",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-temperove-farby-z-oblecenia-kompletny-sprievodca",
+      "ok": true
+    },
+    {
+      "href": "/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "ok": true
+    },
+    {
+      "href": "/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "url": "https://www.vevo.sk/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "href": "/p-1621/vevo-essence-sample-set",
+      "url": "https://www.vevo.sk/p-1621/vevo-essence-sample-set",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1621/vevo-essence-sample-set",
+      "ok": true
+    }
+  ]
+}

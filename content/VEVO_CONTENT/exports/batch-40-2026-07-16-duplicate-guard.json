@@ -1,0 +1,59 @@
+{
+  "existing_count": 811,
+  "excluded_batch": 40,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Priedušnosť, savosť a rýchloschnutie: ako čítať vlastnosti textilu",
+      "slug": "priedusnost-savost-a-rychloschnutie-ako-citat-vlastnosti-textilu",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Bavlna, ľan, satén alebo flanel: aké obliečky vybrať podľa sezóny a potenia",
+      "slug": "bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia",
+      "status": "ok",
+      "clusters": [
+        {
+          "cluster": "bedding_sleep",
+          "terms": [
+            "obliecky"
+          ],
+          "intent_terms": [],
+          "note": "Bedding topics need clear separation by textile type and user problem."
+        }
+      ],
+      "issues": []
+    },
+    {
+      "title": "Froté, bambus alebo mikrovlákno: ktorý uterák vybrať podľa savosti a schnutia",
+      "slug": "frote-bambus-alebo-mikrovlakno-ktory-uterak-vybrat-podla-savosti-a-schnutia",
+      "status": "ok",
+      "clusters": [
+        {
+          "cluster": "bathroom_towels",
+          "terms": [
+            "frote",
+            "uterak"
+          ],
+          "intent_terms": [],
+          "note": "Bathroom/towel topics should be separated by textile and problem."
+        }
+      ],
+      "issues": []
+    },
+    {
+      "title": "Polyester, polyamid, merino alebo elastan: z čoho má byť športové oblečenie",
+      "slug": "polyester-polyamid-merino-alebo-elastan-z-coho-ma-byt-sportove-oblecenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}
