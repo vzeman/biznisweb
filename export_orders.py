@@ -8328,12 +8328,20 @@ class BizniWebExporter:
             "out_of_window_orders": int(out_of_window_orders),
         }
 
-        print(
-            f"  {summary['flipped_days']}/{summary['started_red_days']} loss days turned green, "
-            f"median {summary['median_days_to_green']} days to green"
-        )
+        # A window too short for anyone to come back yet produces an all-zero panel,
+        # which teaches readers to ignore the section. Report it as unavailable so
+        # short-period bundles simply omit it instead of showing empty columns.
+        available = bool(rows) and summary["repeat_orders"] > 0
 
-        return {"available": True, "rows": rows, "curve": curve, "summary": summary}
+        if available:
+            print(
+                f"  {summary['flipped_days']}/{summary['started_red_days']} loss days turned green, "
+                f"median {summary['median_days_to_green']} days to green"
+            )
+        else:
+            print("  No repeat orders inside this window; maturation view omitted")
+
+        return {"available": available, "rows": rows, "curve": curve, "summary": summary}
 
     def analyze_repeat_purchase_cohorts(self, df: pd.DataFrame) -> dict:
         """
