@@ -125,6 +125,21 @@ SHIPPING_SUBSIDY_PER_ORDER = 0.2  # legacy alias; use SHIPPING_NET_PER_ORDER sem
 SHIPPING_NET_PER_ORDER = SHIPPING_SUBSIDY_PER_ORDER  # positive = business cost, negative = shipping profit
 FIXED_MONTHLY_COST = 0  # EUR per month (Marek, Uctovnictvo)
 FIXED_DAILY_COST = 0  # EUR per day; when set, overrides monthly fixed-cost spreading
+# Daily profit maturation (day-1 ledger value vs today's cohort-matured value)
+PROFIT_MATURATION_MATURE_AGE_DAYS = 90  # A day needs this much observed life before "still red" is a verdict
+PROFIT_MATURATION_MAX_PROJECTED_DAYS = 730  # Beyond this the linear projection stops being informative
+PROFIT_MATURATION_MAX_CURVE_AGE_DAYS = 365  # Upper bound for the cohort ageing curve
+PROFIT_MATURATION_MIN_CURVE_SAMPLE = 10  # Drop ageing-curve points averaged over fewer days than this
+
+
+def _profit_sign_status(value: float) -> str:
+    """Map a profit figure to the positive/negative/neutral vocabulary used by the ledger."""
+    if value > 0:
+        return "positive"
+    if value < 0:
+        return "negative"
+    return "neutral"
+
 EXPENSE_MATCH_MODE = "identifier_first"  # Match product costs by identifiers first unless project opts into title-first
 PRODUCT_NAME_ALIASES: Dict[str, str] = {}  # Optional project-scoped aliases for canonical reporting product names
 MISSING_COST_MARGIN_PCT = 0.0  # Product margin used only when no configured purchase cost can be resolved
@@ -7037,6 +7052,7 @@ class BizniWebExporter:
 
         # Create aggregated reports
         date_product_agg, date_agg, items_agg, month_agg, ltv_by_date = self.create_aggregated_reports(analytics_df, date_from, date_to, fb_daily_spend, google_ads_daily_spend)
+        daily_profit_maturation = self.analyze_daily_profit_maturation(analytics_df, date_agg)
         if not isinstance(advanced_dtc_metrics, dict):
             advanced_dtc_metrics = {}
         try:
@@ -7233,6 +7249,7 @@ class BizniWebExporter:
             fb_hourly_stats=fb_hourly_stats,
             fb_dow_stats=fb_dow_stats,
             ltv_by_date=ltv_by_date,
+            daily_profit_maturation=daily_profit_maturation,
             consistency_checks=consistency_checks,
             cfo_kpi_payload=cfo_kpi_payload,
             source_health=source_health,
@@ -8076,6 +8093,247 @@ class BizniWebExporter:
             "analysis_end_month": str(analysis_end_period),
             "excluded_prior_customers": excluded_prior_customers,
         }
+
+    def analyze_daily_profit_maturation(
+        self,
+        df: pd.DataFrame,
+        date_agg: pd.DataFrame,
+    ) -> dict:
+        """
+        Track how each ledger day's profit/loss matures once repeat orders arrive.
+
+        The daily ledger shows a day exactly as it was booked: revenue of that day
+        minus the costs of that day (product, ads, packaging, shipping, fixed).
+        That is the number visible one day later, and on an acquisition-heavy day
+        it is usually a loss, because the whole ad spend is charged against a
+        single first order.
+
+        This re-reads the same day today by attributing every later repeat order
+        back to the day its customer was acquired. A day that opened red normally
+        crosses into green once those customers come back. "Days to green" is the
+        distance between the acquisition day and the day its running total first
+        reaches zero.
+
+        This is an attribution lens, not extra euros: repeat revenue already sits
+        inside the calendar day it was booked on, so cohort totals and calendar
+        totals must never be added together.
+        """
+        print("\nAnalyzing daily profit maturation (day-1 vs today)...")
+
+        empty = {"available": False, "rows": [], "curve": [], "summary": {}}
+        if df is None or df.empty or date_agg is None or date_agg.empty:
+            return empty
+        if 'customer_email' not in df.columns or 'order_num' not in df.columns:
+            return empty
+        if 'item_total_without_tax' not in df.columns:
+            return empty
+
+        work = df.copy()
+        if 'purchase_date_only' in work.columns:
+            purchase_day = pd.to_datetime(work['purchase_date_only'], errors='coerce')
+        else:
+            purchase_day = pd.to_datetime(work.get('purchase_date'), errors='coerce')
+        work['mat_day'] = purchase_day.dt.date
+        work['mat_email'] = work['customer_email'].fillna('').astype(str).str.strip().str.lower()
+        work = work[work['mat_email'].ne('') & work['mat_email'].ne('nan') & work['mat_day'].notna()]
+        if work.empty:
+            return empty
+
+        work['mat_revenue'] = pd.to_numeric(work['item_total_without_tax'], errors='coerce').fillna(0.0)
+        work['mat_product_cost'] = pd.to_numeric(work.get('total_expense'), errors='coerce').fillna(0.0)
+
+        # Collapse item rows into order rows so fulfillment is charged once per order.
+        orders_df = work.groupby(['mat_email', 'order_num'], as_index=False).agg(
+            mat_day=('mat_day', 'min'),
+            mat_revenue=('mat_revenue', 'sum'),
+            mat_product_cost=('mat_product_cost', 'sum'),
+        )
+        orders_df['mat_contribution'] = (
+            orders_df['mat_revenue']
+            - orders_df['mat_product_cost']
+            - PACKAGING_COST_PER_ORDER
+            - SHIPPING_NET_PER_ORDER
+        )
+
+        # Acquisition day per customer. The full-history first purchase date wins so
+        # customers acquired before the window are not mislabelled as acquired inside it.
+        acquisition_day: Dict[str, Any] = {}
+        if 'customer_first_purchase_date' in work.columns:
+            history_first = pd.to_datetime(work['customer_first_purchase_date'], errors='coerce')
+            history_map = (
+                pd.DataFrame({'mat_email': work['mat_email'], 'mat_first': history_first})
+                .dropna(subset=['mat_first'])
+                .groupby('mat_email')['mat_first']
+                .min()
+            )
+            acquisition_day = {email: value.date() for email, value in history_map.items()}
+        for email, day in orders_df.groupby('mat_email')['mat_day'].min().to_dict().items():
+            acquisition_day.setdefault(email, day)
+
+        orders_df['mat_acquired'] = orders_df['mat_email'].map(acquisition_day)
+        orders_df = orders_df[orders_df['mat_acquired'].notna()]
+        if orders_df.empty:
+            return empty
+
+        ledger = date_agg.copy()
+        ledger['date'] = pd.to_datetime(ledger['date'], errors='coerce').dt.date
+        ledger = ledger[ledger['date'].notna()].sort_values('date')
+        if ledger.empty:
+            return empty
+
+        observation_end = max(ledger['date'])
+        first_ledger_day = min(ledger['date'])
+
+        # Repeat orders only: a customer's first order is already inside that day's own P&L.
+        repeat_by_cohort: Dict[Any, Dict[Any, List[Any]]] = {}
+        out_of_window_contribution = 0.0
+        out_of_window_orders = 0
+        for row in orders_df[orders_df['mat_day'] > orders_df['mat_acquired']].itertuples():
+            acquired = row.mat_acquired
+            if acquired < first_ledger_day or acquired > observation_end:
+                out_of_window_contribution += float(row.mat_contribution)
+                out_of_window_orders += 1
+                continue
+            bucket = repeat_by_cohort.setdefault(acquired, {}).setdefault(row.mat_day, [0.0, 0, set()])
+            bucket[0] += float(row.mat_contribution)
+            bucket[1] += 1
+            bucket[2].add(row.mat_email)
+
+        acquired_customers = (
+            orders_df[orders_df['mat_day'] == orders_df['mat_acquired']]
+            .groupby('mat_acquired')['mat_email']
+            .nunique()
+            .to_dict()
+        )
+
+        rows: List[Dict[str, Any]] = []
+        cumulative_by_age: Dict[int, List[float]] = {}
+        for _, ledger_row in ledger.iterrows():
+            day = ledger_row['date']
+            day_one_profit = round(float(ledger_row.get('net_profit') or 0.0), 2)
+            observed_days = (observation_end - day).days
+
+            running = day_one_profit
+            days_to_green: Optional[int] = 0 if day_one_profit >= 0 else None
+            green_date = day if day_one_profit >= 0 else None
+            repeat_contribution = 0.0
+            repeat_order_count = 0
+            repeat_customers: set = set()
+            age_points: Dict[int, float] = {}
+
+            for repeat_day in sorted((repeat_by_cohort.get(day) or {}).keys()):
+                contribution, order_count, customers = repeat_by_cohort[day][repeat_day]
+                running += contribution
+                repeat_contribution += contribution
+                repeat_order_count += order_count
+                repeat_customers |= customers
+                if days_to_green is None and running >= 0:
+                    days_to_green = (repeat_day - day).days
+                    green_date = repeat_day
+                age_points[(repeat_day - day).days] = running
+
+            current_profit = round(running, 2)
+            contribution_rate = (repeat_contribution / observed_days) if observed_days > 0 else 0.0
+            projected_days_to_green: Optional[int] = None
+            if days_to_green is None and current_profit < 0 and contribution_rate > 0:
+                projected = observed_days + math.ceil(abs(current_profit) / contribution_rate)
+                if projected <= PROFIT_MATURATION_MAX_PROJECTED_DAYS:
+                    projected_days_to_green = int(projected)
+
+            rows.append({
+                "date": day.isoformat(),
+                "day_one_profit": day_one_profit,
+                "current_profit": current_profit,
+                "maturation_uplift": round(current_profit - day_one_profit, 2),
+                "days_to_green": days_to_green,
+                "green_date": green_date.isoformat() if green_date else None,
+                "projected_days_to_green": projected_days_to_green,
+                "gap_to_green": round(min(0.0, current_profit), 2),
+                "repeat_contribution": round(repeat_contribution, 2),
+                "repeat_orders": int(repeat_order_count),
+                "repeat_customers": int(len(repeat_customers)),
+                "customers_acquired": int(acquired_customers.get(day, 0) or 0),
+                "observed_days": int(observed_days),
+                "day_one_status": _profit_sign_status(day_one_profit),
+                "current_status": _profit_sign_status(current_profit),
+            })
+
+            # Cohort ageing curve: carry the running total forward across every age.
+            curve_horizon = min(observed_days, PROFIT_MATURATION_MAX_CURVE_AGE_DAYS)
+            running_for_curve = day_one_profit
+            for age in range(0, curve_horizon + 1):
+                if age in age_points:
+                    running_for_curve = age_points[age]
+                cumulative_by_age.setdefault(age, []).append(running_for_curve)
+
+        # The curve thins out with age, because only the oldest days have lived that long.
+        # Past the minimum sample the average stops describing the business and starts
+        # describing one or two individual days, so it is cut there.
+        curve: List[Dict[str, Any]] = []
+        for age in sorted(cumulative_by_age.keys()):
+            values = cumulative_by_age[age]
+            if len(values) < PROFIT_MATURATION_MIN_CURVE_SAMPLE and age > 0:
+                break
+            green = sum(1 for value in values if value >= 0)
+            curve.append({
+                "age_days": int(age),
+                "days_tracked": len(values),
+                "avg_cumulative_profit": round(sum(values) / len(values), 2),
+                "green_share_pct": round(green / len(values) * 100, 2),
+            })
+
+        started_red = [row for row in rows if row["day_one_profit"] < 0]
+        flipped = [row for row in started_red if row["days_to_green"] is not None]
+        still_red = [row for row in started_red if row["days_to_green"] is None]
+        mature_still_red = [
+            row for row in still_red if row["observed_days"] >= PROFIT_MATURATION_MATURE_AGE_DAYS
+        ]
+        # A day that acquired nobody has no cohort to bring it back, so recurring revenue
+        # can never rescue it. Counting it as "waiting for payback" would be misleading.
+        no_cohort_still_red = [row for row in still_red if row["customers_acquired"] == 0]
+        flip_days = sorted(int(row["days_to_green"]) for row in flipped)
+
+        def _median(values: List[int]) -> Optional[float]:
+            if not values:
+                return None
+            middle = len(values) // 2
+            if len(values) % 2:
+                return float(values[middle])
+            return round((values[middle - 1] + values[middle]) / 2, 1)
+
+        total_day_one = round(sum(row["day_one_profit"] for row in rows), 2)
+        total_current = round(sum(row["current_profit"] for row in rows), 2)
+        summary = {
+            "total_days": len(rows),
+            "born_green_days": len(rows) - len(started_red),
+            "started_red_days": len(started_red),
+            "flipped_days": len(flipped),
+            "still_red_days": len(still_red),
+            "mature_still_red_days": len(mature_still_red),
+            "no_cohort_still_red_days": len(no_cohort_still_red),
+            "waiting_still_red_days": len(still_red) - len(no_cohort_still_red),
+            "flipped_share_pct": round(len(flipped) / len(started_red) * 100, 1) if started_red else 0.0,
+            "median_days_to_green": _median(flip_days),
+            "avg_days_to_green": round(sum(flip_days) / len(flip_days), 1) if flip_days else None,
+            "fastest_days_to_green": flip_days[0] if flip_days else None,
+            "slowest_days_to_green": flip_days[-1] if flip_days else None,
+            "total_day_one_profit": total_day_one,
+            "total_current_profit": total_current,
+            "total_maturation_uplift": round(total_current - total_day_one, 2),
+            "repeat_contribution": round(sum(row["repeat_contribution"] for row in rows), 2),
+            "repeat_orders": int(sum(row["repeat_orders"] for row in rows)),
+            "mature_age_days": PROFIT_MATURATION_MATURE_AGE_DAYS,
+            "observation_end": observation_end.isoformat(),
+            "out_of_window_contribution": round(out_of_window_contribution, 2),
+            "out_of_window_orders": int(out_of_window_orders),
+        }
+
+        print(
+            f"  {summary['flipped_days']}/{summary['started_red_days']} loss days turned green, "
+            f"median {summary['median_days_to_green']} days to green"
+        )
+
+        return {"available": True, "rows": rows, "curve": curve, "summary": summary}
 
     def analyze_repeat_purchase_cohorts(self, df: pd.DataFrame) -> dict:
         """

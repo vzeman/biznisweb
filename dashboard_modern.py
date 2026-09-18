@@ -308,6 +308,100 @@ def _daily_profit_loss(series: Dict[str, List[Any]]) -> Dict[str, Any]:
     return {"summary": summary, "rows": rows}
 
 
+def _daily_profit_maturation(
+    payload: Optional[dict],
+    daily_profit_rows: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Normalize the upstream maturation payload and fold it into the ledger rows.
+
+    The ledger already carries each day as it was booked (day-1 value). This adds
+    the second reading of the same day: what it is worth today, once the repeat
+    orders of the customers acquired that day are attributed back to it.
+    """
+    payload = payload or {}
+    rows_by_date = {
+        str(row.get("date") or ""): row
+        for row in (payload.get("rows") or [])
+        if str(row.get("date") or "")
+    }
+    available = bool(payload.get("available")) and bool(rows_by_date)
+
+    for ledger_row in daily_profit_rows:
+        source = rows_by_date.get(str(ledger_row.get("date") or ""))
+        if not source:
+            ledger_row["maturation"] = None
+            continue
+        days_to_green = source.get("days_to_green")
+        projected = source.get("projected_days_to_green")
+        ledger_row["maturation"] = {
+            "day_one_profit": _num(source.get("day_one_profit")),
+            "current_profit": _num(source.get("current_profit")),
+            "maturation_uplift": _num(source.get("maturation_uplift")),
+            "days_to_green": int(days_to_green) if days_to_green is not None else None,
+            "projected_days_to_green": int(projected) if projected is not None else None,
+            "green_date": str(source.get("green_date") or "") or None,
+            "gap_to_green": _num(source.get("gap_to_green")),
+            "repeat_contribution": _num(source.get("repeat_contribution")),
+            "repeat_orders": int(round(_num(source.get("repeat_orders")))),
+            "repeat_customers": int(round(_num(source.get("repeat_customers")))),
+            "customers_acquired": int(round(_num(source.get("customers_acquired")))),
+            "observed_days": int(round(_num(source.get("observed_days")))),
+            "current_status": str(source.get("current_status") or "neutral"),
+        }
+
+    curve = [
+        {
+            "age_days": int(round(_num(point.get("age_days")))),
+            "avg_cumulative_profit": _num(point.get("avg_cumulative_profit")),
+            "green_share_pct": _num(point.get("green_share_pct")),
+            "days_tracked": int(round(_num(point.get("days_tracked")))),
+        }
+        for point in (payload.get("curve") or [])
+    ]
+    summary = {key: _json_safe(value) for key, value in (payload.get("summary") or {}).items()}
+
+    return {
+        "available": available,
+        "rows": [_json_safe(row) for row in (payload.get("rows") or [])],
+        "curve": curve,
+        "summary": summary,
+    }
+
+
+def _days_to_green_cell_html(maturation: Optional[Dict[str, Any]]) -> str:
+    """Render the days-to-green cell: an actual crossing, a projection, or 'not yet'."""
+    if not maturation:
+        return '<td class="number muted-note">-</td>'
+    days_to_green = maturation.get("days_to_green")
+    if days_to_green is not None:
+        if days_to_green == 0:
+            return (
+                '<td class="number daily-profit-value positive">'
+                '<span class="lang-en">green on day 1</span>'
+                '<span class="lang-sk hidden">zelena hned</span></td>'
+            )
+        green_date = escape(str(maturation.get("green_date") or ""))
+        return (
+            f'<td class="number daily-profit-value positive">{int(days_to_green)} d'
+            f'<span class="maturation-sub">{green_date}</span></td>'
+        )
+    projected = maturation.get("projected_days_to_green")
+    if projected is not None:
+        return (
+            f'<td class="number maturation-projected">~{int(projected)} d'
+            '<span class="maturation-sub"><span class="lang-en">projected</span>'
+            '<span class="lang-sk hidden">odhad</span></span></td>'
+        )
+    return (
+        '<td class="number daily-profit-value negative">'
+        '<span class="lang-en">not yet</span><span class="lang-sk hidden">zatial nie</span>'
+        f'<span class="maturation-sub">{int(round(_num(maturation.get("observed_days"))))} d '
+        '<span class="lang-en">observed</span><span class="lang-sk hidden">sledovane</span>'
+        '</span></td>'
+    )
+
+
 def _kpis(payload: Optional[dict]) -> Dict[str, Any]:
     payload = payload or {}
     metric_defs = []
@@ -654,25 +748,43 @@ def _geo_confidence_badge_html(status: Any) -> str:
     )
 
 
-def _daily_profit_row_html(row: Dict[str, Any]) -> str:
+def _daily_profit_row_html(row: Dict[str, Any], with_maturation: bool = False) -> str:
     status = str(row.get("status") or "neutral").strip().lower()
     if status not in {"positive", "negative", "neutral"}:
         status = "neutral"
     label_en = str(row.get("label_en") or "Break-even")
     label_sk = str(row.get("label_sk") or "Nula")
-    return (
-        f'<tr class="daily-profit-row {escape(status)}">'
+    cells = (
         f'<td>{escape(str(row.get("date") or "-"))}</td>'
         f'<td><span class="daily-profit-badge {escape(status)}">'
         f'<span class="lang-en">{escape(label_en)}</span>'
         f'<span class="lang-sk hidden">{escape(label_sk)}</span>'
         '</span></td>'
         f'<td class="number daily-profit-value {escape(status)}">&euro;{_num(row.get("profit_with_fixed")):,.2f}</td>'
+    )
+    if with_maturation:
+        maturation = row.get("maturation") or None
+        if maturation:
+            current_status = str(maturation.get("current_status") or "neutral").strip().lower()
+            if current_status not in {"positive", "negative", "neutral"}:
+                current_status = "neutral"
+            uplift = _num(maturation.get("maturation_uplift"))
+            uplift_class = "positive" if uplift > 0 else ("negative" if uplift < 0 else "neutral")
+            cells += (
+                f'<td class="number daily-profit-value {current_status}">'
+                f'&euro;{_num(maturation.get("current_profit")):,.2f}</td>'
+                f'<td class="number daily-profit-value {uplift_class}">{"+" if uplift > 0 else ""}'
+                f'&euro;{uplift:,.2f}</td>'
+            )
+        else:
+            cells += '<td class="number muted-note">-</td><td class="number muted-note">-</td>'
+        cells += _days_to_green_cell_html(row.get("maturation"))
+    cells += (
         f'<td class="number">&euro;{_num(row.get("profit_without_fixed")):,.2f}</td>'
         f'<td class="number">&euro;{_num(row.get("revenue")):,.2f}</td>'
         f'<td class="number">{int(round(_num(row.get("orders"))))}</td>'
-        '</tr>'
     )
+    return f'<tr class="daily-profit-row {escape(status)}">{cells}</tr>' 
 
 
 def _creditnote_carrier_row_html(row: Dict[str, Any]) -> str:
@@ -802,6 +914,7 @@ def generate_modern_dashboard(
     fb_hourly_stats: Optional[list] = None,
     fb_dow_stats: Optional[list] = None,
     ltv_by_date: Optional[pd.DataFrame] = None,
+    daily_profit_maturation: Optional[dict] = None,
     consistency_checks: Optional[dict] = None,
     financial_metrics: Optional[dict] = None,
     cfo_kpi_payload: Optional[dict] = None,
@@ -823,6 +936,9 @@ def generate_modern_dashboard(
     daily_profit_loss = _daily_profit_loss(series)
     daily_profit_summary = daily_profit_loss["summary"]
     daily_profit_rows = daily_profit_loss["rows"]
+    maturation = _daily_profit_maturation(daily_profit_maturation, daily_profit_rows)
+    maturation_summary = maturation["summary"]
+    maturation_available = bool(maturation["available"])
     daily_profit_best_class = _profit_status_class(daily_profit_summary.get("best_day_profit"))
     daily_profit_worst_class = _profit_status_class(daily_profit_summary.get("worst_day_profit"))
     kpi_payload = _kpis(cfo_kpi_payload)
@@ -2466,6 +2582,7 @@ def generate_modern_dashboard(
     payload = {
         "series": series,
         "daily_profit_loss": daily_profit_loss,
+        "daily_profit_maturation": maturation,
         "kpis": kpi_payload,
         "cost_mix": cost_mix,
         "cities": cities,
@@ -3205,10 +3322,74 @@ def generate_modern_dashboard(
     payload["ceo_cockpit"] = ceo_cockpit_payload
     payload_json = _json_script_content(payload)
 
+    daily_profit_column_count = 9 if maturation_available else 6
     daily_profit_rows_html = "".join(
-        _daily_profit_row_html(row)
+        _daily_profit_row_html(row, with_maturation=maturation_available)
         for row in reversed(daily_profit_rows)
-    ) or '<tr><td colspan="6"><span class="lang-en">No daily profit/loss data available.</span><span class="lang-sk hidden">Denne data zisku/straty nie su dostupne.</span></td></tr>'
+    ) or f'<tr><td colspan="{daily_profit_column_count}"><span class="lang-en">No daily profit/loss data available.</span><span class="lang-sk hidden">Denne data zisku/straty nie su dostupne.</span></td></tr>'
+
+    booked_profit_header_html = (
+        '<th class="number"><span class="lang-en">Day-1 profit</span><span class="lang-sk hidden">Zisk v den 1</span></th>'
+        if maturation_available
+        else '<th class="number"><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk po fixoch</span></th>'
+    )
+    maturation_header_html = (
+        '<th class="number"><span class="lang-en">Today (matured)</span><span class="lang-sk hidden">Dnes (dozrete)</span></th>'
+        '<th class="number"><span class="lang-en">Recurring uplift</span><span class="lang-sk hidden">Prinos opakovanych</span></th>'
+        '<th class="number"><span class="lang-en">Days to green</span><span class="lang-sk hidden">Dni do zelenej</span></th>'
+    ) if maturation_available else ""
+    maturation_panel_html = ""
+    if maturation_available:
+        median_days = maturation_summary.get("median_days_to_green")
+        median_days_html = (
+            f"{_num(median_days):,.1f}".rstrip("0").rstrip(".") + " d" if median_days is not None
+            else '<span class="lang-en">n/a</span><span class="lang-sk hidden">n/a</span>'
+        )
+        fastest_days = maturation_summary.get("fastest_days_to_green")
+        slowest_days = maturation_summary.get("slowest_days_to_green")
+        range_note_html = (
+            f'{_num(fastest_days):,.0f}-{_num(slowest_days):,.0f} d '
+            '<span class="lang-en">range</span><span class="lang-sk hidden">rozpatie</span>'
+            if fastest_days is not None and slowest_days is not None
+            else '<span class="lang-en">no crossings yet</span><span class="lang-sk hidden">zatial ziadne prechody</span>'
+        )
+        started_red_days = int(round(_num(maturation_summary.get("started_red_days"))))
+        flipped_days = int(round(_num(maturation_summary.get("flipped_days"))))
+        still_red_days = int(round(_num(maturation_summary.get("still_red_days"))))
+        waiting_still_red_days = int(round(_num(maturation_summary.get("waiting_still_red_days"))))
+        no_cohort_still_red_days = int(round(_num(maturation_summary.get("no_cohort_still_red_days"))))
+        mature_age_days = int(round(_num(maturation_summary.get("mature_age_days"))))
+        uplift_value = _num(maturation_summary.get("total_maturation_uplift"))
+        uplift_class = _profit_status_class(uplift_value)
+        day_one_total = _num(maturation_summary.get("total_day_one_profit"))
+        current_total = _num(maturation_summary.get("total_current_profit"))
+        maturation_panel_html = f"""
+                    <div class="panel chart-card" id="profit-maturation" style="margin-top:18px;">
+                        <div class="card-head">
+                            <div>
+                                <h3><span class="lang-en">How long until a day turns green</span><span class="lang-sk hidden">Ako dlho trva, kym sa den dostane do zelenych cisel</span></h3>
+                                <p><span class="lang-en">The ledger above shows each day as it was booked one day later. Here the same day is read again today, with every later repeat order of the customers acquired that day attributed back to it.</span><span class="lang-sk hidden">Prehlad vyssie ukazuje kazdy den tak, ako bol zauctovany o den neskor. Tu je ten isty den precitany znova dnes, s kazdou neskorsou opakovanou objednavkou zakaznikov ziskanych v ten den priradenou spat k nemu.</span></p>
+                            </div>
+                        </div>
+                        <div class="daily-profit-grid">
+                            <div class="mini-card daily-profit-card positive"><small><span class="lang-en">Median days to green</span><span class="lang-sk hidden">Median dni do zelenej</span></small><strong>{median_days_html}</strong><span class="muted-note">{range_note_html}</span></div>
+                            <div class="mini-card daily-profit-card positive"><small><span class="lang-en">Loss days that turned green</span><span class="lang-sk hidden">Stratove dni, ktore zozelenali</span></small><strong>{flipped_days} / {started_red_days}</strong><span class="muted-note">{_format_mini_value_html(maturation_summary.get("flipped_share_pct"), kind="percent", decimals=1)} <span class="lang-en">of loss days</span><span class="lang-sk hidden">stratovych dni</span></span></div>
+                            <div class="mini-card daily-profit-card negative"><small><span class="lang-en">Still red</span><span class="lang-sk hidden">Stale v cervenom</span></small><strong>{waiting_still_red_days}</strong><span class="muted-note">+{no_cohort_still_red_days} <span class="lang-en">days with no customer acquired, which recurring revenue can never rescue</span><span class="lang-sk hidden">dni bez ziskaneho zakaznika, ktore opakovane nakupy nikdy nezachrania</span></span></div>
+                            <div class="mini-card daily-profit-card {uplift_class}"><small><span class="lang-en">Recurring uplift so far</span><span class="lang-sk hidden">Prinos opakovanych nakupov</span></small><strong>{_format_mini_value_html(uplift_value, kind="currency")}</strong><span class="muted-note">{_format_mini_value_html(day_one_total, kind="currency")} &rarr; {_format_mini_value_html(current_total, kind="currency")}</span></div>
+                        </div>
+                        <div class="chart-shell tall"><canvas id="profitMaturationChart"></canvas></div>
+                        <p class="muted-note" style="margin-top:12px;"><span class="lang-en">Day-1 is the booked ledger value. Today adds the contribution margin of later repeat orders (net revenue minus product, packaging and shipping cost). No extra ad spend is charged, because acquisition was already paid for on the acquisition day.</span><span class="lang-sk hidden">Den 1 je zauctovana hodnota z prehladu. Dnes pridava kontribucnu marzu neskorsich opakovanych objednavok (cista trzba minus produkt, balenie a doprava). Ziadna dalsia reklama sa nepripocitava, akvizicia uz bola zaplatena v den ziskania zakaznika.</span></p>
+                    </div>
+                    <div class="panel chart-card" style="margin-top:18px;">
+                        <div class="card-head">
+                            <div>
+                                <h3><span class="lang-en">Payback curve by day age</span><span class="lang-sk hidden">Krivka navratnosti podla veku dna</span></h3>
+                                <p><span class="lang-en">Average running total of a day at each age, and the share of days already in green by that age. Later ages are averaged over fewer days, because only older days have lived that long.</span><span class="lang-sk hidden">Priemerny bezny sucet dna v kazdom veku a podiel dni, ktore su v tom veku uz v zelenom. Vyssie veky su priemerovane cez menej dni, pretoze tak dlho zili iba starsie dni.</span></p>
+                            </div>
+                        </div>
+                        <div class="chart-shell"><canvas id="profitPaybackCurveChart"></canvas></div>
+                        <p class="muted-note" style="margin-top:12px;"><span class="lang-en">This is an attribution lens, not additional euros. Repeat revenue is already booked inside the calendar day it arrived on, so cohort totals and calendar totals must never be added together.</span><span class="lang-sk hidden">Toto je pohlad cez atribuciu, nie dalsie euro navyse. Opakovana trzba je uz zauctovana v kalendarnom dni, kedy prisla, takze kohortne a kalendarne sucty sa nikdy nesmu scitavat.</span></p>
+                    </div>"""
 
     product_rows_html = "".join(
         (
@@ -4504,7 +4685,9 @@ def generate_modern_dashboard(
         .daily-profit-card.negative strong, .daily-profit-value.negative {{ color: var(--red); }}
         .daily-profit-card.neutral strong, .daily-profit-value.neutral {{ color: var(--muted); }}
         .daily-profit-ledger {{ max-height: 390px; overflow:auto; border:1px solid var(--line); border-radius: 18px; margin-top: 16px; background:#fff; }}
-        .daily-profit-ledger table {{ min-width: 760px; }}
+        .daily-profit-ledger table {{ min-width: 1080px; }}
+        .maturation-sub {{ display:block; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing:.04em; text-transform: uppercase; margin-top: 2px; }}
+        .maturation-projected {{ color: var(--muted); font-style: italic; }}
         .daily-profit-ledger thead th {{ position: sticky; top: 0; z-index: 1; background: #fffdfa; }}
         .daily-profit-row.positive {{ background: rgba(31,157,102,.045); }}
         .daily-profit-row.negative {{ background: rgba(207,80,96,.065); }}
@@ -4679,7 +4862,8 @@ def generate_modern_dashboard(
                                     <tr>
                                         <th><span class="lang-en">Date</span><span class="lang-sk hidden">Datum</span></th>
                                         <th><span class="lang-en">State</span><span class="lang-sk hidden">Stav</span></th>
-                                        <th class="number"><span class="lang-en">Profit incl. fixed</span><span class="lang-sk hidden">Zisk po fixoch</span></th>
+                                        {booked_profit_header_html}
+                                        {maturation_header_html}
                                         <th class="number"><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk pred fixom</span></th>
                                         <th class="number"><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th>
                                         <th class="number"><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th>
@@ -4689,6 +4873,7 @@ def generate_modern_dashboard(
                             </table>
                         </div>
                     </div>
+{maturation_panel_html}
                     <div class="grid-2" style="margin-top:18px;">
                         <div class="panel chart-card">
                             <div class="card-head">
@@ -5848,6 +6033,75 @@ def generate_modern_dashboard(
                 }},
                 options: dailyProfitOpts,
             }});
+
+            const maturation = DATA.daily_profit_maturation || {{}};
+            if (maturation.available && document.getElementById('profitMaturationChart')) {{
+                const mRows = maturation.rows || [];
+                const mLabels = mRows.map(r => r.date);
+                const dayOne = mRows.map(r => Number(r.day_one_profit || 0));
+                const today = mRows.map(r => Number(r.current_profit || 0));
+                const uplift = mRows.map(r => Number(r.maturation_uplift || 0));
+                const maturationOpts = baseOptions();
+                maturationOpts.scales.y.grid.color = (ctx) => Number(ctx.tick.value) === 0 ? 'rgba(36,31,25,.30)' : 'rgba(140,122,99,.12)';
+                maturationOpts.plugins.tooltip.callbacks = {{
+                    label: (ctx) => `${{ctx.dataset.label}}: ${{fmtCurrency(ctx.parsed.y)}}`,
+                    afterBody: (items) => {{
+                        const row = mRows[items[0].dataIndex];
+                        if (!row) return '';
+                        const lines = [];
+                        if (row.days_to_green === 0) {{
+                            lines.push('Green on day 1');
+                        }} else if (row.days_to_green !== null && row.days_to_green !== undefined) {{
+                            lines.push(`Turned green after ${{row.days_to_green}} days (${{row.green_date}})`);
+                        }} else if (row.projected_days_to_green !== null && row.projected_days_to_green !== undefined) {{
+                            lines.push(`Still red - projected green after ~${{row.projected_days_to_green}} days`);
+                        }} else {{
+                            lines.push(`Still red after ${{row.observed_days}} days observed`);
+                        }}
+                        lines.push(`${{row.repeat_orders}} repeat orders from ${{row.repeat_customers}} customers`);
+                        return lines;
+                    }},
+                }};
+                new Chart(document.getElementById('profitMaturationChart'), {{
+                    data: {{
+                        labels: mLabels,
+                        datasets: [
+                            {{ type: 'bar', label: 'Day-1 booked', data: dayOne, backgroundColor: dayOne.map(v => v < 0 ? 'rgba(207,80,96,.55)' : 'rgba(31,157,102,.45)'), borderWidth: 0, borderRadius: 5, barPercentage: .9, categoryPercentage: .9, yAxisID: 'y', order: 2 }},
+                            {{ type: 'line', label: 'Today (matured)', data: today, borderColor: '#1f9d66', backgroundColor: 'rgba(31,157,102,.10)', fill: true, tension: .3, borderWidth: 2.4, pointRadius: 0, yAxisID: 'y', order: 1 }},
+                            {{ type: 'line', label: 'Recurring uplift', data: uplift, borderColor: '#4766ff', borderDash: [7, 5], tension: .3, borderWidth: 1.8, pointRadius: 0, yAxisID: 'y', order: 0 }},
+                        ],
+                    }},
+                    options: maturationOpts,
+                }});
+            }}
+            if (maturation.available && document.getElementById('profitPaybackCurveChart')) {{
+                const curve = maturation.curve || [];
+                const curveOpts = dualAxisOptions();
+                curveOpts.scales.y.grid.color = (ctx) => Number(ctx.tick.value) === 0 ? 'rgba(36,31,25,.30)' : 'rgba(140,122,99,.12)';
+                curveOpts.scales.y1.min = 0;
+                curveOpts.scales.y1.max = 100;
+                curveOpts.scales.y1.ticks.callback = (v) => `${{v}}%`;
+                curveOpts.plugins.tooltip.callbacks = {{
+                    title: (items) => `Day age: ${{items[0].label}}`,
+                    label: (ctx) => ctx.dataset.yAxisID === 'y1'
+                        ? `${{ctx.dataset.label}}: ${{Number(ctx.parsed.y).toFixed(1)}}%`
+                        : `${{ctx.dataset.label}}: ${{fmtCurrency(ctx.parsed.y)}}`,
+                    afterBody: (items) => {{
+                        const point = curve[items[0].dataIndex];
+                        return point ? `Averaged over ${{point.days_tracked}} days` : '';
+                    }},
+                }};
+                new Chart(document.getElementById('profitPaybackCurveChart'), {{
+                    data: {{
+                        labels: curve.map(p => p.age_days),
+                        datasets: [
+                            {{ type: 'line', label: 'Avg running total per day', data: curve.map(p => p.avg_cumulative_profit), borderColor: '#ff8a1f', backgroundColor: (ctx) => gradient(ctx, 'rgba(255,138,31,.26)', 'rgba(255,138,31,.02)'), fill: true, tension: .3, borderWidth: 2.6, pointRadius: 0, yAxisID: 'y' }},
+                            {{ type: 'line', label: 'Share of days already green', data: curve.map(p => p.green_share_pct), borderColor: '#1f9d66', tension: .3, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                        ],
+                    }},
+                    options: curveOpts,
+                }});
+            }}
             const ordersOpts = baseOptions();
             ordersOpts.scales.y1 = {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }};
             new Chart(document.getElementById('ordersAovChart'), {{
