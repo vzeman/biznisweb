@@ -1,3 +1,13 @@
+## 2026-09-30 — VEVO Shopify feasibility audit (read-only discovery)
+
+Date: 2026-09-30 (Europe/Bratislava)
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-shopify-audit-20260930`
+What changed: Added `projects/vevo/SHOPIFY_MIGRATION_AUDIT_2026-09-30.md` as the durable evidence/decision record for assessing a Shopify storefront while retaining reporting/manufacturing and daily operations. No application or runtime change.
+What is verified: Clean isolated worktree from main `c98d350e`, fetch and pull/rebase complete; authenticated VEVO admin inspected read-only. Mixed EUR/CZK/HUF orders, custom stock-changing statuses, payment and carrier definitions observed. Official Chameleoon Shopify connector confirmed; official Shopify local-currency limitation with external gateways identified.
+Known issues: Existing Playground checkout is unrelated and contains many untracked files; untouched. Chameleoon session is signed out, so account-specific configuration is unverified. Stripe availability for the actual new Shopify account remains unverified. Existing source/runtime differences are being inventoried, not repaired during this audit.
+Next exact step: Complete source/admin discovery and update the audit with architecture options, workflow parity acceptance gates and remaining owner inputs. No deployment or migration is in scope. No local dev/test server, worker or tunnel started.
+
 ## 2026-09-18 — VEVO report maturation charts deployed and rerun
 
 Date: 2026-09-18, 03:26 UTC
