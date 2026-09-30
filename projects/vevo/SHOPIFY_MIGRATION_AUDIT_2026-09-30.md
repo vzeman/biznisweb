@@ -136,6 +136,16 @@ Currency decision must precede implementation:
 
 Keeping BiznisWeb as a permanent mirrored operational backend is not the default recommendation: duplicated orders, stock, notifications and documents create two writers. A temporary bridge could be evaluated only with strict ownership and idempotency. If identical administration and one Stripe-based multi-currency shop are absolute requirements, Shopify is not yet a proven fit; redesigning the current storefront is a valid comparison.
 
+## Public comparison: Bloom Robbins (2026-09-30)
+
+The owner asked whether Bloom Robbins' gateway can be identified from public website code. The Slovak storefront and live guest checkout were inspected without entering contact, address or payment details, submitting an order or changing the existing cart contents.
+
+- The SK checkout's DOM HTML explicitly names **Stripe Card Payments** as a `PaymentGateway` and as the available card payment method; its `availablePresentmentCurrencies` is `["EUR"]`. This is direct checkout configuration evidence, stronger than the Stripe logo also present in the cart. The checkout displays card payment, Google Pay and COD (2 EUR). No payment transaction was executed; merchant fees and account terms remain unknown.
+- Public storefront HTML confirms separate Shopify stores: [SK](https://www.bloomrobbins.sk/) is `bloomsk.myshopify.com`, shop ID `25563398216`, EUR; [CZ](https://www.bloomrobbins.cz/) is `bloomcz.myshopify.com`, shop ID `10182197333`, CZK; [HU](https://www.bloomrobbins.hu/) is `bloomhu.myshopify.com`, shop ID `53294825639`, HUF. CZ/HU gateways were not verified in their checkouts.
+- This is a concrete example of the separate-shops architecture above, not evidence of one Stripe-based Shopify shop charging all three currencies. Their internal order, inventory and fulfillment consolidation cannot be established from public HTML. Do not infer a Shopify plan, negotiated fees or internal integrations.
+
+Only public gateway names, store identities and currencies are recorded here; checkout session URLs and identifiers are intentionally omitted. Existing VEVO/Chameleoon admin-access stop remains unchanged.
+
 ## Acceptance gates before any switch
 
 Run test orders in a controlled environment with notification/payment/stock isolation. No tests below were executed by this audit.
