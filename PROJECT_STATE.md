@@ -1,12 +1,12 @@
-## 2026-09-30 — VEVO Shopify feasibility audit (read-only discovery)
+## 2026-09-30 — VEVO Shopify feasibility assessment and credential stop
 
 Date: 2026-09-30 (Europe/Bratislava)
 Repo: `vzeman/biznisweb`
 Branch: `codex/vevo-shopify-audit-20260930`
-What changed: Added `projects/vevo/SHOPIFY_MIGRATION_AUDIT_2026-09-30.md` as the durable evidence/decision record for assessing a Shopify storefront while retaining reporting/manufacturing and daily operations. No application or runtime change.
-What is verified: Clean isolated worktree from main `c98d350e`, fetch and pull/rebase complete; authenticated VEVO admin inspected read-only. Mixed EUR/CZK/HUF orders, custom stock-changing statuses, payment and carrier definitions observed. Official Chameleoon Shopify connector confirmed; official Shopify local-currency limitation with external gateways identified.
-Known issues: Existing Playground checkout is unrelated and contains many untracked files; untouched. Chameleoon session is signed out, so account-specific configuration is unverified. Stripe availability for the actual new Shopify account remains unverified. Existing source/runtime differences are being inventoried, not repaired during this audit.
-Next exact step: Complete source/admin discovery and update the audit with architecture options, workflow parity acceptance gates and remaining owner inputs. No deployment or migration is in scope. No local dev/test server, worker or tunnel started.
+What changed: Added `projects/vevo/SHOPIFY_MIGRATION_AUDIT_2026-09-30.md` with evidence, source contracts, architecture choices, cost constraints, acceptance scenarios and owner questions. No application or runtime change. Recommendation is conditional feasibility with preserved custom screens, not a drop-in theme migration.
+What is verified: Clean isolated worktree from main `c98d350e`, fetch and pull/rebase complete; authenticated VEVO admin inspected read-only. Mixed EUR/CZK/HUF orders, stock-changing statuses, payment/carrier definitions and separate document counters observed. Owner signed into Chameleoon; one Biznisweb/Vevo source, 11 carrier configurations, COD mappings and created-shipment -> Shipped rule verified. Core and peripheral Git source contracts reviewed. Official connector exists; single-shop local-currency checkout with standalone Stripe is a material limitation.
+Known issues: An unredacted browser DOM output exposed the source connector's BiznisWeb API credential; owner notified and further admin inspection stopped. Secret value was not copied into files/Git. Credential rotation/update of authorized consumers is pending owner action. Existing Playground checkout and unrelated worktrees remain untouched. Some peripheral implementations exist only on open PR branches; default main is not their operational source. Current AWS runtime, Shopify payment eligibility and physical printing were not verified.
+Next exact step: Owner rotates affected credential and updates authorized consumers, then verify connectivity. Obtain staff workflow, market/currency and accounting requirements before selecting architecture or starting a controlled end-to-end Shopify proof of concept. This audit does not authorize deployment. No local dev/test server, worker or tunnel started; no process cleanup needed.
 
 ## 2026-09-18 — VEVO report maturation charts deployed and rerun
 
