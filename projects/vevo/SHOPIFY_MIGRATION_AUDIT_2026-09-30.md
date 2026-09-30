@@ -49,6 +49,7 @@ No configuration was saved, no shipment was created, and no label was printed. N
 
 ## Vendor constraints verified on 2026-09-30
 
+- Follow-up clarification: one Shopify store can support multiple languages and domains. Current documentation allows up to 20 languages on Basic/Grow/Advanced and up to 30 on Plus/Enterprise. The VEVO limitation is not language support: distinguish translated content, displayed prices, actual checkout/charge currency and merchant payout currency. Source: <https://help.shopify.com/en/manual/international/localization-and-translation>.
 - Chameleoon documents a Shopify connector with payment/COD classification, carrier mapping, tracking writeback and status rules: <https://docs.chameleoon.sk/shopify>.
 - Shopify Payments supported-country list currently excludes Slovakia: <https://help.shopify.com/en/manual/payments/shopify-payments/supported-countries>.
 - Stripe documents the replacement `Stripe Card Payments` connector. Availability for a new shop under VEVO's actual legal entity is still to be verified: <https://support.stripe.com/questions/update-shopify-payment-provider-from-stripe-to-stripe-card-payments>.
@@ -131,7 +132,7 @@ Currency decision must precede implementation:
 
 1. **One Shopify shop in EUR:** simplest operation, but CZ/HU local-currency checkout with standalone Stripe would change. This does not meet strict current behavior parity.
 2. **Separate EUR/CZK/HUF shops behind a common operations screen:** technically plausible while retaining Stripe, subject to account eligibility. Adds subscriptions, inventory synchronization, cross-store identifiers and shared customer/history work. No longer one native Shopify admin.
-3. **One shop with an eligible multi-currency provider:** investigate Adyen/account/plan eligibility and economics. It changes the payment arrangement and is not a verified cheap substitute. Never select a false merchant country.
+3. **One shop with an eligible multi-currency provider:** not a ready replacement for VEVO. Follow-up official Adyen documentation now explicitly limits activation to organizations with existing Adyen approval, an existing Adyen account and Shopify Checkout. Organizations without that approval cannot activate it. The same page says manual payments including COD remain in the shop base currency even with this integration. No specific plan requirement was stated on the inspected page; do not infer that purchasing Plus unlocks it. Source: <https://help.shopify.com/en/manual/payments/third-party-providers/adyen-gateway>. Never select a false merchant country to obtain Shopify Payments.
 
 Keeping BiznisWeb as a permanent mirrored operational backend is not the default recommendation: duplicated orders, stock, notifications and documents create two writers. A temporary bridge could be evaluated only with strict ownership and idempotency. If identical administration and one Stripe-based multi-currency shop are absolute requirements, Shopify is not yet a proven fit; redesigning the current storefront is a valid comparison.
 
