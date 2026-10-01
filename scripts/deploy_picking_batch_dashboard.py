@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 import time
+import uuid
 from urllib.request import Request, build_opener
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -115,6 +116,8 @@ def main():
     if args.phase == "probe":
         assert not args.receipt.exists(), "Existing receipt must be reconciled before retry"
         target = schedule["Target"]
+        family = f"{args.project}-picking-probe-{args.source_sha[:12]}"
+        assert not ecs.list_tasks(cluster=target["Arn"], family=family, desiredStatus="RUNNING")["taskArns"], "Candidate already running"
         source = ecs.describe_task_definition(taskDefinition=target["EcsParameters"]["TaskDefinitionArn"])["taskDefinition"]
         assert source["family"] == args.project + "-reporting-daily" and len(source["containerDefinitions"]) == 1
         original = source["containerDefinitions"][0]
@@ -130,9 +133,9 @@ def main():
                      "logConfiguration": original["logConfiguration"]}
         receipt = {"project": args.project, "source_sha": args.source_sha, "digest": digest, "previous": previous,
                    "baseline": service_boundary(service), "report_schedule": schedule_boundary(schedule),
-                   "started_by": f"picking-{args.project}-{args.source_sha[:12]}", "cluster": target["Arn"], "phase": "registering"}
+                   "started_by": f"picking-{args.project}-{uuid.uuid4().hex[:16]}", "cluster": target["Arn"], "phase": "registering"}
         save(receipt)
-        definition = ecs.register_task_definition(family=f"{args.project}-picking-probe-{args.source_sha[:12]}",
+        definition = ecs.register_task_definition(family=family,
             executionRoleArn=source["executionRoleArn"], taskRoleArn=source["taskRoleArn"], networkMode="awsvpc",
             requiresCompatibilities=["FARGATE"], cpu=service["InstanceConfiguration"]["Cpu"],
             memory=service["InstanceConfiguration"]["Memory"], containerDefinitions=[container])["taskDefinition"]
