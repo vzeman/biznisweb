@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import math
 import os
@@ -502,6 +503,18 @@ def _delete_shared_operations_snapshot(project: str) -> None:
         pass
 
 
+def _operations_display_revision(state: Dict[str, Any]) -> str:
+    """Track rendered state without invalidating it for download-only metadata.
+
+    Storage ETags still guard every write. Print acknowledgements and all other
+    operational sections remain part of this independent cache fingerprint.
+    """
+    rendered_state = _normalize_operations_state(state)
+    rendered_state.pop("picking_pdf_batches", None)
+    body = json.dumps(rendered_state, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return "state-v1:" + hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
 def _snapshot_matches_operations_state(
     project: str,
     project_settings: Dict[str, Any],
@@ -518,7 +531,14 @@ def _snapshot_matches_operations_state(
         )
     except Exception:
         return False
-    return snapshot_revision == str(state.get("_storage_etag") or "").strip()
+    if snapshot_revision.startswith("state-v1:"):
+        return snapshot_revision == _operations_display_revision(state)
+    # Upgrade a legacy cached payload only after its exact storage revision was
+    # verified. This avoids a full upstream scan on the first post-upgrade PDF.
+    if snapshot_revision == str(state.get("_storage_etag") or "").strip():
+        payload["operations_state_revision"] = _operations_display_revision(state)
+        return True
+    return False
 
 
 def _normalize_operations_state(raw: Any) -> Dict[str, Any]:
@@ -3137,7 +3157,7 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
         "marker": f"{project}-operations-dashboard",
         "project": project,
         "generated_at": order_snapshot["generated_at"],
-        "operations_state_revision": str(operations_state.get("_storage_etag") or "").strip(),
+        "operations_state_revision": _operations_display_revision(operations_state),
         "auto_refresh_seconds": order_snapshot["auto_refresh_seconds"],
         "orders": order_snapshot,
         "executive_kpis": build_executive_kpi_snapshot(payload),

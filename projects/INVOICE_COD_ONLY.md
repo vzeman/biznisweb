@@ -174,3 +174,23 @@ quota errors are never overridden. Other query clients retain their original
 partial-error behavior. No mutation is accepted by the read retry path. Tests
 cover both a fresh successful response and exhausting the finite attempt count.
 Production release remains pending the complete exact-image host checks.
+# Invoice-only release scope after shared cancellation review failure
+
+On 2026-10-01, source `0e65d7d1bf1c42cb425e4c11ad88e6437215d3e1` and image
+`sha256:06417f96e5eeaf3f77318c81ea27c57bf3a38d91f45a9738830736e871d0d78c`
+passed full-backlog COD-only host gates for both invoice services. Managed run
+`36838303200` then stopped on the unchanged cancellation host gate: three old
+recovery cases require settlement review. No financial write occurred during
+these dry runs. All 13 schedules and three state policies were independently
+verified restored. The invoice policy is not yet active in production.
+
+The managed workflow now offers explicit `scope=invoices` (CLI `--scope invoices`)
+to update only ROY/VEVO invoice services. It registers/tests only those candidates,
+changes only their monitoring/state permissions and promotes four invoice targets.
+All five existing schedules still pause and drain together to prevent competing
+readers; the original cancellation definition and every other schedule setting
+are restored unchanged. The same transactional rollback and exact-main/image
+checks apply. Default `scope=all` still requires all three host gates. This scope
+does not override cancellation safety checks or resolve historical review cases.
+Unit tests cover both scopes, preservation of cancellation at every schedule
+write, invoice candidate failure rollback, and invalid-scope rejection.

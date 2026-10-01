@@ -85,6 +85,83 @@ class FakeStateClients:
 
 
 class OrderAutomationDeploymentTests(unittest.TestCase):
+    def scoped_deployment(self, scope):
+        deployment = object.__new__(Deployment)
+        deployment.scope, deployment.commit, deployment.account = scope, "a" * 40, ACCOUNT
+        deployment.session = Mock()
+        deployment.session.client.return_value.describe_images.return_value = {
+            "imageDetails": [{"imageDigest": "sha256:" + "a" * 64}]}
+        deployment.scheduler, deployment.ecs = FakeScheduler(), Mock()
+        def describe(taskDefinition):
+            family = taskDefinition.rsplit("/", 1)[1].rsplit(":", 1)[0]
+            return {"taskDefinition": {"family": family, "networkMode": "awsvpc", "taskRoleArn": "role/" + family,
+                "containerDefinitions": [{"name": "reporting", "command": command_for(family)}]}}
+        deployment.ecs.describe_task_definition.side_effect = describe
+        deployment.ecs.register_task_definition.side_effect = lambda **values: {
+            "taskDefinition": {"taskDefinitionArn": f"arn:aws:ecs:eu-central-1:{ACCOUNT}:task-definition/{values['family']}:9"}}
+        deployment.evidence = {"hosts": []}
+        for method in ("save_private", "prepare_state", "restore_state_policies", "wait_for_drain", "require_current_main"):
+            setattr(deployment, method, Mock())
+        deployment.bucket = Mock(return_value="private-test-bucket")
+        deployment.host_gate = Mock(side_effect=lambda family, *args, **kwargs: {"service": family})
+        deployment.provision_monitoring = Mock(return_value="arn:test:dlq")
+        return deployment
+
+    def test_invoice_scope_preserves_cancellation_and_default_scope_checks_all_services(self):
+        for scope in ("all", "invoices"):
+            with self.subTest(scope=scope):
+                deployment = self.scoped_deployment(scope)
+                before = copy.deepcopy(deployment.scheduler.values)
+                writes = []
+                original_update = deployment.scheduler.update_schedule
+                def update(**request):
+                    writes.append(copy.deepcopy(request))
+                    original_update(**request)
+                deployment.scheduler.update_schedule = update
+                with patch("scripts.deploy_order_automations.established_alarm_route", return_value="arn:test:alarm"), \
+                     patch("builtins.print"):
+                    deployment.run()
+                expected = [family for family, values in SERVICES.items() if scope == "all" or values[1] == "invoice"]
+                self.assertEqual([call.args[0] for call in deployment.host_gate.call_args_list], expected)
+                self.assertEqual([call.args[0] for call in deployment.provision_monitoring.call_args_list], expected)
+                self.assertEqual([call.kwargs["family"] for call in deployment.ecs.register_task_definition.call_args_list], expected)
+                self.assertEqual([call.args[2] for call in deployment.prepare_state.call_args_list], ["role/" + f for f in expected])
+                self.assertEqual(deployment.wait_for_drain.call_count, 2)
+                self.assertEqual(deployment.evidence["phase"], "promotion-readback-verified")
+                if scope == "invoices":
+                    cancel = "roy-unpaid-order-cancellation"
+                    self.assertEqual(deployment.scheduler.values[cancel], schedule_request(before[cancel]))
+                    for request in writes:
+                        if request["Name"] == cancel:
+                            self.assertEqual({**request, "State": "ENABLED"}, schedule_request(before[cancel]))
+                    self.assertNotIn(cancel, deployment.evidence["candidate_task_definitions"])
+                for name in INVOICE_SCHEDULES:
+                    self.assertTrue(deployment.scheduler.values[name]["Target"]["EcsParameters"]["TaskDefinitionArn"].endswith(":9"))
+
+    def test_invoice_scope_failed_host_restores_originals_without_promoting(self):
+        for fail_index in (0, 1):
+            with self.subTest(fail_index=fail_index):
+                deployment = self.scoped_deployment("invoices")
+                before = copy.deepcopy(deployment.scheduler.values)
+                deployment.host_gate.side_effect = ([{"service": "roy-invoice-daily"}] * fail_index
+                                                   + [RuntimeError("candidate-failed")])
+                with self.assertRaisesRegex(RuntimeError, "originals-restored"):
+                    deployment.run()
+                self.assertEqual({name: schedule_request(value) for name, value in deployment.scheduler.values.items()},
+                                 {name: schedule_request(value) for name, value in before.items()})
+                deployment.provision_monitoring.assert_not_called()
+                deployment.restore_state_policies.assert_called_once()
+                self.assertNotIn("roy-unpaid-order-cancellation",
+                                 [call.kwargs["family"] for call in deployment.ecs.register_task_definition.call_args_list])
+
+    def test_unknown_deployment_scope_stops_before_aws_reads(self):
+        deployment = self.scoped_deployment("unexpected")
+        with self.assertRaisesRegex(RuntimeError, "deployment-scope-invalid"):
+            deployment.run()
+        self.assertEqual(deployment.scheduler.writes, [])
+        deployment.session.client.return_value.describe_images.assert_not_called()
+        deployment.ecs.describe_task_definition.assert_not_called()
+
     def test_new_invoice_candidate_forces_full_inventory_but_old_pin_keeps_legacy_args(self):
         for family, old_image, expected in (
             ("roy-invoice-daily", False, True),
