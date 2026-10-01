@@ -1,15 +1,16 @@
-## 2026-10-01 — COD invoice release: first candidate rejected, safe read follow-up
+## 2026-10-01 — COD invoice release: safe read follow-up merged, awaiting image
 
 Date: 2026-10-01
 Repo: `vzeman/biznisweb`
-Branch: `codex/cod-invoice-payment-read-20261001`
+Branch: `codex/cod-invoice-release-evidence-20261001`
 What changed: Invoice discovery and all pre-creation rechecks require exactly one payment element with a verified project COD ID. Both project allowlists were read from their current full language/payment catalogues. Added regression coverage and an on-host COD-only marker requirement. Card/bank/unknown payments cannot authorize new invoices, even after shipped status. Scope excludes existing-document corrections, gateway settings, dashboard printing and Chameleoon.
 What is verified: Clean isolated branch from `c98d350e`, fetch/pull completed. Source runtimes `roy-invoice-daily:11` and `vevo-invoice-daily:9`, AWS account/region/cluster, task identity/IP where active, immutable digest and `/app` are recorded in `projects/INVOICE_COD_ONLY.md`. All 1,005 tests from the order-automation CI suite passed locally; both offline candidate-policy probes and Ruff passed. All scheduled ECS images were confirmed immutable. No financial mutation occurred during the rejected release probe.
 Known issues: Future payment IDs require explicit catalogue verification; absent/ambiguous payment cannot authorize creation. Historical print incident evidence remains on its separate audit branch and is not resolved by this invoice restriction.
 Release progress: PR #590 merged as `b220bc9e63748cf0d64dc23cf1a4da289fe00cef` after all six CI checks passed, including Linux and Windows regressions. Exact-image build `36822990728` succeeded, producing `sha256:9014681bfb3db412e6659004ad157b5d2eea93e090507abc8c10cdedf5052c91`. Managed deployment `36823714684` rejected its first candidate and restored the original runtime; source schedule readback was unchanged before dispatch. Both reporting tasks have `REPORT_SKIP_INVOICES=true`; only the standalone invoice jobs create invoices through this automation.
 Candidate outcome: Deployment `36823714684` rejected ROY candidate `c972efe0a6204ad0b97acffc534ec702` (`172.31.11.236`, `roy-invoice-daily:12`, `/app`) after FLOX failed its historical collection `price_elements` resolver. Synthetic COD policy passed, no financial writes occurred, and the managed rollback restored all five original enabled schedules and state policies, independently read back. No production promotion occurred.
 Follow-up: Inventory omits that broken nested resolver; only potential invoice candidates get a fresh exact-order payment read, followed by complete eligibility and identity recheck. Read failures remain blocking. All 1,009 CI-suite tests passed locally. Read-only first-page production inventory checks passed for both shops without the broken nested resolver. Failed approach and evidence are recorded in `projects/INVOICE_COD_ONLY.md`.
-Next exact step: Full regression, follow-up PR/merge/build, repeat managed candidate curl/COD-marker checks, schedule readback and natural-run verification. No persistent local process started.
+Follow-up release: PR #591 passed all six CI checks and merged as `754b0e342858497bcb9002f21214f7140bc2e9a7`. Build `36825205643` is pending for this corrected source. All 1,009 tests passed locally and in the Linux/Windows CI suites. Original production schedules remain active after the verified first-attempt rollback.
+Next exact step: Verify build `36825205643`, repeat managed candidate curl/COD-marker checks on the corrected image, then schedule readback and natural-run verification. No persistent local process started.
 
 ## 2026-09-18 — VEVO report maturation charts deployed and rerun
 

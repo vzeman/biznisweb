@@ -110,7 +110,11 @@ read failure is not silently swallowed. All 1,009 CI-suite tests passed locally.
 Read-only production checks of the first 30 historical rows passed on both shops
 with the corrected inventory query; no document was created.
 
-Next exact step: full regression, follow-up PR/merge/build and repeat managed host-gated deployment; verify all four invoice schedule
+Follow-up PR #591 passed all six CI checks and merged as
+`754b0e342858497bcb9002f21214f7140bc2e9a7`. Build `36825205643` is pending for this
+corrected source. Release handoff continues on `codex/cod-invoice-release-evidence-20261001`.
+
+Next exact step: verify the corrected image and repeat managed host-gated deployment; verify all four invoice schedule
 targets and subsequent natural runs. The shared managed deployment also verifies
 the unchanged ROY cancellation service; its business behavior is outside this
 change. No local server, worker, watcher, tunnel or persistent process is needed.
