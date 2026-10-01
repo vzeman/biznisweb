@@ -101,6 +101,7 @@ query GetOrders($changed_from: DateTime, $params: OrderParams) {
       pur_date
       last_change
       blocked
+      price_elements { type reference_id title }
       status {
         id
         name
@@ -136,6 +137,7 @@ query GetOrderInvoices($order_num: String!) {
     pur_date
     last_change
     blocked
+    price_elements { type reference_id title }
     status {
       id
       name
@@ -208,6 +210,7 @@ class InvoiceRunSummary:
     invoice_scan_pages: int = 0
     invoice_scan_all_ages: bool = False
     skipped_blocked_orders: int = 0
+    skipped_non_cod_orders: int = 0
     skipped_after_recheck_orders: int = 0
     pending_invoice_emails: int = 0
     ambiguous_invoice_operations: int = 0
@@ -279,6 +282,7 @@ def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dic
 
     return {
         "enabled": bool(raw_settings.get("enabled", False)),
+        "cod_payment_ids": _invoice_cod_payment_ids(raw_settings.get("cod_payment_ids", [])),
         "lookback_days": max(1, lookback_days),
         "exclude_zero_total_orders": bool(raw_settings.get("exclude_zero_total_orders", True)),
         "eligible_statuses": eligible_statuses,
@@ -300,6 +304,15 @@ def resolve_invoice_generation_settings(project_settings: Dict[str, Any]) -> Dic
             "lang_code": str(raw_reconciliation.get("lang_code") or "SK"),
         },
     }
+
+
+def _invoice_cod_payment_ids(values: Iterable[Any]) -> frozenset[str]:
+    """Explicit per-shop identities; no title guessing or shipping-ID fallback."""
+    if not isinstance(values, (list, tuple, set, frozenset)):
+        raise ValueError("Invoice COD payment IDs must be a collection")
+    if any(isinstance(value, bool) or not re.fullmatch(r"[1-9][0-9]*", str(value)) for value in values):
+        raise ValueError("Invoice COD payment IDs must be positive integer identities")
+    return frozenset(str(value) for value in values)
 
 
 def resolve_invoice_date_window(reference_date: Union[str, datetime], lookback_days: int) -> Tuple[str, str]:
@@ -698,6 +711,7 @@ class InvoiceGenerator:
         page_delay_seconds: float = 1.0,
         read_attempts: int = 4,
         project: Optional[str] = None,
+        cod_payment_ids: Optional[Iterable[str]] = None,
     ):
         """Initialize the invoice generator with API credentials"""
         transport = RequestsHTTPTransport(
@@ -714,6 +728,10 @@ class InvoiceGenerator:
                 f"{name}.flox.sk", f"{name}.sk", f"www.{name}.sk"}), None)
         if project is not None:
             bind_status_identity(self.client, project)
+        if cod_payment_ids is None:
+            configured = load_project_settings(project) if project is not None else {}
+            cod_payment_ids = resolve_invoice_generation_settings(configured)["cod_payment_ids"]
+        self.cod_payment_ids = _invoice_cod_payment_ids(cod_payment_ids)
         self.api_token = api_token
         self.base_url = base_url.rstrip("/")
         self.login_url = f"{self.base_url}/admin/login/authenticate/"
@@ -1092,6 +1110,9 @@ class InvoiceGenerator:
                 or (order["invoices"] is not None and not isinstance(order["invoices"], list))
                 or any(not isinstance(inv, dict) or not inv.get("id") for inv in (order["invoices"] or []))
                 or not isinstance(order.get("blocked"), bool)
+                or "price_elements" not in order
+                or (order["price_elements"] is not None and not isinstance(order["price_elements"], list))
+                or any(not isinstance(element, dict) for element in (order["price_elements"] or []))
                 or not isinstance(order.get("sum"), dict)
                 or order["sum"].get("value") is None):
             raise RuntimeError("Incomplete invoice order evidence; no mutations are allowed")
@@ -1204,6 +1225,7 @@ class InvoiceGenerator:
         stats = {
             "skipped_zero_total_orders": 0,
             "skipped_blocked_orders": 0,
+            "skipped_non_cod_orders": 0,
         }
 
         for order in orders:
@@ -1227,6 +1249,10 @@ class InvoiceGenerator:
                 continue
 
             if self._status_is_eligible(order) and not has_invoice:
+                if not self._is_cod_payment(order):
+                    stats["skipped_non_cod_orders"] += 1
+                    logger.debug("Order %s skipped - payment is not a verified COD method", order.get("order_num"))
+                    continue
                 filtered_orders.append(order)
                 logger.info(
                     "Order %s matches criteria for invoice generation - Status: %s - Total: %.2f",
@@ -1243,6 +1269,16 @@ class InvoiceGenerator:
                 )
 
         return filtered_orders, stats
+
+    def _is_cod_payment(self, order: Dict[str, Any]) -> bool:
+        elements = order.get("price_elements")
+        if not isinstance(elements, list) or any(not isinstance(row, dict) for row in elements):
+            return False
+        payments = [row for row in elements if row.get("type") == "payment"]
+        if len(payments) != 1:
+            return False
+        reference = payments[0].get("reference_id")
+        return not isinstance(reference, bool) and str(reference) in self.cod_payment_ids
 
     def _status_is_eligible(self, order: Dict[str, Any]) -> bool:
         if order.get("status_identity_unbound"):
@@ -1973,6 +2009,7 @@ def run_invoice_generation(
                 scan_max_pages=settings["scan_max_pages"], page_delay_seconds=settings["page_delay_seconds"],
                 read_attempts=settings["read_attempts"],
                 project=project_name,
+                cod_payment_ids=settings["cod_payment_ids"],
             )
             generator.operation_journal = journal
             if not dry_run and (not generator.web_session or not generator.validate_session()):
@@ -2060,6 +2097,7 @@ def run_invoice_generation(
             summary.matched_orders = len(candidates)
             summary.skipped_zero_total_orders = stats["skipped_zero_total_orders"]
             summary.skipped_blocked_orders = stats["skipped_blocked_orders"]
+            summary.skipped_non_cod_orders = stats["skipped_non_cod_orders"]
             summary.invoice_scan_pages = generator.scan_pages
             summary.invoice_scan_complete = True
             if journal:

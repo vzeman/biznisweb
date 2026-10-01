@@ -465,7 +465,7 @@ class Deployment:
         else:
             gate_command = ["python", "scripts/order_automation_host_gate.py", "--project", project, "--kind", kind]
             if kind == "invoice":
-                gate_command.append("--full-backlog")
+                gate_command.extend(["--full-backlog", "--require-cod-only"])
         overrides = {"containerOverrides": [{"name": "reporting", "command": gate_command}]}
         require(len(json.dumps(overrides).encode()) <= 8192, "candidate-command-too-large")
         response = self.ecs.run_task(
@@ -506,6 +506,7 @@ class Deployment:
         expected = {"marker": MARKER, "project": project, "kind": kind, "path": "/app", "dry_run": True}
         if kind == "invoice" and not old_image:
             expected["full_backlog"] = True
+            expected["payment_scope"] = "cod_only"
         markers = []
         token = None
         for _ in range(100):

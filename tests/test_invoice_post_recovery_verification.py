@@ -17,6 +17,7 @@ from scripts import verify_invoice_post_recovery as verifier
 def order(identity=1, **changes):
     return {"id": identity, "order_num": f"FIXTURE-{identity}", "pur_date": "2019-01-01",
             "status": {"id": 4, "name": "Odoslaná"}, "blocked": False,
+            "price_elements": [{"type": "payment", "reference_id": "7"}],
             "invoices": [], "sum": {"value": "100.50"}, **changes}
 
 
