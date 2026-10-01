@@ -101,7 +101,6 @@ query GetOrders($changed_from: DateTime, $params: OrderParams) {
       pur_date
       last_change
       blocked
-      price_elements { type reference_id title }
       status {
         id
         name
@@ -1101,7 +1100,8 @@ class InvoiceGenerator:
         return canonical_order(self.client, order)
 
     @staticmethod
-    def _validate_order_for_invoice_read(order: Any, *, allow_null_status: bool = False) -> None:
+    def _validate_order_for_invoice_read(order: Any, *, allow_null_status: bool = False,
+                                        require_payment_evidence: bool = True) -> None:
         if (not isinstance(order, dict) or not str(order.get("order_num") or "").strip()
                 or "status" not in order
                 or not ((allow_null_status and order["status"] is None)
@@ -1110,9 +1110,10 @@ class InvoiceGenerator:
                 or (order["invoices"] is not None and not isinstance(order["invoices"], list))
                 or any(not isinstance(inv, dict) or not inv.get("id") for inv in (order["invoices"] or []))
                 or not isinstance(order.get("blocked"), bool)
-                or "price_elements" not in order
-                or (order["price_elements"] is not None and not isinstance(order["price_elements"], list))
-                or any(not isinstance(element, dict) for element in (order["price_elements"] or []))
+                or (require_payment_evidence and (
+                    "price_elements" not in order
+                    or (order["price_elements"] is not None and not isinstance(order["price_elements"], list))
+                    or any(not isinstance(element, dict) for element in (order["price_elements"] or []))))
                 or not isinstance(order.get("sum"), dict)
                 or order["sum"].get("value") is None):
             raise RuntimeError("Incomplete invoice order evidence; no mutations are allowed")
@@ -1159,7 +1160,8 @@ class InvoiceGenerator:
 
         try:
             result_orders = scan_order_inventory(
-                read, lambda order: self._validate_order_for_invoice_read(order, allow_null_status=True),
+                read, lambda order: self._validate_order_for_invoice_read(
+                    order, allow_null_status=True, require_payment_evidence=False),
                 budget=budget, changed_from=changed_from, label="Invoice scan", logger=logger,
             )
         finally:
@@ -1249,6 +1251,18 @@ class InvoiceGenerator:
                 continue
 
             if self._status_is_eligible(order) and not has_invoice:
+                if "price_elements" not in order:
+                    # Old FLOX inventory rows can have a broken price_elements
+                    # resolver. Query payment only for a possible new invoice,
+                    # then recheck every condition on that exact fresh order.
+                    refreshed = self.fetch_order_for_invoice(order.get("order_num"))
+                    if str(refreshed.get("id")) != str(order.get("id")):
+                        raise RuntimeError("Invoice payment recheck returned another order identity")
+                    selected, recheck_stats = self.filter_orders_for_invoice([refreshed])
+                    filtered_orders.extend(selected)
+                    for key, value in recheck_stats.items():
+                        stats[key] += value
+                    continue
                 if not self._is_cod_payment(order):
                     stats["skipped_non_cod_orders"] += 1
                     logger.debug("Order %s skipped - payment is not a verified COD method", order.get("order_num"))
