@@ -1,12 +1,13 @@
-## 2026-10-01 ? ROY fulfillment incident investigation (in progress)
+## 2026-10-01 — ROY fulfillment audit: verified gaps, original print identity unresolved
 
 Date: 2026-10-01
 Repo: `vzeman/biznisweb`
 Branch: `codex/roy-4874-payment-audit-20261001`
-What changed: Created an isolated, read-only incident investigation and recorded the evidence boundary in `projects/roy/FULFILLMENT_INCIDENT_AUDIT_20261001.md`. No production code or business state changed.
-What is verified: Runtime digest matches the audited dashboard source. Native order history and persisted print acknowledgement refer to different duplicate orders; the discrepancy must be resolved before attributing the cause. The owner's later cancellation is a separate containment action.
-Known issues: Dashboard access logging is disabled; the snapshot/state bucket has no versioning. A print acknowledgement is independent of a PDF artifact and does not prove physical print contents. Private order evidence must not enter this public repo.
-Next exact step: Reconcile exact payment, print/PDF identity, shipment transition and invoice automation journal, then publish the evidence-backed findings and remediation requirements.
+What changed: Added a sanitized incident analysis, read-only evidence collector and offline PDF barcode verifier. No production fulfillment logic, configuration or business record was changed. Full findings and remediation acceptance criteria are in `projects/roy/FULFILLMENT_INCIDENT_AUDIT_20261001.md`.
+What is verified: Chameleoon created the unpaid-order shipment without COD; the ERP moved waiting directly to shipped one second later; the invoice runner then issued the invoice. The dashboard acknowledgement refers to the paid duplicate. Dashboard/PDF and invoice source match deployed immutable images. Recent scan: 248 orders in the selected window, 94 shipped with the relevant online method, one without paid invoice/payment entries. Offline barcode checks passed 9/9; existing dashboard/PDF/auth suites passed 64 tests.
+Known issues: Actual historical PDF/scanned input/lookup response are missing. Cached print authorization and acknowledgement without immutable PDF batch are confirmed gaps, not a proven initial trigger. The dashboard owns payment eligibility before printing; Chameleoon is not assigned a payment-validation responsibility. Strict payment-evidence reuse needs provider amount semantics validation. A diagnostic inadvertently exposed an integration credential in tool output; it must be rotated via the approved credential workflow, and is excluded from all saved evidence. Further live configuration inspection stopped. Public repository must contain no customer/order evidence.
+Evidence preservation: Five private evidence/report objects and a manifest were archived under `data/roy/order-automation/audits/2026-10-01/incident-evidence-20261001/` in the established reporting bucket. Public-access blocking and AES256 encryption were verified; all object hashes were verified by readback. Original runtime state objects were untouched. Manifest SHA-256: `a04cf6228d1b004ca378f1a69f32c0afa92afb77bc8d08ad8bc110c04ef36726`.
+Next exact step: Obtain the original warehouse PDF and, if available, shipment-time Chameleoon input/lookup trace, then correlate all identities. Implement fresh dashboard list/PDF payment gates and immutable batches on a separate reviewed remediation branch. No production fix has been deployed. No temporary persistent process was started.
 
 ## 2026-09-18 — VEVO report maturation charts deployed and rerun
 
