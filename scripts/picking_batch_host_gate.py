@@ -36,6 +36,12 @@ def main():
     from tests.test_picking_print_batches import PickingBatchHttpTests, PickingBatchTests
     suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(cls)
                                for cls in (PickingBatchHttpTests, PickingBatchTests))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromNames([
+        "tests.test_roy_operations_dashboard.RoyOperationsDashboardTests."
+        "test_pdf_download_metadata_preserves_cache_but_printing_invalidates_it",
+        "tests.test_roy_operations_dashboard.RoyOperationsDashboardTests."
+        "test_display_revision_rejects_operational_changes_and_unreadable_state",
+    ]))
     output = io.StringIO()
     result = unittest.TextTestRunner(stream=output).run(suite)
     if not result.wasSuccessful():
