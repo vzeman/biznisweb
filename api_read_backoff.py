@@ -131,7 +131,8 @@ def _status_codes(error: Exception, response_status_code: Any = None) -> set[int
 
 
 def read_retry_delay(error: Exception, *, attempt: int, response_headers: Any = None,
-                     response_status_code: Any = None, now: datetime | None = None) -> float | None:
+                     response_status_code: Any = None, now: datetime | None = None,
+                     retry_internal_partial: bool = False) -> float | None:
     """Return a safe query-only delay, or None when this failure must stop.
 
     429 represents the per-minute cost window. 509 is a daily/monthly quota and
@@ -140,8 +141,19 @@ def read_retry_delay(error: Exception, *, attempt: int, response_headers: Any = 
     Raw error messages and response bodies are never inspected or logged.
     """
     codes = _status_codes(error, response_status_code)
-    if 509 in codes or getattr(error, "data", None) is not None or _permanent_graphql_failure(error):
+    if 509 in codes or _permanent_graphql_failure(error):
         return None
+    if getattr(error, "data", None) is not None:
+        errors = getattr(error, "errors", None)
+        # Invoice reads may discard and retry the WHOLE query for FLOX's
+        # explicitly classified internal resolver failures. Never consume its
+        # partial rows, infer retryability from text, or replay a mutation.
+        if not (retry_internal_partial and type(error).__name__ == "TransportQueryError"
+                and isinstance(errors, list) and errors and all(
+                    isinstance(item, Mapping) and isinstance(item.get("extensions"), Mapping)
+                    and item["extensions"].get("category") == "internal"
+                    for item in errors)):
+            return None
     transient = bool(codes & _TRANSIENT_CODES) or (not codes and type(error).__name__ in _TRANSIENT_ERRORS)
     if not transient:
         return None

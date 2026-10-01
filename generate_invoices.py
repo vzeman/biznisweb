@@ -1067,7 +1067,8 @@ class InvoiceGenerator:
             except Exception as exc:
                 delay = read_retry_delay(exc, attempt=attempt,
                                          response_headers=getattr(transport, "response_headers", None),
-                                         response_status_code=getattr(transport, "response_status_code", None))
+                                         response_status_code=getattr(transport, "response_status_code", None),
+                                         retry_internal_partial=True)
                 if delay is None or attempt + 1 == self.read_attempts:
                     raise
                 wait(delay)

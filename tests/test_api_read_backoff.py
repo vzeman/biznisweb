@@ -89,6 +89,19 @@ class ApiReadBackoffTests(unittest.TestCase):
         # Messages alone must never be treated as structured permanent codes.
         self.assertEqual(60, read_retry_delay(TransportQueryError("FORBIDDEN"), attempt=0))
 
+    def test_explicit_invoice_opt_in_retries_only_all_internal_partial_errors(self):
+        internal = {"extensions": {"category": "internal"}, "path": ["getOrderList", "data", 18, "status"]}
+        error = TransportQueryError("private", errors=[internal], data={"getOrderList": {"data": []}})
+        self.assertIsNone(read_retry_delay(error, attempt=0))
+        self.assertEqual(60, read_retry_delay(error, attempt=0, retry_internal_partial=True))
+        self.assertIsNone(read_retry_delay(error, attempt=0, retry_internal_partial=True, response_status_code=509))
+        self.assertIsNone(read_retry_delay(error, attempt=0, retry_internal_partial=True, response_status_code=403))
+        for errors in ([], [internal, {"message": "Internal server error"}],
+                       [{"message": "Internal server error"}],
+                       [{"extensions": {"category": "internal", "code": "FORBIDDEN"}}]):
+            error = TransportQueryError("private", errors=errors, data={"getOrderList": None})
+            self.assertIsNone(read_retry_delay(error, attempt=0, retry_internal_partial=True))
+
     def test_failed_http_status_is_not_a_success_with_data_only_json(self):
         transport = ReadAwareRequestsHTTPTransport(url="https://example.test/api/graphql", retries=0)
         for status in (429, 509, 401, 308):

@@ -6,6 +6,7 @@ Branch: `codex/cod-invoice-release-evidence-20261001`
 
 Status: code merged and tested; NOT deployed. Both managed release attempts failed
 their production read-only gates. Original enabled production schedules were restored.
+The owner subsequently authorized resuming diagnosis and deploying all changes.
 
 ## Required behavior
 
@@ -159,3 +160,17 @@ reads or bypass the full-backlog gate to force promotion. Work stopped at this
 blocker under the owner's stop-on-error instruction. The shared managed release
 also checks the unchanged cancellation service; no cancellation behavior was
 changed by this invoice policy.
+
+## Resumed release diagnosis
+
+On the owner's explicit follow-up, `scripts/diagnose_invoice_inventory.py --project roy`
+read all 5,183 orders across 180 pages successfully without a web login, journal
+or mutation. The former resolver failure was not reproducible in that run.
+Invoice query reads now opt into the existing bounded retry mechanism for partial
+GraphQL errors only when all errors have FLOX's structured `category=internal`.
+Every failed response is discarded; the complete query is read again and validated.
+Persistent failures still abort the scan; authorization, permanent validation and
+quota errors are never overridden. Other query clients retain their original
+partial-error behavior. No mutation is accepted by the read retry path. Tests
+cover both a fresh successful response and exhausting the finite attempt count.
+Production release remains pending the complete exact-image host checks.

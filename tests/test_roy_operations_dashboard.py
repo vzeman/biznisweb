@@ -676,9 +676,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
     def test_operations_dashboard_has_explicit_print_confirmation_action(self) -> None:
         html = build_roy_operations_dashboard_html("roy")
 
-        self.assertIn("/api/operations/roy/picking-lists.pdf", html)
-        self.assertIn('href="/api/operations/roy/picking-lists.pdf?refresh=0"', html)
-        self.assertIn("pdfUrl.searchParams.set('refresh', '0');", html)
+        self.assertIn("/api/operations/${encodeURIComponent(project)}/picking-lists/download", html)
+        self.assertIn('<button id="pickingPdfLink"', html)
         self.assertIn("/api/operations/${encodeURIComponent(project)}/picking-lists/printed", html)
         self.assertIn("Označiť vytlačené", html)
 
@@ -686,8 +685,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         html = build_roy_operations_dashboard_html("roy")
 
         self.assertIn("function individualPickingPrintLink(order)", html)
-        self.assertIn("pdfUrl.searchParams.set('include_printed', '1');", html)
-        self.assertIn("pdfUrl.searchParams.set('order_num', orderNum);", html)
+        self.assertIn("downloadPickingPdf([link.dataset.printOrder], true)", html)
         self.assertIn('data-print-order="${safe(orderNum)}"', html)
         self.assertIn("Vytlačiť znova", html)
         self.assertIn("pickingPrintCell(order)", html)
@@ -824,7 +822,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("data-ready-pickup", html)
         self.assertIn("/ready", html)
         self.assertIn("Vysklad. PDF", html)
-        self.assertIn("/api/operations/roy/picking-lists.pdf", html)
+        self.assertIn("/api/operations/${encodeURIComponent(project)}/picking-lists/download", html)
         self.assertIn("seenFulfillableOrderKeys", html)
         self.assertIn("nová objednávka na odoslanie", html)
         self.assertIn("replace(/[\"\\\\]/g, '\\\\$&')", html)
