@@ -92,5 +92,31 @@ Actual print, inbound, exclusion and loss state changes still invalidate snapsho
 an unreadable state never validates a cached snapshot. Legacy ETag snapshots are
 upgraded in memory only after their exact storage revision has been verified. Regression tests cover both cache reuse
 after a download and invalidation after actual operational changes.
-The follow-up dashboard build/host/UI rollout is pending; invoice release is still
-source-bound to the first rollout and must finish before `main` advances.
+## Final deployed dashboard verification
+
+PR #595 merged as `7bce051d85019b37f2f0d4bfd44893f5d79b66ea`; successful build
+`36843340777` produced `sha256:4fec00b38699b2b182b87246f5de8c41716fe1d053454cf9a85923cddefe5665`.
+Both dashboards are RUNNING on this immutable digest with automatic deployments
+disabled. Their non-image settings and reporting schedules passed exact readback.
+
+- ROY candidate `446f707f0c9d48f99824daac82870783`, IP `172.31.31.2`, passed eight
+  isolated batch/cache tests, localhost marker and a 63,181-byte PDF preview.
+  App Runner operation `d8a7c061e5b94b5f86790dbbdd4ab756` succeeded.
+- VEVO candidate `320bd227504644298b34e9871373c0e6`, IP `172.31.2.1`, passed the
+  same eight tests, localhost marker and a 49,357-byte PDF preview.
+  App Runner operation `861279d3ba0d487fb0e9dcee66b8525f` succeeded.
+
+Both tasks exited 0, emitted their HTTP-server/port closure marker, and their
+temporary definitions are INACTIVE. Production authenticated health, policy HTML,
+operations API and PDF preview passed for both shops. ROY Chrome confirmed initial
+disabled acknowledgement, a completed individual reprint download, and the same
+filename/count after reload. Live rendering after reload completed in 1,777 ms.
+The test tab was closed immediately after evidence capture. VEVO Chrome remains
+`ERR_BLOCKED_BY_CLIENT`; this client restriction was not bypassed.
+
+The agent did not submit a real print acknowledgement. Later private state readback
+showed zero-new-orders acknowledgements for the reprint test batches, with no
+corresponding agent UI action; actor is unattributed and original print records
+were verified unchanged. Isolated HTTP/Node regressions cover actual marking and
+new-order races without live warehouse writes. Invoice rollout is tracked in
+`INVOICE_COD_ONLY.md` and `PROJECT_STATE.md`; no further dashboard rollout is pending.
