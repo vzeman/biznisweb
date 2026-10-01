@@ -31,6 +31,15 @@ def main():
     }
     assert identity["path"] == "/app" and identity["private_ips"]
     print("PICKING_BATCH_HOST_IDENTITY " + json.dumps(identity), flush=True)
+    # Run isolated writes before any live read can start background refreshes.
+    # All storage and upstream calls in these tests use synthetic dictionaries.
+    from tests.test_picking_print_batches import PickingBatchHttpTests, PickingBatchTests
+    suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(cls)
+                               for cls in (PickingBatchHttpTests, PickingBatchTests))
+    output = io.StringIO()
+    result = unittest.TextTestRunner(stream=output).run(suite)
+    if not result.wasSuccessful():
+        raise RuntimeError("Isolated batch host tests failed: " + output.getvalue())
     os.environ["LIVE_DASHBOARD_AUTH_USER"] = "host-check"
     os.environ["LIVE_DASHBOARD_AUTH_PASSWORD"] = secrets.token_urlsafe(32)
     token = base64.b64encode(("host-check:" + os.environ["LIVE_DASHBOARD_AUTH_PASSWORD"]).encode()).decode()
@@ -61,15 +70,6 @@ def main():
         assert live["project"] == project and live["marker"] == f"{project}-operations-dashboard"
         pdf = curl(f"/api/operations/{project}/picking-lists.pdf?preview=1&refresh=0")
         assert pdf.startswith(b"%PDF-") and len(pdf) > 1000
-        # These tests patch all storage and upstream reads; their HTTP writes
-        # affect only synthetic dictionaries, never production print state.
-        from tests.test_picking_print_batches import PickingBatchHttpTests, PickingBatchTests
-        suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(cls)
-                                   for cls in (PickingBatchHttpTests, PickingBatchTests))
-        output = io.StringIO()
-        result = unittest.TextTestRunner(stream=output).run(suite)
-        if not result.wasSuccessful():
-            raise RuntimeError("Isolated batch host tests failed: " + output.getvalue())
         proof.update({"synthetic_batch_tests": result.testsRun, "batch_races_verified": True,
                       "live_order_count": len(live["orders"]["orders"]), "preview_pdf_bytes": len(pdf)})
         assert json.loads(curl("/__picking_batch_marker")) == proof
