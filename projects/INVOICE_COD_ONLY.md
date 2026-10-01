@@ -21,7 +21,18 @@ The same prefix contains `independent-after-promotion.json`, SHA-256
 AES256 and verified by readback. ROY's first regular scheduled task
 `15f1a55225a14cc883ab8d2fc70a3014`, IP `172.31.23.197`, ran the new digest at
 10:20 UTC and exited 0 at 10:21 UTC; matched, created and failed counts were zero.
-The first regular VEVO run is the remaining verification step.
+VEVO's first regular task `5e3bbcb0f68b492498bd39f90b92cb61`, IP `172.31.23.156`,
+ran at 10:30 UTC and exited 0 at 10:31 UTC on the same new digest, also with
+matched, created and failed counts zero. Both were started by the existing
+scheduler, with unchanged `python invoice_runner.py --project <shop>` commands;
+neither was manually triggered for testing. Email and status-reconciliation
+failure counts were also zero. These runs verify normal production execution;
+with no eligible missing invoices, actual non-COD rejection is established by
+the policy regressions and host gates, not by these zero-candidate runs.
+The same private prefix contains `natural-runs-verified.json`, SHA-256
+`598c28b36fddca35e4d86c042f0db18c5aff0e76d9fb6410a69a03ba4cf82231`, with encrypted
+storage/readback verified. Both daily reporting tasks retain
+`REPORT_SKIP_INVOICES=true`. No deployment or verification remains pending.
 
 The release history below retains failed approaches and rollback evidence.
 Statements about inactive policy or pending deployment describe those earlier
