@@ -77,4 +77,20 @@ tests passed locally. Build `36834786881` is running; no runtime promotion yet.
 Release evidence is maintained on `codex/picking-release-evidence-20261001` while
 the exact merged checkout stays clean for deployment. Do not merge documentation
 or advance `main` until all source-bound promotions finish.
-Final deployed image, task/operation IDs and verification remain pending.
+The first rollout uses merged source `0e65d7d1bf1c42cb425e4c11ad88e6437215d3e1`
+and immutable digest `sha256:06417f96e5eeaf3f77318c81ea27c57bf3a38d91f45a9738830736e871d0d78c`.
+Both candidate host gates and App Runner promotions passed (see `PROJECT_STATE.md`).
+ROY Chrome verified the exact downloaded filename/count surviving reload without
+acknowledging any warehouse order. VEVO Chrome is client-blocked; both production
+services passed authenticated HTTP and PDF-preview readback.
+
+UI verification identified unnecessary full snapshot invalidation after recording
+a pending download: the storage ETag changes even though displayed operations do
+not. The follow-up cache fingerprint includes every normalized operational state
+section except `picking_pdf_batches`. S3 ETag conditional writes are unchanged.
+Actual print, inbound, exclusion and loss state changes still invalidate snapshots;
+an unreadable state never validates a cached snapshot. Legacy ETag snapshots keep
+their original comparison until refreshed. Regression tests cover both cache reuse
+after a download and invalidation after actual operational changes.
+The follow-up dashboard build/host/UI rollout is pending; invoice release is still
+source-bound to the first rollout and must finish before `main` advances.

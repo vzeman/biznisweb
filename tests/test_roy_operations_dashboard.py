@@ -931,6 +931,43 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                 )
             )
 
+    def test_pdf_download_metadata_preserves_cache_but_printing_invalidates_it(self) -> None:
+        settings = make_project_settings()
+        state = rod._empty_operations_state()
+        state["_storage_etag"] = '"before-download"'
+        cached = {"operations_state_revision": rod._operations_display_revision(state), "project": "roy"}
+        state["picking_pdf_batches"]["batch"] = {"order_nums": ["synthetic-order"]}
+        state["_storage_etag"] = '"after-download"'
+        with patch.dict(rod._CACHE, {"roy": (100.0, cached)}, clear=True), \
+             patch("roy_operations_dashboard.time.monotonic", return_value=100.0), \
+             patch("roy_operations_dashboard.load_project_settings", return_value=settings), \
+             patch("roy_operations_dashboard.load_roy_operations_state", return_value=state), \
+             patch("roy_operations_dashboard._load_shared_operations_snapshot", return_value=None), \
+             patch("roy_operations_dashboard._save_shared_operations_snapshot"), \
+             patch("roy_operations_dashboard.generate_roy_operations_snapshot", return_value={"project": "roy"}) as generate:
+            self.assertEqual(rod.get_cached_roy_operations_snapshot("roy")["cache"]["status"], "fresh")
+            generate.assert_not_called()
+            state["printed_picking_orders"]["synthetic-order"] = {"printed_at": "2026-10-01T00:00:00Z"}
+            self.assertEqual(rod.get_cached_roy_operations_snapshot("roy")["cache"]["status"], "refreshed")
+            generate.assert_called_once()
+
+    def test_display_revision_rejects_operational_changes_and_unreadable_state(self) -> None:
+        settings = make_project_settings()
+        state = rod._empty_operations_state()
+        payload = {"operations_state_revision": rod._operations_display_revision(state)}
+        for section in ("loss_acknowledgements", "inbound_orders", "inventory_restock_exclusions",
+                        "printed_picking_orders", "auto_cleared_inbound_orders", "picking_print_batches"):
+            with self.subTest(section=section):
+                changed = copy.deepcopy(state)
+                if isinstance(changed[section], list):
+                    changed[section].append({"changed": True})
+                else:
+                    changed[section]["synthetic"] = {"changed": True}
+                with patch("roy_operations_dashboard.load_roy_operations_state", return_value=changed):
+                    self.assertFalse(rod._snapshot_matches_operations_state("roy", settings, payload))
+        with patch("roy_operations_dashboard.load_roy_operations_state", side_effect=RuntimeError("unavailable")):
+            self.assertFalse(rod._snapshot_matches_operations_state("roy", settings, payload))
+
     def test_force_refresh_bypasses_stale_cache_and_generates_snapshot(self) -> None:
         project = "roy"
         settings = make_project_settings()
