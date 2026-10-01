@@ -3053,7 +3053,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                     self._send_download(pdf, content_type="application/pdf", filename=filename, batch=batch)
                 else:
                     if "order_nums" in body:
-                        raise ValueError("Najprv stiahnite nové PDF v tomto okne dashboardu.")
+                        raise ValueError("Obnovte stránku dashboardu (F5) a stiahnite nové PDF pred označením tlače.")
                     batch = acknowledge_picking_pdf_batch(operations_state, project, body.get("batch_id"))
                     storage = save_roy_operations_state(project, operations_state, project_settings)
                     self._send_json({"ok": True, "project": project, "batch": batch, "storage": storage})
