@@ -2,7 +2,7 @@
 
 Date: 2026-10-01
 Repo: `vzeman/biznisweb`
-Branch: `codex/cod-only-invoice-automation-20261001`
+Branch: `codex/cod-invoice-payment-read-20261001` (follow-up to the merged COD policy)
 
 ## Required behavior
 
@@ -29,7 +29,11 @@ localhost curl marker before promotion. No user-facing UI is changed.
 
 ## Identity policy
 
-Both discovery and exact-order queries now include `price_elements`.
+Exact-order queries include `price_elements`. The inventory deliberately excludes
+that nested resolver because FLOX fails to resolve it on some historical rows.
+Only a shipped, unblocked, positive-value order without a final invoice triggers
+the exact-order payment read; its identity and all eligibility conditions are
+then rechecked. A failed exact-order read cannot be treated as an empty backlog.
 Only one element of type `payment` may authorize creation; its `reference_id`
 must match the explicit per-shop `invoice_generation.cod_payment_ids` allowlist.
 Shipping references, free-text title matches, unknown IDs, missing payment data
@@ -80,14 +84,33 @@ ECR build, so changing the `latest` alias cannot silently update another service
 PR #590 merged as `b220bc9e63748cf0d64dc23cf1a4da289fe00cef` after all six CI checks
 passed (including Linux and Windows). Exact-image build `36822990728` succeeded:
 `sha256:9014681bfb3db412e6659004ad157b5d2eea93e090507abc8c10cdedf5052c91`.
-Managed deployment `36823714684` is running on the exact merged source.
+Managed deployment `36823714684` rejected its candidate on the exact merged source.
 All five source schedules matched their independent before-deploy snapshot.
 The private snapshot is `data/roy/order-automation/deployments/b220bc9e63748cf0d64dc23cf1a4da289fe00cef/cod-policy-independent-before.json`,
 SHA-256 `a7d279f69532817ccfc087e7e20330e567a851d7114b67f40cec5948cb06dc47`.
 Both daily reporting tasks explicitly set `REPORT_SKIP_INVOICES=true`, so their
 unchanged images cannot bypass this standalone invoice policy.
 
-Next exact step: observe managed host-gated deployment; verify all four invoice schedule
+The first managed candidate failed safely: ROY task
+`c972efe0a6204ad0b97acffc534ec702`, IP `172.31.11.236`, definition
+`roy-invoice-daily:12`, `/app`, exact new digest, exited 1 after FLOX returned
+`Internal server error` at `getOrderList.data[4].price_elements`. Its synthetic
+COD filter check passed before the inventory read failed. No candidate was
+promoted and no financial mutation was attempted. Managed receipt
+`data/roy/order-automation/deployments/b220bc9e63748cf0d64dc23cf1a4da289fe00cef/0188d0f4602c4811bfe3d2749dc4df29.json`
+records `original-schedules-and-state-policies-restored`. Independent readback
+confirmed all five originals ENABLED on invoice definitions ROY `:11`, VEVO `:9`
+and cancellation `:42`.
+
+The follow-up avoids the broken historical collection resolver while retaining
+the mandatory fresh payment gate before every financial write. Added tests prove
+the inventory omits that field, only potential candidates need a payment read,
+online candidates are rejected, fresh status/identity changes are honored and
+read failure is not silently swallowed. All 1,009 CI-suite tests passed locally.
+Read-only production checks of the first 30 historical rows passed on both shops
+with the corrected inventory query; no document was created.
+
+Next exact step: full regression, follow-up PR/merge/build and repeat managed host-gated deployment; verify all four invoice schedule
 targets and subsequent natural runs. The shared managed deployment also verifies
 the unchanged ROY cancellation service; its business behavior is outside this
 change. No local server, worker, watcher, tunnel or persistent process is needed.

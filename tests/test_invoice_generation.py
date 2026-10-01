@@ -17,6 +17,7 @@ from generate_invoices import (
     InvoiceGenerator,
     InvoiceRunSummary,
     PREINVOICE_ORDER_MUTATION,
+    ORDER_QUERY,
     _parse_native_response_object,
     _status_matches_invoice_generation,
     reconcile_existing_invoice_statuses,
@@ -957,6 +958,63 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Incomplete invoice order evidence"):
             self.run_fixture()
         self.assertEqual({}, self.store.read()[0]["last_scan"])
+
+    def test_inventory_avoids_historical_payment_resolver_and_checks_only_candidates(self):
+        document = getattr(ORDER_QUERY, "document", ORDER_QUERY)
+        self.assertNotIn("price_elements", print_ast(document))
+        original = self.api.execute
+        old = invoice_order("already-invoiced", id="2", invoices=[{"id": "known"}])
+        self.api.extra_orders.append(old)
+
+        def execute(query, variable_values=None):
+            response = original(query, variable_values)
+            if query is ORDER_QUERY:
+                for row in response["getOrderList"]["data"]:
+                    row.pop("price_elements", None)
+            return response
+
+        with patch.object(self.api, "execute", side_effect=execute):
+            summary = self.run_fixture()
+        self.assertEqual(1, summary.created_invoices)
+        self.assertTrue(any(call.get("order_num") == self.order["order_num"] for call in self.api.calls))
+        self.assertFalse(any(call.get("order_num") == old["order_num"] for call in self.api.calls))
+
+    def test_inventory_payment_recheck_can_exclude_a_shipped_online_order(self):
+        original = self.api.execute
+        self.order["price_elements"] = [{"type": "payment", "reference_id": "18"}]
+
+        def execute(query, variable_values=None):
+            response = original(query, variable_values)
+            if query is ORDER_QUERY:
+                for row in response["getOrderList"]["data"]:
+                    row.pop("price_elements", None)
+            return response
+
+        with patch.object(self.api, "execute", side_effect=execute):
+            summary = self.run_fixture()
+        self.assertEqual((0, 1), (summary.created_invoices, summary.skipped_non_cod_orders))
+        self.assertEqual([], self.api.preparation_calls)
+        self.assertEqual([], self.web.get_urls)
+
+    def test_inventory_payment_recheck_does_not_trust_stale_status_or_identity(self):
+        discovery = deepcopy(self.order)
+        discovery.pop("price_elements")
+        for changes in ({"status": {"id": 1, "name": "Waiting"}}, {"invoices": [{"id": "existing"}]},
+                        {"blocked": True}, {"sum": {"value": 0}}):
+            with self.subTest(changes=changes), patch.object(
+                self.generator, "fetch_order_for_invoice", return_value={**self.order, **changes}
+            ):
+                self.assertEqual([], self.generator.filter_orders_for_invoice([discovery])[0])
+        with patch.object(self.generator, "fetch_order_for_invoice", return_value={**self.order, "id": "999"}):
+            with self.assertRaisesRegex(RuntimeError, "another order identity"):
+                self.generator.filter_orders_for_invoice([discovery])
+
+    def test_inventory_payment_recheck_error_cannot_be_treated_as_empty_backlog(self):
+        discovery = deepcopy(self.order)
+        discovery.pop("price_elements")
+        with patch.object(self.generator, "fetch_order_for_invoice", side_effect=RuntimeError("provider read failed")):
+            with self.assertRaisesRegex(RuntimeError, "provider read failed"):
+                self.generator.filter_orders_for_invoice([discovery])
 
     def test_both_project_policies_allow_verified_cod_ids_and_reject_card_ids(self):
         expected = {"roy": {"7", "23", "26", "28", "31", "33", "36"},
