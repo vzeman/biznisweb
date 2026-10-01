@@ -8,7 +8,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import daily_report_runner as daily_runner
 from daily_report_runner import maybe_run_invoice_automation, parse_args as parse_daily_report_args
@@ -1214,6 +1214,31 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
                 self.generator.fetch_order_for_invoice(self.order["order_num"])
         self.assertEqual(1, request.call_count)
         sleep.assert_not_called()
+        self.assertEqual([], self.web.get_urls)
+
+    @patch("generate_invoices.time.sleep")
+    def test_internal_partial_page_is_discarded_then_fresh_page_is_validated(self, _sleep):
+        error = TransportQueryError("synthetic", data=invoice_page([{**self.order, "order_num": "UNTRUSTED"}]),
+                                    errors=[{"extensions": {"category": "internal"},
+                                             "path": ["getOrderList", "data", 0, "status"]}])
+        self.generator.read_attempts = 3
+        self.generator.client = SimpleNamespace(execute=Mock())
+        self.generator.client.execute.side_effect = [error, invoice_page([self.order]), invoice_page([self.order])]
+        result = self.generator._fetch_order_pages()
+        self.assertEqual([self.order["order_num"]], [row["order_num"] for row in result])
+        self.assertEqual(3, self.generator.client.execute.call_count)
+        self.assertEqual([], self.web.get_urls)
+
+    @patch("generate_invoices.time.sleep")
+    def test_persistent_internal_partial_error_still_blocks_scan_and_creation(self, _sleep):
+        error = TransportQueryError("synthetic", data=invoice_page([self.order]),
+                                    errors=[{"extensions": {"category": "internal"}}])
+        self.generator.read_attempts = 3
+        self.generator.client = SimpleNamespace(execute=Mock())
+        self.generator.client.execute.side_effect = error
+        with self.assertRaises(TransportQueryError):
+            self.generator._fetch_order_pages()
+        self.assertEqual(3, self.generator.client.execute.call_count)
         self.assertEqual([], self.web.get_urls)
 
     def test_data_only_http_failure_never_becomes_invoice_evidence(self):

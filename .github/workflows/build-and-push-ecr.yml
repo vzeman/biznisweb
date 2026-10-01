@@ -45,6 +45,9 @@ on:
       - daily_report_runner.py
       - dashboard_modern.py
       - live_dashboard_server.py
+      - picking_print_batches.py
+      - scripts/picking_batch_host_gate.py
+      - scripts/deploy_picking_batch_dashboard.py
       - live_dashboard_maintenance.py
       - production_board.py
       - operations_inventory.py

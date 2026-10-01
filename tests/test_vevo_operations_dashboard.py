@@ -142,7 +142,7 @@ class VevoOperationsTests(unittest.TestCase):
         self.assertIn("VEVO operations dashboard", html)
         self.assertIn('data-marker="vevo-operations-dashboard"', html)
         self.assertIn('href="/manufacturing/vevo"', html)
-        self.assertIn('href="/api/operations/vevo/picking-lists.pdf', html)
+        self.assertIn('<button id="pickingPdfLink"', html)
         self.assertNotIn('/api/operations/roy/', html)
         self.assertNotIn('__SHOP', html)
         self.assertIn('ROY operations dashboard', build_roy_operations_dashboard_html("roy"))

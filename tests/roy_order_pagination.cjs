@@ -59,7 +59,8 @@ assert.deepEqual(visited, Array.from({length:57}, (_, i) => i + 1));
 assert.equal(control('[data-orders-page="next"]').disabled, true);
 assert.equal(control('[data-orders-range]').textContent, '51–57 z 57 objednávok');
 for (const nav of navs) assert.equal(nav.querySelector('[data-orders-page-label]').textContent, 'Strana 6 z 6');
-assert.equal(new URL(ids.get('pickingPdfLink').href, 'https://dashboard.example').searchParams.getAll('order_num').length, 57);
+assert.match(ids.get('pickingPdfLink').textContent, /\(57\)/);
+assert.equal(run('currentUnprintedPickingOrderNums().length'), 57);
 assert.match(ids.get('ordersBody').innerHTML, /data-print-order="57"/);
 assert.match(ids.get('ordersMeta').textContent, /^57 objednávok/);
 

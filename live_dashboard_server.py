@@ -24,13 +24,13 @@ from live_dashboard_maintenance import (
     public_maintenance_status,
 )
 from production_board import get_cached_production_board_snapshot, resolve_production_board_settings
+from picking_print_batches import acknowledge_picking_pdf_batch, register_picking_pdf_batch
 from roy_operations_dashboard import (
     acknowledge_loss_product,
     clear_inbound_stock_order,
     exclude_inventory_restock_alert,
     get_cached_roy_operations_snapshot,
     load_roy_operations_state,
-    mark_picking_orders_printed,
     mark_personal_pickup_ready,
     mark_personal_pickup_shipped,
     resolve_roy_operations_settings,
@@ -1324,13 +1324,14 @@ def build_roy_operations_dashboard_html(
       <div class="actions">
         <button id="soundToggleBtn" class="sound" type="button" aria-pressed="false">Zvuk vyp.</button>
         __MANUFACTURING_LINK__
-        <a id="pickingPdfLink" class="button" href="/api/operations/__SHOP_KEY__/picking-lists.pdf?refresh=0" target="_blank" rel="noopener">Vysklad. PDF</a>
-        <button id="markPickingPrintedBtn" type="button">Označiť vytlačené</button>
+        <button id="pickingPdfLink" class="button" type="button" data-project="__SHOP_KEY__">Vysklad. PDF</button>
+        <button id="markPickingPrintedBtn" type="button" disabled>Označiť vytlačené</button>
         <button id="refreshBtn" class="primary" type="button">Refresh</button>
         <a class="button" href="/">Dashboardy</a>
       </div>
     </header>
     <div id="messageBox" class="hidden"></div>
+    <p id="pickingBatchNote" class="muted" aria-live="polite" data-picking-policy="pdf-batch-v1">Najprv stiahnite PDF v tomto okne.</p>
     <section class="alert-grid" id="alertGrid"></section>
     <p id="inventoryQualityNote" class="muted" hidden></p>
     <section class="panel">
@@ -1561,6 +1562,13 @@ def build_roy_operations_dashboard_html(
       }
     }
     let latestData = null;
+    const pickingBatchStorageKey = `picking:${project}:last-downloaded:v1`;
+    let downloadedPickingBatch = null;
+    let pickingBusy = false;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(pickingBatchStorageKey) || 'null');
+      if (saved && saved.project === project && /^[a-f0-9]{32}$/.test(saved.batchId) && saved.count > 0) downloadedPickingBatch = saved;
+    } catch (_error) { /* A blocked storage area must not prevent this tab from downloading. */ }
     let refreshTimer = null;
     let kpiScope = 'monthly';
     let ordersPage = 1;
@@ -2002,17 +2010,18 @@ def build_roy_operations_dashboard_html(
     }
     function updatePickingControls() {
       const orderNums = currentUnprintedPickingOrderNums();
-      const pdfUrl = new URL(`/api/operations/${encodeURIComponent(project)}/picking-lists.pdf`, window.location.origin);
-      pdfUrl.searchParams.set('refresh', '0');
-      orderNums.forEach((orderNum) => pdfUrl.searchParams.append('order_num', orderNum));
       const link = el('pickingPdfLink');
       const markButton = el('markPickingPrintedBtn');
-      link.href = `${pdfUrl.pathname}${pdfUrl.search}`;
       link.textContent = `Vysklad. PDF (${fmtInt(orderNums.length)})`;
-      link.classList.toggle('disabled', !orderNums.length);
-      link.setAttribute('aria-disabled', orderNums.length ? 'false' : 'true');
-      markButton.disabled = !orderNums.length;
-      markButton.textContent = `Označiť vytlačené (${fmtInt(orderNums.length)})`;
+      link.disabled = pickingBusy || !orderNums.length;
+      link.classList.toggle('disabled', pickingBusy || !orderNums.length);
+      link.setAttribute('aria-disabled', !pickingBusy && orderNums.length ? 'false' : 'true');
+      markButton.disabled = pickingBusy || !downloadedPickingBatch;
+      markButton.textContent = downloadedPickingBatch
+        ? `Označiť vytlačené (${fmtInt(downloadedPickingBatch.count)})` : 'Označiť vytlačené';
+      el('pickingBatchNote').textContent = downloadedPickingBatch
+        ? `Posledné stiahnuté PDF v tomto okne: ${fmtInt(downloadedPickingBatch.count)} objednávok · ${downloadedPickingBatch.filename}`
+        : 'Najprv stiahnite PDF v tomto okne. Označenie platí iba pre jeho objednávky.';
     }
     function pickingPrintBadge(order) {
       if (!order.picking_printed) return '<span class="badge good">nové</span>';
@@ -2022,13 +2031,8 @@ def build_roy_operations_dashboard_html(
     function individualPickingPrintLink(order) {
       const orderNum = String(order.order_num || order.id || '').trim();
       if (!orderNum) return '';
-      const pdfUrl = new URL(`/api/operations/${encodeURIComponent(project)}/picking-lists.pdf`, window.location.origin);
-      pdfUrl.searchParams.set('refresh', '0');
-      pdfUrl.searchParams.set('include_printed', '1');
-      pdfUrl.searchParams.set('order_num', orderNum);
       const label = order.picking_printed ? 'Vytlačiť znova' : 'Vytlačiť';
-      const href = `${pdfUrl.pathname}${pdfUrl.search}`;
-      return `<a class="button order-print-button" data-print-order="${safe(orderNum)}" href="${safe(href)}" target="_blank" rel="noopener" aria-label="${safe(`${label} objednávku ${orderNum}`)}">${safe(label)}</a>`;
+      return `<button type="button" class="button order-print-button" data-print-order="${safe(orderNum)}" aria-label="${safe(`${label} objednávku ${orderNum}`)}">${safe(label)}</button>`;
     }
     function pickingPrintCell(order) {
       return `<div class="print-cell">${pickingPrintBadge(order)}${individualPickingPrintLink(order)}</div>`;
@@ -2450,30 +2454,76 @@ def build_roy_operations_dashboard_html(
         showMessage(error instanceof Error ? error.message : String(error));
       }
     }
-    async function markPickingPrinted() {
-      const orderNums = currentUnprintedPickingOrderNums();
-      if (!orderNums.length) {
-        showMessage('Nie sú žiadne nevytlačené objednávky na označenie.', true);
-        return;
+    function rememberPickingBatch(batch) {
+      downloadedPickingBatch = batch;
+      try {
+        if (batch) sessionStorage.setItem(pickingBatchStorageKey, JSON.stringify(batch));
+        else sessionStorage.removeItem(pickingBatchStorageKey);
+      } catch (_error) { /* In-memory batch binding remains valid. */ }
+    }
+    async function downloadPickingPdf(orderNums, includePrinted = false) {
+      if (pickingBusy || !orderNums.length) return;
+      pickingBusy = true;
+      updatePickingControls();
+      let blobUrl;
+      try {
+        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/picking-lists/download`, {
+          method: 'POST', cache: 'no-store',
+          headers: { 'X-Operations-Action': 'dashboard-action', 'Content-Type': 'application/json' },
+          body: JSON.stringify({order_nums: orderNums, include_printed: includePrinted}),
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || `HTTP ${response.status}`);
+        }
+        const blob = await response.blob();
+        const batchId = response.headers.get('X-Picking-Batch-Id') || '';
+        const count = Number(response.headers.get('X-Picking-Order-Count'));
+        const filename = response.headers.get('X-Picking-Filename') || '';
+        if (!/^[a-f0-9]{32}$/.test(batchId) || !Number.isInteger(count) || count <= 0
+            || !filename || await blob.slice(0, 5).text() !== '%PDF-') {
+          throw new Error('Stiahnuté PDF nemá platnú dávku. Skúste stiahnuť znova.');
+        }
+        blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        rememberPickingBatch({project, batchId, count, filename});
+        showMessage(`PDF pripravené na tlač: ${fmtInt(count)} objednávok. Po vytlačení potvrďte túto dávku.`, true);
+      } catch (error) {
+        showMessage(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (blobUrl) setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+        pickingBusy = false;
+        updatePickingControls();
       }
-      if (!window.confirm(`Označiť ${orderNums.length} objednávok z posledného PDF ako vytlačené?`)) return;
-      const button = el('markPickingPrintedBtn');
-      button.disabled = true;
+    }
+    async function markPickingPrinted() {
+      const batch = downloadedPickingBatch;
+      if (pickingBusy || !batch) return;
+      if (!window.confirm(`Označiť ${batch.count} objednávok z PDF „${batch.filename}“ ako vytlačené?`)) return;
+      pickingBusy = true;
+      updatePickingControls();
       try {
         const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/picking-lists/printed`, {
           method:'POST',
           cache:'no-store',
           headers:{ 'X-Operations-Action':'dashboard-action', 'Content-Type':'application/json' },
-          body: JSON.stringify({ order_nums: orderNums }),
+          body: JSON.stringify({ batch_id: batch.batchId }),
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        rememberPickingBatch(null);
         showMessage(`Označené ako vytlačené: ${fmtInt((data.batch || {}).order_count)} objednávok.`, true);
         await loadDashboard(true);
       } catch (error) {
         showMessage(error instanceof Error ? error.message : String(error));
       } finally {
-        button.disabled = false;
+        pickingBusy = false;
+        updatePickingControls();
       }
     }
     async function acknowledgeLossProduct(input) {
@@ -2502,11 +2552,16 @@ def build_roy_operations_dashboard_html(
     el('refreshBtn').addEventListener('click', () => loadDashboard(false));
     el('markPickingPrintedBtn').addEventListener('click', () => markPickingPrinted());
     el('pickingPdfLink').addEventListener('click', (event) => {
-      if (!currentUnprintedPickingOrderNums().length) {
-        event.preventDefault();
-        showMessage('Nie sú žiadne nevytlačené objednávky na PDF.', true);
-      }
+      event.preventDefault();
+      downloadPickingPdf(currentUnprintedPickingOrderNums());
     });
+    document.addEventListener('click', (event) => {
+      const link = event.target.closest('[data-print-order]');
+      if (!link) return;
+      event.preventDefault();
+      downloadPickingPdf([link.dataset.printOrder], true);
+    });
+    updatePickingControls();
     initializeOrderSound();
     initializeOrdersPagination();
     document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
@@ -2557,13 +2612,18 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             # A response cannot be recovered after that connection is gone.
             return
 
-    def _send_download(self, body: bytes, *, content_type: str, filename: str, status: int = 200) -> None:
+    def _send_download(self, body: bytes, *, content_type: str, filename: str, status: int = 200,
+                       batch: Optional[Dict[str, Any]] = None) -> None:
         ascii_filename = "".join(ch if ch.isalnum() or ch in ".-_" else "_" for ch in filename) or "download.pdf"
         try:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
+            if batch:
+                self.send_header("X-Picking-Batch-Id", batch["batch_id"])
+                self.send_header("X-Picking-Order-Count", str(batch["order_count"]))
+                self.send_header("X-Picking-Filename", ascii_filename)
             self.send_header(
                 "Content-Disposition",
                 f"attachment; filename=\"{ascii_filename}\"; filename*=UTF-8''{quote(filename)}",
@@ -2946,7 +3006,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             and parts[0] == "api"
             and parts[1] == "operations"
             and parts[3] == "picking-lists"
-            and parts[4] == "printed"
+            and parts[4] in {"printed", "download"}
         ):
             project = parts[2]
             if project not in projects:
@@ -2955,28 +3015,48 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
             if project not in {"roy", "vevo"}:
                 self._send_json({"error": f"Picking-list printing is not enabled for '{project}'."}, status=404)
                 return
+            if not is_trusted_roy_operations_action_request(
+                content_type=self.headers.get("Content-Type"),
+                action_header=("inventory-restock-preference" if self.headers.get("X-Operations-Action") == "dashboard-action" else ""),
+                sec_fetch_site=self.headers.get("Sec-Fetch-Site"),
+                origin=self.headers.get("Origin"), host=self.headers.get("Host"),
+            ):
+                self._send_json({"error": "Untrusted picking action request."}, status=403)
+                return
             try:
                 body = self._read_json_body()
-                requested_order_nums = body.get("order_nums")
-                if not isinstance(requested_order_nums, list) or not requested_order_nums:
-                    raise ValueError("order_nums must contain at least one order number.")
                 project_settings = load_project_settings(project)
-                payload = get_cached_roy_operations_snapshot(
-                    project,
-                    report_payload=read_latest_dashboard_payload(project),
-                    force_refresh=False,
-                )
-                all_orders = ((payload.get("orders") or {}).get("orders") or [])
+                if not resolve_roy_operations_settings(project_settings)["enabled"]:
+                    raise ValueError("Operations dashboard is not enabled.")
                 operations_state = load_roy_operations_state(project, project_settings, require_configured_remote=True)
-                orders = select_picking_orders_for_print(
-                    all_orders,
-                    operations_state,
-                    order_nums=requested_order_nums,
-                    include_printed=False,
-                )
-                batch = mark_picking_orders_printed(operations_state, orders)
-                storage = save_roy_operations_state(project, operations_state, project_settings)
-                self._send_json({"ok": True, "project": project, "batch": batch, "storage": storage})
+                if parts[4] == "download":
+                    requested = body.get("order_nums")
+                    if (not isinstance(requested, list) or not requested
+                            or any(not isinstance(value, str) or not value.strip() for value in requested)
+                            or not isinstance(body.get("include_printed", False), bool)):
+                        raise ValueError("Vyberte objednávky na stiahnutie PDF.")
+                    payload = get_cached_roy_operations_snapshot(
+                        project, report_payload=read_latest_dashboard_payload(project), force_refresh=False,
+                    )
+                    orders = select_picking_orders_for_print(
+                        ((payload.get("orders") or {}).get("orders") or []), operations_state,
+                        order_nums=requested, include_printed=body.get("include_printed", False),
+                    )
+                    if not orders:
+                        raise ValueError("Žiadna z vybraných objednávok už nie je dostupná na tlač. Obnovte dashboard.")
+                    pdf = build_roy_picking_lists_pdf(orders, project=project)
+                    filename = build_roy_picking_lists_filename(orders, project=project)
+                    batch = register_picking_pdf_batch(operations_state, project, orders, pdf, filename)
+                    filename = filename.removesuffix(".pdf") + "-" + batch["batch_id"][:8] + ".pdf"
+                    batch["filename"] = filename
+                    save_roy_operations_state(project, operations_state, project_settings)
+                    self._send_download(pdf, content_type="application/pdf", filename=filename, batch=batch)
+                else:
+                    if "order_nums" in body:
+                        raise ValueError("Obnovte stránku dashboardu (F5) a stiahnite nové PDF pred označením tlače.")
+                    batch = acknowledge_picking_pdf_batch(operations_state, project, body.get("batch_id"))
+                    storage = save_roy_operations_state(project, operations_state, project_settings)
+                    self._send_json({"ok": True, "project": project, "batch": batch, "storage": storage})
             except Exception as exc:
                 self._send_json({"error": str(exc)}, status=400)
             return

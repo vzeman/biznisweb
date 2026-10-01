@@ -384,6 +384,7 @@ def _empty_operations_state() -> Dict[str, Any]:
         "auto_cleared_inbound_orders": [],
         "printed_picking_orders": {},
         "picking_print_batches": [],
+        "picking_pdf_batches": {},
     }
 
 
@@ -530,6 +531,7 @@ def _normalize_operations_state(raw: Any) -> Dict[str, Any]:
         "inbound_orders",
         "inventory_restock_exclusions",
         "printed_picking_orders",
+        "picking_pdf_batches",
     ):
         values = raw.get(section) if isinstance(raw.get(section), dict) else {}
         state[section] = {
@@ -711,9 +713,10 @@ def mark_picking_orders_printed(
     orders: Iterable[Dict[str, Any]],
     *,
     printed_at: Optional[str] = None,
+    batch_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     printed_at = printed_at or _state_now_iso()
-    batch_id = "picking-" + "".join(ch for ch in printed_at if ch.isdigit())[:14]
+    batch_id = batch_id or "picking-" + "".join(ch for ch in printed_at if ch.isdigit())[:14]
     printed = state.setdefault("printed_picking_orders", {})
     if not isinstance(printed, dict):
         printed = {}
