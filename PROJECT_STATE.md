@@ -1,3 +1,13 @@
+## 2026-10-01 ? ROY fulfillment incident investigation (in progress)
+
+Date: 2026-10-01
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-4874-payment-audit-20261001`
+What changed: Created an isolated, read-only incident investigation and recorded the evidence boundary in `projects/roy/FULFILLMENT_INCIDENT_AUDIT_20261001.md`. No production code or business state changed.
+What is verified: Runtime digest matches the audited dashboard source. Native order history and persisted print acknowledgement refer to different duplicate orders; the discrepancy must be resolved before attributing the cause. The owner's later cancellation is a separate containment action.
+Known issues: Dashboard access logging is disabled; the snapshot/state bucket has no versioning. A print acknowledgement is independent of a PDF artifact and does not prove physical print contents. Private order evidence must not enter this public repo.
+Next exact step: Reconcile exact payment, print/PDF identity, shipment transition and invoice automation journal, then publish the evidence-backed findings and remediation requirements.
+
 ## 2026-09-18 — VEVO report maturation charts deployed and rerun
 
 Date: 2026-09-18, 03:26 UTC
