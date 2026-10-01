@@ -935,9 +935,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         settings = make_project_settings()
         state = rod._empty_operations_state()
         state["_storage_etag"] = '"before-download"'
-        cached = {"operations_state_revision": rod._operations_display_revision(state), "project": "roy"}
-        state["picking_pdf_batches"]["batch"] = {"order_nums": ["synthetic-order"]}
-        state["_storage_etag"] = '"after-download"'
+        cached = {"operations_state_revision": state["_storage_etag"], "project": "roy"}
         with patch.dict(rod._CACHE, {"roy": (100.0, cached)}, clear=True), \
              patch("roy_operations_dashboard.time.monotonic", return_value=100.0), \
              patch("roy_operations_dashboard.load_project_settings", return_value=settings), \
@@ -945,6 +943,11 @@ class RoyOperationsDashboardTests(unittest.TestCase):
              patch("roy_operations_dashboard._load_shared_operations_snapshot", return_value=None), \
              patch("roy_operations_dashboard._save_shared_operations_snapshot"), \
              patch("roy_operations_dashboard.generate_roy_operations_snapshot", return_value={"project": "roy"}) as generate:
+            # The existing shared/worker cache is upgraded only after exact ETag validation.
+            self.assertEqual(rod.get_cached_roy_operations_snapshot("roy")["cache"]["status"], "fresh")
+            self.assertTrue(cached["operations_state_revision"].startswith("state-v1:"))
+            state["picking_pdf_batches"]["batch"] = {"order_nums": ["synthetic-order"]}
+            state["_storage_etag"] = '"after-download"'
             self.assertEqual(rod.get_cached_roy_operations_snapshot("roy")["cache"]["status"], "fresh")
             generate.assert_not_called()
             state["printed_picking_orders"]["synthetic-order"] = {"printed_at": "2026-10-01T00:00:00Z"}

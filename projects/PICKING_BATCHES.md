@@ -89,8 +89,8 @@ a pending download: the storage ETag changes even though displayed operations do
 not. The follow-up cache fingerprint includes every normalized operational state
 section except `picking_pdf_batches`. S3 ETag conditional writes are unchanged.
 Actual print, inbound, exclusion and loss state changes still invalidate snapshots;
-an unreadable state never validates a cached snapshot. Legacy ETag snapshots keep
-their original comparison until refreshed. Regression tests cover both cache reuse
+an unreadable state never validates a cached snapshot. Legacy ETag snapshots are
+upgraded in memory only after their exact storage revision has been verified. Regression tests cover both cache reuse
 after a download and invalidation after actual operational changes.
 The follow-up dashboard build/host/UI rollout is pending; invoice release is still
 source-bound to the first rollout and must finish before `main` advances.

@@ -533,8 +533,12 @@ def _snapshot_matches_operations_state(
         return False
     if snapshot_revision.startswith("state-v1:"):
         return snapshot_revision == _operations_display_revision(state)
-    # Existing shared snapshots stay usable until a real state change/refresh.
-    return snapshot_revision == str(state.get("_storage_etag") or "").strip()
+    # Upgrade a legacy cached payload only after its exact storage revision was
+    # verified. This avoids a full upstream scan on the first post-upgrade PDF.
+    if snapshot_revision == str(state.get("_storage_etag") or "").strip():
+        payload["operations_state_revision"] = _operations_display_revision(state)
+        return True
+    return False
 
 
 def _normalize_operations_state(raw: Any) -> Dict[str, Any]:
