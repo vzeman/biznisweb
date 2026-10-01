@@ -3,6 +3,14 @@ name: Deploy Order Automations
 on:
   workflow_dispatch:
     inputs:
+      scope:
+        description: Services to update; invoices preserves the cancellation runtime
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - invoices
       paused_incident_key:
         description: Reviewed private incident key for the exact four paused invoice schedules
         required: false
@@ -53,6 +61,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - name: Verify candidates and promote exact image
         env:
+          DEPLOYMENT_SCOPE: ${{ inputs.scope }}
           PAUSED_INCIDENT_KEY: ${{ inputs.paused_incident_key }}
           PAUSED_INCIDENT_SHA256: ${{ inputs.paused_incident_sha256 }}
         run: |
@@ -62,6 +71,7 @@ jobs:
           import sys
 
           command = [sys.executable, "scripts/deploy_order_automations.py", "--commit", os.environ["GITHUB_SHA"]]
+          command += ["--scope", os.environ.get("DEPLOYMENT_SCOPE") or "all"]
           key = os.environ.get("PAUSED_INCIDENT_KEY", "")
           digest = os.environ.get("PAUSED_INCIDENT_SHA256", "")
           if key or digest:

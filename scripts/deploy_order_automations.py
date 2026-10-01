@@ -218,8 +218,10 @@ def promote_schedules(scheduler, originals: dict, desired: dict) -> None:
 
 class Deployment:
     def __init__(self, session, commit: str, *, paused_incident_key: str | None = None,
-                 paused_incident_sha256: str | None = None):
+                 paused_incident_sha256: str | None = None, scope: str = "all"):
         pause_incident_arguments(paused_incident_key, paused_incident_sha256)
+        require(scope in {"all", "invoices"}, "deployment-scope-invalid")
+        self.scope = scope
         self.session, self.commit = session, commit
         self.paused_incident_key, self.paused_incident_sha256 = paused_incident_key, paused_incident_sha256
         self.ecs = session.client("ecs")
@@ -780,6 +782,10 @@ class Deployment:
         return queue_arn
 
     def run(self) -> None:
+        scope = getattr(self, "scope", "all")
+        require(scope in {"all", "invoices"}, "deployment-scope-invalid")
+        services = {family: values for family, values in SERVICES.items()
+                    if scope == "all" or values[1] == "invoice"}
         image = self.session.client("ecr").describe_images(repositoryName="vevo-reporting", imageIds=[{"imageTag": f"git-{self.commit}"}])["imageDetails"]
         require(len(image) == 1 and re.fullmatch(r"sha256:[a-f0-9]{64}", image[0]["imageDigest"]) is not None, "exact-commit-image-missing")
         digest = image[0]["imageDigest"]
@@ -789,19 +795,20 @@ class Deployment:
         if not getattr(self, "paused_incident_key", None):
             self.validate_snapshots(snapshots)
         definitions, candidates, buckets = {}, {}, {}
-        for family, (project, _, schedule_name) in SERVICES.items():
+        for family, (project, _, schedule_name) in services.items():
             source = self.ecs.describe_task_definition(taskDefinition=snapshots[schedule_name]["Target"]["EcsParameters"]["TaskDefinitionArn"])["taskDefinition"]
             buckets[family] = self.bucket(source)
             from reporting_core.storage import resolve_report_s3_location
             settings = json.loads((ROOT / "projects" / project / "settings.json").read_text(encoding="utf-8"))
             _, prefix = resolve_report_s3_location(project, settings, environ={})
             definitions[family] = candidate_definition(source, family, image_uri, (buckets[family], prefix))
-        require(buckets["roy-invoice-daily"] == buckets["roy-unpaid-order-cancellation"], "roy-state-bucket-mismatch")
+        if scope == "all":
+            require(buckets["roy-invoice-daily"] == buckets["roy-unpaid-order-cancellation"], "roy-state-bucket-mismatch")
         if getattr(self, "paused_incident_key", None):
             self.validate_pause_manifest(buckets["roy-invoice-daily"], snapshots)
         self.validate_snapshots(snapshots)
         self.evidence.update(original_schedules=snapshots, candidate_task_definitions=definitions,
-                             image_digest=digest, phase="before-candidates")
+                             image_digest=digest, scope=scope, phase="before-candidates")
         evidence_bucket = buckets["roy-invoice-daily"]
         self.evidence_bucket = evidence_bucket
         self.save_private(evidence_bucket)
@@ -810,28 +817,33 @@ class Deployment:
             # Journal access is a host-check prerequisite; the surrounding
             # transaction restores it before resuming originals on failure.
             seen_state = set()
-            for family, (project, _, _) in SERVICES.items():
+            for family, (project, _, _) in services.items():
                 identity = (project, buckets[family], definitions[family]["taskRoleArn"])
                 if identity not in seen_state:
                     self.prepare_state(*identity)
                     seen_state.add(identity)
-            for family, (_, _, schedule_name) in SERVICES.items():
+            for family, (_, _, schedule_name) in services.items():
                 candidates[family] = self.ecs.register_task_definition(**definitions[family])["taskDefinition"]["taskDefinitionArn"]
                 paused = {name: {**schedule_request(row), "State": "DISABLED"} for name, row in snapshots.items()}
                 host = self.host_gate(family, candidates[family], snapshots[schedule_name], digest,
                                       paused_schedules=paused)
                 self.evidence["hosts"].append(host)
                 self.save_private(evidence_bucket)
-            require(len(self.evidence["hosts"]) == len(SERVICES), "host-gate-incomplete")
+            require(len(self.evidence["hosts"]) == len(services), "host-gate-incomplete")
             self.alarm_actions = [established_alarm_route(self.session, self.account)]
             self.evidence["alarm_actions"] = self.alarm_actions
             self.require_current_main()
             dlqs = {}
-            for family in SERVICES:
+            for family in services:
                 service_schedules = [snapshot for name, snapshot in snapshots.items() if SCHEDULES[name] == family]
                 dlqs[family] = self.provision_monitoring(family, service_schedules, buckets[family], definitions[family])
             desired = {}
             for name, family in SCHEDULES.items():
+                if family not in services:
+                    # Shared readers are paused/drained together, but an excluded
+                    # service retains its exact definition, cadence and settings.
+                    desired[name] = schedule_request(snapshots[name])
+                    continue
                 settings = json.loads((ROOT / "projects" / SERVICES[family][0] / "settings.json").read_text(encoding="utf-8"))
                 desired[name] = desired_schedule(snapshots[name], candidates[family], dlqs[family], settings)
             self.evidence.update(desired_schedules=desired, phase="ready-to-promote")
@@ -846,12 +858,14 @@ class Deployment:
             raise
         self.evidence["phase"] = "promotion-readback-verified"
         self.save_private(evidence_bucket)
-        print("ORDER_AUTOMATION_DEPLOY_OK:services=3:schedules=5:immutable:private-evidence", flush=True)
+        print(f"ORDER_AUTOMATION_DEPLOY_OK:scope={scope}:services={len(services)}:schedules=5:immutable:private-evidence", flush=True)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--scope", choices=("all", "invoices"), default="all",
+                        help="Invoices updates only the two invoice services; cancellation resumes unchanged")
     parser.add_argument("--pin-current", action="store_true", help="Pin existing invoice behavior before publishing a new shared image")
     parser.add_argument("--current-image-digest", help="Independently verified current image digest; required for --pin-current")
     parser.add_argument("--profile", help="Local AWS profile, allowed only for --pin-current")
@@ -862,6 +876,7 @@ def main() -> None:
     pause_incident_arguments(args.paused_incident_key, args.paused_incident_sha256)
     import boto3
     if args.pin_current:
+        require(args.scope == "all", "pin-current-scope-rejected")
         require(not args.paused_incident_key and not args.paused_incident_sha256, "pin-current-paused-incident-rejected")
         require(re.fullmatch(r"sha256:[a-f0-9]{64}", args.current_image_digest or "") is not None, "pin-current-digest-required")
         head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
@@ -882,7 +897,8 @@ def main() -> None:
                 and os.environ.get("GITHUB_ACTIONS") == "true", "managed-main-only")
         require(os.environ.get("AWS_REGION") == "eu-central-1", "region-mismatch")
         Deployment(boto3.Session(region_name="eu-central-1"), args.commit,
-                   paused_incident_key=args.paused_incident_key, paused_incident_sha256=args.paused_incident_sha256).run()
+                   paused_incident_key=args.paused_incident_key, paused_incident_sha256=args.paused_incident_sha256,
+                   scope=args.scope).run()
 
 
 if __name__ == "__main__":
