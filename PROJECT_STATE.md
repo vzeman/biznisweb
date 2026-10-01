@@ -1,4 +1,4 @@
-## 2026-10-01 — ROY and VEVO COD-only invoice generation (implementation)
+## 2026-10-01 — ROY and VEVO COD-only invoice generation (merged, awaiting release)
 
 Date: 2026-10-01
 Repo: `vzeman/biznisweb`
@@ -6,7 +6,8 @@ Branch: `codex/cod-only-invoice-automation-20261001`
 What changed: Invoice discovery and all pre-creation rechecks require exactly one payment element with a verified project COD ID. Both project allowlists were read from their current full language/payment catalogues. Added regression coverage and an on-host COD-only marker requirement. Card/bank/unknown payments cannot authorize new invoices, even after shipped status. Scope excludes existing-document corrections, gateway settings, dashboard printing and Chameleoon.
 What is verified: Clean isolated branch from `c98d350e`, fetch/pull completed. Source runtimes `roy-invoice-daily:11` and `vevo-invoice-daily:9`, AWS account/region/cluster, task identity/IP where active, immutable digest and `/app` are recorded in `projects/INVOICE_COD_ONLY.md`. All 1,005 tests from the order-automation CI suite passed locally; both offline candidate-policy probes and Ruff passed. All scheduled ECS images were confirmed immutable. No production mutation or deployment yet.
 Known issues: Future payment IDs require explicit catalogue verification; absent/ambiguous payment cannot authorize creation. Historical print incident evidence remains on its separate audit branch and is not resolved by this invoice restriction.
-Next exact step: Commit/push, PR/merge after CI, exact image build, managed candidate curl/marker gates, schedule readback and natural-run verification. No persistent local process started.
+Release progress: PR #590 merged as `b220bc9e63748cf0d64dc23cf1a4da289fe00cef` after all six CI checks passed, including Linux and Windows regressions. Exact-image build `36822990728` is running. Both reporting tasks have `REPORT_SKIP_INVOICES=true`; only the standalone invoice jobs create invoices through this automation.
+Next exact step: Verify exact image build, dispatch managed candidate curl/marker gates for the merged source, then verify schedule readback and natural runs. No persistent local process started.
 
 ## 2026-09-18 — VEVO report maturation charts deployed and rerun
 

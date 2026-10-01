@@ -77,8 +77,12 @@ locally, both projects' offline policy probes passed, and Ruff/diff checks passe
 All scheduled ECS consumers were checked to use immutable images before a shared
 ECR build, so changing the `latest` alias cannot silently update another service.
 
-Next exact step: commit/push, PR/merge, immutable
-image build and managed host-gated deployment; verify all four invoice schedule
+PR #590 merged as `b220bc9e63748cf0d64dc23cf1a4da289fe00cef` after all six CI checks
+passed (including Linux and Windows). Exact-image build `36822990728` is pending.
+Both daily reporting tasks explicitly set `REPORT_SKIP_INVOICES=true`, so their
+unchanged images cannot bypass this standalone invoice policy.
+
+Next exact step: immutable image build and managed host-gated deployment; verify all four invoice schedule
 targets and subsequent natural runs. The shared managed deployment also verifies
 the unchanged ROY cancellation service; its business behavior is outside this
 change. No local server, worker, watcher, tunnel or persistent process is needed.
