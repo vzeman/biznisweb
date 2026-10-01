@@ -111,8 +111,13 @@ Read-only production checks of the first 30 historical rows passed on both shops
 with the corrected inventory query; no document was created.
 
 Follow-up PR #591 passed all six CI checks and merged as
-`754b0e342858497bcb9002f21214f7140bc2e9a7`. Build `36825205643` is pending for this
-corrected source. Release handoff continues on `codex/cod-invoice-release-evidence-20261001`.
+`754b0e342858497bcb9002f21214f7140bc2e9a7`. Build `36825205643` succeeded with
+`sha256:870076898a6d7785e465a4e4c958079c350ec9f34e3d9ee691ae372f20d98d30`.
+Second managed deployment `36825973341` is running on that corrected source.
+Independent rollback readback verified all 13 schedules and three state policies.
+The second private preflight receipt is `data/roy/order-automation/deployments/754b0e342858497bcb9002f21214f7140bc2e9a7/cod-policy-independent-before.json`,
+SHA-256 `59dbca76506d4b77da5bc70e4e393f38548e5364842d952e9ed3222db4d114f4`.
+Release handoff continues on `codex/cod-invoice-release-evidence-20261001`.
 
 Next exact step: verify the corrected image and repeat managed host-gated deployment; verify all four invoice schedule
 targets and subsequent natural runs. The shared managed deployment also verifies
