@@ -78,11 +78,16 @@ All scheduled ECS consumers were checked to use immutable images before a shared
 ECR build, so changing the `latest` alias cannot silently update another service.
 
 PR #590 merged as `b220bc9e63748cf0d64dc23cf1a4da289fe00cef` after all six CI checks
-passed (including Linux and Windows). Exact-image build `36822990728` is pending.
+passed (including Linux and Windows). Exact-image build `36822990728` succeeded:
+`sha256:9014681bfb3db412e6659004ad157b5d2eea93e090507abc8c10cdedf5052c91`.
+Managed deployment `36823714684` is running on the exact merged source.
+All five source schedules matched their independent before-deploy snapshot.
+The private snapshot is `data/roy/order-automation/deployments/b220bc9e63748cf0d64dc23cf1a4da289fe00cef/cod-policy-independent-before.json`,
+SHA-256 `a7d279f69532817ccfc087e7e20330e567a851d7114b67f40cec5948cb06dc47`.
 Both daily reporting tasks explicitly set `REPORT_SKIP_INVOICES=true`, so their
 unchanged images cannot bypass this standalone invoice policy.
 
-Next exact step: immutable image build and managed host-gated deployment; verify all four invoice schedule
+Next exact step: observe managed host-gated deployment; verify all four invoice schedule
 targets and subsequent natural runs. The shared managed deployment also verifies
 the unchanged ROY cancellation service; its business behavior is outside this
 change. No local server, worker, watcher, tunnel or persistent process is needed.
