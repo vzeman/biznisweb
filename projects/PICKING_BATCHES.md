@@ -71,4 +71,10 @@ than rerunning a mutation. No generic process termination is used.
 After host verification, check the real dashboard in Chrome: no confirmation is
 enabled before a download, the downloaded count/filename is shown, and Refresh
 does not change that batch. Do not acknowledge real warehouse orders as a test.
+PR #593 passed all six CI checks, including Linux and Windows regression, and
+merged as `73b6ba79307768192cc1fd9b0381f911b1c45fd3`. All 1,019 workflow regression
+tests passed locally. Build `36834786881` is running; no runtime promotion yet.
+Release evidence is maintained on `codex/picking-release-evidence-20261001` while
+the exact merged checkout stays clean for deployment. Do not merge documentation
+or advance `main` until all source-bound promotions finish.
 Final deployed image, task/operation IDs and verification remain pending.
