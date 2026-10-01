@@ -1,3 +1,16 @@
+## 2026-10-01 — Current handoff: dashboards and COD-only invoices deployed
+
+Date: 2026-10-01, 10:23 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/picking-deployed-evidence-20261001`
+What changed: Both dashboards and both standalone invoice services now run source `7bce051d85019b37f2f0d4bfd44893f5d79b66ea`, immutable image `sha256:4fec00b38699b2b182b87246f5de8c41716fe1d053454cf9a85923cddefe5665`. PDF acknowledgements use the last completed download's server-held membership in the current tab. Invoice creation requires a verified COD payment identity. The download-only cache invalidation fix is included. PR #595 and build `36843340777` succeeded; invoice deployment `36843666635`, attempt 2, succeeded with `scope=invoices`.
+What is verified: Final dashboard host/local curl/UI evidence is in `projects/PICKING_BATCHES.md`. Invoice host gates ROY `abb1383c2b1b43389b56dcc09c5ec7df` / `172.31.22.164` and VEVO `e775a5fe096d4969965e92f25d5adecd` / `172.31.35.108` passed full-backlog dry runs and localhost `payment_scope=cod_only` markers at `/app`, exit 0. Four ENABLED invoice targets now reference `roy-invoice-daily:15` and `vevo-invoice-daily:11`; independent comparison proves all other nine schedules unchanged. Both invoice state policies match the candidate; cancellation schedule, definition `:42` and policy remain unchanged. AWS may reorder environment entries; comparison normalizes order while checking all names and values. The unrelated preview schedule remains DISABLED exactly as before. ROY's first natural scheduled task `15f1a55225a14cc883ab8d2fc70a3014`, IP `172.31.23.197`, ran the new digest at 10:20 UTC and exited 0 at 10:21 UTC, with matched/created/failed all zero.
+Private evidence: Deployment receipt `data/roy/order-automation/deployments/7bce051d85019b37f2f0d4bfd44893f5d79b66ea/03836f1c009e4edf82b6a99713a86827.json` is `promotion-readback-verified`. Independent encrypted readback is the same prefix plus `independent-after-promotion.json`, SHA-256 `fcdc1c7fd3a065007b81d0a5078be23856296e2df822facabaa5d1437c1f4021`.
+Known issues: Historical entry of the unpaid order into a picking PDF is not proven by these two fixes. Three historical cancellation settlement-review cases remain unresolved and were not overridden. VEVO Chrome is client-blocked; its host and authenticated live HTTP/PDF checks passed. Zero-new-order acknowledgements observed outside the agent's recorded actions remain unattributed; existing print records were unchanged. No persistent local server, worker, watcher or tunnel was started; finite candidate tasks exited, and disposable dashboard/failed-release definitions are INACTIVE. The two promoted invoice definitions remain ACTIVE for production.
+Next exact step: Observe the first regular VEVO run on `vevo-invoice-daily:11` after deployment, save private runtime evidence for both shops, then merge final documentation through a PR. Do not manually trigger financial jobs for testing. Source-bound deployments are complete, so documentation may now advance `main` through the normal reviewed workflow.
+
+The sections below preserve chronological implementation and failed-release history; their pending/blocker statements describe those earlier points in time.
+
 ## 2026-10-01 — Bind print acknowledgement to downloaded PDF; release all changes
 
 Date: 2026-10-01
