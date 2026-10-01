@@ -2,7 +2,10 @@
 
 Date: 2026-10-01
 Repo: `vzeman/biznisweb`
-Branch: `codex/cod-invoice-payment-read-20261001` (follow-up to the merged COD policy)
+Branch: `codex/cod-invoice-release-evidence-20261001`
+
+Status: code merged and tested; NOT deployed. Both managed release attempts failed
+their production read-only gates. Original enabled production schedules were restored.
 
 ## Required behavior
 
@@ -113,13 +116,46 @@ with the corrected inventory query; no document was created.
 Follow-up PR #591 passed all six CI checks and merged as
 `754b0e342858497bcb9002f21214f7140bc2e9a7`. Build `36825205643` succeeded with
 `sha256:870076898a6d7785e465a4e4c958079c350ec9f34e3d9ee691ae372f20d98d30`.
-Second managed deployment `36825973341` is running on that corrected source.
+Second managed deployment `36825973341` failed on that corrected source.
 Independent rollback readback verified all 13 schedules and three state policies.
 The second private preflight receipt is `data/roy/order-automation/deployments/754b0e342858497bcb9002f21214f7140bc2e9a7/cod-policy-independent-before.json`,
 SHA-256 `59dbca76506d4b77da5bc70e4e393f38548e5364842d952e9ed3222db4d114f4`.
 Release handoff continues on `codex/cod-invoice-release-evidence-20261001`.
 
-Next exact step: verify the corrected image and repeat managed host-gated deployment; verify all four invoice schedule
-targets and subsequent natural runs. The shared managed deployment also verifies
-the unchanged ROY cancellation service; its business behavior is outside this
-change. No local server, worker, watcher, tunnel or persistent process is needed.
+## Final release blocker and verified rollback
+
+The second candidate's identity was verified before the application check:
+ROY task `46233203baf24186a431a0b1d3379f01`, private IP `172.31.15.118`,
+definition `roy-invoice-daily:13`, path `/app`, exact corrected digest above.
+Its command was `python scripts/order_automation_host_gate.py --project roy
+--kind invoice --full-backlog --require-cod-only`. The synthetic COD policy
+probe passed. Historical inventory then failed with FLOX `Internal server error`
+at `getOrderList.data[18].status`. This field was already in the original
+inventory query; the failure is not evidence that payment filtering failed.
+The full scan and final localhost marker did not complete, so promotion was
+rejected. VEVO candidate verification was not reached. The task is STOPPED,
+exit 1, and the dry run attempted no financial mutation.
+
+Managed receipt
+`data/roy/order-automation/deployments/754b0e342858497bcb9002f21214f7140bc2e9a7/8c22b4dfde6143dfaeede51816586b1b.json`
+records `deployment-failed-check-rollback` and
+`original-schedules-and-state-policies-restored`. Independent readback verified
+all 13 schedules and all three state policies against the saved originals,
+with no active host-gate candidate tasks. Both ROY invoice schedules are ENABLED
+on `roy-invoice-daily:11`; both VEVO schedules are ENABLED on
+`vevo-invoice-daily:9`. Their original image and previous creation policy remain
+active. The COD-only restriction must not be represented as deployed.
+
+The private independent after-release evidence is
+`data/roy/order-automation/deployments/754b0e342858497bcb9002f21214f7140bc2e9a7/cod-policy-independent-after-failed-release.json`,
+SHA-256 `69bdaeaa0e9daf6b3fc69160cd9bbb8dd64febc988109a6c8c603e3c2f2ac995`.
+It was stored with AES256, create-only semantics and readback hash verification.
+No local server, worker, watcher, tunnel or persistent process was started.
+
+Next exact step: diagnose and resolve the FLOX historical status resolver failure,
+then rerun the exact-image host gates, verify all four invoice schedule targets
+and subsequent natural runs. Do not remove status validation, swallow failed
+reads or bypass the full-backlog gate to force promotion. Work stopped at this
+blocker under the owner's stop-on-error instruction. The shared managed release
+also checks the unchanged cancellation service; no cancellation behavior was
+changed by this invoice policy.
