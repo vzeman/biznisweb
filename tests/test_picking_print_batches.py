@@ -15,9 +15,32 @@ from unittest.mock import patch
 from live_dashboard_server import LiveDashboardHandler, build_roy_operations_dashboard_html
 from picking_print_batches import acknowledge_picking_pdf_batch, register_picking_pdf_batch
 from roy_operations_dashboard import _normalize_operations_state
+from scripts.deploy_picking_batch_dashboard import SERVICES, validate_proof
 
 
 class PickingBatchTests(unittest.TestCase):
+    def test_deployment_proof_is_bound_to_exact_task_project_ip_and_image(self):
+        for project in SERVICES:
+            receipt = {"project": project, "task_arn": "task-1", "definition": "definition-1", "started_by": "probe-1", "digest": "sha256:exact"}
+            task = {"taskArn": "task-1", "taskDefinitionArn": "definition-1", "startedBy": "probe-1", "lastStatus": "STOPPED",
+                    "containers": [{"exitCode": 0, "imageDigest": "sha256:exact"}],
+                    "attachments": [{"details": [{"name": "privateIPv4Address", "value": "172.31.1.2"}]}]}
+            proof = {"identity": {"task_arn": "task-1", "service": SERVICES[project][0], "project": project,
+                                  "path": "/app", "private_ips": ["172.31.1.2"]},
+                     "marker": "pdf-batch-v1", "batch_races_verified": True, "synthetic_batch_tests": 5, "preview_pdf_bytes": 1500}
+            validate_proof(task, proof, receipt)
+            for field, value in (("task_arn", "another-task"), ("path", "/wrong"),
+                                 ("private_ips", ["172.31.1.3"]), ("project", "foreign")):
+                changed = copy.deepcopy(proof)
+                changed["identity"][field] = value
+                with self.assertRaises(AssertionError):
+                    validate_proof(task, changed, receipt)
+            for field, value in (("exitCode", 1), ("imageDigest", "sha256:other")):
+                changed = copy.deepcopy(task)
+                changed["containers"][0][field] = value
+                with self.assertRaises(AssertionError):
+                    validate_proof(changed, proof, receipt)
+
     def test_snapshot_survives_order_changes_and_repeat_ack_is_idempotent(self):
         state = {}
         orders = [{"order_num": "A", "status": "paid"}, {"order_num": "B"}]

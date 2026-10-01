@@ -16,6 +16,7 @@ on:
       - 'scripts/vevo_operations_host_gate.py'
       - 'live_dashboard_server.py'
       - 'picking_print_batches.py'
+      - 'scripts/*picking*batch*.py'
       - 'manual_settlement.py'
       - 'scripts/record_verified_manual_settlement.py'
       - 'order_inventory.py'
