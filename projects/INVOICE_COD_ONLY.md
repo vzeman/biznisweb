@@ -2,11 +2,41 @@
 
 Date: 2026-10-01
 Repo: `vzeman/biznisweb`
-Branch: `codex/cod-invoice-release-evidence-20261001`
+Branch: `codex/picking-deployed-evidence-20261001`
 
-Status: code merged and tested; NOT deployed. Both managed release attempts failed
-their production read-only gates. Original enabled production schedules were restored.
-The owner subsequently authorized resuming diagnosis and deploying all changes.
+Status: DEPLOYED for ROY and VEVO. Scoped release `36843666635`, attempt 2,
+succeeded on source `7bce051d85019b37f2f0d4bfd44893f5d79b66ea` (PR #595), image
+`sha256:4fec00b38699b2b182b87246f5de8c41716fe1d053454cf9a85923cddefe5665`.
+The two ROY plans use `roy-invoice-daily:15`; both VEVO plans use
+`vevo-invoice-daily:11`. All four are ENABLED, with timing and other parameters
+unchanged. Independent comparison verified the remaining nine schedules and
+the cancellation state policy unchanged; both invoice state policies match the
+candidate. Full-backlog host gates passed for both shops with localhost
+`payment_scope=cod_only` markers at `/app`, exit 0 and no financial writes.
+
+Private release receipt:
+`data/roy/order-automation/deployments/7bce051d85019b37f2f0d4bfd44893f5d79b66ea/03836f1c009e4edf82b6a99713a86827.json`.
+The same prefix contains `independent-after-promotion.json`, SHA-256
+`fcdc1c7fd3a065007b81d0a5078be23856296e2df822facabaa5d1437c1f4021`, stored with
+AES256 and verified by readback. ROY's first regular scheduled task
+`15f1a55225a14cc883ab8d2fc70a3014`, IP `172.31.23.197`, ran the new digest at
+10:20 UTC and exited 0 at 10:21 UTC; matched, created and failed counts were zero.
+VEVO's first regular task `5e3bbcb0f68b492498bd39f90b92cb61`, IP `172.31.23.156`,
+ran at 10:30 UTC and exited 0 at 10:31 UTC on the same new digest, also with
+matched, created and failed counts zero. Both were started by the existing
+scheduler, with unchanged `python invoice_runner.py --project <shop>` commands;
+neither was manually triggered for testing. Email and status-reconciliation
+failure counts were also zero. These runs verify normal production execution;
+with no eligible missing invoices, actual non-COD rejection is established by
+the policy regressions and host gates, not by these zero-candidate runs.
+The same private prefix contains `natural-runs-verified.json`, SHA-256
+`598c28b36fddca35e4d86c042f0db18c5aff0e76d9fb6410a69a03ba4cf82231`, with encrypted
+storage/readback verified. Both daily reporting tasks retain
+`REPORT_SKIP_INVOICES=true`. No deployment or verification remains pending.
+
+The release history below retains failed approaches and rollback evidence.
+Statements about inactive policy or pending deployment describe those earlier
+attempts, not the current production state above.
 
 ## Required behavior
 
@@ -123,7 +153,7 @@ The second private preflight receipt is `data/roy/order-automation/deployments/7
 SHA-256 `59dbca76506d4b77da5bc70e4e393f38548e5364842d952e9ed3222db4d114f4`.
 Release handoff continues on `codex/cod-invoice-release-evidence-20261001`.
 
-## Final release blocker and verified rollback
+## Earlier release blocker and verified rollback
 
 The second candidate's identity was verified before the application check:
 ROY task `46233203baf24186a431a0b1d3379f01`, private IP `172.31.15.118`,
@@ -174,7 +204,7 @@ quota errors are never overridden. Other query clients retain their original
 partial-error behavior. No mutation is accepted by the read retry path. Tests
 cover both a fresh successful response and exhausting the finite attempt count.
 Production release remains pending the complete exact-image host checks.
-# Invoice-only release scope after shared cancellation review failure
+## Invoice-only release scope after shared cancellation review failure
 
 On 2026-10-01, source `0e65d7d1bf1c42cb425e4c11ad88e6437215d3e1` and image
 `sha256:06417f96e5eeaf3f77318c81ea27c57bf3a38d91f45a9738830736e871d0d78c`
