@@ -71,19 +71,46 @@ def localhost_marker(payload: dict) -> None:
         raise RuntimeError("host-gate-thread-not-stopped")
 
 
+def verify_cod_only_policy(project: str) -> None:
+    """Exercise the deployed selection path without creating any business record."""
+    from generate_invoices import InvoiceGenerator, resolve_invoice_generation_settings
+    from reporting_core import load_project_settings
+
+    settings = resolve_invoice_generation_settings(load_project_settings(project))
+    if not settings["cod_payment_ids"] or "18" in settings["cod_payment_ids"]:
+        raise RuntimeError("host-gate-cod-policy-invalid")
+    generator = InvoiceGenerator("https://example.test/api/graphql", "synthetic", "https://example.test",
+                                 cod_payment_ids=settings["cod_payment_ids"])
+    base = {"order_num": "host-policy-check", "status": {"id": 4, "name": "Odoslaná"},
+            "invoices": [], "blocked": False, "sum": {"value": 1}}
+    for identity in settings["cod_payment_ids"] | {"18", "6", "999999"}:
+        row = {**base, "price_elements": [{"type": "payment", "reference_id": identity}]}
+        selected, _ = generator.filter_orders_for_invoice([row])
+        if bool(selected) != (identity in settings["cod_payment_ids"]):
+            raise RuntimeError("host-gate-cod-policy-filter-failed")
+    for elements in ([], [{"type": "shipping", "reference_id": next(iter(settings["cod_payment_ids"]))}]):
+        if generator.filter_orders_for_invoice([{**base, "price_elements": elements}])[0]:
+            raise RuntimeError("host-gate-cod-evidence-failed")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", choices=("roy", "vevo"), required=True)
     parser.add_argument("--kind", choices=("invoice", "cancellation"), required=True)
     parser.add_argument("--full-backlog", action="store_true")
+    parser.add_argument("--require-cod-only", action="store_true")
     args = parser.parse_args()
     if args.full_backlog and args.kind != "invoice":
         raise RuntimeError("host-gate-full-backlog-kind-mismatch")
+    if args.require_cod_only and args.kind != "invoice":
+        raise RuntimeError("host-gate-cod-kind-mismatch")
     if args.kind == "cancellation" and args.project != "roy":
         raise RuntimeError("host-gate-service-not-allowed")
     if os.getcwd() != "/app":
         raise RuntimeError("host-gate-path-mismatch")
     if args.kind == "invoice":
+        if args.require_cod_only:
+            verify_cod_only_policy(args.project)
         from invoice_runner import parse_args, run_invoice_runner
         runner_args = ["--project", args.project, "--dry-run"]
         if args.full_backlog:
@@ -99,6 +126,8 @@ def main() -> None:
                "path": "/app", "dry_run": True}
     if args.full_backlog:
         payload["full_backlog"] = True
+    if args.require_cod_only:
+        payload["payment_scope"] = "cod_only"
     localhost_marker(payload)
     print(MARKER + " " + json.dumps(payload, sort_keys=True), flush=True)
 

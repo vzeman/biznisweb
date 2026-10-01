@@ -158,6 +158,7 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
 
     put_metric("InvoiceStandaloneMatchedOrders", summary.matched_orders, project, reporting_defaults)
     put_metric("InvoiceStandaloneSkippedZeroTotal", summary.skipped_zero_total_orders, project, reporting_defaults)
+    put_metric("InvoiceStandaloneSkippedNonCOD", summary.skipped_non_cod_orders, project, reporting_defaults)
     put_metric("InvoiceStandaloneCreated", summary.created_invoices, project, reporting_defaults)
     put_metric("InvoiceStandaloneCreateFailures", summary.failed_invoices, project, reporting_defaults)
     put_metric("InvoiceStandaloneEmailed", summary.emailed_invoices, project, reporting_defaults)
@@ -201,7 +202,8 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         f"status_reconciliation_candidates={summary.invoice_status_reconciliation_candidates} "
         f"statuses_reconciled={summary.reconciled_invoice_statuses} "
         f"status_reconciliation_failed={summary.failed_invoice_status_reconciliations} "
-        f"skipped_zero_total={summary.skipped_zero_total_orders}"
+        f"skipped_zero_total={summary.skipped_zero_total_orders} "
+        f"skipped_non_cod={summary.skipped_non_cod_orders}"
     )
 
     if (
@@ -247,6 +249,7 @@ def run_invoice_runner(args: argparse.Namespace) -> Dict[str, Any]:
         ),
         "invoice_status_reconciliation_target_id": summary.invoice_status_reconciliation_target_id,
         "skipped_zero_total_orders": summary.skipped_zero_total_orders,
+        "skipped_non_cod_orders": summary.skipped_non_cod_orders,
         "dry_run": summary.dry_run,
         "invoice_scan_complete": getattr(summary, "invoice_scan_complete", True),
         "invoice_scan_pages": getattr(summary, "invoice_scan_pages", 0),

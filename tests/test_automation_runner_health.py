@@ -8,7 +8,7 @@ from reporting_core.metrics import automation_metric_defaults, put_metric
 
 def summary(**overrides):
     fields = dict(project="roy", date_from="2026-01-01", date_to="2026-04-01",
-                  matched_orders=0, skipped_zero_total_orders=0, created_invoices=0,
+                  matched_orders=0, skipped_zero_total_orders=0, skipped_non_cod_orders=0, created_invoices=0,
                   failed_invoices=0, emailed_invoices=0, failed_invoice_emails=0,
                   missing_invoice_ids=0, invoice_status_reconciliation_candidates=0,
                   reconciled_invoice_statuses=0, failed_invoice_status_reconciliations=0,

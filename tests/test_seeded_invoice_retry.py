@@ -30,7 +30,7 @@ class SeededInvoiceRetryTests(unittest.TestCase):
         self.web = InvoiceWebFake(self.api)
         self.web.close = Mock()
         self.generator = InvoiceGenerator("https://example.test/api/graphql", "synthetic-token", "https://example.test",
-                                           page_delay_seconds=0, read_attempts=1)
+                                           page_delay_seconds=0, read_attempts=1, cod_payment_ids=["7"])
         self.generator.client = self.api
         self.generator.arf_token = "arf123"
         self.generator.validate_session = lambda: True

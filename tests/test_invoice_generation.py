@@ -85,6 +85,7 @@ class _FakeInvoiceClient:
                 "id": "501",
                 "preinvoices": [{"id": "701"}],
                 "blocked": False,
+                "price_elements": [{"type": "payment", "reference_id": "7"}],
                 "status": {"id": 4, "name": "Odoslaná"},
                 "sum": {"value": 12.5, "formatted": "12.50 EUR"},
                 "invoices": self.invoices if self.calls > 2 else [],
@@ -520,6 +521,7 @@ class InvoiceGenerationTests(unittest.TestCase):
             api_url="https://example.com/api/graphql",
             api_token="token",
             base_url="https://example.com",
+            cod_payment_ids=["7"],
             exclude_zero_total_orders=True,
         )
         filtered, stats = generator.filter_orders_for_invoice(
@@ -532,6 +534,7 @@ class InvoiceGenerationTests(unittest.TestCase):
                 },
                 {
                     "order_num": "A-2",
+                    "price_elements": [{"type": "payment", "reference_id": "7"}],
                     "status": {"name": "Odoslaná"},
                     "invoices": [],
                     "sum": {"value": 12.5},
@@ -553,6 +556,7 @@ class InvoiceGenerationTests(unittest.TestCase):
             api_url="https://example.com/api/graphql",
             api_token="token",
             base_url="https://example.com",
+            cod_payment_ids=["7"],
             send_invoice_email=True,
         )
         generator.web_session = _FakeInvoiceWebSession()
@@ -587,6 +591,7 @@ class InvoiceGenerationTests(unittest.TestCase):
             api_url="https://example.com/api/graphql",
             api_token="token",
             base_url="https://example.com",
+            cod_payment_ids=["7"],
             send_invoice_email=True,
         )
         generator.web_session = _FakeInvoiceWebSession()
@@ -678,6 +683,7 @@ class InvoiceGenerationTests(unittest.TestCase):
 def invoice_order(number="fixture-order", **updates):
     result = {"id": "1", "order_num": number, "pur_date": "2020-01-01 10:00:00",
               "last_change": "2020-02-01 10:00:00", "blocked": False,
+              "price_elements": [{"type": "payment", "reference_id": "7", "title": "COD"}],
               "status": {"id": "4", "name": "Odoslaná"}, "invoices": [], "preinvoices": [{"id": "701"}],
               "sum": {"value": 20, "formatted": "20 EUR", "is_net_price": False, "currency": {"code": "EUR"}}}
     result.update(updates)
@@ -838,7 +844,7 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
         self.order = invoice_order()
         self.api = InvoiceApiFake(self.order)
         self.generator = InvoiceGenerator("https://example.test/api/graphql", "fixture-token", "https://example.test",
-                                          page_delay_seconds=0, read_attempts=1)
+                                          page_delay_seconds=0, read_attempts=1, cod_payment_ids=["7"])
         self.generator.client = self.api
         self.web = InvoiceWebFake(self.api)
         self.generator.web_session = self.web
@@ -877,6 +883,101 @@ class InvoiceSafetyRegressionTests(unittest.TestCase):
              patch.dict(os.environ, {"BIZNISWEB_API_TOKEN": "fixture-token"}), \
              patch("generate_invoices.time.sleep"):
             return run_invoice_generation(kwargs.pop("project", "shop"), "2026-06-09", "2026-06-15", state_store=self.store, **kwargs)
+
+    def test_shipped_card_order_never_prepares_or_finalizes_an_invoice(self):
+        self.order["price_elements"] = [{"type": "payment", "reference_id": "18", "title": "Online card"}]
+        self.order["preinvoices"] = None
+        summary = self.run_fixture()
+        self.assertEqual((0, 0, 1), (summary.matched_orders, summary.created_invoices, summary.skipped_non_cod_orders))
+        self.assertEqual([], self.api.preparation_calls)
+        self.assertEqual([], self.web.get_urls)
+        record = self.store.read()[0]["orders"][self.order["order_num"]]
+        self.assertEqual("complete", record["phase"])
+        self.assertNotIn("invoice_id", record)
+        self.assertNotIn("attempted_at", record)
+
+    def test_pending_non_cod_retry_is_retired_without_financial_writes(self):
+        self.order["price_elements"] = [{"type": "payment", "reference_id": "6"}]
+        with self.store.lease("seed") as journal:
+            journal.update_order(self.order["order_num"], phase="pending")
+        summary = self.run_fixture()
+        self.assertEqual(0, summary.created_invoices)
+        self.assertEqual([], self.api.preparation_calls)
+        self.assertEqual([], self.web.get_urls)
+        self.assertEqual("eligibility_changed", self.store.read()[0]["orders"][self.order["order_num"]]["reason"])
+
+    def test_payment_change_before_preparation_blocks_creation(self):
+        self.order["preinvoices"] = None
+        original = self.generator.fetch_order_for_invoice
+        calls = 0
+
+        def reread(number):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                self.order["price_elements"] = [{"type": "payment", "reference_id": "18"}]
+            return original(number)
+
+        with patch.object(self.generator, "fetch_order_for_invoice", side_effect=reread):
+            result = self.create_with_journal(self.order)
+        self.assertTrue(result.skipped)
+        self.assertEqual([], self.api.preparation_calls)
+        self.assertEqual([], self.web.get_urls)
+
+    def test_payment_change_before_finalization_blocks_creation(self):
+        original = self.generator.fetch_order_for_invoice
+        calls = 0
+
+        def reread(number):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                self.order["price_elements"] = [{"type": "payment", "reference_id": "18"}]
+            return original(number)
+
+        with patch.object(self.generator, "fetch_order_for_invoice", side_effect=reread):
+            result = self.create_with_journal(self.order)
+        self.assertTrue(result.skipped)
+        self.assertEqual([], self.web.get_urls)
+
+    def test_cod_method_identity_is_required_and_shipping_cannot_authorize_it(self):
+        rejected = [None, [], {}, [None], [{"type": "shipping", "reference_id": "7"}],
+                    [{"type": "payment", "reference_id": "18"}, {"type": "shipping", "reference_id": "7"}],
+                    [{"type": "payment", "reference_id": "999", "title": "Dobierkou"}]]
+        rejected += [[{"type": "payment", "reference_id": value}] for value in (None, True, "", "07", 7.0, "18", "6")]
+        rejected += [[{"type": "payment", "reference_id": "7"}] * 2]
+        for elements in rejected:
+            with self.subTest(elements=elements):
+                candidate = invoice_order(price_elements=elements)
+                self.assertEqual([], self.generator.filter_orders_for_invoice([candidate])[0])
+        self.assertEqual([self.order], self.generator.filter_orders_for_invoice([self.order])[0])
+
+    def test_missing_payment_evidence_fails_read_instead_of_advancing_empty_scan(self):
+        self.order.pop("price_elements")
+        with self.assertRaisesRegex(RuntimeError, "Incomplete invoice order evidence"):
+            self.run_fixture()
+        self.assertEqual({}, self.store.read()[0]["last_scan"])
+
+    def test_both_project_policies_allow_verified_cod_ids_and_reject_card_ids(self):
+        expected = {"roy": {"7", "23", "26", "28", "31", "33", "36"},
+                    "vevo": {"7", "8", "10", "14", "16"}}
+        cards = {"roy": {"6", "18", "22", "27", "29", "30", "32", "34", "35"},
+                 "vevo": {"1", "6", "9", "11", "12", "17", "18", "19", "20"}}
+        for project, ids in expected.items():
+            settings = json.loads((ROOT_DIR / "projects" / project / "settings.json").read_text(encoding="utf-8"))
+            resolved = resolve_invoice_generation_settings(settings)
+            self.assertEqual(ids, resolved["cod_payment_ids"])
+            self.generator.cod_payment_ids = resolved["cod_payment_ids"]
+            for identity in ids | cards[project]:
+                with self.subTest(project=project, payment_id=identity):
+                    row = invoice_order(price_elements=[{"type": "payment", "reference_id": identity}])
+                    self.assertEqual(identity in ids, bool(self.generator.filter_orders_for_invoice([row])[0]))
+
+    def test_no_configured_cod_methods_cannot_create_invoices(self):
+        self.generator.cod_payment_ids = frozenset()
+        result = self.create_with_journal(self.order)
+        self.assertTrue(result.skipped)
+        self.assertEqual([], self.web.get_urls)
 
     def test_all_age_scan_includes_purchase_years_before_window(self):
         rows = self.generator.fetch_all_eligible_orders()
@@ -1725,7 +1826,7 @@ class MutableInvoiceInventory:
 class StableInvoicePaginationTests(unittest.TestCase):
     def setUp(self):
         self.generator = InvoiceGenerator("https://example.test/api/graphql", "fixture-token", "https://example.test",
-                                          page_delay_seconds=0, read_attempts=1)
+                                          page_delay_seconds=0, read_attempts=1, cod_payment_ids=["7"])
         self.api = MutableInvoiceInventory()
         self.generator.client = self.api
 

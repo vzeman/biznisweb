@@ -116,6 +116,7 @@
   },
   "invoice_generation": {
     "enabled": true,
+    "cod_payment_ids": ["7", "8", "10", "14", "16"],
     "lookback_days": 90,
     "all_age_backlog_enabled": true,
     "full_scan_interval_hours": 24,
