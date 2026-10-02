@@ -365,13 +365,18 @@ _CACHE_LOCK = threading.RLock()
 _OPERATIONS_STATE_MUTATION_LOCK = threading.RLock()
 _BACKGROUND_REFRESH: Dict[str, Dict[str, Any]] = {}
 _CACHE_TOKENS: Dict[str, int] = {}
+_INVENTORY_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_INVENTORY_REFRESH: Dict[str, Dict[str, Any]] = {}
+_SYNC_REFRESH_LOCKS: Dict[str, Any] = {}
+INVENTORY_REFRESH_SECONDS = 300
+REFRESH_FAILURE_BACKOFF_SECONDS = 30
 STATE_VERSION = 2
 
 
 def _clear_operations_cache(project: str) -> None:
     with _CACHE_LOCK:
         _CACHE.pop(project, None)
-        _BACKGROUND_REFRESH.pop(project, None)
+        _INVENTORY_CACHE.pop(project, None)
         _CACHE_TOKENS[project] = _CACHE_TOKENS.get(project, 0) + 1
     _delete_shared_operations_snapshot(project)
 
@@ -3101,15 +3106,20 @@ def build_inventory_snapshot(
     return inventory, state_changed
 
 
-def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
-    assert_operations_project(project)
+def _operations_state_summary(state: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "inbound_order_count": len(state.get("inbound_orders") or {}),
+        "inventory_restock_excluded_count": len(state.get("inventory_restock_exclusions") or {}),
+        "acknowledged_loss_product_count": len(state.get("loss_acknowledgements") or {}),
+        "auto_cleared_inbound_order_count": len(state.get("auto_cleared_inbound_orders") or []),
+        "printed_picking_order_count": len(state.get("printed_picking_orders") or {}),
+        "last_picking_print_batch": (state.get("picking_print_batches") or [None])[-1],
+    }
 
-    load_project_env(project)
-    project_settings = load_project_settings(project)
-    settings = resolve_roy_operations_settings(project_settings)
-    orders, scan = fetch_open_orders_for_roy_operations(project, settings)
-    order_snapshot = build_roy_orders_snapshot(project=project, orders=orders, settings=settings, scan=scan)
+
+def _generate_inventory_component(project: str, project_settings: Dict[str, Any],
+                                  report_payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    started = time.monotonic()
     payload = report_payload or {}
     if (project_settings.get("operations_dashboard") or {}).get("inventory_source") == "archived_export":
         from operations_inventory import enrich_operations_inventory
@@ -3119,26 +3129,16 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
         project_settings,
         require_configured_remote=True,
     )
-    annotate_picking_print_state(order_snapshot, operations_state)
     base_inventory, _ = build_inventory_snapshot(payload, project_settings=project_settings)
-    try:
-        current_stock_by_sku, live_stock_diagnostics = fetch_current_stock_for_inventory_alerts(
-            project,
-            project_settings,
-            base_inventory,
-            state=operations_state,
-        )
-    except Exception as exc:
-        current_stock_by_sku = {}
-        live_stock_diagnostics = {
-            "enabled": True,
-            "source": "biznisweb_product_search",
-            "target_count": 0,
-            "matched_count": 0,
-            "error_count": 1,
-            "errors": [str(exc)[:240]],
-            "checked_at": _state_now_iso(),
-        }
+    current_stock_by_sku, live_stock_diagnostics = fetch_current_stock_for_inventory_alerts(
+        project,
+        project_settings,
+        base_inventory,
+        state=operations_state,
+    )
+    if live_stock_diagnostics.get("error_count"):
+        # Keep the previous verified component; do not label fallback report stock fresh.
+        raise RuntimeError("Live stock verification was incomplete; previous inventory retained.")
     inventory_snapshot, state_changed = build_inventory_snapshot(
         payload,
         state=operations_state,
@@ -3154,26 +3154,123 @@ def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict
             require_configured_remote=True,
         )
     return {
+        "inventory": inventory_snapshot,
+        "executive_kpis": build_executive_kpi_snapshot(payload),
+        "performance": build_commercial_snapshot(payload, operations_state),
+        "operations_state_revision": _operations_display_revision(operations_state),
+        "inventory_generated_at": _state_now_iso(),
+        "inventory_duration_seconds": round(time.monotonic() - started, 3),
+    }
+
+
+def _start_inventory_refresh(project: str, project_settings: Dict[str, Any],
+                             report_payload: Optional[Dict[str, Any]]) -> None:
+    with _CACHE_LOCK:
+        state = _INVENTORY_REFRESH.setdefault(project, {})
+        if state.get("running") or time.monotonic() < state.get("retry_after", 0):
+            return
+        token = _CACHE_TOKENS.get(project, 0)
+        state.update(running=True, last_error="")
+    report_copy = copy.deepcopy(report_payload)
+
+    def worker() -> None:
+        try:
+            component = _generate_inventory_component(project, project_settings, report_copy)
+            if not _snapshot_matches_operations_state(project, project_settings, component):
+                raise RuntimeError("Operations state changed during inventory refresh.")
+            with _CACHE_LOCK:
+                if token != _CACHE_TOKENS.get(project, 0):
+                    raise RuntimeError("Inventory refresh invalidated by a dashboard action.")
+                _INVENTORY_CACHE[project] = (time.monotonic(), component)
+                state.update(last_error="", retry_after=0)
+        except Exception as exc:
+            with _CACHE_LOCK:
+                state.update(last_error=str(exc), retry_after=time.monotonic() + REFRESH_FAILURE_BACKOFF_SECONDS)
+        finally:
+            with _CACHE_LOCK:
+                state["running"] = False
+
+    threading.Thread(target=worker, name=f"operations-inventory-{project}", daemon=True).start()
+
+
+def _with_inventory(project: str, result: Dict[str, Any], project_settings: Dict[str, Any],
+                    report_payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Compose independent inventory without changing order freshness or membership."""
+    revision = result.get("operations_state_revision")
+    if not revision:
+        return result
+    now = time.monotonic()
+    with _CACHE_LOCK:
+        cached = _INVENTORY_CACHE.get(project)
+        if cached and cached[1].get("operations_state_revision") != revision:
+            cached = None
+        if cached is None and revision and result.get("inventory"):
+            # Reuse the persisted component after a worker restart, preserving its age.
+            stamp = result.get("inventory_generated_at") or result.get("generated_at")
+            try:
+                age = max(0, (datetime.now(timezone.utc) - datetime.fromisoformat(stamp.replace("Z", "+00:00"))).total_seconds())
+            except (ValueError, TypeError, AttributeError):
+                age = INVENTORY_REFRESH_SECONDS + 1
+            component = {k: copy.deepcopy(result[k]) for k in (
+                "inventory", "executive_kpis", "performance", "inventory_generated_at",
+                "inventory_duration_seconds", "operations_state_revision") if k in result}
+            component["inventory_generated_at"] = stamp
+            cached = (now - age, component)
+            _INVENTORY_CACHE[project] = cached
+        if cached:
+            for key, value in cached[1].items():
+                if key != "operations_state_revision":
+                    result[key] = copy.deepcopy(value)
+    if cached is None or now - cached[0] >= INVENTORY_REFRESH_SECONDS:
+        _start_inventory_refresh(project, project_settings, report_payload)
+    with _CACHE_LOCK:
+        state = dict(_INVENTORY_REFRESH.get(project) or {})
+    result["inventory_refresh"] = {
+        "in_progress": bool(state.get("running")),
+        "last_error": state.get("last_error", ""),
+        "generated_at": result.get("inventory_generated_at"),
+    }
+    return result
+
+
+def generate_roy_operations_snapshot(project: str, report_payload: Optional[Dict[str, Any]] = None,
+                                     *, defer_inventory: bool = False) -> Dict[str, Any]:
+    project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
+    assert_operations_project(project)
+    load_project_env(project)
+    project_settings = load_project_settings(project)
+    settings = resolve_roy_operations_settings(project_settings)
+    started = time.monotonic()
+    orders, scan = fetch_open_orders_for_roy_operations(project, settings)
+    order_snapshot = build_roy_orders_snapshot(project=project, orders=orders, settings=settings, scan=scan)
+    state = load_roy_operations_state(project, project_settings, require_configured_remote=True)
+    annotate_picking_print_state(order_snapshot, state)
+    result = {
         "marker": f"{project}-operations-dashboard",
+        "refresh_policy": "independent-orders-v1",
         "project": project,
         "generated_at": order_snapshot["generated_at"],
-        "operations_state_revision": _operations_display_revision(operations_state),
+        "operations_state_revision": _operations_display_revision(state),
         "auto_refresh_seconds": order_snapshot["auto_refresh_seconds"],
         "orders": order_snapshot,
-        "executive_kpis": build_executive_kpi_snapshot(payload),
-        "inventory": inventory_snapshot,
-        "performance": build_commercial_snapshot(payload, operations_state),
-        "operations_state": {
-            "inbound_order_count": len(operations_state.get("inbound_orders") or {}),
-            "inventory_restock_excluded_count": len(
-                operations_state.get("inventory_restock_exclusions") or {}
-            ),
-            "acknowledged_loss_product_count": len(operations_state.get("loss_acknowledgements") or {}),
-            "auto_cleared_inbound_order_count": len(operations_state.get("auto_cleared_inbound_orders") or []),
-            "printed_picking_order_count": len(operations_state.get("printed_picking_orders") or {}),
-            "last_picking_print_batch": (operations_state.get("picking_print_batches") or [None])[-1],
-        },
+        "orders_duration_seconds": round(time.monotonic() - started, 3),
+        "operations_state": _operations_state_summary(state),
+        "inventory": {}, "executive_kpis": {}, "performance": {},
     }
+    if defer_inventory:
+        return _with_inventory(project, result, project_settings, report_payload)
+    component = _generate_inventory_component(project, project_settings, report_payload)
+    # A synchronous action readback still needs inventory, then fresh print state.
+    state = load_roy_operations_state(project, project_settings, require_configured_remote=True)
+    if component["operations_state_revision"] != _operations_display_revision(state):
+        raise RuntimeError("Operations state changed during snapshot generation.")
+    annotate_picking_print_state(order_snapshot, state)
+    result.update(component)
+    result["operations_state"] = _operations_state_summary(state)
+    with _CACHE_LOCK:
+        _INVENTORY_CACHE[project] = (time.monotonic(), copy.deepcopy(component))
+    return result
+
 
 
 def _cache_payload(
@@ -3196,10 +3293,22 @@ def _background_refresh_state(project: str) -> Dict[str, Any]:
         return copy.deepcopy(_BACKGROUND_REFRESH.get(project) or {})
 
 
+def _publish_operations_snapshot(project: str, payload: Dict[str, Any], token: int) -> bool:
+    # Serialize memory and shared publication with local invalidation/newer results.
+    settings = load_project_settings(project)
+    if not _snapshot_matches_operations_state(project, settings, payload):
+        return False
+    with _CACHE_LOCK:
+        if not _cache_payload(project, payload, token=token):
+            return False
+        _save_shared_operations_snapshot(project, settings, payload)
+        return True
+
+
 def _start_background_operations_refresh(project: str, report_payload: Optional[Dict[str, Any]]) -> None:
     with _CACHE_LOCK:
         state = _BACKGROUND_REFRESH.setdefault(project, {})
-        if state.get("running"):
+        if state.get("running") or time.monotonic() < state.get("retry_after", 0):
             return
         token = _CACHE_TOKENS.get(project, 0)
         state.update(
@@ -3214,19 +3323,19 @@ def _start_background_operations_refresh(project: str, report_payload: Optional[
 
     def _worker() -> None:
         try:
-            payload = generate_roy_operations_snapshot(project, report_payload=report_payload_copy)
-            stored = _cache_payload(project, payload, token=token)
-            if stored:
-                _save_shared_operations_snapshot(project, load_project_settings(project), payload)
+            payload = generate_roy_operations_snapshot(project, report_payload=report_payload_copy, defer_inventory=True)
+            stored = _publish_operations_snapshot(project, payload, token)
             with _CACHE_LOCK:
                 state = _BACKGROUND_REFRESH.setdefault(project, {})
                 state["running"] = False
+                state["retry_after"] = 0
                 state["last_completed_at"] = time.monotonic()
                 state["last_error"] = "" if stored else "Cache invalidated while refresh was running."
         except Exception as exc:
             with _CACHE_LOCK:
                 state = _BACKGROUND_REFRESH.setdefault(project, {})
                 state["running"] = False
+                state["retry_after"] = time.monotonic() + REFRESH_FAILURE_BACKOFF_SECONDS
                 state["last_failed_at"] = time.monotonic()
                 state["last_error"] = str(exc)
 
@@ -3243,6 +3352,7 @@ def get_cached_roy_operations_snapshot(
     *,
     report_payload: Optional[Dict[str, Any]] = None,
     force_refresh: bool = False,
+    request_refresh: bool = False,
 ) -> Dict[str, Any]:
     project = (project or BASE_DEFAULT_PROJECT).strip() or BASE_DEFAULT_PROJECT
     assert_operations_project(project)
@@ -3279,18 +3389,21 @@ def get_cached_roy_operations_snapshot(
                 "ttl_seconds": settings["cache_ttl_seconds"],
                 "refresh_in_progress": True,
             }
-            return result
+            return _with_inventory(project, result, project_settings, report_payload)
     if cached and not force_refresh:
         cached_at, payload = cached
         age_seconds = now - cached_at
+        if request_refresh:
+            _start_background_operations_refresh(project, report_payload)
         if age_seconds <= settings["cache_ttl_seconds"]:
             result = copy.deepcopy(payload)
             result["cache"] = {
                 "status": "fresh",
                 "age_seconds": round(age_seconds, 1),
                 "ttl_seconds": settings["cache_ttl_seconds"],
+                "refresh_in_progress": bool(_background_refresh_state(project).get("running")),
             }
-            return result
+            return _with_inventory(project, result, project_settings, report_payload)
         _start_background_operations_refresh(project, report_payload)
         background_state = _background_refresh_state(project)
         result = copy.deepcopy(payload)
@@ -3302,42 +3415,58 @@ def get_cached_roy_operations_snapshot(
         }
         if background_state.get("last_error"):
             result["cache"]["last_refresh_error"] = str(background_state["last_error"])
-        return result
+        return _with_inventory(project, result, project_settings, report_payload)
 
-    # Individual read-only GraphQL calls already perform paced transient retries.
-    # Repeating the complete multi-page snapshot amplifies upstream throttling.
-    generate_attempts = 1
-    last_error: Optional[Exception] = None
-    payload = None
-    for attempt in range(generate_attempts):
-        try:
-            payload = generate_roy_operations_snapshot(project, report_payload=report_payload)
-            break
-        except Exception as exc:
-            last_error = exc
-            if attempt + 1 < generate_attempts:
-                time.sleep(2.0 * (attempt + 1))
-    if payload is None:
-        if cached:
-            cached_at, cached_payload = cached
-            result = copy.deepcopy(cached_payload)
-            result["cache"] = {
-                "status": "stale_after_error",
-                "age_seconds": round(now - cached_at, 1),
-                "ttl_seconds": settings["cache_ttl_seconds"],
-                "error": str(last_error),
-            }
-            return result
-        raise last_error or RuntimeError("Failed to generate ROY operations snapshot")
+    with _CACHE_LOCK:
+        scan_lock = _SYNC_REFRESH_LOCKS.setdefault(project, threading.RLock())
+    with scan_lock:
+        # Another cold request may have populated the cache while this one waited.
+        # Coalesce initial loads without serializing the independent inventory work.
+        with _CACHE_LOCK:
+            populated = project in _CACHE
+        if populated and not force_refresh:
+            return get_cached_roy_operations_snapshot(
+                project, report_payload=report_payload, request_refresh=request_refresh)
+        # Individual read-only GraphQL calls already perform paced transient retries.
+        # Repeating the complete multi-page snapshot amplifies upstream throttling.
+        generate_attempts = 1
+        with _CACHE_LOCK:
+            token = _CACHE_TOKENS.get(project, 0) + 1
+            _CACHE_TOKENS[project] = token
+        last_error: Optional[Exception] = None
+        payload = None
+        for attempt in range(generate_attempts):
+            try:
+                if force_refresh:
+                    payload = generate_roy_operations_snapshot(project, report_payload=report_payload)
+                else:
+                    payload = generate_roy_operations_snapshot(project, report_payload=report_payload, defer_inventory=True)
+                break
+            except Exception as exc:
+                last_error = exc
+                if attempt + 1 < generate_attempts:
+                    time.sleep(2.0 * (attempt + 1))
+        if payload is None:
+            if cached:
+                cached_at, cached_payload = cached
+                result = copy.deepcopy(cached_payload)
+                result["cache"] = {
+                    "status": "stale_after_error",
+                    "age_seconds": round(now - cached_at, 1),
+                    "ttl_seconds": settings["cache_ttl_seconds"],
+                    "error": str(last_error),
+                }
+                return _with_inventory(project, result, project_settings, report_payload)
+            raise last_error or RuntimeError("Failed to generate ROY operations snapshot")
 
-    _cache_payload(cache_key, payload)
-    _save_shared_operations_snapshot(project, project_settings, payload)
-    payload["cache"] = {
-        "status": "refreshed",
-        "age_seconds": 0,
-        "ttl_seconds": settings["cache_ttl_seconds"],
-    }
-    return payload
+        if not _publish_operations_snapshot(cache_key, payload, token):
+            raise RuntimeError("Snapshot invalidated during refresh; retry the dashboard read.")
+        payload["cache"] = {
+            "status": "refreshed",
+            "age_seconds": 0,
+            "ttl_seconds": settings["cache_ttl_seconds"],
+        }
+        return payload
 
 
 def _resolve_order_status_id(

@@ -40,6 +40,7 @@ def validate_proof(task, proof, receipt):
     assert ips and set(identity["private_ips"]) == ips
     assert proof["marker"] == "pdf-batch-v1" and proof["batch_races_verified"] is True
     assert proof["synthetic_batch_tests"] >= 5 and proof["preview_pdf_bytes"] > 1000
+    assert proof["refresh_policy"] == "independent-orders-v1" and proof["independent_refresh_tests"] >= 9
 
 
 def main():
@@ -222,7 +223,9 @@ def main():
             return response.read()
 
     assert json.loads(live("/health"))["ok"] is True
-    assert b'data-picking-policy="pdf-batch-v1"' in live(f"/production/{args.project}")
+    html = live(f"/production/{args.project}")
+    assert b'data-picking-policy="pdf-batch-v1"' in html
+    assert b'data-refresh-policy="independent-orders-v1"' in html
     data = json.loads(live(f"/api/operations/{args.project}/live?refresh=0"))
     assert data["project"] == args.project
     assert live(f"/api/operations/{args.project}/picking-lists.pdf?preview=1&refresh=0").startswith(b"%PDF-")
