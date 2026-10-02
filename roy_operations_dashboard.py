@@ -367,6 +367,7 @@ _BACKGROUND_REFRESH: Dict[str, Dict[str, Any]] = {}
 _CACHE_TOKENS: Dict[str, int] = {}
 _INVENTORY_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
 _INVENTORY_REFRESH: Dict[str, Dict[str, Any]] = {}
+_SYNC_REFRESH_LOCKS: Dict[str, Any] = {}
 INVENTORY_REFRESH_SECONDS = 300
 REFRESH_FAILURE_BACKOFF_SECONDS = 30
 STATE_VERSION = 2
@@ -3416,46 +3417,56 @@ def get_cached_roy_operations_snapshot(
             result["cache"]["last_refresh_error"] = str(background_state["last_error"])
         return _with_inventory(project, result, project_settings, report_payload)
 
-    # Individual read-only GraphQL calls already perform paced transient retries.
-    # Repeating the complete multi-page snapshot amplifies upstream throttling.
-    generate_attempts = 1
     with _CACHE_LOCK:
-        token = _CACHE_TOKENS.get(project, 0) + 1
-        _CACHE_TOKENS[project] = token
-    last_error: Optional[Exception] = None
-    payload = None
-    for attempt in range(generate_attempts):
-        try:
-            if force_refresh:
-                payload = generate_roy_operations_snapshot(project, report_payload=report_payload)
-            else:
-                payload = generate_roy_operations_snapshot(project, report_payload=report_payload, defer_inventory=True)
-            break
-        except Exception as exc:
-            last_error = exc
-            if attempt + 1 < generate_attempts:
-                time.sleep(2.0 * (attempt + 1))
-    if payload is None:
-        if cached:
-            cached_at, cached_payload = cached
-            result = copy.deepcopy(cached_payload)
-            result["cache"] = {
-                "status": "stale_after_error",
-                "age_seconds": round(now - cached_at, 1),
-                "ttl_seconds": settings["cache_ttl_seconds"],
-                "error": str(last_error),
-            }
-            return _with_inventory(project, result, project_settings, report_payload)
-        raise last_error or RuntimeError("Failed to generate ROY operations snapshot")
+        scan_lock = _SYNC_REFRESH_LOCKS.setdefault(project, threading.RLock())
+    with scan_lock:
+        # Another cold request may have populated the cache while this one waited.
+        # Coalesce initial loads without serializing the independent inventory work.
+        with _CACHE_LOCK:
+            populated = project in _CACHE
+        if populated and not force_refresh:
+            return get_cached_roy_operations_snapshot(
+                project, report_payload=report_payload, request_refresh=request_refresh)
+        # Individual read-only GraphQL calls already perform paced transient retries.
+        # Repeating the complete multi-page snapshot amplifies upstream throttling.
+        generate_attempts = 1
+        with _CACHE_LOCK:
+            token = _CACHE_TOKENS.get(project, 0) + 1
+            _CACHE_TOKENS[project] = token
+        last_error: Optional[Exception] = None
+        payload = None
+        for attempt in range(generate_attempts):
+            try:
+                if force_refresh:
+                    payload = generate_roy_operations_snapshot(project, report_payload=report_payload)
+                else:
+                    payload = generate_roy_operations_snapshot(project, report_payload=report_payload, defer_inventory=True)
+                break
+            except Exception as exc:
+                last_error = exc
+                if attempt + 1 < generate_attempts:
+                    time.sleep(2.0 * (attempt + 1))
+        if payload is None:
+            if cached:
+                cached_at, cached_payload = cached
+                result = copy.deepcopy(cached_payload)
+                result["cache"] = {
+                    "status": "stale_after_error",
+                    "age_seconds": round(now - cached_at, 1),
+                    "ttl_seconds": settings["cache_ttl_seconds"],
+                    "error": str(last_error),
+                }
+                return _with_inventory(project, result, project_settings, report_payload)
+            raise last_error or RuntimeError("Failed to generate ROY operations snapshot")
 
-    if not _publish_operations_snapshot(cache_key, payload, token):
-        raise RuntimeError("Snapshot invalidated during refresh; retry the dashboard read.")
-    payload["cache"] = {
-        "status": "refreshed",
-        "age_seconds": 0,
-        "ttl_seconds": settings["cache_ttl_seconds"],
-    }
-    return payload
+        if not _publish_operations_snapshot(cache_key, payload, token):
+            raise RuntimeError("Snapshot invalidated during refresh; retry the dashboard read.")
+        payload["cache"] = {
+            "status": "refreshed",
+            "age_seconds": 0,
+            "ttl_seconds": settings["cache_ttl_seconds"],
+        }
+        return payload
 
 
 def _resolve_order_status_id(

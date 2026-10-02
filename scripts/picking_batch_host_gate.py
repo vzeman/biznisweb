@@ -88,7 +88,7 @@ def main():
         pdf = curl(f"/api/operations/{project}/picking-lists.pdf?preview=1&refresh=0")
         assert pdf.startswith(b"%PDF-") and len(pdf) > 1000
         proof.update({"synthetic_batch_tests": result.testsRun, "batch_races_verified": True,
-                      "refresh_policy": live["refresh_policy"], "independent_refresh_tests": 8,
+                      "refresh_policy": live["refresh_policy"], "independent_refresh_tests": 9,
                       "orders_duration_seconds": live["orders_duration_seconds"],
                       "live_order_count": len(live["orders"]["orders"]), "preview_pdf_bytes": len(pdf)})
         assert json.loads(curl("/__picking_batch_marker")) == proof

@@ -27,7 +27,7 @@ class IndependentRefreshTests(unittest.TestCase):
             return thread
 
         self.stack.enter_context(patch("roy_operations_dashboard.threading.Thread", side_effect=tracked_thread))
-        for name in ("_CACHE", "_CACHE_TOKENS", "_BACKGROUND_REFRESH", "_INVENTORY_CACHE", "_INVENTORY_REFRESH"):
+        for name in ("_CACHE", "_CACHE_TOKENS", "_BACKGROUND_REFRESH", "_INVENTORY_CACHE", "_INVENTORY_REFRESH", "_SYNC_REFRESH_LOCKS"):
             self.stack.enter_context(patch.dict(getattr(rod, name), {}, clear=True))
         self.settings = make_project_settings()
         self.settings["operations_dashboard"].update(cache_ttl_seconds=1, auto_refresh_seconds=30)
@@ -181,6 +181,36 @@ class IndependentRefreshTests(unittest.TestCase):
         self.assertFalse(rod._publish_operations_snapshot("roy", payload, 0))
         self.assertNotIn("roy", rod._CACHE)
         self.shared.assert_not_called()
+
+    def test_simultaneous_cold_requests_share_one_order_scan(self):
+        entered, duplicate = threading.Event(), threading.Event()
+        results, errors = [], []
+
+        def blocked_orders(*args):
+            if entered.is_set():
+                duplicate.set()
+            entered.set()
+            self.release.wait(timeout=3)
+            return [], {}
+
+        def read():
+            try:
+                results.append(rod.get_cached_roy_operations_snapshot("roy"))
+            except Exception as exc:
+                errors.append(exc)
+
+        self.fetch.side_effect = blocked_orders
+        first = threading.Thread(target=read)
+        first.start()
+        self.assertTrue(entered.wait(timeout=1))
+        second = threading.Thread(target=read)
+        second.start()
+        self.assertFalse(duplicate.wait(timeout=0.1))
+        self.release.set()
+        self.join_workers()
+        self.assertEqual([], errors)
+        self.assertEqual(2, len(results))
+        self.assertEqual(1, self.fetch.call_count)
 
 
 class RefreshBrowserTests(unittest.TestCase):
