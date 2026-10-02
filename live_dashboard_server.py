@@ -1315,7 +1315,7 @@ def build_roy_operations_dashboard_html(
       <div id="maintenanceMeta" class="maintenance-meta">Po dokončení sa dashboard odblokuje automaticky.</div>
     </div>
   </div>
-  <main id="dashboardRoot" data-marker="__SHOP_MARKER__-operations-dashboard" __MAINTENANCE_INERT__>
+  <main data-refresh-policy="independent-orders-v1" id="dashboardRoot" data-marker="__SHOP_MARKER__-operations-dashboard" __MAINTENANCE_INERT__>
     <header>
       <div>
         <h1>__SHOP_NAME__ operations dashboard</h1>
@@ -1570,6 +1570,11 @@ def build_roy_operations_dashboard_html(
       if (saved && saved.project === project && /^[a-f0-9]{32}$/.test(saved.batchId) && saved.count > 0) downloadedPickingBatch = saved;
     } catch (_error) { /* A blocked storage area must not prevent this tab from downloading. */ }
     let refreshTimer = null;
+    let dashboardRefreshInFlight = null;
+    let queuedDashboardReadback = false;
+    let quickRefreshStartedAt = null;
+    const QUICK_REFRESH_MS = 5000;
+    const QUICK_REFRESH_LIMIT_MS = 120000;
     let kpiScope = 'monthly';
     let ordersPage = 1;
     let ordersPageSize = 10;
@@ -1673,7 +1678,7 @@ def build_roy_operations_dashboard_html(
         el('maintenanceMessage').textContent = next.message || 'Prosíme o strpenie a dashboard zatiaľ nepoužívajte.';
         el('maintenanceMeta').textContent = maintenancePhaseLabel(next);
         if (refreshTimer) {
-          clearInterval(refreshTimer);
+          clearTimeout(refreshTimer);
           refreshTimer = null;
         }
         if (document.activeElement !== overlay) overlay.focus({preventScroll:true});
@@ -2299,7 +2304,12 @@ def build_roy_operations_dashboard_html(
     function render(data) {
       latestData = data;
       const cache = data.cache || {};
-      el('subtitle').textContent = `Posledná aktualizácia ${text(data.generated_at)}. Auto refresh ${fmtInt(data.auto_refresh_seconds || 90)}s.`;
+      const inventory = data.inventory_refresh || {};
+      const refreshing = cache.refresh_in_progress ? ' · Obnovujem objednávky…' : '';
+      const stock = inventory.in_progress ? ' · Obnovujem sklad…' : '';
+      const warning = cache.last_refresh_error ? ' · Obnova objednávok zlyhala, zobrazujem posledné dáta.' : '';
+      const stockWarning = inventory.last_error ? ' · Obnova skladu zlyhala.' : '';
+      el('subtitle').textContent = `Objednávky: ${text(data.generated_at)} · Sklad: ${text(data.inventory_generated_at, 'načítava sa')}. Auto refresh ${fmtInt(data.auto_refresh_seconds || 90)}s.${refreshing}${stock}${warning}${stockWarning}`;
       el('cacheBadge').textContent = `${text(cache.status, 'live')} ${cache.age_seconds !== undefined ? `${cache.age_seconds}s` : ''}`;
       el('cacheBadge').className = `badge ${cache.status === 'stale_after_error' ? 'bad' : 'info'}`;
       renderAlerts(data);
@@ -2310,24 +2320,54 @@ def build_roy_operations_dashboard_html(
       renderPerformance(data);
       notifyAboutNewFulfillableOrders(data);
     }
-    async function loadDashboard(force=false) {
+    function scheduleDashboardRefresh(data) {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = null;
       if (maintenanceLocked) return;
+      const pending = Boolean((data.cache || {}).refresh_in_progress || (data.inventory_refresh || {}).in_progress);
+      const now = Date.now();
+      if (pending && quickRefreshStartedAt === null) quickRefreshStartedAt = now;
+      if (!pending) quickRefreshStartedAt = null;
+      const quick = pending && now - quickRefreshStartedAt < QUICK_REFRESH_LIMIT_MS;
+      const delay = quick ? QUICK_REFRESH_MS : Math.max(30, Number(data.auto_refresh_seconds || 90)) * 1000;
+      refreshTimer = setTimeout(() => loadDashboard(false), delay);
+    }
+    async function loadDashboard(force=false, requestRefresh=false) {
+      if (maintenanceLocked) return;
+      if (dashboardRefreshInFlight) {
+        // Preserve mandatory action readback without allowing overlapping responses.
+        if (force) queuedDashboardReadback = true;
+        return dashboardRefreshInFlight;
+      }
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = null;
+      if (requestRefresh) quickRefreshStartedAt = null;
       el('refreshBtn').disabled = true;
-      try {
-        const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/live${force ? '?refresh=1' : ''}`, { cache:'no-store' });
-        const data = await readJsonApi(response, 'Live načítanie');
-        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-        clearMessage();
-        render(data);
-        if (refreshTimer) clearInterval(refreshTimer);
-        if (!maintenanceLocked) {
-          refreshTimer = setInterval(() => loadDashboard(false), Math.max(30, Number(data.auto_refresh_seconds || 90)) * 1000);
+      dashboardRefreshInFlight = (async () => {
+        try {
+          const query = force ? '?refresh=1' : (requestRefresh ? '?revalidate=1' : '');
+          const response = await fetchApi(`/api/operations/${encodeURIComponent(project)}/live${query}`, { cache:'no-store' });
+          const data = await readJsonApi(response, 'Live načítanie');
+          if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+          clearMessage();
+          render(data);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          showMessage(latestData ? `Live refresh zlyhal, zobrazujem posledné načítané dáta: ${message}` : message);
+        } finally {
+          el('refreshBtn').disabled = false;
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        showMessage(latestData ? `Live refresh zlyhal, zobrazujem posledné načítané dáta: ${message}` : message);
+      })();
+      try {
+        await dashboardRefreshInFlight;
       } finally {
-        el('refreshBtn').disabled = false;
+        dashboardRefreshInFlight = null;
+        if (queuedDashboardReadback) {
+          queuedDashboardReadback = false;
+          await loadDashboard(true);
+        } else {
+          scheduleDashboardRefresh(latestData || {});
+        }
       }
     }
     async function markPickupShipped(input) {
@@ -2546,10 +2586,10 @@ def build_roy_operations_dashboard_html(
         showMessage(error instanceof Error ? error.message : String(error));
       }
     }
-    // A normal refresh returns the current snapshot promptly and revalidates it
-    // in the background. Full synchronous scans remain reserved for state-changing
+    // Manual refresh starts an asynchronous order refresh even within the TTL.
+    // Full synchronous scans remain reserved for state-changing
     // dashboard actions that need an immediate readback.
-    el('refreshBtn').addEventListener('click', () => loadDashboard(false));
+    el('refreshBtn').addEventListener('click', () => loadDashboard(false, true));
     el('markPickingPrintedBtn').addEventListener('click', () => markPickingPrinted());
     el('pickingPdfLink').addEventListener('click', (event) => {
       event.preventDefault();
@@ -2762,6 +2802,7 @@ class LiveDashboardHandler(BaseHTTPRequestHandler):
                         project,
                         report_payload=read_latest_dashboard_payload(project),
                         force_refresh=force_refresh,
+                        request_refresh=query.get("revalidate", [""])[0] == "1",
                     )
                 )
             except Exception as exc:

@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 import unittest
 from http.server import ThreadingHTTPServer
 from urllib.request import urlopen
@@ -34,6 +35,7 @@ def main():
     # Run isolated writes before any live read can start background refreshes.
     # All storage and upstream calls in these tests use synthetic dictionaries.
     from tests.test_picking_print_batches import PickingBatchHttpTests, PickingBatchTests
+    from tests.test_operations_refresh import IndependentRefreshTests
     suite = unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromTestCase(cls)
                                for cls in (PickingBatchHttpTests, PickingBatchTests))
     suite.addTests(unittest.defaultTestLoader.loadTestsFromNames([
@@ -42,6 +44,7 @@ def main():
         "tests.test_roy_operations_dashboard.RoyOperationsDashboardTests."
         "test_display_revision_rejects_operational_changes_and_unreadable_state",
     ]))
+    suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(IndependentRefreshTests))
     output = io.StringIO()
     result = unittest.TextTestRunner(stream=output).run(suite)
     if not result.wasSuccessful():
@@ -72,11 +75,21 @@ def main():
         assert json.loads(curl("/health"))["ok"] is True
         html = curl(f"/production/{project}")
         assert b'data-picking-policy="pdf-batch-v1"' in html and b"batch_id: batch.batchId" in html
+        assert b'data-refresh-policy="independent-orders-v1"' in html
         live = json.loads(curl(f"/api/operations/{project}/live?refresh=0"))
+        # A shared snapshot can predate this release. Require new order publication.
+        for _ in range(60):
+            if live.get("refresh_policy") == "independent-orders-v1":
+                break
+            time.sleep(5)
+            live = json.loads(curl(f"/api/operations/{project}/live?refresh=0"))
+        assert live.get("refresh_policy") == "independent-orders-v1"
         assert live["project"] == project and live["marker"] == f"{project}-operations-dashboard"
         pdf = curl(f"/api/operations/{project}/picking-lists.pdf?preview=1&refresh=0")
         assert pdf.startswith(b"%PDF-") and len(pdf) > 1000
         proof.update({"synthetic_batch_tests": result.testsRun, "batch_races_verified": True,
+                      "refresh_policy": live["refresh_policy"], "independent_refresh_tests": 7,
+                      "orders_duration_seconds": live["orders_duration_seconds"],
                       "live_order_count": len(live["orders"]["orders"]), "preview_pdf_bytes": len(pdf)})
         assert json.loads(curl("/__picking_batch_marker")) == proof
         print("PICKING_BATCH_HOST_OK " + json.dumps(proof), flush=True)

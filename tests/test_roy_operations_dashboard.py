@@ -220,7 +220,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         inventory = project_settings["inventory_model"]
 
         self.assertTrue(operations["enabled"])
-        self.assertEqual(90, operations["auto_refresh_seconds"])
+        self.assertEqual(30, operations["auto_refresh_seconds"])
         self.assertEqual(23, operations["pickup_ready_status_id"])
         self.assertEqual("Pripravené k odberu", operations["pickup_ready_status_name"])
         self.assertEqual(4, operations["shipped_status_id"])
@@ -817,7 +817,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
         self.assertIn("fetchApi(`/api/operations/${encodeURIComponent(project)}/live", html)
         self.assertIn("async function readJsonApi(response, context)", html)
         self.assertIn("upstream nevrátil údaje", html)
-        self.assertIn("el('refreshBtn').addEventListener('click', () => loadDashboard(false));", html)
+        self.assertIn("el('refreshBtn').addEventListener('click', () => loadDashboard(false, true));", html)
         self.assertNotIn("await fetch(`/api/operations/", html)
         self.assertIn("data-ready-pickup", html)
         self.assertIn("/ready", html)
@@ -942,7 +942,8 @@ class RoyOperationsDashboardTests(unittest.TestCase):
              patch("roy_operations_dashboard.load_roy_operations_state", return_value=state), \
              patch("roy_operations_dashboard._load_shared_operations_snapshot", return_value=None), \
              patch("roy_operations_dashboard._save_shared_operations_snapshot"), \
-             patch("roy_operations_dashboard.generate_roy_operations_snapshot", return_value={"project": "roy"}) as generate:
+             patch("roy_operations_dashboard.generate_roy_operations_snapshot", side_effect=lambda *a, **k: {
+                 "project": "roy", "operations_state_revision": rod._operations_display_revision(state)}) as generate:
             # The existing shared/worker cache is upgraded only after exact ETag validation.
             self.assertEqual(rod.get_cached_roy_operations_snapshot("roy")["cache"]["status"], "fresh")
             self.assertTrue(cached["operations_state_revision"].startswith("state-v1:"))
@@ -999,6 +1000,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
                 patch("roy_operations_dashboard.time.monotonic", return_value=105.0),
                 patch("roy_operations_dashboard._start_background_operations_refresh") as start_background,
                 patch("roy_operations_dashboard.generate_roy_operations_snapshot", return_value=fresh_payload) as generate_snapshot,
+                patch("roy_operations_dashboard._snapshot_matches_operations_state", return_value=True),
             ):
                 result = rod.get_cached_roy_operations_snapshot(project, force_refresh=True)
 

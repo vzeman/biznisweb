@@ -27,7 +27,8 @@ class PickingBatchTests(unittest.TestCase):
                     "attachments": [{"details": [{"name": "privateIPv4Address", "value": "172.31.1.2"}]}]}
             proof = {"identity": {"task_arn": "task-1", "service": SERVICES[project][0], "project": project,
                                   "path": "/app", "private_ips": ["172.31.1.2"]},
-                     "marker": "pdf-batch-v1", "batch_races_verified": True, "synthetic_batch_tests": 5, "preview_pdf_bytes": 1500}
+                     "marker": "pdf-batch-v1", "batch_races_verified": True, "synthetic_batch_tests": 15, "preview_pdf_bytes": 1500,
+                     "refresh_policy": "independent-orders-v1", "independent_refresh_tests": 7}
             validate_proof(task, proof, receipt)
             for field, value in (("task_arn", "another-task"), ("path", "/wrong"),
                                  ("private_ips", ["172.31.1.3"]), ("project", "foreign")):
