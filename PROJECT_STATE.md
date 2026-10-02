@@ -1,3 +1,14 @@
+## 2026-10-02 — Read-only ROY dashboard refresh diagnosis
+
+Date: 2026-10-02, 14:18 UTC
+Repo: `vzeman/biznisweb`
+Branch: `codex/dashboard-refresh-diagnosis-20261002`
+What changed: Documentation only, in response to the owner's question about slow order appearance. Clean detached checkout was synchronized with `origin/main` by fetch/prune and pull/rebase before creating this branch. No runtime, settings, orders or print acknowledgements were changed, and no local server/worker was started.
+What is verified: Exact ROY App Runner service `ff762bb1c93148638741c62e7abb45b2` remains RUNNING on the deployed `sha256:4fec00b38699b2b182b87246f5de8c41716fe1d053454cf9a85923cddefe5665`. Current source/config and live DOM/API agree on 90-second browser polling and 60-second server cache TTL. Both timer and Refresh button call the ordinary cached endpoint. A stale response starts background revalidation and immediately returns old data; the browser has no completion-triggered poll, so it waits another ordinary interval. The refresh timer restarts after a successful response. Snapshot generation scans orders, then completes inventory/live-stock processing before publishing the combined result.
+Observed production evidence: At `2026-10-02T14:18:38Z`, an ordinary authenticated GET returned in 1.30 seconds but had `generated_at=2026-10-02T14:14:43Z`, `cache.status=stale_revalidating`, `age_seconds=182.3`, `ttl_seconds=60`, and `refresh_in_progress=true`. Source-data age was about 235 seconds; cache age is measured from insertion and is not source-data age. The shared snapshot with that generated time was saved at `14:15:34Z`, 51 seconds after the order snapshot timestamp. Its scan covered 240 orders / eight pages; inventory diagnostics recorded 47 targets / 87 search terms and zero errors. The user's tab independently showed the same generated timestamp and revalidation status. This is evidence of stale displayed data, not a measured creation-to-display latency for any particular new order or a maximum latency guarantee.
+Known issues: A 90-second label does not guarantee order visibility within 90 seconds. Background scan duration, inventory coupling and a further browser poll can extend the delay; failed revalidation can retain older data. This diagnosis does not alter or resolve the historical unpaid-order incident. Existing PDF batch and COD-only safeguards remain deployed.
+Next exact step: No implementation was requested in this frequency question. If refresh performance is addressed, separate order refresh/publication from inventory work, measure each stage, and fetch completed background results promptly with bounded polling. Preserve payment/picking eligibility and immutable PDF-batch behavior. Merely reducing the ordinary interval does not remove backend coupling. No production deployment is part of this diagnostic change.
+
 ## 2026-10-01 — Current handoff: dashboards and COD-only invoices deployed
 
 Date: 2026-10-01, 10:32 UTC
