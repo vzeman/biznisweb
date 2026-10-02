@@ -32,7 +32,7 @@ are joined. No persistent dev server is required for these tests.
 Release through `scripts/deploy_picking_batch_dashboard.py` from a clean exact
 merged checkout. Its finite host gate now requires `independent-orders-v1` in the
 HTML and a newly published API result, alongside the existing PDF proof, localhost
-marker and seven isolated backend refresh tests. The private receipt records task,
+marker and eight isolated backend refresh tests. The private receipt records task,
 IP, path, digest and measured order-scan duration. Promote only the intended shop;
 all non-image settings and reporting schedules must remain identical. Then verify
 actual UI refresh and read back the remaining scheduled runtimes independently.

@@ -3129,24 +3129,15 @@ def _generate_inventory_component(project: str, project_settings: Dict[str, Any]
         require_configured_remote=True,
     )
     base_inventory, _ = build_inventory_snapshot(payload, project_settings=project_settings)
-    try:
-        current_stock_by_sku, live_stock_diagnostics = fetch_current_stock_for_inventory_alerts(
-            project,
-            project_settings,
-            base_inventory,
-            state=operations_state,
-        )
-    except Exception as exc:
-        current_stock_by_sku = {}
-        live_stock_diagnostics = {
-            "enabled": True,
-            "source": "biznisweb_product_search",
-            "target_count": 0,
-            "matched_count": 0,
-            "error_count": 1,
-            "errors": [str(exc)[:240]],
-            "checked_at": _state_now_iso(),
-        }
+    current_stock_by_sku, live_stock_diagnostics = fetch_current_stock_for_inventory_alerts(
+        project,
+        project_settings,
+        base_inventory,
+        state=operations_state,
+    )
+    if live_stock_diagnostics.get("error_count"):
+        # Keep the previous verified component; do not label fallback report stock fresh.
+        raise RuntimeError("Live stock verification was incomplete; previous inventory retained.")
     inventory_snapshot, state_changed = build_inventory_snapshot(
         payload,
         state=operations_state,

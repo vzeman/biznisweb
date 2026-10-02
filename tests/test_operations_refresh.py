@@ -175,8 +175,22 @@ class IndependentRefreshTests(unittest.TestCase):
             self.assertFalse(result["cache"]["refresh_in_progress"])
         self.assertEqual(count, self.fetch.call_count)
 
+    def test_remote_state_change_rejects_order_publication_before_memory_or_shared_write(self):
+        payload = {"operations_state_revision": rod._operations_display_revision(self.state)}
+        self.state["printed_picking_orders"]["synthetic"] = {"printed_at": "changed"}
+        self.assertFalse(rod._publish_operations_snapshot("roy", payload, 0))
+        self.assertNotIn("roy", rod._CACHE)
+        self.shared.assert_not_called()
+
 
 class RefreshBrowserTests(unittest.TestCase):
+    def test_partial_live_stock_failure_does_not_publish_fallback_as_fresh_inventory(self):
+        with patch("roy_operations_dashboard.load_roy_operations_state", return_value=rod._empty_operations_state()), \
+             patch("roy_operations_dashboard.build_inventory_snapshot", return_value=({}, False)), \
+             patch("roy_operations_dashboard.fetch_current_stock_for_inventory_alerts", return_value=({}, {"error_count": 1})):
+            with self.assertRaisesRegex(RuntimeError, "previous inventory retained"):
+                rod._generate_inventory_component("roy", make_project_settings(), {})
+
     @unittest.skipUnless(shutil.which("node"), "Node.js required")
     def test_completion_polling_single_flight_failure_and_action_queue(self):
         html = build_roy_operations_dashboard_html("roy")

@@ -40,7 +40,7 @@ def validate_proof(task, proof, receipt):
     assert ips and set(identity["private_ips"]) == ips
     assert proof["marker"] == "pdf-batch-v1" and proof["batch_races_verified"] is True
     assert proof["synthetic_batch_tests"] >= 5 and proof["preview_pdf_bytes"] > 1000
-    assert proof["refresh_policy"] == "independent-orders-v1" and proof["independent_refresh_tests"] >= 7
+    assert proof["refresh_policy"] == "independent-orders-v1" and proof["independent_refresh_tests"] >= 8
 
 
 def main():
