@@ -448,6 +448,59 @@ class DuplicateGuardTests(unittest.TestCase):
                     {issue["type"] for issue in results[0]["issues"]},
                 )
 
+    def test_batch_56_finishing_aliases_are_blocked_by_canonical_articles(self):
+        families = (
+            (
+                "Čo je sanforizovaná alebo predzrazená bavlna: zvyškové zrážanie a starostlivosť",
+                "co-je-sanforizovana-alebo-predzrazena-bavlna-zvyskove-zrazanie-a-starostlivost",
+                (
+                    "Čo je Sanforized cotton: predzrážanie a pranie",
+                    "Čo je preshrunk cotton: zvyškové zrážanie a údržba",
+                ),
+            ),
+            (
+                "Čo je nekrčivá bavlna a easy-care úprava: ako funguje a ako ju prať",
+                "co-je-nekrciva-bavlna-a-easy-care-uprava-ako-funguje-a-ako-ju-prat",
+                (
+                    "Čo je non-iron cotton: košeľa bez žehlenia a pranie",
+                    "Čo je durable press cotton: odolnosť proti pokrčeniu",
+                ),
+            ),
+            (
+                "Čo je bioleštená bavlna: enzýmová úprava, žmolky a pranie",
+                "co-je-biolestena-bavlna-enzymova-uprava-zmolky-a-pranie",
+                (
+                    "Čo je biopolished cotton: hladký povrch a pranie",
+                    "Čo je bio-polished cotton: enzýmy a žmolky",
+                ),
+            ),
+            (
+                "Čo je garment-dyed oblečenie: farbenie hotového odevu, blednutie a pranie",
+                "co-je-garment-dyed-oblecenie-farbenie-hotoveho-odevu-blednutie-a-pranie",
+                (
+                    "Čo je garment-dyed clothing: farbenie po ušití a pranie",
+                    "Čo je product-dyed clothing: farba švov a blednutie",
+                ),
+            ),
+        )
+
+        for title, slug, candidates in families:
+            existing = [
+                duplicate_guard.row_from_title_link(
+                    title,
+                    f"https://www.vevo.sk/n/{slug}",
+                    "rss",
+                )
+            ]
+            for candidate in candidates:
+                with self.subTest(candidate=candidate):
+                    results = duplicate_guard.analyze([candidate], existing, 0.28)
+                    self.assertEqual(results[0]["status"], "block")
+                    self.assertIn(
+                        "canonical_definition_head",
+                        {issue["type"] for issue in results[0]["issues"]},
+                    )
+
     def test_cross_section_title_tokens_remove_template_words(self):
         left = cross_section_audit.title_tokens(
             "Ako umyt okna bez smuh - Kompletny sprievodca"

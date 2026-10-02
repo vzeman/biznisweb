@@ -2213,6 +2213,20 @@ Branch: codex/vevo-content-batch-54
 - Planning commit `d6cc2c9c`, prepared-content commit `fadf1a95` and publication verification commit `bcb9b6f2` are pushed on `codex/vevo-content-batch-55`. Stacked PR `#476` targets `codex/vevo-content-batch-54`; `env-check`, `secret-scan`, `security-baseline` and `observability-baseline` passed.
 - Durable prepared and verification artifacts include the content plan, exploratory and final candidate records, live-admin scanner, builder, article JSON, independent admin and public verifiers, prepublication guards, hidden smoke, MCP publication, public verification, postpublication project audit and mobile-QA reports.
 
+## Batch 56 Cotton Finishes And Garment Dyeing - Planning 2026-10-02
+
+- Status: broad candidate scan and topic selection complete; article construction and publication remain pending.
+- Work is isolated in `D:/CodexWorktrees/Playground-vevo-b56` on `codex/vevo-content-batch-56`, stacked on the pushed batch 55 handoff. The unrelated dirty root checkout was inspected but not modified.
+- The current BiznisWeb article guidance was rechecked on `2026-10-02`; it confirms that News posts support separate SEO title/description fields and an editable URL identifier. The existing repo-local slug-safe MCP/API workflow remains the required publication path.
+- Eighteen exploratory finishing, dyeing and decorative-textile subjects were checked against the merged Blog, FAQ, glossary, RSS and local catalog. The title guard returned sixteen `OK` results and two manual reviews: mercerized cotton versus moleskin wording, and batik versus Madras colour-transfer wording.
+- Exact live-admin scans found zero whole-word or whole-phrase candidate matches in Blog block `765` (`622` records), FAQ block `774` (`177` records) and glossary block `1905` (`95` records).
+- The first candidate scanner used substring matching and produced false `ikat` matches inside `certifikáty` and `delikátne`. It was corrected to normalized phrase-boundary matching, recompiled and rerun before selection; the corrected report has `total_match_count=0`.
+- Selected subjects are sanforized/preshrunk cotton, easy-care/non-iron cotton, biopolished cotton and garment-dyed clothing. Their mechanisms are respectively mechanical compression, crosslinking finish, controlled cellulase surface removal and dyeing after assembly.
+- Canonical alias groups and a focused regression test now prevent future standalone duplicates under English trade names and Slovak paraphrases. Piece-dyed fabric and pigment-dyed clothing are intentionally not aliases of garment-dyed clothing.
+- Primary evidence is being constrained to accessible SANFOR, Cotton Incorporated/CottonWorks, AATCC, GINETEX, European Commission/ECHA and peer-reviewed PubMed/PMC sources. No inaccessible source will be allowlisted merely to pass link preflight.
+- Product recommendations remain conditional on the complete care label. No article may claim that detergent restores a worn finish, prevents designed fading, performs industrial biofinishing or overrides residual shrinkage.
+- Next exact step for this batch: run the focused alias and final candidate guards, commit and push the planning checkpoint, then build four distinct rich-HTML articles and preflight every public link before any live mutation.
+
 ## Known Issues
 
 - The initial VEVO snapshot migration and batch 43 work are isolated on `codex/vevo-content-batch-43`; they are not part of `main` until the branch is reviewed and merged through a pull request.
@@ -2247,11 +2261,12 @@ Branch: codex/vevo-content-batch-54
 
 For the next VEVO work:
 
-1. Start batch 56 from a broad exploratory candidate pool and check every intent and alias against the merged Blog, FAQ, glossary, RSS and local catalog before selecting topics.
-2. Treat all batch 55 canonical subjects and aliases as occupied, including pattern-family terminology that could otherwise look like separate article opportunities.
-3. Prefer topics with a clearly distinct material mechanism and an honest VEVO product/category bridge; defer any topic whose safe primary care method conflicts with the proposed product.
-4. Preserve the small-batch quality baseline: substantial topic-specific depth, accessible expert sources, responsive rich HTML, no fixed prices or internal workflow wording, and independent public/mobile verification.
-5. Keep batch 56 stacked on batch 55 until the earlier pull requests merge, push every durable checkpoint and merge only through pull requests.
+1. Build the four selected batch 56 articles without changing their recorded canonical titles or clean slugs.
+2. Keep each article centred on its distinct manufacturing mechanism and do not collapse garment dyeing into pigment dyeing or generic colourfastness.
+3. Preflight every expert, internal, category and product URL without an exception allowlist, then run wording, depth, HTML, overlap and duplicate gates before mutation.
+4. Confirm the live MCP mutation hard-gate and hidden slug/rich-HTML smoke before one resumable publication attempt; inspect live state before any retry.
+5. Independently verify admin readback, public URLs, outgoing links and the `390x844` layout, then record publication and occupied aliases.
+6. Keep batch 56 stacked on batch 55 until earlier pull requests merge, push every durable checkpoint and merge only through pull requests.
 
 ## Handoff Template
 
