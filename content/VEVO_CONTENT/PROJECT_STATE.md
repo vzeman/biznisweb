@@ -2242,7 +2242,7 @@ Branch: codex/vevo-content-batch-54
 - Mobile QA at requested `390x844` produced an effective `375px` content viewport and confirmed a `351px` article column for every URL, both `680px` tables contained by `overflow-x:auto` wrappers, both action buttons contained, zero one-character paragraphs, no escaped HTML and no page-level horizontal overflow. Visual inspection of the rendered mobile article also passed; the viewport override was reset and the temporary tab was closed.
 - Final postpublication project check passes `53/53` tests. Project audit reports a merged live catalog of `876` records, zero duplicate-title groups, zero invalid slugs, both publication reports green and `block_count=0`.
 - The stale global MCP registration remains a non-blocking warning. This batch deliberately used the explicit repo-local script whose account, block, hidden smoke and final readback all passed.
-- Planning commit `7b69cf4f`, prepared-content commit `64058bf9` and publication verification commit `e7a1d8e6` are pushed on `codex/vevo-content-batch-56`. Stacked PR `#597` targets `codex/vevo-content-batch-55`.
+- Planning commit `7b69cf4f`, prepared-content commit `64058bf9` and publication verification commit `e7a1d8e6` are pushed on `codex/vevo-content-batch-56`. Stacked PR `#597` targets `codex/vevo-content-batch-55`; `env-check`, `secret-scan`, `security-baseline` and `observability-baseline` passed.
 
 ## Known Issues
 
