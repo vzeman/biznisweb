@@ -1,5 +1,25 @@
 # Independent operations refresh
 
+Status: deployed to ROY on 2026-10-02 from source
+`6ae9a74b2745ec69c2846ebda526f62cea7a1174` (PRs #599/#600), immutable image
+`sha256:83e668764e64463bdf4c3252da5580ee576f75aefd34f12f058d8d990e065001`.
+All 1,035 CI regressions passed on Linux and Windows. The finite host gate passed
+17 synthetic checks, localhost markers and valid PDF preview, then exited 0 and
+its disposable task definition became INACTIVE. App Runner operation
+`f32cbdb13af14766abbd70dd1fef9dc1` succeeded; authenticated live readback and the
+user's actual Chrome tab confirmed the independent timestamps and 30-second
+cadence. Observed scans took 29.489 seconds on the candidate and 37.093 seconds
+live; inventory took 62.177 seconds independently. A cached live response took
+1.282 seconds with order data 71.5 seconds old while another scan was active.
+These are individual measurements, not arrival-time guarantees.
+
+The selected ROY tab was reloaded; other old tabs need F5. VEVO's service remains
+exactly unchanged. Independent readback found 12 schedules unchanged and a separate
+Linux AWS CLI update of the monthly creditnote target from `:54` to `:58`, without
+other schedule changes; that unrelated update was recorded without attributing
+its actor or reverting it. All scheduled images remain immutable. Exact private
+receipt paths, hashes and cleanup evidence are in `PROJECT_STATE.md`.
+
 The order list must not wait for inventory search and calculation. Ordinary reads
 publish a complete, unchanged eligibility scan with current print-state annotation;
 a separate single-flight worker refreshes inventory. The shared dashboard response
