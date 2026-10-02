@@ -942,6 +942,7 @@ class RoyOperationsDashboardTests(unittest.TestCase):
              patch("roy_operations_dashboard.load_roy_operations_state", return_value=state), \
              patch("roy_operations_dashboard._load_shared_operations_snapshot", return_value=None), \
              patch("roy_operations_dashboard._save_shared_operations_snapshot"), \
+             patch("roy_operations_dashboard._start_inventory_refresh"), \
              patch("roy_operations_dashboard.generate_roy_operations_snapshot", side_effect=lambda *a, **k: {
                  "project": "roy", "operations_state_revision": rod._operations_display_revision(state)}) as generate:
             # The existing shared/worker cache is upgraded only after exact ETag validation.
