@@ -2213,9 +2213,9 @@ Branch: codex/vevo-content-batch-54
 - Planning commit `d6cc2c9c`, prepared-content commit `fadf1a95` and publication verification commit `bcb9b6f2` are pushed on `codex/vevo-content-batch-55`. Stacked PR `#476` targets `codex/vevo-content-batch-54`; `env-check`, `secret-scan`, `security-baseline` and `observability-baseline` passed.
 - Durable prepared and verification artifacts include the content plan, exploratory and final candidate records, live-admin scanner, builder, article JSON, independent admin and public verifiers, prepublication guards, hidden smoke, MCP publication, public verification, postpublication project audit and mobile-QA reports.
 
-## Batch 56 Cotton Finishes And Garment Dyeing - Planning 2026-10-02
+## Batch 56 Cotton Finishes And Garment Dyeing - Prepared 2026-10-02
 
-- Status: broad candidate scan and topic selection complete; article construction and publication remain pending.
+- Status: all four articles are built and pass prepublication quality gates; live MCP mutation, independent public verification and mobile verification remain pending.
 - Work is isolated in `D:/CodexWorktrees/Playground-vevo-b56` on `codex/vevo-content-batch-56`, stacked on the pushed batch 55 handoff. The unrelated dirty root checkout was inspected but not modified.
 - The current BiznisWeb article guidance was rechecked on `2026-10-02`; it confirms that News posts support separate SEO title/description fields and an editable URL identifier. The existing repo-local slug-safe MCP/API workflow remains the required publication path.
 - Eighteen exploratory finishing, dyeing and decorative-textile subjects were checked against the merged Blog, FAQ, glossary, RSS and local catalog. The title guard returned sixteen `OK` results and two manual reviews: mercerized cotton versus moleskin wording, and batik versus Madras colour-transfer wording.
@@ -2225,7 +2225,12 @@ Branch: codex/vevo-content-batch-54
 - Canonical alias groups and a focused regression test now prevent future standalone duplicates under English trade names and Slovak paraphrases. Piece-dyed fabric and pigment-dyed clothing are intentionally not aliases of garment-dyed clothing.
 - Primary evidence is being constrained to accessible SANFOR, Cotton Incorporated/CottonWorks, AATCC, GINETEX, European Commission/ECHA and peer-reviewed PubMed/PMC sources. No inaccessible source will be allowlisted merely to pass link preflight.
 - Product recommendations remain conditional on the complete care label. No article may claim that detergent restores a worn finish, prevents designed fading, performs industrial biofinishing or overrides residual shrinkage.
-- Next exact step for this batch: run the focused alias and final candidate guards, commit and push the planning checkpoint, then build four distinct rich-HTML articles and preflight every public link before any live mutation.
+- Prepared visible word counts are `3865`, `3734`, `3624` and `3810`. Every article contains `32` H2 headings, two responsive tables, `11` styled blocks, one concrete product card, one category card, thirteen authored FAQ entries and zero short or one-character paragraphs.
+- Seven-word-shingle overlap is `0.0933-0.0976`, below the `0.13` ceiling. Definitions, mechanisms, diagnostics, procedures, expert sections and tables remain topic-specific.
+- Direct link preflight initially rejected the ECHA page with HTTP `403`, the generic AATCC page with HTTP `403` and a PubMed route with HTTP `203`. They were replaced or removed before export; the final article set uses accessible European Commission, AATCC member catalog and peer-reviewed PMC destinations and passes without an exception allowlist.
+- The full prepared project check passes `53/53` tests. Final duplicate checking covers `875` merged RSS/local records and returns four `OK` results, while public-wording, fixed-price, depth and HTML-safety guards report zero failures.
+- Generated source artifacts are `imports/build_batch_56_cotton_finishes_garment_dyeing.py` and `imports/batch-56-2026-10-02-articles.json`; the deterministic builder regenerates the ignored link-preflight evidence under `exports/`.
+- Next exact step for this batch: commit and push the prepared checkpoint, confirm the live MCP account/domain/language/page/block/count and zero exact matches, run the disposable hidden slug/rich-HTML smoke, then publish once through the resumable repo-local workflow.
 
 ## Known Issues
 
@@ -2261,12 +2266,11 @@ Branch: codex/vevo-content-batch-54
 
 For the next VEVO work:
 
-1. Build the four selected batch 56 articles without changing their recorded canonical titles or clean slugs.
-2. Keep each article centred on its distinct manufacturing mechanism and do not collapse garment dyeing into pigment dyeing or generic colourfastness.
-3. Preflight every expert, internal, category and product URL without an exception allowlist, then run wording, depth, HTML, overlap and duplicate gates before mutation.
-4. Confirm the live MCP mutation hard-gate and hidden slug/rich-HTML smoke before one resumable publication attempt; inspect live state before any retry.
-5. Independently verify admin readback, public URLs, outgoing links and the `390x844` layout, then record publication and occupied aliases.
-6. Keep batch 56 stacked on batch 55 until earlier pull requests merge, push every durable checkpoint and merge only through pull requests.
+1. Confirm the live MCP mutation hard-gate for account `vevo.flox.sk`, public domain `www.vevo.sk`, Slovak Blog page `309`, News block `765`, current catalog count and zero exact batch 56 title or slug matches.
+2. Run the disposable hidden slug/rich-HTML smoke and prove that the hidden post remains public `404`, is deleted and leaves no residue.
+3. Publish the four prepared articles once through the resumable repo-local workflow; inspect its durable report and live catalog before any retry.
+4. Independently verify admin readback, public URLs, outgoing links and the `390x844` layout, then record publication IDs and occupied aliases.
+5. Keep batch 56 stacked on batch 55 until earlier pull requests merge, push every durable checkpoint and merge only through pull requests.
 
 ## Handoff Template
 
