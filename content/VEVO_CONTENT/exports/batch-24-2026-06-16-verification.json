@@ -1,0 +1,273 @@
+{
+  "generated_at": "2026-06-16T03:04:24.499639+00:00",
+  "project": "VEVO_CONTENT",
+  "batch": 24,
+  "news_block_id": "765",
+  "page_count": 5,
+  "link_count": 19,
+  "pages": [
+    {
+      "news_id": "2245",
+      "title": "Čo je fleece: hrejivosť, žmolkovanie a starostlivosť pri praní",
+      "slug": "co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+      "url": "https://www.vevo.sk/n/co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+      "date_posted": "2025-09-28",
+      "time_posted": "08:00:00",
+      "checks": {
+        "http_200": true,
+        "final_url": "https://www.vevo.sk/n/co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+        "title_present": true,
+        "date_published_meta": true,
+        "visible_date_present": true,
+        "quick_box_present": true,
+        "recommendation_box_present": true,
+        "product_link_present": true,
+        "category_link_present": true,
+        "no_customer_cta_word": true,
+        "no_fixed_price_in_article_content": true,
+        "article_href_count": 7,
+        "content_text_length": 4492,
+        "content_html_length": 8363
+      },
+      "article_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel",
+        "/n/akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+        "/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+        "/n/polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni",
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+        "https://pmc.ncbi.nlm.nih.gov/articles/PMC4249026/",
+        "https://textileexchange.org/other-synthetics/"
+      ]
+    },
+    {
+      "news_id": "2246",
+      "title": "Čo je softshell: vrstvy, membrána, impregnácia a správna starostlivosť",
+      "slug": "co-je-softshell-vrstvy-membrana-impregnacia-a-spravna-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-softshell-vrstvy-membrana-impregnacia-a-spravna-starostlivost",
+      "date_posted": "2025-09-28",
+      "time_posted": "08:12:00",
+      "checks": {
+        "http_200": true,
+        "final_url": "https://www.vevo.sk/n/co-je-softshell-vrstvy-membrana-impregnacia-a-spravna-starostlivost",
+        "title_present": true,
+        "date_published_meta": true,
+        "visible_date_present": true,
+        "quick_box_present": true,
+        "recommendation_box_present": true,
+        "product_link_present": true,
+        "category_link_present": true,
+        "no_customer_cta_word": true,
+        "no_fixed_price_in_article_content": true,
+        "article_href_count": 7,
+        "content_text_length": 4543,
+        "content_html_length": 8461
+      },
+      "article_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel",
+        "/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+        "/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+        "/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+        "https://textileexchange.org/other-synthetics/",
+        "https://www.gore-tex.com/support/care/outerwear"
+      ]
+    },
+    {
+      "news_id": "2247",
+      "title": "Čo je membránové oblečenie: vodný stĺpec, priedušnosť a pranie bez poškodenia",
+      "slug": "co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "url": "https://www.vevo.sk/n/co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "date_posted": "2025-09-28",
+      "time_posted": "08:24:00",
+      "checks": {
+        "http_200": true,
+        "final_url": "https://www.vevo.sk/n/co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+        "title_present": true,
+        "date_published_meta": true,
+        "visible_date_present": true,
+        "quick_box_present": true,
+        "recommendation_box_present": true,
+        "product_link_present": true,
+        "category_link_present": true,
+        "no_customer_cta_word": true,
+        "no_fixed_price_in_article_content": true,
+        "article_href_count": 7,
+        "content_text_length": 4702,
+        "content_html_length": 8606
+      },
+      "article_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel",
+        "/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+        "/n/ako-odstranit-sol-a-mokry-sneh-z-lyziarskych-rukavic-s-membranou",
+        "/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+        "https://textileexchange.org/other-synthetics/",
+        "https://www.gore-tex.com/support/care/outerwear"
+      ]
+    },
+    {
+      "news_id": "2248",
+      "title": "Prečo sa oblečenie žmolkuje: vlákna, trenie, pranie a sušenie",
+      "slug": "preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "date_posted": "2025-09-28",
+      "time_posted": "08:36:00",
+      "checks": {
+        "http_200": true,
+        "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+        "title_present": true,
+        "date_published_meta": true,
+        "visible_date_present": true,
+        "quick_box_present": true,
+        "recommendation_box_present": true,
+        "product_link_present": true,
+        "category_link_present": true,
+        "no_customer_cta_word": true,
+        "no_fixed_price_in_article_content": true,
+        "article_href_count": 7,
+        "content_text_length": 4584,
+        "content_html_length": 8489
+      },
+      "article_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel",
+        "/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+        "/n/akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+        "/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+        "https://textileexchange.org/knowledge-center/reports/materials-market-report-2024/",
+        "https://textileexchange.org/other-synthetics/"
+      ]
+    },
+    {
+      "news_id": "2249",
+      "title": "Mikroplasty z oblečenia: ako prať syntetiku zodpovednejšie bez paniky",
+      "slug": "mikroplasty-z-oblecenia-ako-prat-syntetiku-zodpovednejsie-bez-paniky",
+      "url": "https://www.vevo.sk/n/mikroplasty-z-oblecenia-ako-prat-syntetiku-zodpovednejsie-bez-paniky",
+      "date_posted": "2025-09-28",
+      "time_posted": "08:48:00",
+      "checks": {
+        "http_200": true,
+        "final_url": "https://www.vevo.sk/n/mikroplasty-z-oblecenia-ako-prat-syntetiku-zodpovednejsie-bez-paniky",
+        "title_present": true,
+        "date_published_meta": true,
+        "visible_date_present": true,
+        "quick_box_present": true,
+        "recommendation_box_present": true,
+        "product_link_present": true,
+        "category_link_present": true,
+        "no_customer_cta_word": true,
+        "no_fixed_price_in_article_content": true,
+        "article_href_count": 8,
+        "content_text_length": 4865,
+        "content_html_length": 8919
+      },
+      "article_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel",
+        "/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+        "/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+        "/n/recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+        "https://pmc.ncbi.nlm.nih.gov/articles/PMC9826067/",
+        "https://www.frontiersin.org/journals/marine-science/articles/10.3389/fmars.2019.00030/full",
+        "https://www.nature.com/articles/s41598-019-43023-x"
+      ]
+    }
+  ],
+  "links": [
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel"
+    },
+    {
+      "href": "/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit"
+    },
+    {
+      "href": "/n/ako-odstranit-sol-a-mokry-sneh-z-lyziarskych-rukavic-s-membranou",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-sol-a-mokry-sneh-z-lyziarskych-rukavic-s-membranou"
+    },
+    {
+      "href": "/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov"
+    },
+    {
+      "href": "/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany"
+    },
+    {
+      "href": "/n/akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost"
+    },
+    {
+      "href": "/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal"
+    },
+    {
+      "href": "/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen"
+    },
+    {
+      "href": "/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie"
+    },
+    {
+      "href": "/n/polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni"
+    },
+    {
+      "href": "/n/recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat"
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+    },
+    {
+      "href": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4249026/",
+      "status_code": 200,
+      "final_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4249026/"
+    },
+    {
+      "href": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9826067/",
+      "status_code": 200,
+      "final_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC9826067/"
+    },
+    {
+      "href": "https://textileexchange.org/knowledge-center/reports/materials-market-report-2024/",
+      "status_code": 200,
+      "final_url": "https://textileexchange.org/knowledge-center/reports/materials-market-report-2024/"
+    },
+    {
+      "href": "https://textileexchange.org/other-synthetics/",
+      "status_code": 200,
+      "final_url": "https://textileexchange.org/other-synthetics/"
+    },
+    {
+      "href": "https://www.frontiersin.org/journals/marine-science/articles/10.3389/fmars.2019.00030/full",
+      "status_code": 200,
+      "final_url": "https://www.frontiersin.org/journals/marine-science/articles/10.3389/fmars.2019.00030/full"
+    },
+    {
+      "href": "https://www.gore-tex.com/support/care/outerwear",
+      "status_code": 200,
+      "final_url": "https://www.gore-tex.com/support/care/outerwear"
+    },
+    {
+      "href": "https://www.nature.com/articles/s41598-019-43023-x",
+      "status_code": 200,
+      "final_url": "https://www.nature.com/articles/s41598-019-43023-x"
+    }
+  ]
+}

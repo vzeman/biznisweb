@@ -1,0 +1,293 @@
+{
+  "batch": 22,
+  "verified_at": "2026-06-11T11:51:00Z",
+  "source_articles": "content/VEVO_CONTENT/imports/batch-22-2026-06-11-articles.json",
+  "article_count": 5,
+  "article_urls_ok": true,
+  "link_count_checked": 17,
+  "links_ok": true,
+  "rss_note": "IDs and datePublished values resolved from public article HTML meta because RSS can be unstable/close connection.",
+  "source_link_note": "The original GOTS homepage source URL returned HTTP 500 during verification and was replaced with the stable Textile Exchange organic cotton certification source in the two cotton articles.",
+  "articles": [
+    {
+      "title": "Čo je bavlna: vlastnosti, výhody, nevýhody a starostlivosť",
+      "slug": "co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "http_status": 200,
+      "id": "2235",
+      "date_published_meta": "2025-09-30T08:00:00",
+      "expected_date_published_prefix": "2025-09-30T08:00:00",
+      "article_body_length": 8521,
+      "checks": {
+        "http_200": true,
+        "article_body_scoped": true,
+        "date_published_matches": true,
+        "rich_quick_box_present": true,
+        "recommendation_box_present": true,
+        "product_card_present": true,
+        "category_card_present": true,
+        "no_fixed_prices_in_article_content": true,
+        "no_customer_facing_cta_word": true,
+        "no_malformed_hrefs": true,
+        "no_old_global_standard_link": true
+      },
+      "href_count_in_article_body": 7,
+      "internal_links_in_article_body": [
+        "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+        "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+        "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+        "https://www.vevo.sk/n/polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni",
+        "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "external_links_in_article_body": [
+        "https://textileexchange.org/organic-cotton-certification/",
+        "https://www.britannica.com/topic/cotton-fibre-and-plant"
+      ]
+    },
+    {
+      "title": "Organická bavlna: čo znamená a či sa perie inak ako bežná bavlna",
+      "slug": "organicka-bavlna-co-znamena-a-ci-sa-perie-inak-ako-bezna-bavlna",
+      "url": "https://www.vevo.sk/n/organicka-bavlna-co-znamena-a-ci-sa-perie-inak-ako-bezna-bavlna",
+      "http_status": 200,
+      "id": "2236",
+      "date_published_meta": "2025-09-30T08:12:00",
+      "expected_date_published_prefix": "2025-09-30T08:12:00",
+      "article_body_length": 8451,
+      "checks": {
+        "http_200": true,
+        "article_body_scoped": true,
+        "date_published_matches": true,
+        "rich_quick_box_present": true,
+        "recommendation_box_present": true,
+        "product_card_present": true,
+        "category_card_present": true,
+        "no_fixed_prices_in_article_content": true,
+        "no_customer_facing_cta_word": true,
+        "no_malformed_hrefs": true,
+        "no_old_global_standard_link": true
+      },
+      "href_count_in_article_body": 7,
+      "internal_links_in_article_body": [
+        "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+        "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+        "https://www.vevo.sk/n/ako-odstranit-vitaminovy-sirup-z-detskeho-body-a-podbradnika",
+        "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+        "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "external_links_in_article_body": [
+        "https://textileexchange.org/organic-cotton-certification/",
+        "https://www.britannica.com/topic/cotton-fibre-and-plant"
+      ]
+    },
+    {
+      "title": "Čo je ľan: prečo sa krčí, ako ho prať a ako ho zjemniť",
+      "slug": "co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "http_status": 200,
+      "id": "2237",
+      "date_published_meta": "2025-09-30T08:24:00",
+      "expected_date_published_prefix": "2025-09-30T08:24:00",
+      "article_body_length": 8154,
+      "checks": {
+        "http_200": true,
+        "article_body_scoped": true,
+        "date_published_matches": true,
+        "rich_quick_box_present": true,
+        "recommendation_box_present": true,
+        "product_card_present": true,
+        "category_card_present": true,
+        "no_fixed_prices_in_article_content": true,
+        "no_customer_facing_cta_word": true,
+        "no_malformed_hrefs": true,
+        "no_old_global_standard_link": true
+      },
+      "href_count_in_article_body": 7,
+      "internal_links_in_article_body": [
+        "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+        "https://www.vevo.sk/n/ako-prat-lanovu-koselu-aby-nezostala-tvrda-a-pokrcena",
+        "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+        "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+        "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "external_links_in_article_body": [
+        "https://www.britannica.com/plant/flax",
+        "https://www.britannica.com/topic/linen"
+      ]
+    },
+    {
+      "title": "Ľan vs bavlna: rozdiely v savosti, krčivosti a starostlivosti",
+      "slug": "lan-vs-bavlna-rozdiely-v-savosti-krcivosti-a-starostlivosti",
+      "url": "https://www.vevo.sk/n/lan-vs-bavlna-rozdiely-v-savosti-krcivosti-a-starostlivosti",
+      "http_status": 200,
+      "id": "2238",
+      "date_published_meta": "2025-09-30T08:36:00",
+      "expected_date_published_prefix": "2025-09-30T08:36:00",
+      "article_body_length": 8211,
+      "checks": {
+        "http_200": true,
+        "article_body_scoped": true,
+        "date_published_matches": true,
+        "rich_quick_box_present": true,
+        "recommendation_box_present": true,
+        "product_card_present": true,
+        "category_card_present": true,
+        "no_fixed_prices_in_article_content": true,
+        "no_customer_facing_cta_word": true,
+        "no_malformed_hrefs": true,
+        "no_old_global_standard_link": true
+      },
+      "href_count_in_article_body": 7,
+      "internal_links_in_article_body": [
+        "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+        "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+        "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+        "https://www.vevo.sk/n/polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni",
+        "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "external_links_in_article_body": [
+        "https://www.britannica.com/topic/cotton-fibre-and-plant",
+        "https://www.britannica.com/topic/linen"
+      ]
+    },
+    {
+      "title": "Modal vs lyocell vs viskóza: ako sa líšia pri praní a nosení",
+      "slug": "modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "url": "https://www.vevo.sk/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "http_status": 200,
+      "id": "2239",
+      "date_published_meta": "2025-09-30T08:48:00",
+      "expected_date_published_prefix": "2025-09-30T08:48:00",
+      "article_body_length": 8386,
+      "checks": {
+        "http_200": true,
+        "article_body_scoped": true,
+        "date_published_matches": true,
+        "rich_quick_box_present": true,
+        "recommendation_box_present": true,
+        "product_card_present": true,
+        "category_card_present": true,
+        "no_fixed_prices_in_article_content": true,
+        "no_customer_facing_cta_word": true,
+        "no_malformed_hrefs": true,
+        "no_old_global_standard_link": true
+      },
+      "href_count_in_article_body": 7,
+      "internal_links_in_article_body": [
+        "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+        "https://www.vevo.sk/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+        "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+        "https://www.vevo.sk/n/modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+        "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "external_links_in_article_body": [
+        "https://pmc.ncbi.nlm.nih.gov/articles/PMC8044815/",
+        "https://www.britannica.com/technology/rayon-textile-fiber"
+      ]
+    }
+  ],
+  "links": [
+    {
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8044815/",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://textileexchange.org/organic-cotton-certification/",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.britannica.com/plant/flax",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.britannica.com/technology/rayon-textile-fiber",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.britannica.com/topic/cotton-fibre-and-plant",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.britannica.com/topic/linen",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-odstranit-vitaminovy-sirup-z-detskeho-body-a-podbradnika",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-lanovu-koselu-aby-nezostala-tvrda-a-pokrcena",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/modal-v-obleceni-co-znamena-preco-je-maekky-a-ako-ho-prat",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "http_status": 200,
+      "ok": true,
+      "error": null
+    }
+  ],
+  "errors": []
+}

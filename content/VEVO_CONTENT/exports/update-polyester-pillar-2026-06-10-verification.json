@@ -1,0 +1,81 @@
+{
+  "verified_at": "2026-06-10T10:45:25.708259+00:00",
+  "post_id": "1864",
+  "url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+  "workflow": "Existing VEVO polyester article expanded; duplicate new article intentionally not created.",
+  "internal_link_checks": [
+    {
+      "href": "/c/vevo-fragrance/parfum-do-prania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania"
+    },
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel"
+    },
+    {
+      "href": "/n/ako-odstranit-zapach-potu-z-polyesteroveho-tricka",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-potu-z-polyesteroveho-tricka"
+    },
+    {
+      "href": "/n/ako-pouzivat-parfum-do-prania-pri-sportovom-obleceni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-pouzivat-parfum-do-prania-pri-sportovom-obleceni"
+    },
+    {
+      "href": "/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar"
+    },
+    {
+      "href": "/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni"
+    },
+    {
+      "href": "/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost"
+    },
+    {
+      "href": "/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen"
+    },
+    {
+      "href": "/n/polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/polyester-vs-bavlna-rozdiely-pri-noseni-prani-a-voni"
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+    }
+  ],
+  "page_check": {
+    "status": 200,
+    "requested_url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+    "final_url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+    "post_ids": [
+      "1864"
+    ],
+    "has_title": true,
+    "has_quick_answer": true,
+    "has_styled_callout": true,
+    "has_recommendation_card": true,
+    "has_product_card": true,
+    "has_no_question_mark_damage": true,
+    "article_source_has_no_escaped_quotes": true,
+    "article_source_has_no_malformed_href": true,
+    "corrupt_slug_status": 404,
+    "all_internal_links_200": true,
+    "required_ok": true
+  },
+  "sources": [
+    "https://www.britannica.com/science/polyester",
+    "https://pmc.ncbi.nlm.nih.gov/articles/PMC4249026/"
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "created_at": "2026-07-05T15:08:11.351920+00:00",
+  "batch": "batch-32-robot-vacuum-layout-repair",
+  "record_count": 11,
+  "ok_count": 11,
+  "all_ok": true,
+  "records": [
+    {
+      "slug": "ako-vybrat-roboticky-vysavac",
+      "url": "https://www.vevo.sk/n/ako-vybrat-roboticky-vysavac",
+      "status": 200,
+      "max_short_paragraph_run": 0,
+      "short_paragraph_count": 0,
+      "has_required_category_link": true,
+      "has_required_product_link": true,
+      "body_length": 19534,
+      "ok": true
+    },
+    {
+      "slug": "ako-vybrat-roboticky-vysavac-s-mopom",
+      "url": "https://www.vevo.sk/n/ako-vybrat-roboticky-vysavac-s-mopom",
+      "status": 200,
+      "max_short_paragraph_run": 0,
+      "short_paragraph_count": 0,
+      "has_required_category_link": true,
+      "has_required_product_link": true,
+      "body_length": 15459,
+      "ok": true
+    },
+    {
+      "slug": "ako-vycistit-roboticky-vysavac",
+      "url": "https://www.vevo.sk/n/ako-vycistit-roboticky-vysavac",
+      "status": 200,
+      "max_short_paragraph_run": 0,
+      "short_paragraph_count": 0,
+      "has_required_category_link": true,
+      "has_required_product_link": true,
+      "body_length": 15526,
+      "ok": true
+    },
+    {
+      "slug": "ako-restartovat-roboticky-vysavac",
+      "url": "https://www.vevo.sk/n/ako-restartovat-roboticky-vysavac",
+      "status": 200,
+      "max_short_paragraph_run": 0,
+      "short_paragraph_count": 0,
+      "has_required_category_link": true,
+      "has_required_product_link": true,
+      "body_length": 15515,
+      "ok": true
+    },
+    {
+      "slug": "ako-sparovat-roboticky-vysavac-xiaomi",
+      "url": "https://www.vevo.sk/n/ako-sparovat-roboticky-vysavac-xiaomi",
+      "status": 200,
+      "max_short_paragraph_run": 0,
+      "short_paragraph_count": 0,
+      "has_required_category_link": true,
+      "has_required_product_link": true,
+      "body_length": 15880,
+      "ok": true
+    },
+    {
+      "slug": "ako-dlho-sa-nabija-roboticky-vysavac",
+      "url": "https://www.vevo.sk/n/ako-dlho-sa-nabija-roboticky-vysavac",
+      "status": 200,
+      "max_short_paragraph_run": 0,
+      "short_paragraph_count": 0,
+      "has_required_category_link": true,
+      "has_required_product_link": true,
+      "body_length": 15815,
+      "ok": true
+    },
+    {
+      "slug": "ako-funguje-roboticky-vysavac",
+      "url": "https://www.vevo.sk/n/ako-funguje-roboticky-vysavac",
+      "status": 200,
+      "max_short_paragraph_run": 0,
+      "short_paragraph_count": 0,
+      "has_required_category_link": true,
+      "has_required_product_link": true,
+      "body_length": 15871,
+      "ok": true
+    },
+    {
+      "slug": "ako-zapnut-roboticky-vysavac",
+      "url": "https://www.vevo.sk/n/ako-zapnut-roboticky-vysavac",
+      "status": 200,
+      "max_short_paragraph_run": 0,
+      "short_paragraph_count": 0,
+      "has_required_category_link": true,
+      "has_required_product_link": true,
+      "body_length": 15621,
+      "ok": true
+    },
+    {
+      "slug": "ako-odvapnit-roboticky-vysavac",
+      "url": "https://www.vevo.sk/n/ako-odvapnit-roboticky-vysavac",
+      "status": 200,
+      "max_short_paragraph_run": 0,
+      "short_paragraph_count": 0,
+      "has_required_category_link": true,
+      "has_required_product_link": true,
+      "body_length": 15889,
+      "ok": true
+    },
+    {
+      "slug": "roboticky-vysavac-je-offline",
+      "url": "https://www.vevo.sk/n/roboticky-vysavac-je-offline",
+      "status": 200,
+      "max_short_paragraph_run": 0,
+      "short_paragraph_count": 0,
+      "has_required_category_link": true,
+      "has_required_product_link": true,
+      "body_length": 15617,
+      "ok": true
+    },
+    {
+      "slug": "kam-umiestnit-roboticky-vysavac-a-kam-ho-schovat",
+      "url": "https://www.vevo.sk/n/kam-umiestnit-roboticky-vysavac-a-kam-ho-schovat",
+      "status": 200,
+      "max_short_paragraph_run": 0,
+      "short_paragraph_count": 0,
+      "has_required_category_link": true,
+      "has_required_product_link": true,
+      "body_length": 15854,
+      "ok": true
+    }
+  ]
+}

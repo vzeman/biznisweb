@@ -1,0 +1,278 @@
+{
+  "batch": 32,
+  "created_at": "2026-07-05T17:03:54",
+  "article_count": 11,
+  "date_posted": "2025-09-20",
+  "required_category": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/cistic-do-robotickeho-vysavaca",
+  "required_product": "https://www.vevo.sk/p-1635/vevo-cistic-podlah-pre-vsetky-vysavace-ylang-absolute",
+  "all_links_ok": true,
+  "bad_links": [],
+  "link_checks": [
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/cistic-do-robotickeho-vysavaca",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/cistic-do-robotickeho-vysavaca",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1635/vevo-cistic-podlah-pre-vsetky-vysavace-ylang-absolute",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1635/vevo-cistic-podlah-pre-vsetky-vysavace-ylang-absolute",
+      "ok": true
+    },
+    {
+      "url": "https://homesupport.irobot.com/s/article/31056",
+      "status": 200,
+      "final_url": "https://homesupport.irobot.com/s/article/31056",
+      "ok": true
+    },
+    {
+      "url": "https://homesupport.irobot.com/s/article/20500",
+      "status": 200,
+      "final_url": "https://homesupport.irobot.com/s/article/20500",
+      "ok": true
+    },
+    {
+      "url": "https://www.ecovacs.com/us/blog/can-you-put-cleaning-solution-in-robot-mop",
+      "status": 200,
+      "final_url": "https://www.ecovacs.com/us/blog/can-you-put-cleaning-solution-in-robot-mop",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-odstranit-chlpy-z-oblecenia-pri-prani-ked-mate-psa-alebo-macku",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-chlpy-z-oblecenia-pri-prani-ked-mate-psa-alebo-macku",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-textilie-v-domacnosti-so-psom-pocas-plznutia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-textilie-v-domacnosti-so-psom-pocas-plznutia",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-pelech-pre-psa-alebo-macku-aby-nezapachal",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-pelech-pre-psa-alebo-macku-aby-nezapachal",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "ok": true
+    },
+    {
+      "url": "https://www.ecovacs.com/us/blog/robot-vacuum-mop-not-dispensing-water",
+      "status": 200,
+      "final_url": "https://www.ecovacs.com/us/blog/robot-vacuum-mop-not-dispensing-water",
+      "ok": true
+    },
+    {
+      "url": "https://www.mi.com/global/support/faq/details/KA-597579/",
+      "status": 200,
+      "final_url": "https://www.mi.com/global/support/faq/details/KA-597579/",
+      "ok": true
+    },
+    {
+      "url": "https://www.ecovacs.com/us/blog/how-to-clean-robot-vacuum-cleaner",
+      "status": 200,
+      "final_url": "https://www.ecovacs.com/us/blog/how-to-clean-robot-vacuum-cleaner",
+      "ok": true
+    },
+    {
+      "url": "https://www.mi.com/global/support/faq/details/KA-617976/",
+      "status": 200,
+      "final_url": "https://www.mi.com/global/support/faq/details/KA-617976/",
+      "ok": true
+    },
+    {
+      "url": "https://www.mi.com/global/support/article/KA-05122/",
+      "status": 200,
+      "final_url": "https://www.mi.com/global/support/article/KA-05122/",
+      "ok": true
+    },
+    {
+      "url": "https://www.mi.com/global/support/faq/details/KA-617950/",
+      "status": 200,
+      "final_url": "https://www.mi.com/global/support/faq/details/KA-617950/",
+      "ok": true
+    },
+    {
+      "url": "https://homesupport.irobot.com/s/article/7272",
+      "status": 200,
+      "final_url": "https://homesupport.irobot.com/s/article/7272",
+      "ok": true
+    },
+    {
+      "url": "https://homesupport.irobot.com/s/article/7273",
+      "status": 200,
+      "final_url": "https://homesupport.irobot.com/s/article/7273",
+      "ok": true
+    },
+    {
+      "url": "https://homesupport.irobot.com/s/article/27087",
+      "status": 200,
+      "final_url": "https://homesupport.irobot.com/s/article/27087",
+      "ok": true
+    },
+    {
+      "url": "https://homesupport.irobot.com/s/article/64102",
+      "status": 200,
+      "final_url": "https://homesupport.irobot.com/s/article/64102",
+      "ok": true
+    },
+    {
+      "url": "https://homesupport.irobot.com/s/article/19952",
+      "status": 200,
+      "final_url": "https://homesupport.irobot.com/s/article/19952",
+      "ok": true
+    },
+    {
+      "url": "https://www.mi.com/global/support/faq/details/KA-256971/",
+      "status": 200,
+      "final_url": "https://www.mi.com/global/support/faq/details/KA-256971/",
+      "ok": true
+    },
+    {
+      "url": "https://homesupport.irobot.com/s/article/31056/",
+      "status": 200,
+      "final_url": "https://homesupport.irobot.com/s/article/31056",
+      "ok": true
+    }
+  ],
+  "articles": [
+    {
+      "title": "Ako vybrať robotický vysávač",
+      "slug": "ako-vybrat-roboticky-vysavac",
+      "words": 2074,
+      "h2_count": 22,
+      "table_count": 2,
+      "styled_block_count": 7,
+      "required_category_present": true,
+      "required_product_present": true,
+      "product_link_count": 4,
+      "category_link_count": 4
+    },
+    {
+      "title": "Ako vybrať robotický vysávač s mopom",
+      "slug": "ako-vybrat-roboticky-vysavac-s-mopom",
+      "words": 1525,
+      "h2_count": 22,
+      "table_count": 2,
+      "styled_block_count": 7,
+      "required_category_present": true,
+      "required_product_present": true,
+      "product_link_count": 2,
+      "category_link_count": 2
+    },
+    {
+      "title": "Ako vyčistiť robotický vysávač",
+      "slug": "ako-vycistit-roboticky-vysavac",
+      "words": 1537,
+      "h2_count": 22,
+      "table_count": 2,
+      "styled_block_count": 7,
+      "required_category_present": true,
+      "required_product_present": true,
+      "product_link_count": 2,
+      "category_link_count": 4
+    },
+    {
+      "title": "Ako reštartovať robotický vysávač",
+      "slug": "ako-restartovat-roboticky-vysavac",
+      "words": 1537,
+      "h2_count": 22,
+      "table_count": 2,
+      "styled_block_count": 7,
+      "required_category_present": true,
+      "required_product_present": true,
+      "product_link_count": 2,
+      "category_link_count": 2
+    },
+    {
+      "title": "Ako spárovať robotický vysávač Xiaomi",
+      "slug": "ako-sparovat-roboticky-vysavac-xiaomi",
+      "words": 1572,
+      "h2_count": 22,
+      "table_count": 2,
+      "styled_block_count": 7,
+      "required_category_present": true,
+      "required_product_present": true,
+      "product_link_count": 2,
+      "category_link_count": 4
+    },
+    {
+      "title": "Ako dlho sa nabíja robotický vysávač",
+      "slug": "ako-dlho-sa-nabija-roboticky-vysavac",
+      "words": 1580,
+      "h2_count": 22,
+      "table_count": 2,
+      "styled_block_count": 7,
+      "required_category_present": true,
+      "required_product_present": true,
+      "product_link_count": 2,
+      "category_link_count": 2
+    },
+    {
+      "title": "Ako funguje robotický vysávač",
+      "slug": "ako-funguje-roboticky-vysavac",
+      "words": 1577,
+      "h2_count": 22,
+      "table_count": 2,
+      "styled_block_count": 7,
+      "required_category_present": true,
+      "required_product_present": true,
+      "product_link_count": 4,
+      "category_link_count": 2
+    },
+    {
+      "title": "Ako zapnúť robotický vysávač",
+      "slug": "ako-zapnut-roboticky-vysavac",
+      "words": 1541,
+      "h2_count": 22,
+      "table_count": 2,
+      "styled_block_count": 7,
+      "required_category_present": true,
+      "required_product_present": true,
+      "product_link_count": 2,
+      "category_link_count": 4
+    },
+    {
+      "title": "Ako odvápniť robotický vysávač",
+      "slug": "ako-odvapnit-roboticky-vysavac",
+      "words": 1559,
+      "h2_count": 22,
+      "table_count": 2,
+      "styled_block_count": 7,
+      "required_category_present": true,
+      "required_product_present": true,
+      "product_link_count": 4,
+      "category_link_count": 2
+    },
+    {
+      "title": "Robotický vysávač je offline",
+      "slug": "roboticky-vysavac-je-offline",
+      "words": 1552,
+      "h2_count": 22,
+      "table_count": 2,
+      "styled_block_count": 7,
+      "required_category_present": true,
+      "required_product_present": true,
+      "product_link_count": 2,
+      "category_link_count": 4
+    },
+    {
+      "title": "Kam umiestniť robotický vysávač a kam ho schovať",
+      "slug": "kam-umiestnit-roboticky-vysavac-a-kam-ho-schovat",
+      "words": 1601,
+      "h2_count": 22,
+      "table_count": 2,
+      "styled_block_count": 7,
+      "required_category_present": true,
+      "required_product_present": true,
+      "product_link_count": 2,
+      "category_link_count": 4
+    }
+  ]
+}

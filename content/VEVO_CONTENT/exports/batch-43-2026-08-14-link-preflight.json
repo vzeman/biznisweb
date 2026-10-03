@@ -1,0 +1,442 @@
+{
+  "checked_count": 37,
+  "failure_count": 0,
+  "links": [
+    {
+      "url": "https://www.vevo.sk/n/pevnost-textilu-v-tahu-a-proti-roztrhnutiu-co-skusky-hovoria-o-odolnosti",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "expected_status": 404,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/pevnost-textilu-v-tahu-a-proti-roztrhnutiu-co-skusky-hovoria-o-odolnosti",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "error": null
+    },
+    {
+      "url": "https://www.iso.org/standard/60676.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200,
+        403
+      ],
+      "status": 403,
+      "final_url": "https://www.iso.org/standard/60676.html",
+      "error": null
+    },
+    {
+      "url": "https://www.iso.org/standard/23370.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200,
+        403
+      ],
+      "status": 403,
+      "final_url": "https://www.iso.org/standard/23370.html",
+      "error": null
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/splyvavost-textilu-preco-niektore-latky-drzia-tvar-a-ine-kopiruju-postavu",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "expected_status": 404,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/splyvavost-textilu-preco-niektore-latky-drzia-tvar-a-ine-kopiruju-postavu",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "error": null
+    },
+    {
+      "url": "https://www.iso.org/standard/41375.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200,
+        403
+      ],
+      "status": 403,
+      "final_url": "https://www.iso.org/standard/41375.html",
+      "error": null
+    },
+    {
+      "url": "https://store.astm.org/standards/d1388",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://store.astm.org/standards/d1388",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/tepelny-odpor-textilu-preco-niektore-vrstvy-hreju-viac-pri-rovnakej-hrubke",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "expected_status": 404,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/tepelny-odpor-textilu-preco-niektore-vrstvy-hreju-viac-pri-rovnakej-hrubke",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/polyester-polyamid-merino-alebo-elastan-z-coho-ma-byt-sportove-oblecenie",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/polyester-polyamid-merino-alebo-elastan-z-coho-ma-byt-sportove-oblecenie",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/priedusnost-savost-a-rychloschnutie-ako-citat-vlastnosti-textilu",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/priedusnost-savost-a-rychloschnutie-ako-citat-vlastnosti-textilu",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "error": null
+    },
+    {
+      "url": "https://www.iso.org/standard/85998.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200,
+        403
+      ],
+      "status": 403,
+      "final_url": "https://www.iso.org/standard/85998.html",
+      "error": null
+    },
+    {
+      "url": "https://store.astm.org/f1868-23.html",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://store.astm.org/f1868-23.html",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ochrana-textilu-pred-uv-ziarenim-co-znamena-upf-a-co-ju-znizuje",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "expected_status": 404,
+      "status": 404,
+      "final_url": "https://www.vevo.sk/n/ochrana-textilu-pred-uv-ziarenim-co-znamena-upf-a-co-ju-znizuje",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vyprat-opalovaci-olej-z-plazovej-tuniky-a-uteraka",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-opalovaci-olej-z-plazovej-tuniky-a-uteraka",
+      "error": null
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm183/579/",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm183/579/",
+      "error": null
+    },
+    {
+      "url": "https://www.who.int/news-room/questions-and-answers/item/radiation-protecting-against-skin-cancer",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.who.int/news-room/questions-and-answers/item/radiation-protecting-against-skin-cancer",
+      "error": null
+    },
+    {
+      "url": "https://www.gov.uk/government/publications/ultraviolet-radiation-and-sunscreen/ultraviolet-radiation-frequently-asked-questions",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.gov.uk/government/publications/ultraviolet-radiation-and-sunscreen/ultraviolet-radiation-frequently-asked-questions",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-softshell-vrstvy-membrana-impregnacia-a-spravna-starostlivost",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-softshell-vrstvy-membrana-impregnacia-a-spravna-starostlivost",
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-odstranit-repelent-z-outdoorovej-ciapky-a-navlekov-na-ruky",
+      "kind": "article_link",
+      "ok": true,
+      "expected_status": 200,
+      "expected_statuses": [
+        200
+      ],
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-repelent-z-outdoorovej-ciapky-a-navlekov-na-ruky",
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,325 @@
+{
+  "batch": "batch-41",
+  "verified_at": "2026-07-21T14:21:22.978379+00:00",
+  "article_count": 4,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Bavlna a elastan: starostlivosť o tričká, rifle a spodnú bielizeň",
+      "slug": "bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3862,
+      "h2_count": 29,
+      "table_count": 2,
+      "styled_block_count": 23,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://cottonworks.com/product-innovation/product-technologies/natural-stretch-technology/",
+        "https://members.aatcc.org/store/tm135/543/",
+        "https://regional.astm.org/industry/textiles",
+        "https://www.ginetex.net/share/article/4201/care-symbols"
+      ],
+      "body_length": 96673,
+      "ok": true
+    },
+    {
+      "title": "Vlna a polyamid: prečo sa miešajú vlákna a ako to ovplyvňuje pranie",
+      "slug": "vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3566,
+      "h2_count": 29,
+      "table_count": 2,
+      "styled_block_count": 23,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://regional.astm.org/industry/textiles",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.woolmark.com/care",
+        "https://www.woolmark.com/industry/product-development/product-innovations/core-spun-technology/"
+      ],
+      "body_length": 94923,
+      "ok": true
+    },
+    {
+      "title": "Statická elektrina v oblečení: prečo látky priľnú a ako obmedziť iskrenie",
+      "slug": "staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+      "url": "https://www.vevo.sk/n/staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3502,
+      "h2_count": 29,
+      "table_count": 2,
+      "styled_block_count": 23,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://members.aatcc.org/store/tm115/525/",
+        "https://nvlpubs.nist.gov/nistpubs/jres/24/jresv24n6p645_A1b.pdf",
+        "https://www.iso.org/standard/61384.html",
+        "https://www.iso.org/standard/77996.html"
+      ],
+      "body_length": 94854,
+      "ok": true
+    },
+    {
+      "title": "Odolnosť textilu proti oderu: čo znamená Martindale pri oblečení a bytových látkach",
+      "slug": "odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3433,
+      "h2_count": 29,
+      "table_count": 2,
+      "styled_block_count": 23,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://regional.astm.org/industry/textiles",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.iso.org/standard/61058.html",
+        "https://www.iso.org/standard/75376.html",
+        "https://www.iso.org/standard/77552.html"
+      ],
+      "body_length": 94315,
+      "ok": true
+    }
+  ],
+  "link_checks": [
+    {
+      "url": "https://cottonworks.com/product-innovation/product-technologies/natural-stretch-technology/",
+      "status": 200,
+      "final_url": "https://cottonworks.com/product-innovation/product-technologies/natural-stretch-technology/",
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm115/525/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm115/525/",
+      "ok": true
+    },
+    {
+      "url": "https://members.aatcc.org/store/tm135/543/",
+      "status": 200,
+      "final_url": "https://members.aatcc.org/store/tm135/543/",
+      "ok": true
+    },
+    {
+      "url": "https://nvlpubs.nist.gov/nistpubs/jres/24/jresv24n6p645_A1b.pdf",
+      "status": 200,
+      "final_url": "https://nvlpubs.nist.gov/nistpubs/jres/24/jresv24n6p645_A1b.pdf",
+      "ok": true
+    },
+    {
+      "url": "https://regional.astm.org/industry/textiles",
+      "status": 200,
+      "final_url": "https://regional.astm.org/industry/textiles",
+      "ok": true
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/61058.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/61058.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/61384.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/61384.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/75376.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/75376.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/77552.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/77552.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/77996.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/77996.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-rifle-aby-nevybledli-nezmaekli-a-drzali-tvar",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-rifle-aby-nevybledli-nezmaekli-a-drzali-tvar",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "url": "https://www.woolmark.com/care",
+      "status": 200,
+      "final_url": "https://www.woolmark.com/care",
+      "ok": true
+    },
+    {
+      "url": "https://www.woolmark.com/industry/product-development/product-innovations/core-spun-technology/",
+      "status": 200,
+      "final_url": "https://www.woolmark.com/industry/product-development/product-innovations/core-spun-technology/",
+      "ok": true
+    }
+  ]
+}

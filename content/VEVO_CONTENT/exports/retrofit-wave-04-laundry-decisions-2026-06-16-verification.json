@@ -1,0 +1,180 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-16T12:02:02.812725+00:00",
+  "wave_file": "content\\VEVO_CONTENT\\exports\\retrofit-wave-04-laundry-decisions-2026-06-16.json",
+  "article_count": 3,
+  "link_count": 15,
+  "all_ok": true,
+  "articles": [
+    {
+      "post_id": "2261",
+      "slug": "praci-gel-alebo-praci-prasok-kedy-co-funguje-lepsie-a-preco",
+      "url": "https://www.vevo.sk/n/praci-gel-alebo-praci-prasok-kedy-co-funguje-lepsie-a-preco",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/praci-gel-alebo-praci-prasok-kedy-co-funguje-lepsie-a-preco",
+      "title_present": true,
+      "required_fragments": [
+        "Jednoduch"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2256",
+      "slug": "predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "url": "https://www.vevo.sk/n/predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "title_present": true,
+      "required_fragments": [
+        "Jednoduch"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1549/vevo-shot-koncentrat-na-cistenie-pracky"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/detox-pracky"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2257",
+      "slug": "otacky-pri-odstredovani-ako-ovplyvnuju-vlhkost-krcenie-a-opotrebovanie-oblecenia",
+      "url": "https://www.vevo.sk/n/otacky-pri-odstredovani-ako-ovplyvnuju-vlhkost-krcenie-a-opotrebovanie-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/otacky-pri-odstredovani-ako-ovplyvnuju-vlhkost-krcenie-a-opotrebovanie-oblecenia",
+      "title_present": true,
+      "required_fragments": [
+        "Jednoduch"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1612/prirodne-vlnene-gule-do-susicky-3-ks"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/gule-do-susicky"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    }
+  ],
+  "links": [
+    {
+      "href": "/c/vevo-home-care/pranie/detox-pracky",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/detox-pracky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/detox-pracky",
+      "ok": true
+    },
+    {
+      "href": "/c/vevo-home-care/pranie/gule-do-susicky",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/gule-do-susicky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/gule-do-susicky",
+      "ok": true
+    },
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "url": "https://www.vevo.sk/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-biele-smuhy-od-pracieho-prasku-z-cierneho-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-odstranit-biele-smuhy-od-pracieho-prasku-z-cierneho-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-biele-smuhy-od-pracieho-prasku-z-cierneho-oblecenia",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "url": "https://www.vevo.sk/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "url": "https://www.vevo.sk/n/ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-pracovne-tricko-po-zahradkarceni-od-hliny-a-potu",
+      "url": "https://www.vevo.sk/n/ako-vyprat-pracovne-tricko-po-zahradkarceni-od-hliny-a-potu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-pracovne-tricko-po-zahradkarceni-od-hliny-a-potu",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "ok": true
+    },
+    {
+      "href": "/p-1549/vevo-shot-koncentrat-na-cistenie-pracky",
+      "url": "https://www.vevo.sk/p-1549/vevo-shot-koncentrat-na-cistenie-pracky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1549/vevo-shot-koncentrat-na-cistenie-pracky",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "href": "/p-1612/prirodne-vlnene-gule-do-susicky-3-ks",
+      "url": "https://www.vevo.sk/p-1612/prirodne-vlnene-gule-do-susicky-3-ks",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1612/prirodne-vlnene-gule-do-susicky-3-ks",
+      "ok": true
+    }
+  ]
+}

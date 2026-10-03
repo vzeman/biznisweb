@@ -1,0 +1,285 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-16T16:55:32.994084+00:00",
+  "wave_file": "content\\VEVO_CONTENT\\exports\\retrofit-wave-13-materials-stain-five-2026-06-16.json",
+  "article_count": 5,
+  "link_count": 24,
+  "all_ok": true,
+  "articles": [
+    {
+      "post_id": "2240",
+      "slug": "co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2228",
+      "slug": "co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2227",
+      "slug": "co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2226",
+      "slug": "co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2195",
+      "slug": "ako-odstranit-arasidove-maslo-z-tricka-obrusu-a-detskej-mikiny",
+      "url": "https://www.vevo.sk/n/ako-odstranit-arasidove-maslo-z-tricka-obrusu-a-detskej-mikiny",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-arasidove-maslo-z-tricka-obrusu-a-detskej-mikiny",
+      "title_present": true,
+      "required_fragments": [
+        "Odporúčané riešenie"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    }
+  ],
+  "links": [
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-majonezu-a-dressing-z-obrusu-bez-mastneho-flaku",
+      "url": "https://www.vevo.sk/n/ako-odstranit-majonezu-a-dressing-z-obrusu-bez-mastneho-flaku",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-majonezu-a-dressing-z-obrusu-bez-mastneho-flaku",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-olejove-a-mastne-skvrny-z-oblecenia-po-prani",
+      "url": "https://www.vevo.sk/n/ako-odstranit-olejove-a-mastne-skvrny-z-oblecenia-po-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-olejove-a-mastne-skvrny-z-oblecenia-po-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-olivovy-olej-z-lanovej-kosele-bez-mastnej-mapy",
+      "url": "https://www.vevo.sk/n/ako-odstranit-olivovy-olej-z-lanovej-kosele-bez-mastnej-mapy",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-olivovy-olej-z-lanovej-kosele-bez-mastnej-mapy",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-parfumovy-flak-z-oblecenia-a-jemnych-latok",
+      "url": "https://www.vevo.sk/n/ako-odstranit-parfumovy-flak-z-oblecenia-a-jemnych-latok",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-parfumovy-flak-z-oblecenia-a-jemnych-latok",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-cyklisticky-dres-a-elasticke-sportove-oblecenie",
+      "url": "https://www.vevo.sk/n/ako-prat-cyklisticky-dres-a-elasticke-sportove-oblecenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-cyklisticky-dres-a-elasticke-sportove-oblecenie",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-merino",
+      "url": "https://www.vevo.sk/n/ako-prat-merino",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-merino",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "url": "https://www.vevo.sk/n/ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "url": "https://www.vevo.sk/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-syntetiku-polyester-a-elastan-aby-nezapachali-a-drzali-tvar",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-viskozovu-bluzku-aby-nestratila-tvar-a-neostala-vytahana",
+      "url": "https://www.vevo.sk/n/ako-prat-viskozovu-bluzku-aby-nestratila-tvar-a-neostala-vytahana",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-viskozovu-bluzku-aby-nestratila-tvar-a-neostala-vytahana",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-vlneny-pled-a-deku-bez-zrazenia",
+      "url": "https://www.vevo.sk/n/ako-prat-vlneny-pled-a-deku-bez-zrazenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-vlneny-pled-a-deku-bez-zrazenia",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "url": "https://www.vevo.sk/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-cokoladu-z-detskeho-oblecenia-a-obrusov",
+      "url": "https://www.vevo.sk/n/ako-vyprat-cokoladu-z-detskeho-oblecenia-a-obrusov",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-cokoladu-z-detskeho-oblecenia-a-obrusov",
+      "ok": true
+    },
+    {
+      "href": "/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "ok": true
+    },
+    {
+      "href": "/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "ok": true
+    },
+    {
+      "href": "/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "url": "https://www.vevo.sk/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "ok": true
+    },
+    {
+      "href": "/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "url": "https://www.vevo.sk/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    }
+  ]
+}

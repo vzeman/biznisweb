@@ -1,0 +1,36 @@
+{
+  "batch": "batch-31",
+  "created_at": "2026-06-29T15:05:00+00:00",
+  "status": "prepared_not_published",
+  "news_block_id": "765",
+  "target_page_id": "309",
+  "prepared_xls": "C:/Users/Patrik jankech/AppData/Local/Temp/vevo-batch-31-material-guides-clean-urls.xls",
+  "article_source": "content/VEVO_CONTENT/imports/batch-31-2026-06-29-articles.json",
+  "planned_date_posted": "2025-09-21",
+  "safe_publish_decision": "Do not use direct biznisweb_add_news_post for this public batch because the connector cannot set clean URL slugs or backdated date_posted/time_posted fields.",
+  "blocker": "The in-app browser upload dialog exposes a standard input[type=file], but the available browser automation API does not expose setInputFiles and attempts to set or type the file path into the file input are blocked by browser security. The Codex browser cookie database is also locked by the running app, so an authenticated shell upload could not be safely completed.",
+  "manual_unblock_step": "Upload the prepared XLS into BiznisWeb admin Files, ideally the clanky folder, then run the established XLS news import into blog news block 765. After import, resolve the created post IDs and normalize the final rich HTML through biznisweb_update_news_post.",
+  "prepared_articles": [
+    {
+      "title": "Čo je satén: nie je to vždy hodváb a ako ho správne prať",
+      "slug": "co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "time_posted": "08:00:00"
+    },
+    {
+      "title": "Čo je flanel: prečo hreje, ako sa perie a prečo môže žmolkovať",
+      "slug": "co-je-flanel-preco-hreje-ako-sa-perie-a-preco-moze-zmolkovat",
+      "time_posted": "08:12:00"
+    },
+    {
+      "title": "Čo je manšester: rebrovaná látka, prach v rebrách a správne pranie",
+      "slug": "co-je-mansester-rebrovana-latka-prach-v-rebrach-a-spravne-pranie",
+      "time_posted": "08:24:00"
+    }
+  ],
+  "local_verification": {
+    "duplicate_guard": "OK for all 3 candidates against 765 existing RSS records",
+    "article_depth_guard": "passed; visible word counts 1511, 1504, 1502",
+    "public_content_guard": "passed; remaining_hit_count=0",
+    "link_preflight": "passed; 32 links checked, 0 failed"
+  }
+}

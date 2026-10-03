@@ -1,0 +1,56 @@
+{
+  "article_count": 5,
+  "failure_count": 0,
+  "articles": [
+    {
+      "title": "Ako prať chránič matraca: pot, prach, roztoče a správne sušenie",
+      "slug": "ako-prat-chranic-matraca-pot-prach-roztoce-a-spravne-susenie",
+      "has_escaped_html": false,
+      "has_fixed_price": false,
+      "has_table": true,
+      "has_style": true,
+      "product_links": 1,
+      "category_links": 3
+    },
+    {
+      "title": "Ako prať paplón a prikrývku: veľkosť bubna, výplň a sušenie bez zápachu",
+      "slug": "ako-prat-paplon-a-prikryvku-velkost-bubna-vypln-a-susenie-bez-zapachu",
+      "has_escaped_html": false,
+      "has_fixed_price": false,
+      "has_table": true,
+      "has_style": true,
+      "product_links": 1,
+      "category_links": 3
+    },
+    {
+      "title": "Ako prať plachtu s gumou: rohy, pot, zrazenie a sušenie bez pokrčenia",
+      "slug": "ako-prat-plachtu-s-gumou-rohy-pot-zrazenie-a-susenie-bez-pokrcenia",
+      "has_escaped_html": false,
+      "has_fixed_price": false,
+      "has_table": true,
+      "has_style": true,
+      "product_links": 1,
+      "category_links": 3
+    },
+    {
+      "title": "Ako prať prehoz na posteľ: prach, chlpy, objem a sušenie",
+      "slug": "ako-prat-prehoz-na-postel-prach-chlpy-objem-a-susenie",
+      "has_escaped_html": false,
+      "has_fixed_price": false,
+      "has_table": true,
+      "has_style": true,
+      "product_links": 1,
+      "category_links": 3
+    },
+    {
+      "title": "Ako prať posteľnú sukňu a textílie okolo postele: prach, chlpy a sezónne pranie",
+      "slug": "ako-prat-postelnu-suknu-a-textilie-okolo-postele-prach-chlpy-a-sezonne-pranie",
+      "has_escaped_html": false,
+      "has_fixed_price": false,
+      "has_table": true,
+      "has_style": true,
+      "product_links": 1,
+      "category_links": 3
+    }
+  ]
+}

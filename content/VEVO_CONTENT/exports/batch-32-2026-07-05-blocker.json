@@ -1,0 +1,28 @@
+{
+  "batch": "batch-32",
+  "date": "2026-07-05",
+  "project": "VEVO_CONTENT",
+  "domain": "vevo.sk",
+  "news_webpage_id": "309",
+  "news_block_id": "765",
+  "article_source": "content/VEVO_CONTENT/imports/batch-32-2026-07-05-articles.json",
+  "candidate_file": "content/VEVO_CONTENT/batches/batch-32-candidates-2026-07-05.txt",
+  "prepared_xls": "C:/Users/Patrik jankech/AppData/Local/Temp/vevo-batch-32-robot-vacuum-clean-urls.xls",
+  "planned_publish_date": "2025-09-20",
+  "article_count": 11,
+  "status": "prepared_not_published",
+  "safe_publish_decision": "Do not create public posts through direct biznisweb_add_news_post because the connector cannot set clean URL slugs or backdated date_posted/time_posted fields.",
+  "admin_api_decision": "Do not create hidden drafts for this batch unless the user explicitly accepts a draft-only state, because duplicate safety is more important than adding unpublished admin rows.",
+  "browser_state": "The in-app browser automation endpoint reported zero visible tabs, so the admin UI import/publication flow could not be completed in this session.",
+  "required_links": {
+    "category": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/cistic-do-robotickeho-vysavaca",
+    "product": "https://www.vevo.sk/p-1635/vevo-cistic-podlah-pre-vsetky-vysavace-ylang-absolute"
+  },
+  "verification": {
+    "duplicate_guard": "content/VEVO_CONTENT/exports/batch-32-2026-07-05-duplicate-guard.json",
+    "public_content_guard": "content/VEVO_CONTENT/exports/batch-32-2026-07-05-public-content-guard.json",
+    "article_depth_guard": "content/VEVO_CONTENT/exports/batch-32-2026-07-05-depth-guard.json",
+    "link_preflight": "content/VEVO_CONTENT/exports/batch-32-2026-07-05-link-preflight.json"
+  },
+  "next_exact_step": "Use the XLS/admin import workflow for Blog news block 765, then resolve real post IDs and verify clean public URLs, canonical slugs, date 2025-09-20, styled HTML, required product/category links, and no duplicate admin rows."
+}

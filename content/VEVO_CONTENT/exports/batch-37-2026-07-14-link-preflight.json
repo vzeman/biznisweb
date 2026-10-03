@@ -1,0 +1,139 @@
+{
+  "checked_count": 19,
+  "failure_count": 0,
+  "links": [
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-radiator-od-prachu-rebra-zadna-strana-mastnota-a-bezpecna-udrzba",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-odstranit-prach-z-textilii-po-malovani-alebo-rekonstrukcii",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-cistit-textilne-tienidla-lamp-a-dekoracie-od-prachu",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/sources-indoor-particulate-matter-pm",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/what-can-i-do-improve-indoor-air-quality-my-home",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/p-1630/univerzalny-cistic-vevo-pure-harmony-500ml",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/univerzalny-cistic-do-domacnosti",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-umyt-podlahu-bez-smuh-laminat-vinyl-dlazba-a-mopovanie-v-praxi",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-parapety-a-okenne-ramy-prach-pel-cierne-mapy-a-skvrny",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-umyt-okna-bez-smuh-kompletny-sprievodca",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/biological-contaminants-and-indoor-air-quality",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-zaclony-v-kuchyni-od-mastnoty-a-pachov",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-interierove-dvere-a-zarubne-odtlacky-mastnota-a-povrch-bez-smuh",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-kuchynsku-linku-od-mastnoty-prachu-a-smuh-bez-poskodenia-povrchu",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-vypinace-a-klucky-dotykove-miesta-mastnota-a-bezpecny-postup",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.electricalsafetyfirst.org.uk/safety-advice/products-and-appliances/cleaning-clothing/steam-cleaners/",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-drez-a-bateriu-vodny-kamen-mastnota-zapach-a-bezpecne-cistenie",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-soklove-listy-prach-smuhy-chlpy-a-rohy-bez-poskodenia",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "article_count": 4,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Pevnosť textilu v ťahu a proti roztrhnutiu: čo skúšky hovoria o odolnosti",
+      "slug": "pevnost-textilu-v-tahu-a-proti-roztrhnutiu-co-skusky-hovoria-o-odolnosti",
+      "body_length": 26695,
+      "styled_block_count": 12,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-43-2026-08-14-articles.json"
+    },
+    {
+      "title": "Splývavosť textilu: prečo niektoré látky držia tvar a iné kopírujú postavu",
+      "slug": "splyvavost-textilu-preco-niektore-latky-drzia-tvar-a-ine-kopiruju-postavu",
+      "body_length": 26339,
+      "styled_block_count": 12,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-43-2026-08-14-articles.json"
+    },
+    {
+      "title": "Tepelný odpor textilu: prečo niektoré vrstvy hrejú viac pri rovnakej hrúbke",
+      "slug": "tepelny-odpor-textilu-preco-niektore-vrstvy-hreju-viac-pri-rovnakej-hrubke",
+      "body_length": 26803,
+      "styled_block_count": 12,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-43-2026-08-14-articles.json"
+    },
+    {
+      "title": "Ochrana textilu pred UV žiarením: čo znamená UPF a čo ju znižuje",
+      "slug": "ochrana-textilu-pred-uv-ziarenim-co-znamena-upf-a-co-ju-znizuje",
+      "body_length": 27640,
+      "styled_block_count": 12,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-43-2026-08-14-articles.json"
+    }
+  ]
+}

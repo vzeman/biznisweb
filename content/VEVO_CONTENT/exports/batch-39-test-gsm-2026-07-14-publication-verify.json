@@ -1,0 +1,118 @@
+{
+  "batch": "batch-39-test-gsm",
+  "verified_at": "2026-07-14T14:51:00.968029+00:00",
+  "article_count": 1,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Gramáž látky: čo znamená GSM pri uterákoch, obliečkach a tričkách",
+      "slug": "gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3245,
+      "table_count": 2,
+      "styled_block_count": 21,
+      "product_links_present": true,
+      "category_links_present": true,
+      "internal_article_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "internal_article_links": [
+        "/n/ako-prat-uteraky-rady-a-tipy-na-ciste-a-maekke-uteraky",
+        "/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+        "/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+        "/n/co-je-mikrovlakno-vyhody-nevyhody-savost-a-pranie",
+        "/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+        "/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti"
+      ],
+      "external_links": [
+        "https://store.astm.org/standards/d3776",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.iso.org/standard/9335.html"
+      ],
+      "body_length": 92150,
+      "ok": true
+    }
+  ],
+  "link_checks": [
+    {
+      "url": "https://store.astm.org/standards/d3776",
+      "status": 200,
+      "final_url": "https://store.astm.org/standards/d3776",
+      "ok": true
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/9335.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/9335.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-uteraky-rady-a-tipy-na-ciste-a-maekke-uteraky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-uteraky-rady-a-tipy-na-ciste-a-maekke-uteraky",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-mikrovlakno-vyhody-nevyhody-savost-a-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-mikrovlakno-vyhody-nevyhody-savost-a-pranie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    }
+  ]
+}

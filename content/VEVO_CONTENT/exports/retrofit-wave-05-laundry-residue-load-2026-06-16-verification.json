@@ -1,0 +1,180 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-16T12:15:41.308487+00:00",
+  "wave_file": "content\\VEVO_CONTENT\\exports\\retrofit-wave-05-laundry-residue-load-2026-06-16.json",
+  "article_count": 3,
+  "link_count": 15,
+  "all_ok": true,
+  "articles": [
+    {
+      "post_id": "2259",
+      "slug": "preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "title_present": true,
+      "required_fragments": [
+        "Jednoduch"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1626/prava-octova-avivaz-lesna-zmes-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/avivaz/octova-avivaz"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2260",
+      "slug": "ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "url": "https://www.vevo.sk/n/ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "title_present": true,
+      "required_fragments": [
+        "Jednoduch"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2258",
+      "slug": "preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "url": "https://www.vevo.sk/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "title_present": true,
+      "required_fragments": [
+        "Jednoduch"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1549/vevo-shot-koncentrat-na-cistenie-pracky"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/detox-pracky"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    }
+  ],
+  "links": [
+    {
+      "href": "/c/vevo-home-care/pranie/avivaz/octova-avivaz",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/avivaz/octova-avivaz",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/avivaz/octova-avivaz",
+      "ok": true
+    },
+    {
+      "href": "/c/vevo-home-care/pranie/detox-pracky",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/detox-pracky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/detox-pracky",
+      "ok": true
+    },
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "url": "https://www.vevo.sk/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "url": "https://www.vevo.sk/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "url": "https://www.vevo.sk/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "ok": true
+    },
+    {
+      "href": "/n/tvrda-voda-a-pranie-preco-je-bielizen-tvrda-siva-a-bez-vone",
+      "url": "https://www.vevo.sk/n/tvrda-voda-a-pranie-preco-je-bielizen-tvrda-siva-a-bez-vone",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/tvrda-voda-a-pranie-preco-je-bielizen-tvrda-siva-a-bez-vone",
+      "ok": true
+    },
+    {
+      "href": "/p-1549/vevo-shot-koncentrat-na-cistenie-pracky",
+      "url": "https://www.vevo.sk/p-1549/vevo-shot-koncentrat-na-cistenie-pracky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1549/vevo-shot-koncentrat-na-cistenie-pracky",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "href": "/p-1626/prava-octova-avivaz-lesna-zmes-1l",
+      "url": "https://www.vevo.sk/p-1626/prava-octova-avivaz-lesna-zmes-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1626/prava-octova-avivaz-lesna-zmes-1l",
+      "ok": true
+    }
+  ]
+}

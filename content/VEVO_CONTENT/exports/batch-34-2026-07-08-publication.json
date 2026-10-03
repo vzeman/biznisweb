@@ -1,0 +1,59 @@
+{
+  "verified_at": "2026-07-08T06:03:33.549593+00:00",
+  "batch": 34,
+  "all_ok": true,
+  "record_count": 3,
+  "ok_count": 3,
+  "post_ids": [
+    "2294",
+    "2295",
+    "2297"
+  ],
+  "deleted_hidden_test_post_id": "2296",
+  "date_policy": "User allowed current publish date on 2026-07-08; clean URL remained mandatory.",
+  "workflow_note": "Created hidden drafts first to verify auto-generated clean slugs, then filled rich HTML through admin source mode, toggled HTML mode back before save, enabled active, and verified public pages.",
+  "records": [
+    {
+      "post_id": "2294",
+      "slug": "ako-vycistit-sprchovy-kut-vodny-kamen-mydlove-usadeniny-skary-a-sklo-bez-smuh",
+      "url": "https://www.vevo.sk/n/ako-vycistit-sprchovy-kut-vodny-kamen-mydlove-usadeniny-skary-a-sklo-bez-smuh",
+      "status": 200,
+      "html_length": 131795,
+      "has_draft_text": false,
+      "has_inline_style": true,
+      "has_product_link": true,
+      "has_category_link": true,
+      "has_table": true,
+      "has_escaped_html": false,
+      "ok": true
+    },
+    {
+      "post_id": "2295",
+      "slug": "ako-vycistit-skary-v-kupelni-plesen-vodny-kamen-a-zazltnute-miesta-bez-poskodenia",
+      "url": "https://www.vevo.sk/n/ako-vycistit-skary-v-kupelni-plesen-vodny-kamen-a-zazltnute-miesta-bez-poskodenia",
+      "status": 200,
+      "html_length": 131772,
+      "has_draft_text": false,
+      "has_inline_style": true,
+      "has_product_link": true,
+      "has_category_link": true,
+      "has_table": true,
+      "has_escaped_html": false,
+      "ok": true
+    },
+    {
+      "post_id": "2297",
+      "slug": "ako-vycistit-sprchovu-hlavicu-vodny-kamen-slaby-prud-a-hygienicka-udrzba",
+      "url": "https://www.vevo.sk/n/ako-vycistit-sprchovu-hlavicu-vodny-kamen-slaby-prud-a-hygienicka-udrzba",
+      "status": 200,
+      "html_length": 131418,
+      "has_draft_text": false,
+      "has_inline_style": true,
+      "has_product_link": true,
+      "has_category_link": true,
+      "has_table": true,
+      "has_escaped_html": false,
+      "ok": true
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "batch": 30,
+  "created_at": "2026-06-29T13:55:00+02:00",
+  "status": "prepared_not_published",
+  "prepared_files": {
+    "candidates": "content/VEVO_CONTENT/batches/batch-30-candidates-2026-06-29.txt",
+    "content_plan": "content/VEVO_CONTENT/content-plan/batch-30-bathroom-bedding-care-2026-06-29.md",
+    "builder": "content/VEVO_CONTENT/imports/build_batch_30_bathroom_bedding.py",
+    "articles_json": "content/VEVO_CONTENT/imports/batch-30-2026-06-29-articles.json",
+    "preflight": "content/VEVO_CONTENT/exports/batch-30-2026-06-29-preflight.json",
+    "duplicate_guard": "content/VEVO_CONTENT/exports/batch-30-2026-06-29-duplicate-guard.json",
+    "xls": "C:/Users/Patrik jankech/AppData/Local/Temp/vevo-batch-30-bathroom-bedding-clean-urls.xls"
+  },
+  "local_checks": {
+    "duplicate_guard": "final candidates OK against live VEVO corpus; first draft topics were rejected as too similar and replaced",
+    "link_preflight": "all article, product, category, and source links returned HTTP 200",
+    "depth_guard": "passed for all 3 articles; visible word counts 1527, 1592, 1549",
+    "public_internal_terms": "no hits for internal terms such as longtail, keyword, SEO, search intent, sub-query, fan-out, CTA",
+    "fixed_prices": "no Cena, euro symbol, or &euro; hits in generated article JSON/preflight"
+  },
+  "publication_blocker": {
+    "browser": "Codex in-app browser automation repeatedly timed out while listing tabs or opening the VEVO admin and reset the JavaScript session.",
+    "connector": "Available BiznisWeb add/update news tools do not expose link, date_posted, time_posted, title_tag, or description. Using them for public creation would risk the previously observed non-semantic URLs or wrong dates.",
+    "cookie_probe": "Readable Codex and standard-browser cookie stores did not provide a safe usable VEVO admin session; no cookie values were printed or saved."
+  },
+  "safe_decision": "Do not create public posts via biznisweb_add_news_post until slug/date control is available. Batch 30 remains prepared but unpublished.",
+  "next_exact_step": "Restore a working VEVO admin browser session or provide an import-capable BiznisWeb tool. Then import the prepared XLS into news block 765, normalize the rich HTML from the JSON, publish with date 2025-09-22, and run public verification."
+}

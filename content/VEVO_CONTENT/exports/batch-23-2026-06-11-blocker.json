@@ -1,0 +1,57 @@
+{
+  "batch": 23,
+  "created_at": "2026-06-11T16:44:38Z",
+  "status": "prepared_publish_blocked",
+  "reason": "BiznisWeb admin session is on the login page and no local VEVO credentials file is available.",
+  "admin_url": "https://vevo.flox.sk/erp/main/login",
+  "news_block_id": "765",
+  "safe_publish_decision": "Do not use direct add_news_post connector because it cannot safely set clean URL slugs and backdated date_posted/time_posted fields for public posts.",
+  "article_count": 5,
+  "planned_date_posted": "2025-09-29",
+  "planned_times": [
+    "08:00:00",
+    "08:12:00",
+    "08:24:00",
+    "08:36:00",
+    "08:48:00"
+  ],
+  "articles": [
+    {
+      "title": "Čo je bambusová viskóza: mäkkosť, marketingové tvrdenia a reálna starostlivosť",
+      "slug": "co-je-bambusova-viskoza-makkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "date_posted": "2025-09-29",
+      "time_posted": "08:00:00"
+    },
+    {
+      "title": "Bambusové vlákno vs bavlna: výhody, nevýhody a pranie pri citlivej pokožke",
+      "slug": "bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "date_posted": "2025-09-29",
+      "time_posted": "08:12:00"
+    },
+    {
+      "title": "Čo je akryl: prečo pripomína vlnu a ako sa perie",
+      "slug": "co-je-akryl-preco-pripomina-vlnu-a-ako-sa-perie",
+      "date_posted": "2025-09-29",
+      "time_posted": "08:24:00"
+    },
+    {
+      "title": "Akryl vs vlna: žmolkovanie, teplo, zápach a starostlivosť",
+      "slug": "akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+      "date_posted": "2025-09-29",
+      "time_posted": "08:36:00"
+    },
+    {
+      "title": "Čo je zmesový materiál: prečo sa oblečenie zráža alebo správa inak než čakáte",
+      "slug": "co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "date_posted": "2025-09-29",
+      "time_posted": "08:48:00"
+    }
+  ],
+  "next_step_after_login": [
+    "Open BiznisWeb admin Pages > SK Blog > Novinky block 765.",
+    "Create each article from content/VEVO_CONTENT/imports/batch-23-2026-06-11-articles.json through the admin form.",
+    "Set title, short text, rich HTML source, date_posted 29.09.2025, time_posted from JSON, SEO title, SEO description, and URL identifier before saving each post.",
+    "Verify frontend HTTP 200, IDs, datePublished meta, rich HTML styles, product/category cards, malformed hrefs, internal links, and external source links.",
+    "Save mapping and verification exports, then update VEVO and root PROJECT_STATE.md."
+  ]
+}

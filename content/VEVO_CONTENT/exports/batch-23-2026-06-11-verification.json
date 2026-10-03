@@ -1,0 +1,302 @@
+{
+  "batch": 23,
+  "verified_at": "2026-06-11",
+  "all_ok": true,
+  "summary": {
+    "articles": 5,
+    "http_200": 5,
+    "date_published_matches": 5,
+    "visible_date_present": 5,
+    "styled_quick_box": 5,
+    "recommendation_box": 5,
+    "product_or_category_card": 5,
+    "all_article_links_ok": 5
+  },
+  "results": [
+    {
+      "post_id": "2240",
+      "title": "Čo je bambusová viskóza: mäkkosť, marketingové tvrdenia a reálna starostlivosť",
+      "slug": "co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "resolved_url": "https://www.vevo.sk/n/co-je-bambusova-viskoza-maekkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "status": 200,
+      "datePublished": "2025-09-29T08:00:00",
+      "visibleDate": "29.9.2025 08:00:00",
+      "expectedDate": "2025-09-29T08:00:00",
+      "checks": {
+        "http_200": true,
+        "title_present": true,
+        "date_published_matches": true,
+        "visible_date_present": true,
+        "styled_quick_box": true,
+        "recommendation_box": true,
+        "product_or_category_card": true,
+        "no_customer_cta_word": true,
+        "no_fixed_prices": true,
+        "no_malformed_hrefs": true,
+        "all_article_links_ok": true
+      },
+      "malformed_hrefs": [],
+      "article_link_count": 7,
+      "article_links": [
+        {
+          "url": "https://textileexchange.org/manmade-cellulosic-fibers/",
+          "status": 200
+        },
+        {
+          "url": "https://www.britannica.com/technology/rayon-textile-fiber",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+          "status": 200
+        }
+      ],
+      "html_length": 8433
+    },
+    {
+      "post_id": "2241",
+      "title": "Bambusové vlákno vs bavlna: výhody, nevýhody a pranie pri citlivej pokožke",
+      "slug": "bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "resolved_url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "status": 200,
+      "datePublished": "2025-09-29T08:12:00",
+      "visibleDate": "29.9.2025 08:12:00",
+      "expectedDate": "2025-09-29T08:12:00",
+      "checks": {
+        "http_200": true,
+        "title_present": true,
+        "date_published_matches": true,
+        "visible_date_present": true,
+        "styled_quick_box": true,
+        "recommendation_box": true,
+        "product_or_category_card": true,
+        "no_customer_cta_word": true,
+        "no_fixed_prices": true,
+        "no_malformed_hrefs": true,
+        "all_article_links_ok": true
+      },
+      "malformed_hrefs": [],
+      "article_link_count": 7,
+      "article_links": [
+        {
+          "url": "https://textileexchange.org/manmade-cellulosic-fibers/",
+          "status": 200
+        },
+        {
+          "url": "https://www.britannica.com/topic/cotton-fibre-and-plant",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-prat-detsku-postelnu-bielizen-bez-drazdenia-pokozky",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/organicka-bavlna-co-znamena-a-ci-sa-perie-inak-ako-bezna-bavlna",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+          "status": 200
+        }
+      ],
+      "html_length": 8315
+    },
+    {
+      "post_id": "2242",
+      "title": "Čo je akryl: prečo pripomína vlnu a ako sa perie",
+      "slug": "co-je-akryl-preco-pripomina-vlnu-a-ako-sa-perie",
+      "url": "https://www.vevo.sk/n/co-je-akryl-preco-pripomina-vlnu-a-ako-sa-perie",
+      "resolved_url": "https://www.vevo.sk/n/co-je-akryl-preco-pripomina-vlnu-a-ako-sa-perie",
+      "status": 200,
+      "datePublished": "2025-09-29T08:24:00",
+      "visibleDate": "29.9.2025 08:24:00",
+      "expectedDate": "2025-09-29T08:24:00",
+      "checks": {
+        "http_200": true,
+        "title_present": true,
+        "date_published_matches": true,
+        "visible_date_present": true,
+        "styled_quick_box": true,
+        "recommendation_box": true,
+        "product_or_category_card": true,
+        "no_customer_cta_word": true,
+        "no_fixed_prices": true,
+        "no_malformed_hrefs": true,
+        "all_article_links_ok": true
+      },
+      "malformed_hrefs": [],
+      "article_link_count": 7,
+      "article_links": [
+        {
+          "url": "https://www.britannica.com/technology/acrylic-fiber",
+          "status": 200
+        },
+        {
+          "url": "https://www.britannica.com/topic/textile",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+          "status": 200
+        }
+      ],
+      "html_length": 7947
+    },
+    {
+      "post_id": "2243",
+      "title": "Akryl vs vlna: žmolkovanie, teplo, zápach a starostlivosť",
+      "slug": "akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+      "url": "https://www.vevo.sk/n/akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+      "resolved_url": "https://www.vevo.sk/n/akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+      "status": 200,
+      "datePublished": "2025-09-29T08:36:00",
+      "visibleDate": "29.9.2025 08:36:00",
+      "expectedDate": "2025-09-29T08:36:00",
+      "checks": {
+        "http_200": true,
+        "title_present": true,
+        "date_published_matches": true,
+        "visible_date_present": true,
+        "styled_quick_box": true,
+        "recommendation_box": true,
+        "product_or_category_card": true,
+        "no_customer_cta_word": true,
+        "no_fixed_prices": true,
+        "no_malformed_hrefs": true,
+        "all_article_links_ok": true
+      },
+      "malformed_hrefs": [],
+      "article_link_count": 7,
+      "article_links": [
+        {
+          "url": "https://www.britannica.com/animal/wool",
+          "status": 200
+        },
+        {
+          "url": "https://www.britannica.com/technology/acrylic-fiber",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/co-je-merino-vlna-vyhody-nevyhody-a-pranie-bez-zrazenia",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+          "status": 200
+        }
+      ],
+      "html_length": 7844
+    },
+    {
+      "post_id": "2244",
+      "title": "Čo je zmesový materiál: prečo sa oblečenie zráža alebo správa inak než čakáte",
+      "slug": "co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "resolved_url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "status": 200,
+      "datePublished": "2025-09-29T08:48:00",
+      "visibleDate": "29.9.2025 08:48:00",
+      "expectedDate": "2025-09-29T08:48:00",
+      "checks": {
+        "http_200": true,
+        "title_present": true,
+        "date_published_matches": true,
+        "visible_date_present": true,
+        "styled_quick_box": true,
+        "recommendation_box": true,
+        "product_or_category_card": true,
+        "no_customer_cta_word": true,
+        "no_fixed_prices": true,
+        "no_malformed_hrefs": true,
+        "all_article_links_ok": true
+      },
+      "malformed_hrefs": [],
+      "article_link_count": 7,
+      "article_links": [
+        {
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC8044815/",
+          "status": 200
+        },
+        {
+          "url": "https://www.britannica.com/topic/textile",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/co-je-elastan-preco-je-v-leginach-spodnej-bielizni-a-sportovom-obleceni",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+          "status": 200
+        },
+        {
+          "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+          "status": 200
+        }
+      ],
+      "html_length": 8305
+    }
+  ]
+}

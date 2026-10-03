@@ -1,0 +1,63 @@
+{
+  "article_count": 4,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Stálofarebnosť textilu: prečo farby blednú pri praní, svetle a trení",
+      "slug": "stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "body_length": 26128,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-42-2026-07-22-articles.json"
+    },
+    {
+      "title": "Pevnosť šva a posun nití: prečo oblečenie praská pri švoch",
+      "slug": "pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "body_length": 25812,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-42-2026-07-22-articles.json"
+    },
+    {
+      "title": "Zatrhávanie textilu: prečo vznikajú vytiahnuté očká a ako im predchádzať",
+      "slug": "zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "body_length": 25292,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-42-2026-07-22-articles.json"
+    },
+    {
+      "title": "Počet nití pri obliečkach: čo znamená thread count a čo o kvalite nehovorí",
+      "slug": "pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "body_length": 25422,
+      "styled_block_count": 11,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-42-2026-07-22-articles.json"
+    }
+  ]
+}

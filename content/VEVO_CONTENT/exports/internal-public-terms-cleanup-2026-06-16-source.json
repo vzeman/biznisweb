@@ -1,0 +1,777 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-16T06:37:34.934700+00:00",
+  "purpose": "Remove internal SEO/workflow wording from public VEVO article fields.",
+  "dry_run": false,
+  "live_candidate_count": 63,
+  "live_candidates": [
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "source_priority": 10,
+      "index": 3,
+      "title": "Ako odstrániť zápach z bežeckých legín po tréningu",
+      "slug": "ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "post_id": "2128",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-bezeckych-legin-po-treningu",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "source_priority": 10,
+      "index": 6,
+      "title": "Ako odstrániť zápach z ponožiek a športovej obuvi po tréningu",
+      "slug": "ako-odstranit-zapach-z-ponoziek-a-sportovej-obuvi-po-treningu",
+      "post_id": "2131",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-ponoziek-a-sportovej-obuvi-po-treningu",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "source_priority": 10,
+      "index": 8,
+      "title": "Ako zabrániť púšťaniu farby pri praní nového oblečenia",
+      "slug": "ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "post_id": "2133",
+      "url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "source_priority": 10,
+      "index": 10,
+      "title": "Ako vyprať kari a kurkumu z bavlneného trička bez žltého tieňa",
+      "slug": "ako-vyprat-kari-a-kurkumu-z-bavlneneho-tricka-bez-zlteho-tiena",
+      "post_id": "2135",
+      "url": "https://www.vevo.sk/n/ako-vyprat-kari-a-kurkumu-z-bavlneneho-tricka-bez-zlteho-tiena",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "source_priority": 10,
+      "index": 12,
+      "title": "Ako odstrániť majonézu a dressing z obrusu bez mastného fľaku",
+      "slug": "ako-odstranit-majonezu-a-dressing-z-obrusu-bez-mastneho-flaku",
+      "post_id": "2137",
+      "url": "https://www.vevo.sk/n/ako-odstranit-majonezu-a-dressing-z-obrusu-bez-mastneho-flaku",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "source_priority": 10,
+      "index": 14,
+      "title": "Ako odstrániť mlieko a jogurt z textilu bez kyslého zápachu",
+      "slug": "ako-odstranit-mlieko-a-jogurt-z-textilu-bez-kysleho-zapachu",
+      "post_id": "2139",
+      "url": "https://www.vevo.sk/n/ako-odstranit-mlieko-a-jogurt-z-textilu-bez-kysleho-zapachu",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "source_priority": 10,
+      "index": 16,
+      "title": "Ako odstrániť žuvačku z nohavíc, mikiny a poťahu",
+      "slug": "ako-odstranit-zuvacku-z-nohavic-mikiny-a-potahu",
+      "post_id": "2141",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zuvacku-z-nohavic-mikiny-a-potahu",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-15-2026-06-09-articles.json",
+      "source_priority": 10,
+      "index": 18,
+      "title": "Ako vyčistiť filter práčky, keď bielizeň zapácha alebo voda odteká pomaly",
+      "slug": "ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "post_id": "2143",
+      "url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 0,
+      "title": "Ako odstrániť lepidlo z oblečenia po tvorení s deťmi",
+      "slug": "ako-odstranit-lepidlo-z-oblecenia-po-tvoreni-s-detmi",
+      "post_id": "2165",
+      "url": "https://www.vevo.sk/n/ako-odstranit-lepidlo-z-oblecenia-po-tvoreni-s-detmi",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 1,
+      "title": "Ako odstrániť sekundové lepidlo z textilu a kedy to nerobiť doma",
+      "slug": "ako-odstranit-sekundove-lepidlo-z-textilu-a-kedy-to-nerobit-doma",
+      "post_id": "2166",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sekundove-lepidlo-z-textilu-a-kedy-to-nerobit-doma",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 2,
+      "title": "Ako odstrániť akrylovú farbu z trička bez zafixovania",
+      "slug": "ako-odstranit-akrylovu-farbu-z-tricka-bez-zafixovania",
+      "post_id": "2167",
+      "url": "https://www.vevo.sk/n/ako-odstranit-akrylovu-farbu-z-tricka-bez-zafixovania",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 3,
+      "title": "Ako odstrániť vodové farby z detskej zástery a rukávov mikiny",
+      "slug": "ako-odstranit-vodove-farby-z-detskej-zastery-a-rukavov-mikiny",
+      "post_id": "2168",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vodove-farby-z-detskej-zastery-a-rukavov-mikiny",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 4,
+      "title": "Ako odstrániť plastelínu z teplákov, koberca a poťahu",
+      "slug": "ako-odstranit-plastelinu-z-teplakov-koberca-a-potahu",
+      "post_id": "2169",
+      "url": "https://www.vevo.sk/n/ako-odstranit-plastelinu-z-teplakov-koberca-a-potahu",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 5,
+      "title": "Ako odstrániť sliz z detského trička a deky bez lepkavých zvyškov",
+      "slug": "ako-odstranit-sliz-z-detskeho-tricka-a-deky-bez-lepkavych-zvyskov",
+      "post_id": "2170",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sliz-z-detskeho-tricka-a-deky-bez-lepkavych-zvyskov",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 6,
+      "title": "Ako vyprať voskovky z peračníka a textilného obalu",
+      "slug": "ako-vyprat-voskovky-z-peracnika-a-textilneho-obalu",
+      "post_id": "2171",
+      "url": "https://www.vevo.sk/n/ako-vyprat-voskovky-z-peracnika-a-textilneho-obalu",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 7,
+      "title": "Ako odstrániť zvýrazňovač z rukáva mikiny a školského trička",
+      "slug": "ako-odstranit-zvyraznovac-z-rukava-mikiny-a-skolskeho-tricka",
+      "post_id": "2172",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zvyraznovac-z-rukava-mikiny-a-skolskeho-tricka",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 8,
+      "title": "Ako odstrániť červenú papriku z trička a kuchynskej utierky",
+      "slug": "ako-odstranit-cervenu-papriku-z-tricka-a-kuchynskej-utierky",
+      "post_id": "2173",
+      "url": "https://www.vevo.sk/n/ako-odstranit-cervenu-papriku-z-tricka-a-kuchynskej-utierky",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 9,
+      "title": "Ako odstrániť sójovú omáčku z košele, obrusu a prestierania",
+      "slug": "ako-odstranit-sojovu-omacku-z-kosele-obrusu-a-prestierania",
+      "post_id": "2174",
+      "url": "https://www.vevo.sk/n/ako-odstranit-sojovu-omacku-z-kosele-obrusu-a-prestierania",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 10,
+      "title": "Ako odstrániť balzamikový ocot z bieleho obrusu",
+      "slug": "ako-odstranit-balzamikovy-ocot-z-bieleho-obrusu",
+      "post_id": "2175",
+      "url": "https://www.vevo.sk/n/ako-odstranit-balzamikovy-ocot-z-bieleho-obrusu",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 11,
+      "title": "Ako odstrániť olivový olej z ľanovej košele bez mastnej mapy",
+      "slug": "ako-odstranit-olivovy-olej-z-lanovej-kosele-bez-mastnej-mapy",
+      "post_id": "2176",
+      "url": "https://www.vevo.sk/n/ako-odstranit-olivovy-olej-z-lanovej-kosele-bez-mastnej-mapy",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 12,
+      "title": "Ako odstrániť vlasové sérum z uteráka a goliera košele",
+      "slug": "ako-odstranit-vlasove-serum-z-uteraka-a-goliera-kosele",
+      "post_id": "2177",
+      "url": "https://www.vevo.sk/n/ako-odstranit-vlasove-serum-z-uteraka-a-goliera-kosele",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 13,
+      "title": "Ako odstrániť krém na ruky z rukávov svetra a deky",
+      "slug": "ako-odstranit-krem-na-ruky-z-rukavov-svetra-a-deky",
+      "post_id": "2178",
+      "url": "https://www.vevo.sk/n/ako-odstranit-krem-na-ruky-z-rukavov-svetra-a-deky",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 14,
+      "title": "Ako vyprať suchý šampón z čierneho trička a goliera",
+      "slug": "ako-vyprat-suchy-sampon-z-cierneho-tricka-a-goliera",
+      "post_id": "2179",
+      "url": "https://www.vevo.sk/n/ako-vyprat-suchy-sampon-z-cierneho-tricka-a-goliera",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 15,
+      "title": "Ako odstrániť lak na vlasy z goliera košele a šatky",
+      "slug": "ako-odstranit-lak-na-vlasy-z-goliera-kosele-a-satky",
+      "post_id": "2180",
+      "url": "https://www.vevo.sk/n/ako-odstranit-lak-na-vlasy-z-goliera-kosele-a-satky",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 16,
+      "title": "Ako odstrániť trblietky z šiat, saka a kabáta po oslave",
+      "slug": "ako-odstranit-trblietky-z-siat-saka-a-kabata-po-oslave",
+      "post_id": "2181",
+      "url": "https://www.vevo.sk/n/ako-odstranit-trblietky-z-siat-saka-a-kabata-po-oslave",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 17,
+      "title": "Ako odstrániť pach z kostýmu po karnevale bez poškodenia látky",
+      "slug": "ako-odstranit-pach-z-kostymu-po-karnevale-bez-poskodenia-latky",
+      "post_id": "2182",
+      "url": "https://www.vevo.sk/n/ako-odstranit-pach-z-kostymu-po-karnevale-bez-poskodenia-latky",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 18,
+      "title": "Ako prať oblečenie po kaderníctve od vlasov, farby a lakov",
+      "slug": "ako-prat-oblecenie-po-kadernictve-od-vlasov-farby-a-lakov",
+      "post_id": "2183",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-po-kadernictve-od-vlasov-farby-a-lakov",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-17-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 19,
+      "title": "Ako vyprať pracovné tričko po záhradkárčení od hliny a potu",
+      "slug": "ako-vyprat-pracovne-tricko-po-zahradkarceni-od-hliny-a-potu",
+      "post_id": "2184",
+      "url": "https://www.vevo.sk/n/ako-vyprat-pracovne-tricko-po-zahradkarceni-od-hliny-a-potu",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-21-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 0,
+      "title": "Recyklovaný polyester: čo znamená, aké má výhody a ako sa oň starať",
+      "slug": "recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+      "post_id": "2230",
+      "url": "https://www.vevo.sk/n/recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-21-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 1,
+      "title": "Čo je polyamid alebo nylon: vlastnosti, odolnosť a pranie",
+      "slug": "co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "post_id": "2231",
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-21-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 2,
+      "title": "Polyamid vs polyester: ktorý materiál lepšie znáša pot, šport a časté pranie",
+      "slug": "polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "post_id": "2232",
+      "url": "https://www.vevo.sk/n/polyamid-vs-polyester-ktory-material-lepsie-znasa-pot-sport-a-caste-pranie",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-21-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 3,
+      "title": "Modal v oblečení: čo znamená, prečo je mäkký a ako ho prať",
+      "slug": "modal-v-obleceni-co-znamena-preco-je-makky-a-ako-ho-prat",
+      "post_id": "2233",
+      "url": "https://www.vevo.sk/n/modal-v-obleceni-co-znamena-preco-je-makky-a-ako-ho-prat",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-21-2026-06-10-articles.json",
+      "source_priority": 10,
+      "index": 4,
+      "title": "Čo je lyocell alebo Tencel: priedušnosť, jemnosť a starostlivosť",
+      "slug": "co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "post_id": "2234",
+      "url": "https://www.vevo.sk/n/co-je-lyocell-alebo-tencel-priedusnost-jemnost-a-starostlivost",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-22-2026-06-11-articles.json",
+      "source_priority": 10,
+      "index": 0,
+      "title": "Čo je bavlna: vlastnosti, výhody, nevýhody a starostlivosť",
+      "slug": "co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "post_id": "2235",
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-22-2026-06-11-articles.json",
+      "source_priority": 10,
+      "index": 1,
+      "title": "Organická bavlna: čo znamená a či sa perie inak ako bežná bavlna",
+      "slug": "organicka-bavlna-co-znamena-a-ci-sa-perie-inak-ako-bezna-bavlna",
+      "post_id": "2236",
+      "url": "https://www.vevo.sk/n/organicka-bavlna-co-znamena-a-ci-sa-perie-inak-ako-bezna-bavlna",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-22-2026-06-11-articles.json",
+      "source_priority": 10,
+      "index": 2,
+      "title": "Čo je ľan: prečo sa krčí, ako ho prať a ako ho zjemniť",
+      "slug": "co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "post_id": "2237",
+      "url": "https://www.vevo.sk/n/co-je-lan-preco-sa-krci-ako-ho-prat-a-ako-ho-zjemnit",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-22-2026-06-11-articles.json",
+      "source_priority": 10,
+      "index": 3,
+      "title": "Ľan vs bavlna: rozdiely v savosti, krčivosti a starostlivosti",
+      "slug": "lan-vs-bavlna-rozdiely-v-savosti-krcivosti-a-starostlivosti",
+      "post_id": "2238",
+      "url": "https://www.vevo.sk/n/lan-vs-bavlna-rozdiely-v-savosti-krcivosti-a-starostlivosti",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-22-2026-06-11-articles.json",
+      "source_priority": 10,
+      "index": 4,
+      "title": "Modal vs lyocell vs viskóza: ako sa líšia pri praní a nosení",
+      "slug": "modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "post_id": "2239",
+      "url": "https://www.vevo.sk/n/modal-vs-lyocell-vs-viskoza-ako-sa-lisia-pri-prani-a-noseni",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-23-2026-06-11-articles.json",
+      "source_priority": 10,
+      "index": 0,
+      "title": "Čo je bambusová viskóza: mäkkosť, marketingové tvrdenia a reálna starostlivosť",
+      "slug": "co-je-bambusova-viskoza-makkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "post_id": "2240",
+      "url": "https://www.vevo.sk/n/co-je-bambusova-viskoza-makkost-marketingove-tvrdenia-a-realna-starostlivost",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-23-2026-06-11-articles.json",
+      "source_priority": 10,
+      "index": 1,
+      "title": "Bambusové vlákno vs bavlna: výhody, nevýhody a pranie pri citlivej pokožke",
+      "slug": "bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "post_id": "2241",
+      "url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-23-2026-06-11-articles.json",
+      "source_priority": 10,
+      "index": 2,
+      "title": "Čo je akryl: prečo pripomína vlnu a ako sa perie",
+      "slug": "co-je-akryl-preco-pripomina-vlnu-a-ako-sa-perie",
+      "post_id": "2242",
+      "url": "https://www.vevo.sk/n/co-je-akryl-preco-pripomina-vlnu-a-ako-sa-perie",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-23-2026-06-11-articles.json",
+      "source_priority": 10,
+      "index": 3,
+      "title": "Akryl vs vlna: žmolkovanie, teplo, zápach a starostlivosť",
+      "slug": "akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+      "post_id": "2243",
+      "url": "https://www.vevo.sk/n/akryl-vs-vlna-zmolkovanie-teplo-zapach-a-starostlivost",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-23-2026-06-11-articles.json",
+      "source_priority": 10,
+      "index": 4,
+      "title": "Čo je zmesový materiál: prečo sa oblečenie zráža alebo správa inak než čakáte",
+      "slug": "co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "post_id": "2244",
+      "url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-24-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 0,
+      "title": "Čo je fleece: hrejivosť, žmolkovanie a starostlivosť pri praní",
+      "slug": "co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+      "post_id": "2245",
+      "url": "https://www.vevo.sk/n/co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-24-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 1,
+      "title": "Čo je softshell: vrstvy, membrána, impregnácia a správna starostlivosť",
+      "slug": "co-je-softshell-vrstvy-membrana-impregnacia-a-spravna-starostlivost",
+      "post_id": "2246",
+      "url": "https://www.vevo.sk/n/co-je-softshell-vrstvy-membrana-impregnacia-a-spravna-starostlivost",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-24-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 2,
+      "title": "Čo je membránové oblečenie: vodný stĺpec, priedušnosť a pranie bez poškodenia",
+      "slug": "co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "post_id": "2247",
+      "url": "https://www.vevo.sk/n/co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-24-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 3,
+      "title": "Prečo sa oblečenie žmolkuje: vlákna, trenie, pranie a sušenie",
+      "slug": "preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "post_id": "2248",
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-24-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 4,
+      "title": "Mikroplasty z oblečenia: ako prať syntetiku zodpovednejšie bez paniky",
+      "slug": "mikroplasty-z-oblecenia-ako-prat-syntetiku-zodpovednejsie-bez-paniky",
+      "post_id": "2249",
+      "url": "https://www.vevo.sk/n/mikroplasty-z-oblecenia-ako-prat-syntetiku-zodpovednejsie-bez-paniky",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-25-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 0,
+      "title": "Ako čítať štítok na oblečení: materiál, symboly prania a správny program",
+      "slug": "ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "post_id": "2250",
+      "url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-25-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 1,
+      "title": "Symboly prania na štítku: čo znamená vanička, trojuholník, kruh, štvorec a žehlička",
+      "slug": "symboly-prania-na-stitku-co-znamena-vanicka-trojuholnik-kruh-stvorec-a-zehlicka",
+      "post_id": "2251",
+      "url": "https://www.vevo.sk/n/symboly-prania-na-stitku-co-znamena-vanicka-trojuholnik-kruh-stvorec-a-zehlicka",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-25-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 2,
+      "title": "Prečo sa oblečenie zrazí po praní: teplota, vlákna, sušička a prevencia",
+      "slug": "preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "post_id": "2252",
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-25-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 3,
+      "title": "Ako prať nové oblečenie prvýkrát: farby, chemický pach, zrážanie a štítok",
+      "slug": "ako-prat-nove-oblecenie-prvykrat-farby-chemicky-pach-zrazanie-a-stitok",
+      "post_id": "2253",
+      "url": "https://www.vevo.sk/n/ako-prat-nove-oblecenie-prvykrat-farby-chemicky-pach-zrazanie-a-stitok",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-25-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 4,
+      "title": "Certifikáty na textile: OEKO-TEX, GOTS, recyklované vlákna a čo znamenajú pri praní",
+      "slug": "certifikaty-na-textile-oeko-tex-gots-recyklovane-vlakna-a-co-znamenaju-pri-prani",
+      "post_id": "2254",
+      "url": "https://www.vevo.sk/n/certifikaty-na-textile-oeko-tex-gots-recyklovane-vlakna-a-co-znamenaju-pri-prani",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-26-2026-06-16-quality-update.json",
+      "source_priority": 20,
+      "index": 0,
+      "title": "Ako funguje prací gél: tenzidy, enzýmy, pH a dávkovanie pri bežnom praní",
+      "slug": "ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "post_id": "2255",
+      "url": "https://www.vevo.sk/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-26-2026-06-16-quality-update.json",
+      "source_priority": 20,
+      "index": 1,
+      "title": "Predpieranie v práčke: kedy má zmysel a kedy len míňa vodu, čas a prací prostriedok",
+      "slug": "predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "post_id": "2256",
+      "url": "https://www.vevo.sk/n/predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-26-2026-06-16-quality-update.json",
+      "source_priority": 20,
+      "index": 2,
+      "title": "Otáčky pri odstreďovaní: ako ovplyvňujú vlhkosť, krčenie a opotrebovanie oblečenia",
+      "slug": "otacky-pri-odstredovani-ako-ovplyvnuju-vlhkost-krcenie-a-opotrebovanie-oblecenia",
+      "post_id": "2257",
+      "url": "https://www.vevo.sk/n/otacky-pri-odstredovani-ako-ovplyvnuju-vlhkost-krcenie-a-opotrebovanie-oblecenia",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-26-2026-06-16-quality-update.json",
+      "source_priority": 20,
+      "index": 3,
+      "title": "Preplnená práčka: prečo sa bielizeň nevyperie, neopláchne a zapácha",
+      "slug": "preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "post_id": "2258",
+      "url": "https://www.vevo.sk/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-26-2026-06-16-quality-update.json",
+      "source_priority": 20,
+      "index": 4,
+      "title": "Prečo je bielizeň po praní tvrdá alebo lepkavá: zvyšky gélu, dávkovanie a oplach",
+      "slug": "preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "post_id": "2259",
+      "url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-27-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 0,
+      "title": "Ako dávkovať prací gél podľa tvrdosti vody, náplne a znečistenia",
+      "slug": "ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "post_id": "2260",
+      "url": "https://www.vevo.sk/n/ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-27-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 1,
+      "title": "Prací gél alebo prací prášok: kedy čo funguje lepšie a prečo",
+      "slug": "praci-gel-alebo-praci-prasok-kedy-co-funguje-lepsie-a-preco",
+      "post_id": "2261",
+      "url": "https://www.vevo.sk/n/praci-gel-alebo-praci-prasok-kedy-co-funguje-lepsie-a-preco",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-27-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 2,
+      "title": "Extra oplach v práčke: kedy pomôže pri zápachu, tvrdej bielizni a citlivej pokožke",
+      "slug": "extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "post_id": "2262",
+      "url": "https://www.vevo.sk/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-27-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 3,
+      "title": "Krátky program v práčke: kedy stačí a kedy zhoršuje zvyšky pracieho prostriedku",
+      "slug": "kratky-program-v-pracke-kedy-staci-a-kedy-zhorsuje-zvysky-pracieho-prostriedku",
+      "post_id": "2263",
+      "url": "https://www.vevo.sk/n/kratky-program-v-pracke-kedy-staci-a-kedy-zhorsuje-zvysky-pracieho-prostriedku",
+      "fields_changed": [
+        "long"
+      ]
+    },
+    {
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-27-2026-06-16-articles.json",
+      "source_priority": 10,
+      "index": 4,
+      "title": "Koľko bielizne dať do práčky: praktická kapacita podľa uterákov, obliečok a športu",
+      "slug": "kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "post_id": "2264",
+      "url": "https://www.vevo.sk/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "fields_changed": [
+        "long"
+      ]
+    }
+  ],
+  "live_update": {
+    "initial_update_result_file": "content/VEVO_CONTENT/exports/internal-public-terms-cleanup-2026-06-16-mcp-results.json",
+    "retry_update_result_file": "content/VEVO_CONTENT/exports/internal-public-terms-cleanup-2026-06-16-mcp-retry-results.json",
+    "live_verification_file": "content/VEVO_CONTENT/exports/internal-public-terms-cleanup-2026-06-16-live-verification.json",
+    "attempted_candidate_count": 63,
+    "initial_successful_count": 57,
+    "retry_successful_count": 5,
+    "successful_live_update_count": 62,
+    "unupdated_unreachable_candidate": "symboly-prania-na-stitku-co-znamena-vanicka-trojuholnik-kruh-stvorec-a-zehlicka",
+    "unupdated_reason": "BiznisWeb returned invalid reference for deleted/hidden duplicate post; public URL returns HTTP 404 and no public article text is available to clean.",
+    "source_candidate_count": 63
+  }
+}

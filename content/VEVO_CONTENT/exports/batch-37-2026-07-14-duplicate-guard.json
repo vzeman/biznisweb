@@ -1,0 +1,145 @@
+{
+  "existing_count": 801,
+  "excluded_batch": 37,
+  "catalog_health": {
+    "duplicate_title_group_count": 7,
+    "duplicate_titles": [
+      {
+        "title": "Ako správne vyžehliť záclonu – Kompletný sprievodca",
+        "records": [
+          {
+            "link": "https://www.vevo.sk/n/ako-spravne-vyzehlit-zaclonu-kompletny-sprievodca",
+            "slug": "ako-spravne-vyzehlit-zaclonu-kompletny-sprievodca"
+          },
+          {
+            "link": "https://www.vevo.sk/n/111111111111111111",
+            "slug": "111111111111111111"
+          }
+        ]
+      },
+      {
+        "title": "Vonné esencie – Srdce každého parfumu",
+        "records": [
+          {
+            "link": "https://www.vevo.sk/n/vonne-esencie-srdce-kazdeho-parfumu1",
+            "slug": "vonne-esencie-srdce-kazdeho-parfumu1"
+          },
+          {
+            "link": "https://www.vevo.sk/n/vonne-esencie-srdce-kazdeho-parfumu",
+            "slug": "vonne-esencie-srdce-kazdeho-parfumu"
+          }
+        ]
+      },
+      {
+        "title": "Koncentrácia parfumu – EdP, EdT, EdC vysvetlené",
+        "records": [
+          {
+            "link": "https://www.vevo.sk/n/koncentracia-parfumu-edp-edt-edc-vysvetlene",
+            "slug": "koncentracia-parfumu-edp-edt-edc-vysvetlene"
+          },
+          {
+            "link": "https://www.vevo.sk/n/koncentracia-parfumu-edp-edt-edc-vysvetlene1",
+            "slug": "koncentracia-parfumu-edp-edt-edc-vysvetlene1"
+          }
+        ]
+      },
+      {
+        "title": "Silikóny v avivážach – Skrytý nepriateľ vášho prádla",
+        "records": [
+          {
+            "link": "https://www.vevo.sk/n/silikony-v-avivazach-skryty-nepriatel-vasho-pradla",
+            "slug": "silikony-v-avivazach-skryty-nepriatel-vasho-pradla"
+          },
+          {
+            "link": "https://www.vevo.sk/n/silikony-v-avivazach-skryty-nepriatel-vasho-pradla1",
+            "slug": "silikony-v-avivazach-skryty-nepriatel-vasho-pradla1"
+          }
+        ]
+      },
+      {
+        "title": "Teplota prania a vôňa – Kompletný sprievodca",
+        "records": [
+          {
+            "link": "https://www.vevo.sk/n/teplota-prania-a-vona-kompletny-sprievodca",
+            "slug": "teplota-prania-a-vona-kompletny-sprievodca"
+          },
+          {
+            "link": "https://www.vevo.sk/n/teplota-prania-a-vona-kompletny-sprievodca1",
+            "slug": "teplota-prania-a-vona-kompletny-sprievodca1"
+          }
+        ]
+      },
+      {
+        "title": "Sušička a vône – Ako zachovať vôňu po sušení",
+        "records": [
+          {
+            "link": "https://www.vevo.sk/n/susicka-a-vone-ako-zachovat-vonu-po-suseni",
+            "slug": "susicka-a-vone-ako-zachovat-vonu-po-suseni"
+          },
+          {
+            "link": "https://www.vevo.sk/n/susicka-a-vone-ako-zachovat-vonu-po-suseni1",
+            "slug": "susicka-a-vone-ako-zachovat-vonu-po-suseni1"
+          }
+        ]
+      },
+      {
+        "title": "Citrusové vône – Sviežosť a energia pre vaše prádlo",
+        "records": [
+          {
+            "link": "https://www.vevo.sk/n/citrusove-vone-sviezost-a-energia-pre-vase-pradlo",
+            "slug": "citrusove-vone-sviezost-a-energia-pre-vase-pradlo"
+          },
+          {
+            "link": "https://www.vevo.sk/n/citrusove-vone-sviezost-a-energia-pre-vase-pradlo1",
+            "slug": "citrusove-vone-sviezost-a-energia-pre-vase-pradlo1"
+          }
+        ]
+      }
+    ],
+    "bad_slug_count": 1,
+    "bad_slugs": [
+      {
+        "title": "Ako správne vyžehliť záclonu – Kompletný sprievodca",
+        "link": "https://www.vevo.sk/n/111111111111111111",
+        "slug": "111111111111111111"
+      }
+    ]
+  },
+  "results": [
+    {
+      "title": "Ako vyčistiť radiátor od prachu: rebrá, zadná strana, mastnota a bezpečná údržba",
+      "slug": "ako-vycistit-radiator-od-prachu-rebra-zadna-strana-mastnota-a-bezpecna-udrzba",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Ako vyčistiť parapety a okenné rámy: prach, peľ, čierne mapy a škvrny",
+      "slug": "ako-vycistit-parapety-a-okenne-ramy-prach-pel-cierne-mapy-a-skvrny",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Ako vyčistiť interiérové dvere a zárubne: odtlačky, mastnota a povrch bez šmúh",
+      "slug": "ako-vycistit-interierove-dvere-a-zarubne-odtlacky-mastnota-a-povrch-bez-smuh",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Ako vyčistiť vypínače a kľučky: dotykové miesta, mastnota a bezpečný postup",
+      "slug": "ako-vycistit-vypinace-a-klucky-dotykove-miesta-mastnota-a-bezpecny-postup",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Ako vyčistiť soklové lišty: prach, šmuhy, chlpy a rohy bez poškodenia",
+      "slug": "ako-vycistit-soklove-listy-prach-smuhy-chlpy-a-rohy-bez-poskodenia",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}
