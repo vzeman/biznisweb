@@ -1,3 +1,13 @@
+## 2026-10-07 — VEVO country performance analysis in progress
+
+Date: 2026-10-07 (Europe/Bratislava)
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-country-analysis-20261007`
+What changed: Owner requested separate SK/CZ/HU performance and causes for the last two months. Analysis uses August/September 2026, July context and October 1–6 separately. Created an isolated worktree from synchronized `origin/main` after fetch/status/pull checks. Added a read-only Meta Insights audit; no campaigns, commerce state or production services are changed.
+What is verified: Private AWS report generation `daily-reports/vevo/20261006T231826Z/` covers through October 6, reports complete sources and zero QA failures, with cost/geo warnings. CSV is realized-order-only and cannot establish failed-payment rates. Direct Meta account is `act_1131531703632101`, name `Wachman`, EUR/Europe/Bratislava; delivered campaigns are VEVO. Meta August spend EUR 1,275.47, September EUR 5,746.52. Country is queried directly rather than inferred from campaign names. Revenue is net merchandise EUR, not gross checkout value. Fixed FX and modeled expenses require disclosure.
+Known issues: Existing campaign order attribution is a modeled 60% click-share/40% spend-share allocation. Existing Google country allocation is also modeled. Reporting's HU COD mapping may exclude valid orders; a bounded read-only source reconciliation is in progress. No production repair is authorized by this analysis request. Raw customer exports stay in ignored `data/`; only aggregate findings and reproducible scripts may be committed.
+Next exact step: Finish source reconciliation (especially HU COD), join independent country/order/advertising summaries, review arithmetic and limitations, and commit/push the final report and handoff. No local server, worker, watcher, tunnel or production task was started.
+
 ## 2026-10-02 — Current handoff: ROY independent refresh deployed
 
 Date: 2026-10-02, 15:16 UTC
