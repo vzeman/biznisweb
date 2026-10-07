@@ -18,7 +18,7 @@ import shutil
 import unicodedata
 import sys
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_DOWN
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_HALF_DOWN, ROUND_DOWN
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 import calendar
@@ -541,6 +541,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         }
         price {
           value
+          raw_value
           formatted
           is_net_price
           currency {
@@ -660,6 +661,7 @@ query GetOrdersWithoutPriceElements($filter: OrderFilter, $params: OrderParams) 
         }
         price {
           value
+          raw_value
           formatted
           is_net_price
           currency {
@@ -3245,6 +3247,32 @@ class BizniWebExporter:
 
         return pd.DataFrame(expanded_rows).reset_index(drop=True)
 
+    def _apply_reporting_bundle_cost_to_parent(self, row: Dict[str, Any]) -> None:
+        """Use the existing component accounting in both source CSV and analytics.
+
+        Component expansion is the single resolver for mapped/fallback acquisition
+        costs. The original parent lookup remains in purchase_cost_reference_*.
+        """
+        rules = self._product_component_expansion_rules()
+        if not rules:
+            return
+        canonical = dict(row)
+        canonical["item_label"] = self.canonicalize_reporting_product_label(row.get("item_label"))
+        if not any(isinstance(rule, dict) and self._component_rule_matches_row(canonical, rule) for rule in rules):
+            return
+        components = self.add_reporting_product_identity_columns(pd.DataFrame([row]))
+        if components.empty or not components["bundle_component_flag"].all():
+            return
+        total_expense = round(float(components["total_expense"].sum()), 2)
+        quantity = self._to_float(row.get("item_quantity"))
+        if not quantity:
+            raise ValueError("bundle parent has zero quantity")
+        row["total_expense"] = total_expense
+        row["expense_per_item"] = total_expense / quantity
+        row["expense_source"] = "reporting_bundle_components:" + str(components.iloc[0]["bundle_expansion_rule"])
+        row["profit_before_ads"] = round(self._to_float(row.get("item_total_without_tax")) - total_expense, 2)
+        row["roi_before_ads"] = round(row["profit_before_ads"] / total_expense * 100, 2) if total_expense > 0 else 0.0
+
     @staticmethod
     def _is_sample_item_label(label: Any) -> bool:
         text = str(label or "").strip().lower()
@@ -5407,6 +5435,10 @@ class BizniWebExporter:
                         if realized and any(
                             (item.get("sum") or {}).get("raw_value") is None
                             or (item.get("sum_with_tax") or {}).get("raw_value") is None
+                            or (
+                                self.project_settings.get("order_currency_rounding_precision")
+                                and (item.get("price") or {}).get("raw_value") is None
+                            )
                             for item in order.get("items") or []
                         ):
                             logger.info("Refreshing order cache with source-precision monetary fields for %s", date.strftime('%Y-%m-%d'))
@@ -6480,6 +6512,25 @@ class BizniWebExporter:
         return result
 
     def _reconcile_order_item_revenue(self, order: Dict[str, Any]) -> Tuple[List[Dict[str, Decimal]], str]:
+        try:
+            return self._reconcile_order_item_revenue_basis(order)
+        except OrderRevenueReconciliationError as original:
+            currency = ((order.get("sum") or {}).get("currency") or {}).get("code")
+            precisions = self.project_settings.get("order_currency_rounding_precision") or {}
+            # Some source net orders total rounded unit prices, while their line sums
+            # retain a different intermediate precision. Only a complete, independently
+            # corroborated unit-price model may replace a non-reconciling line basis.
+            if (
+                original.reason != "grand_total_not_reconciled"
+                or currency not in precisions
+                or (order.get("sum") or {}).get("is_net_price") is not True
+            ):
+                raise
+            return self._reconcile_order_item_revenue_basis(order, use_unit_rounding=True)
+
+    def _reconcile_order_item_revenue_basis(
+        self, order: Dict[str, Any], *, use_unit_rounding: bool = False,
+    ) -> Tuple[List[Dict[str, Decimal]], str]:
         """Resolve header discounts from source arithmetic, never from its unreliable VAT flag.
 
         All matching happens in the source currency, before fixed-model FX. The two-cent
@@ -6508,13 +6559,41 @@ class BizniWebExporter:
         currency = (order_sum.get("currency") or {}).get("code")
         if currency not in CURRENCY_RATES_TO_EUR:
             fail("missing_or_unsupported_order_currency")
+        precision = (self.project_settings.get("order_currency_rounding_precision") or {}).get(currency)
+        if precision is not None and (type(precision) is not int or not 0 <= precision <= 6):
+            fail("invalid_currency_rounding_precision")
+        quantum = Decimal(1).scaleb(-precision) if precision is not None else None
+
+        def source_rounded(value):
+            # GraphQL floats can represent exact half-quantum values a few binary
+            # ulps below the boundary. Normalize only sub-nanounit serialization
+            # noise, independently of the unchanged two-cent reconciliation bound.
+            return value.quantize(Decimal("0.000000001"), rounding=ROUND_HALF_UP).quantize(
+                quantum or cent, rounding=ROUND_HALF_UP,
+            )
+
+        def verify_display(source):
+            if quantum is not None:
+                if source_rounded(money(source.get("raw_value"))) != money(source.get("value")):
+                    fail("source_raw_display_rounding_mismatch")
+
+        def vat_rounding_candidates(value):
+            normalized = value.quantize(Decimal("0.000000001"), rounding=ROUND_HALF_UP)
+            # Source calculations have used both sides of exact half-quantum ties.
+            # These alternatives differ only at a half boundary within floating-point
+            # serialization noise; all other values have one possible rounded result.
+            return {
+                normalized.quantize(quantum, rounding=ROUND_HALF_UP),
+                normalized.quantize(quantum, rounding=ROUND_HALF_DOWN),
+            }
+
         grand_total = money(order_sum.get("value"))
-        if order_sum.get("is_net_price") is True:
-            fail("unsupported_net_order_grand_total")
+        verify_display(order_sum)
         elements = order.get("price_elements")
         if not isinstance(elements, list):
             fail("missing_price_elements")
         lines = []
+        rounding_proofs = set()
         for item in order.get("items") or []:
             net_source = item.get("sum") or {}
             gross_source = item.get("sum_with_tax") or {}
@@ -6522,6 +6601,7 @@ class BizniWebExporter:
             for source in (net_source, gross_source, unit_source):
                 if (source.get("currency") or {}).get("code", currency) != currency:
                     fail("mixed_order_item_currencies")
+                verify_display(source)
             rate = money(item.get("tax_rate", 0))
             if rate < 0 or rate > 100:
                 fail("unsupported_item_tax_rate")
@@ -6541,12 +6621,42 @@ class BizniWebExporter:
             check_net = money(net_source["raw_value"]) if net_source.get("raw_value") is not None else net
             check_gross = money(gross_source["raw_value"]) if gross_source.get("raw_value") is not None else gross
             if abs(check_gross - check_net * multiplier) > tolerance:
-                fail("item_net_gross_vat_mismatch")
+                quantity = money(item.get("quantity", 1))
+                unit_raw = money(unit_source["raw_value"]) if unit_source.get("raw_value") is not None else None
+                if quantum is not None and source_rounded(check_gross) in vat_rounding_candidates(check_net * multiplier):
+                    rounding_proofs.add("currency_line_rounding")
+                elif (
+                    quantum is not None and quantity > 0 and quantity == quantity.to_integral_value()
+                    and unit_raw is not None and abs(check_net - unit_raw * quantity) <= Decimal("0.0000001")
+                    and source_rounded(check_gross) in {amount * quantity for amount in vat_rounding_candidates(unit_raw * multiplier)}
+                ):
+                    rounding_proofs.add("currency_unit_vat_rounding")
+                else:
+                    fail("item_net_gross_vat_mismatch")
+            if use_unit_rounding:
+                quantity = money(item.get("quantity", 1))
+                unit_raw = money(unit_source.get("raw_value"))
+                unit = money(unit_source.get("value"))
+                if (
+                    quantum is None or rate != 0 or quantity <= 0 or quantity != quantity.to_integral_value()
+                    or abs(check_net - unit_raw * quantity) > Decimal("0.0000001")
+                    or source_rounded(unit_raw) != unit
+                ):
+                    fail("unverified_source_unit_rounding")
+                net = unit * quantity
+                gross = net
+                rounding_proofs.add("source_unit_rounding")
             lines.append({"net": net, "gross": gross, "multiplier": multiplier})
         if not lines:
             fail("missing_merchandise_lines")
         goods_gross = sum((line["gross"] for line in lines), Decimal(0))
         goods_net = sum((line["net"] for line in lines), Decimal(0))
+        if order_sum.get("is_net_price") is True:
+            # A zero-tax or entirely free order has identical net/gross totals. Positive
+            # VAT net-denominated grand totals need separate source evidence, not a guess.
+            if any(line["net"] != line["gross"] for line in lines):
+                fail("unsupported_net_order_grand_total")
+            rounding_proofs.add("net_grand_total")
         multipliers = {line["multiplier"] for line in lines}
         service_totals = {Decimal(0)}
         discounts = []
@@ -6555,14 +6665,20 @@ class BizniWebExporter:
                 fail("invalid_price_element")
             kind = str(element.get("type") or "").strip().lower()
             price = element.get("price") or {}
+            verify_display(price)
             value = money(price.get("raw_value") if price.get("raw_value") is not None else price.get("value"))
             if not value:
                 continue
             if kind in {"shipping", "payment", "autoround"}:
-                if price.get("is_net_price") is True:
-                    possibilities = {rounded(value * multiplier) for multiplier in multipliers}
+                if use_unit_rounding:
+                    displayed_value = money(price.get("value"))
+                    if source_rounded(value) != displayed_value:
+                        fail("unverified_source_service_rounding")
+                    possibilities = {displayed_value}
+                elif price.get("is_net_price") is True:
+                    possibilities = {source_rounded(value * multiplier) for multiplier in multipliers}
                 elif price.get("is_net_price") is False:
-                    possibilities = {rounded(value)}
+                    possibilities = {source_rounded(value)}
                 else:
                     fail("missing_service_tax_basis")
                 service_totals = {total + amount for total in service_totals for amount in possibilities}
@@ -6596,13 +6712,13 @@ class BizniWebExporter:
                     remaining_services = service_gross - (total_reduction - goods_reduction)
                     # Header monetary flags have contradicted actual provider totals. Both
                     # gross and net representations must be proved by the grand total.
-                    amounts = {rounded(value), rounded(value * goods_gross / goods_net)}
+                    amounts = {source_rounded(value), source_rounded(value * goods_gross / goods_net)}
                     for amount in amounts:
                         if percent is not None:
-                            expected_goods = rounded(remaining_goods * percent)
+                            expected_goods = source_rounded(remaining_goods * percent)
                             if abs(amount - expected_goods) <= tolerance:
                                 next_states.add((total_reduction + amount, goods_reduction + amount))
-                            expected_cart = rounded((remaining_goods + remaining_services) * percent)
+                            expected_cart = source_rounded((remaining_goods + remaining_services) * percent)
                             if remaining_services and abs(amount - expected_cart) <= tolerance:
                                 next_states.add((total_reduction + amount, goods_reduction + expected_goods))
                         elif not remaining_services:
@@ -6638,6 +6754,8 @@ class BizniWebExporter:
                     lines[index]["gross"] -= gross_part
                     if lines[index]["net"] < 0 or lines[index]["gross"] < 0:
                         fail("discount_exceeds_merchandise_line")
+        if rounding_proofs:
+            method += ":" + "+".join(sorted(rounding_proofs))
         return lines, method
 
     def flatten_order(self, order: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -6961,6 +7079,7 @@ class BizniWebExporter:
                     'profit_before_ads': reported_item_profit_before_ads,
                     'roi_before_ads': round(item_roi_before_ads, 2),
                 })
+                self._apply_reporting_bundle_cost_to_parent(row)
                 item_rows.append(row)
 
             # If all order rows were excluded (e.g. zero-price gifts only), skip this order in export.

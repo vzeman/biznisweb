@@ -389,6 +389,8 @@ def validate_lock(value):
 
 
 def check_migration(s3, *, lease=None):
+    from scripts.reporting_image_release_lease import require_roy_idle
+    require_roy_idle(s3)
     found = read_object(s3, LOCK_KEY, optional=True)
     if found is None:
         require(lease is None, "runtime-lease-disappeared")
@@ -410,17 +412,26 @@ class MigrationLease:
         self.s3, self.owner, self.now, self.etag = s3, owner, now or now_utc, None
         self.pending_value = None
 
+    def _read(self, *, optional=False):
+        return read_object(self.s3, LOCK_KEY, optional=optional)
+
+    def _put(self, value, previous):
+        return write_object(self.s3, LOCK_KEY, value, etag=previous)
+
+    def _check(self, *, owned=False):
+        return check_migration(self.s3, lease=self if owned else None)
+
     def _write(self, state, previous):
         now = self.now()
         value = {"schema_version": 1, "owner": self.owner, "state": state, "updated_at": now.isoformat(),
                  "expires_at": (now + timedelta(minutes=20)).isoformat(), "generation": uuid.uuid4().hex}
         self.pending_value = value
         try:
-            self.etag = write_object(self.s3, LOCK_KEY, value, etag=previous)
+            self.etag = self._put(value, previous)
         except Exception:
             # A PUT can commit before its response is lost. Read once; never
             # replay it or assume that a newer foreign generation is ours.
-            observed = read_object(self.s3, LOCK_KEY, optional=True)
+            observed = self._read(optional=True)
             if observed is None or observed[0] != value or observed[1] == previous:
                 raise
             self.etag = observed[1]
@@ -428,21 +439,21 @@ class MigrationLease:
 
     def acquire(self):
         require_private_bucket(self.s3)
-        prior = check_migration(self.s3)
+        prior = self._check()
         self._write("active", prior)
         return self
 
     def renew(self):
-        check_migration(self.s3, lease=self)
+        self._check(owned=True)
         self._write("active", self.etag)
 
     def release(self):
-        check_migration(self.s3, lease=self)
+        self._check(owned=True)
         self._write("released", self.etag)
 
     def retain_uncertain(self):
         # This may also fail; the existing active/stale lock still blocks readers.
-        found = read_object(self.s3, LOCK_KEY)
+        found = self._read()
         if self.pending_value is not None and found[0] == self.pending_value:
             self.etag = found[1]
             self.pending_value = None

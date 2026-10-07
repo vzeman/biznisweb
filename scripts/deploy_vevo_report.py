@@ -437,8 +437,14 @@ class Deployment:
         require(self.binding.schedule_snapshot(self.known_schedule) == self.binding.schedule_snapshot(desired),
                 "report-schedule-write-not-confirmed")
 
+    def probe_role_name(self):
+        return "VevoReportProbe-" + self.release_id
+
+    def probe_policy(self):
+        return diagnostic_policy(self.release_id)
+
     def create_role(self):
-        name = "VevoReportProbe-" + self.release_id
+        name = self.probe_role_name()
         trust = {"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Principal": {"Service": "ecs-tasks.amazonaws.com"},
                  "Action": "sts:AssumeRole", "Condition": {"StringEquals": {"aws:SourceAccount": ACCOUNT},
                  "ArnLike": {"aws:SourceArn": f"arn:aws:ecs:{REGION}:{ACCOUNT}:*"}}}]}
@@ -453,7 +459,7 @@ class Deployment:
             # interpret eventually consistent not-found as confirmed absence.
             self.resolve_attempted_role()
         require(self.role_created, "report-probe-role-not-created")
-        policy = diagnostic_policy(self.release_id)
+        policy = self.probe_policy()
         self.iam.put_role_policy(RoleName=name, PolicyName="IsolatedProbe", PolicyDocument=json.dumps(policy))
         require(self.iam.get_role_policy(RoleName=name, PolicyName="IsolatedProbe")["PolicyDocument"] == policy,
                 "report-probe-policy-readback")
@@ -469,13 +475,13 @@ class Deployment:
 
     def probe_role(self):
         try:
-            return self.iam.get_role(RoleName="VevoReportProbe-" + self.release_id)["Role"]
+            return self.iam.get_role(RoleName=self.probe_role_name())["Role"]
         except Exception as exc:
             require(getattr(exc, "response", {}).get("Error", {}).get("Code") == "NoSuchEntity", "report-probe-role-read-uncertain")
             return None
 
     def validate_probe_role(self, role):
-        require(role["Arn"] == f"arn:aws:iam::{ACCOUNT}:role/VevoReportProbe-{self.release_id}"
+        require(role["Arn"] == f"arn:aws:iam::{ACCOUNT}:role/{self.probe_role_name()}"
                 and {r["Key"]: r["Value"] for r in role.get("Tags", [])} == {"ManagedReportProbe": self.release_id}
                 and role.get("AssumeRolePolicyDocument") == self.role_trust,
                 "report-probe-role-ownership-invalid")
@@ -518,14 +524,14 @@ class Deployment:
         if not self.role_created and not self.role_attempted:
             return
         self.cleanup_task()
-        name = "VevoReportProbe-" + self.release_id
+        name = self.probe_role_name()
         role = self.resolve_attempted_role()
         self.validate_probe_role(role)
         policies = self.iam.list_role_policies(RoleName=name)["PolicyNames"]
         require(self.iam.list_attached_role_policies(RoleName=name)["AttachedPolicies"] == []
                 and policies in ([], ["IsolatedProbe"]), "report-probe-role-cleanup-ownership-invalid")
         if policies:
-            require(self.iam.get_role_policy(RoleName=name, PolicyName="IsolatedProbe")["PolicyDocument"] == diagnostic_policy(self.release_id),
+            require(self.iam.get_role_policy(RoleName=name, PolicyName="IsolatedProbe")["PolicyDocument"] == self.probe_policy(),
                     "report-probe-role-policy-drift")
             self.iam.delete_role_policy(RoleName=name, PolicyName="IsolatedProbe")
         self.iam.delete_role(RoleName=name)

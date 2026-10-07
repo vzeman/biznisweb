@@ -86,7 +86,7 @@ def source_order(number="test-order"):
         "price_elements": [],
         "items": [{"item_label": "Synthetic", "ean": "test-ean", "import_code": None,
                    "warehouse_number": None, "quantity": 1, "tax_rate": 23,
-                   "price": copy.deepcopy(money), "sum": net_total,
+                   "price": copy.deepcopy(net_total), "sum": net_total,
                    "sum_with_tax": copy.deepcopy(gross_total)}],
         "sum": gross_total,
     }

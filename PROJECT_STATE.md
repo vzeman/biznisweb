@@ -1,3 +1,7 @@
+## 2026-10-07 — ROY reporting correction requested
+
+The owner requested the same classes of reporting corrections for ROY, including zero tip/insurance cost across foreign storefronts and accurate discounts, followed by production deployment. Work is on `codex/roy-reporting-cost-discount-audit-20261007` from exact main `50bc9670a8d4ee537eb9aeeb61113a6180c7d692`; fetch and pull completed and the initial checkout was clean. ROY-specific current state and the next exact step are now maintained in `projects/roy/PROJECT_STATE.md`. Existing VEVO publication remains paused; this ROY request does not authorize clearing its retained lease or modifying its runtime.
+
 ## 2026-10-07 — Corrected manual sample complete; full-history probe blocked, publication stopped
 
 Date: 2026-10-07

@@ -2,6 +2,16 @@
   "biznisweb_api_url": "https://roy.flox.sk/api/graphql",
   "project_display_name": "Roy",
   "reporting_system_name": "Roy reporting",
+  "measured_country_ads_enabled": true,
+  "order_revenue_reconciliation_enabled": true,
+  "order_currency_rounding_precision": {
+    "EUR": 2,
+    "CZK": 1,
+    "HUF": 0,
+    "PLN": 2,
+    "RON": 2,
+    "USD": 2
+  },
   "enable_email_strategy_report": false,
   "send_daily_report_email": false,
   "report_from_date": "2025-09-24",
@@ -80,6 +90,14 @@
   "shipping_net_per_order": -0.2,
   "fixed_monthly_cost": 7600,
   "missing_cost_margin_pct": 35,
+  "zero_cost_service_product_skus": [
+    "H-36CA74A7",
+    "H-4A782878"
+  ],
+  "zero_cost_service_labels": [
+    "Tringelt",
+    "Poistenie balíka proti strate a rozbitiu"
+  ],
   "authoritative_margin_override_skus": {
     "H-94491FEF": 90,
     "H-ACACB998": 90,
@@ -208,7 +226,13 @@
     "cod_payment_ids": [
       "7",
       "10",
-      "16"
+      "16",
+      "23",
+      "26",
+      "28",
+      "31",
+      "33",
+      "36"
     ],
     "prepaid_fulfilled_statuses": [
       "Odoslana"
@@ -230,7 +254,14 @@
       "11",
       "17",
       "18",
-      "20"
+      "20",
+      "22",
+      "27",
+      "29",
+      "30",
+      "32",
+      "34",
+      "35"
     ]
   },
   "unpaid_order_cancellation": {
