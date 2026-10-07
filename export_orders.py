@@ -2094,6 +2094,15 @@ class BizniWebExporter:
         spend_attribution = (geo_profitability or {}).get('spend_attribution') or {}
         spend_failures = list(spend_attribution.get('failures') or [])
         warnings.extend(spend_failures)
+        google_coverage = spend_attribution.get('google_ads') or {}
+        if google_coverage.get('status') == 'ok' and google_coverage.get('country_coverage_status') == 'partial':
+            warnings.append(
+                f"Google physical-country coverage is {google_coverage['country_coverage_ratio']:.2%}: "
+                f"EUR {google_coverage['unallocated_spend']:.2f} remains unallocated and "
+                f"EUR {google_coverage['reported_unknown_spend']:.2f} has an unknown reported country. "
+                "Account totals include both; SK/CZ/HU costs are unchanged. Country MER and contribution "
+                "use identified costs and do not assign this gap to a market."
+            )
         if spend_attribution.get('mode') == 'estimated' and not geo_df.empty:
             warnings.append('Country ads are modeled allocations: Meta campaign names and Google daily order shares; not measured country spend.')
 
@@ -3438,6 +3447,22 @@ class BizniWebExporter:
                 "realized_revenue missing-payment overrides conflict for exact order numbers: "
                 + ", ".join(sorted(conflicting_order_nums))
             )
+        compensation_evidence = raw.get("missing_price_elements_compensation_reconciliation", {})
+        if not isinstance(compensation_evidence, dict):
+            raise ValueError("missing_price_elements_compensation_reconciliation must be an object")
+        for order_num, evidence in compensation_evidence.items():
+            if (
+                order_num not in realized_overrides
+                or not isinstance(evidence, dict)
+                or set(evidence) != {"source_sha256", "audit_reason"}
+                or not re.fullmatch(r"[0-9a-f]{64}", str(evidence.get("source_sha256") or ""))
+                or not isinstance(evidence.get("audit_reason"), str)
+                or not evidence["audit_reason"].strip()
+            ):
+                raise ValueError(
+                    "missing_price_elements_compensation_reconciliation requires an existing "
+                    "exact realized override, source SHA256 and audit reason"
+                )
         paid_statuses = self._as_config_list(
             raw.get("paid_statuses"),
             DEFAULT_REALIZED_REVENUE_PAID_STATUSES,
@@ -3495,6 +3520,7 @@ class BizniWebExporter:
             "missing_payment_metadata_non_realized_order_nums": set(non_realized_overrides),
             "missing_payment_metadata_realized_order_overrides": realized_overrides,
             "missing_payment_metadata_realized_order_nums": set(realized_overrides),
+            "missing_price_elements_compensation_reconciliation": compensation_evidence,
         }
 
     def _is_cod_payment(self, order: Dict[str, Any]) -> bool:
@@ -3569,6 +3595,8 @@ class BizniWebExporter:
             return False
         realized, reason = self._realized_revenue_decision(order)
         if realized and self.project_settings.get("order_revenue_reconciliation_enabled") is True:
+            if self._audited_compensation_reconciliation(order) is not None:
+                return False
             # Paid card orders also need monetary elements, not just COD identity.
             return True
         return reason in {
@@ -5465,6 +5493,9 @@ class BizniWebExporter:
                     return None
                 print(f"  Loaded {len(orders)} orders from cache for {date.strftime('%Y-%m-%d')}")
                 return orders
+        except OrderRevenueReconciliationError:
+            # A changed reviewed compensation is evidence drift, not a cache miss.
+            raise
         except Exception as e:
             print(f"  Error loading cache for {date.strftime('%Y-%m-%d')}: {e}")
             return None
@@ -6512,6 +6543,9 @@ class BizniWebExporter:
         return result
 
     def _reconcile_order_item_revenue(self, order: Dict[str, Any]) -> Tuple[List[Dict[str, Decimal]], str]:
+        compensation = self._audited_compensation_reconciliation(order)
+        if compensation is not None:
+            return compensation
         try:
             return self._reconcile_order_item_revenue_basis(order)
         except OrderRevenueReconciliationError as original:
@@ -6527,6 +6561,102 @@ class BizniWebExporter:
             ):
                 raise
             return self._reconcile_order_item_revenue_basis(order, use_unit_rounding=True)
+
+    @staticmethod
+    def _compensation_source_fingerprint(order: Dict[str, Any], project_name: str) -> str:
+        """Bind a reviewed compensation to monetary source fields, never customer data."""
+        def number(value):
+            try:
+                parsed = Decimal(str(value))
+            except (InvalidOperation, TypeError, ValueError):
+                raise OrderRevenueReconciliationError(order.get("order_num"), "compensation_source_value_missing") from None
+            if not parsed.is_finite():
+                raise OrderRevenueReconciliationError(order.get("order_num"), "compensation_source_value_nonfinite")
+            return format(parsed.normalize(), "f")
+
+        def money(source):
+            source = source or {}
+            return {
+                "value": number(source.get("value")),
+                "raw_value": number(source.get("raw_value")),
+                "is_net_price": source.get("is_net_price"),
+                "currency": (source.get("currency") or {}).get("code"),
+            }
+
+        snapshot = {
+            "schema": "audited-compensation-v1", "project": project_name,
+            "order_num": str(order.get("order_num") or "").strip(),
+            "pur_date": order.get("pur_date"),
+            "status_id": str((order.get("status") or {}).get("id") or ""),
+            "sum": money(order.get("sum")),
+            "items": [
+                {
+                    **{key: item.get(key) for key in ("item_label", "ean", "import_code", "warehouse_number")},
+                    "quantity": number(item.get("quantity")), "tax_rate": number(item.get("tax_rate")),
+                    **{key: money(item.get(key)) for key in ("price", "sum", "sum_with_tax")},
+                }
+                for item in order.get("items") or []
+            ],
+        }
+        return hashlib.sha256(json.dumps(snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+    def _audited_compensation_reconciliation(
+        self, order: Dict[str, Any],
+    ) -> Optional[Tuple[List[Dict[str, Decimal]], str]]:
+        """Reconcile only an exact, previously audited zero-VAT compensation.
+
+        Equal totals alone do not establish absent fees or discounts. The existing
+        administration audit supplies that exceptional business classification; the
+        fingerprint prevents applying it to changed source data. Missing elements
+        remain missing, and ordinary orders retain the metadata requirement.
+        """
+        if self._has_loaded_price_elements(order):
+            return None
+        evidence = self.realized_revenue_settings.get(
+            "missing_price_elements_compensation_reconciliation", {},
+        ).get(str(order.get("order_num") or "").strip())
+        if evidence is None:
+            return None
+
+        def fail(reason):
+            raise OrderRevenueReconciliationError(order.get("order_num"), reason)
+
+        if order.get("price_elements") is not None:
+            fail("invalid_compensation_price_elements")
+        if self._realized_revenue_decision(order) != (True, "configured_missing_payment_metadata_realized"):
+            fail("audited_compensation_status_changed")
+        if self._compensation_source_fingerprint(order, self.project_name) != evidence["source_sha256"]:
+            fail("audited_compensation_source_changed")
+        items = order.get("items") or []
+        order_sum = order.get("sum") or {}
+        # This reviewed shape is one native-currency, zero-tax compensation line.
+        # Do not generalize the override to baskets, foreign FX or discounted goods.
+        if (
+            len(items) != 1
+            or (order_sum.get("currency") or {}).get("code") != "EUR"
+            or order_sum.get("is_net_price") is not True
+            or not (order.get("status") or {}).get("id")
+            or not order.get("pur_date")
+        ):
+            fail("unsupported_audited_compensation_shape")
+        item = items[0]
+        if Decimal(str(item["quantity"])) != 1 or Decimal(str(item["tax_rate"])) != 0:
+            fail("unsupported_audited_compensation_shape")
+        total = Decimal(str(order_sum["value"]))
+        if total <= 0:
+            fail("unsupported_audited_compensation_amount")
+        for source in (order_sum, item["price"], item["sum"], item["sum_with_tax"]):
+            if (
+                (source.get("currency") or {}).get("code") != "EUR"
+                or source.get("is_net_price") is not True
+                or Decimal(str(source["value"])) != total
+                or abs(Decimal(str(source["raw_value"])) - total) > Decimal("0.000000001")
+            ):
+                fail("audited_compensation_total_not_exact")
+        return [{
+            "net": total, "gross": total, "multiplier": Decimal(1),
+            "discount_net": Decimal(0), "discount_gross": Decimal(0),
+        }], "audited_compensation_source_total:zero_vat_net_grand_total"
 
     def _reconcile_order_item_revenue_basis(
         self, order: Dict[str, Any], *, use_unit_rounding: bool = False,
@@ -12721,6 +12851,9 @@ class BizniWebExporter:
                 'facebook_ads': sum((fb_daily_spend or {}).values()),
                 'google_ads': sum((google_daily_spend or {}).values()),
             },
+            'expected_account_ids': {
+                'google_ads': str(getattr(self.google_ads_client, 'customer_id', '')).replace('-', ''),
+            },
         }
         for key, client in [('facebook_ads', self.fb_client), ('google_ads', self.google_ads_client)]:
             try:
@@ -12728,6 +12861,49 @@ class BizniWebExporter:
             except Exception as exc:
                 result[key] = {'status': 'unavailable', 'error_code': type(exc).__name__}
         return result
+
+    @staticmethod
+    def _validate_google_country_coverage(source, expected_account_id):
+        """Check the residual proof without permitting country reallocations."""
+        try:
+            if not expected_account_id or source.get('customer_id') != expected_account_id:
+                raise ValueError('account identity mismatch')
+            if source.get('residual_basis') != 'account_total_minus_user_location':
+                raise ValueError('residual basis unavailable')
+
+            def money(value):
+                parsed = Decimal(str(value))
+                if not parsed.is_finite() or parsed < 0 or parsed != parsed.quantize(Decimal('.000001')):
+                    raise ValueError('invalid monetary evidence')
+                return parsed
+
+            reported = source['reported_spend_by_country']
+            if not isinstance(reported, dict) or any(
+                key != 'unknown' and not re.fullmatch('[a-z]{2}', key) for key in reported
+            ):
+                raise ValueError('reported country coverage unavailable')
+            reported = {key: money(value) for key, value in reported.items()}
+            account = money(source['account_total_spend'])
+            geo_total = money(source['reported_geo_total_spend'])
+            residual = money(source['unallocated_spend'])
+            unknown = money(source['reported_unknown_spend'])
+            if (sum(reported.values(), Decimal(0)) != geo_total or geo_total + residual != account
+                    or money(source['total_spend']) != account or reported.get('unknown', Decimal(0)) != unknown):
+                raise ValueError('residual totals inconsistent')
+            expected = dict(reported)
+            if residual:
+                expected['unallocated'] = residual
+            if {key: money(value) for key, value in source['spend_by_country'].items()} != expected:
+                raise ValueError('measured countries changed or residual missing')
+            ratio = float(source['country_coverage_ratio'])
+            expected_ratio = float((geo_total - unknown) / account) if account else 1.0
+            expected_status = 'partial' if residual or unknown else 'complete'
+            if (not np.isfinite(ratio) or abs(ratio - expected_ratio) > 1e-12
+                    or source['country_coverage_status'] != expected_status):
+                raise ValueError('coverage description inconsistent')
+        except (KeyError, TypeError, ValueError, InvalidOperation):
+            return 'Google country coverage/account evidence invalid or unavailable'
+        return None
 
     def _validate_country_ads(self, country_ads):
         """Validate source identity, period and conservation before displaying measured economics."""
@@ -12764,7 +12940,11 @@ class BizniWebExporter:
                     problem = 'invalid country spend amount'
                 elif abs(sum(parsed.values()) - total) > 0.05 or abs(total - expected) > 0.05:
                     problem = 'country spend does not reconcile to daily/account spend'
-                else:
+                elif key == 'google_ads':
+                    problem = self._validate_google_country_coverage(
+                        source, (country_ads.get('expected_account_ids') or {}).get(key),
+                    )
+                if not problem:
                     source['spend_by_country'] = parsed
                     source['reconciliation_delta_eur'] = round(total - expected, 6)
                     source['outside_sk_cz_hu_eur'] = round(sum(value for country, value in parsed.items()
@@ -12836,7 +13016,7 @@ class BizniWebExporter:
         if measured:
             country_keys = set(geo['country']) | {'sk', 'cz', 'hu'}
             for provider in ('facebook_ads', 'google_ads'):
-                country_keys.update(country if country in {'sk', 'cz', 'hu', 'unknown'} else 'other'
+                country_keys.update(country if country in {'sk', 'cz', 'hu', 'unknown', 'unallocated'} else 'other'
                                     for country in (attribution[provider].get('spend_by_country') or {}))
             geo = geo.set_index('country').reindex(sorted(country_keys), fill_value=0).reset_index()
         geo['shipping_subsidy_cost'] = geo['shipping_net_cost']
@@ -12871,7 +13051,7 @@ class BizniWebExporter:
                     continue
                 grouped = {}
                 for country, spend in source['spend_by_country'].items():
-                    key = country if country in {'sk', 'cz', 'hu', 'unknown'} else 'other'
+                    key = country if country in {'sk', 'cz', 'hu', 'unknown', 'unallocated'} else 'other'
                     grouped[key] = grouped.get(key, 0.0) + spend
                 geo[column] = geo['country'].map(grouped).fillna(0.0)
             fb_spend_by_country = dict(zip(geo['country'], geo['fb_ads_spend']))
@@ -12879,8 +13059,16 @@ class BizniWebExporter:
         geo['fb_spend_basis'] = attribution['facebook_ads'].get('basis', 'unavailable')
         geo['google_spend_basis'] = attribution['google_ads'].get('basis', 'unavailable')
         geo['spend_attribution_status'] = 'unavailable' if attribution['failure_count'] else attribution['mode']
+        google_coverage = attribution['google_ads']
+        partial_country_coverage = measured and google_coverage.get('country_coverage_status') == 'partial'
+        geo['google_country_coverage_ratio'] = google_coverage.get('country_coverage_ratio')
+        geo['google_country_coverage_status'] = google_coverage.get('country_coverage_status', 'unavailable')
+        if partial_country_coverage and not attribution['failure_count']:
+            geo['spend_attribution_status'] = 'measured_partial_coverage'
         geo['paid_ads_spend'] = geo['fb_ads_spend'] + geo['google_ads_spend']
         geo['net_mer'] = geo['revenue'] / geo['paid_ads_spend'].where(geo['paid_ads_spend'] > 0, np.nan)
+        if measured:
+            geo.loc[geo['country'].isin(['unknown', 'unallocated']), 'net_mer'] = np.nan
         geo['gross_profit'] = geo['revenue'] - geo['product_cost']
         geo['contribution_cost_without_fixed'] = geo['product_cost'] + geo['packaging_cost'] + geo['shipping_net_cost'] + geo['paid_ads_spend']
         geo['contribution_profit_without_fixed'] = geo['revenue'] - geo['contribution_cost_without_fixed']
@@ -12915,6 +13103,10 @@ class BizniWebExporter:
         )
         geo_meta = geo['orders'].apply(lambda value: self._geo_confidence_payload(value, level="country"))
         geo = pd.concat([geo, pd.DataFrame(geo_meta.tolist(), index=geo.index)], axis=1)
+        if partial_country_coverage:
+            ready = geo['confidence_status'] == 'ready'
+            geo.loc[ready, 'confidence_status'] = 'observe'
+            geo.loc[ready, 'confidence_label'] = 'Incomplete country spend coverage'
         if attribution['failure_count']:
             geo['confidence_status'] = 'unavailable'
             geo['confidence_label'] = 'Spend unavailable'

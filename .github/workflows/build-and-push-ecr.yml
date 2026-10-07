@@ -122,7 +122,7 @@ jobs:
           python -m unittest tests.test_seeded_invoice_retry tests.test_reviewed_invoice_reconciliation
           python -m unittest tests.test_creditnote_storno_runner tests.test_creditnote_automation_deployment
           python -m unittest tests.test_api_read_backoff
-          python -m unittest tests.test_vevo_reporting_country_policy tests.test_vevo_localized_product_costs tests.test_vevo_zero_cost_services tests.test_roy_reporting_policies tests.test_roy_revenue_reconciliation tests.test_order_revenue_reconciliation tests.test_ads_measurement tests.test_live_report_quality_gate tests.test_vevo_report_image_release tests.test_reporting_image_release_policy tests.test_roy_report_image_release
+          python -m unittest tests.test_vevo_reporting_country_policy tests.test_vevo_localized_product_costs tests.test_vevo_zero_cost_services tests.test_roy_reporting_policies tests.test_roy_revenue_reconciliation tests.test_order_revenue_reconciliation tests.test_compensation_revenue_reconciliation tests.test_ads_measurement tests.test_live_report_quality_gate tests.test_vevo_report_image_release tests.test_reporting_image_release_policy tests.test_roy_report_image_release
           python -m unittest tests.test_order_status_identity tests.test_status_identity_integration tests.test_explicit_target_integration
           python -m unittest tests.test_reporting_runtime_binding tests.test_reporting_runtime_binding_review tests.test_growthbook_aa_infra_health_evidence tests.test_growthbook_aa_infra_health_workflow tests.test_growthbook_aa_infra_health_log_cli
           python -m unittest tests.test_growthbook_aa_window_checkpoint_workflow tests.test_growthbook_cta_window_checkpoint_workflow tests.test_growthbook_managed_quality_source

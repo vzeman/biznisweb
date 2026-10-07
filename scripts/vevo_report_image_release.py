@@ -26,7 +26,8 @@ from scripts import reporting_runtime_binding as binding  # noqa: E402
 from scripts.deploy_order_automations import TASK_FIELDS  # noqa: E402
 from scripts.deploy_vevo_report import Deployment  # noqa: E402
 from scripts.reporting_migration_host_gate import (  # noqa: E402
-    ACCOUNT, BUCKET, REGION, SERVICE, canonical, read_private, require, sha, verify_quality,
+    ACCOUNT, BUCKET, REGION, SERVICE, DIAGNOSTIC_LIMIT, DIAGNOSTIC_STATUSES, FAILURE_TYPES,
+    canonical, read_private, require, sha, verify_quality,
 )
 from scripts.reporting_image_release_policy import PROJECTS, VEVO, project_policy
 from scripts.reporting_image_release_lease import ScopedImageLease, read_lease, require_roy_idle
@@ -481,8 +482,11 @@ class ImageRelease(Deployment):
             if task["lastStatus"] == "STOPPED":
                 break
             self.sleep(10)
-        require(ready is not None and task is not None and task["lastStatus"] == "STOPPED"
-                and task["containers"][0].get("exitCode") == 0, "image-release-probe-not-successful")
+        successful = (ready is not None and task is not None and task["lastStatus"] == "STOPPED"
+                      and task["containers"][0].get("exitCode") == 0)
+        if not successful and ready is not None and task is not None and task["lastStatus"] == "STOPPED":
+            self.record_probe_failure(ready)
+        require(successful, "image-release-probe-not-successful")
         complete = json.loads(read_private(self.s3, self.prefix + "markers/complete.json"))
         require(all(complete.get(key) == value for key, value in ready.items())
                 and complete.get("phase") == "report-verified" and complete.get("localhost_marker_sha256") == sha(canonical(ready))
@@ -497,6 +501,40 @@ class ImageRelease(Deployment):
                          probe=True, policy=self.policy, from_date=self.report_from_date)
         require(self.live_outputs() == self.original_outputs, "image-release-probe-changed-live-output")
         self.event("probe-complete", identity=ready, complete=complete, terminal_task=task)
+
+    def record_probe_failure(self, ready):
+        """A bounded diagnostic read may explain rejection; it can never authorize promotion."""
+        key = self.prefix + "markers/failed.json"
+        try:
+            raw = read_private(self.s3, key)
+        except Exception as exc:
+            require(binding.error_code(exc) in {"NoSuchKey", "404"}, "image-release-failure-evidence-read-failed")
+            self.event("probe-failure-diagnostics", diagnostic_status="missing")
+            return
+        failed = json.loads(raw)
+        fields = {"schema_version", "phase", "localhost_marker_sha256", "report_from_date", "report_to_date",
+                  "failure_type", "diagnostic"}
+        require(isinstance(failed, dict) and set(failed) == set(ready) | fields
+                and all(failed.get(name) == value for name, value in ready.items())
+                and failed.get("schema_version") == 1 and failed.get("phase") == "report-rejected"
+                and failed.get("localhost_marker_sha256") == sha(canonical(ready))
+                and failed.get("report_from_date") == self.report_from_date and failed.get("report_to_date") == self.to_date
+                and failed.get("failure_type") in FAILURE_TYPES, "image-release-failure-evidence-binding")
+        diagnostic = failed.get("diagnostic")
+        require(isinstance(diagnostic, dict) and diagnostic.get("status") in DIAGNOSTIC_STATUSES,
+                "image-release-failure-diagnostic-invalid")
+        if diagnostic["status"] == "available":
+            require(set(diagnostic) == {"status", "key", "size", "sha256"}
+                    and diagnostic["key"] == self.prefix + "artifacts/diagnostics/data_quality.json"
+                    and type(diagnostic["size"]) is int and 0 < diagnostic["size"] <= DIAGNOSTIC_LIMIT,
+                    "image-release-failure-diagnostic-scope")
+            content = self.fetch(diagnostic["key"], DIAGNOSTIC_LIMIT)
+            require(len(content) == diagnostic["size"] and sha(content) == diagnostic["sha256"]
+                    and isinstance(json.loads(content), dict), "image-release-failure-diagnostic-hash")
+        else:
+            require(set(diagnostic) == {"status"}, "image-release-failure-diagnostic-scope")
+        self.event("probe-failure-diagnostics", failure_marker_key=key, failure_marker_sha256=sha(raw),
+                   diagnostic=diagnostic)
 
     def verify_host(self, task, marker):
         container = task["containers"][0]

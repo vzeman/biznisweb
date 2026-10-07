@@ -95,5 +95,5 @@ jobs:
           tests.test_production_board tests.test_vevo_operations_dashboard tests.test_roy_operations_dashboard tests.test_roy_picking_lists_pdf tests.test_live_dashboard_auth tests.test_live_dashboard_maintenance
           tests.test_picking_print_batches
           tests.test_operations_refresh
-          tests.test_vevo_reporting_country_policy tests.test_vevo_localized_product_costs tests.test_vevo_zero_cost_services tests.test_roy_reporting_policies tests.test_roy_revenue_reconciliation tests.test_order_revenue_reconciliation
+          tests.test_vevo_reporting_country_policy tests.test_vevo_localized_product_costs tests.test_vevo_zero_cost_services tests.test_roy_reporting_policies tests.test_roy_revenue_reconciliation tests.test_order_revenue_reconciliation tests.test_compensation_revenue_reconciliation
           tests.test_ads_measurement tests.test_live_report_quality_gate tests.test_vevo_report_image_release tests.test_reporting_image_release_policy tests.test_roy_report_image_release

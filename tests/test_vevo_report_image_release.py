@@ -13,6 +13,90 @@ OLD_IMAGE = IMAGE[:-64] + "b" * 64
 DATE = "2026-10-06"
 
 
+class ProbeFailureEvidenceTests(unittest.TestCase):
+    def fixture(self):
+        obj = object.__new__(release.ImageRelease)
+        obj.prefix = release.VEVO.probe_prefix + 'a' * 32 + '/'
+        obj.report_from_date, obj.to_date = '2025-05-03', DATE
+        obj.s3, obj.event = Mock(), Mock()
+        ready = {'release_id': 'a' * 32, 'project': 'vevo', 'task_arn': 'owned-task', 'source_commit': 'b' * 40}
+        diagnostic = b'{"qa_status":"critical","qa_errors":["synthetic private failure"]}'
+        entry = {'status': 'available', 'key': obj.prefix + 'artifacts/diagnostics/data_quality.json',
+                 'sha256': release.sha(diagnostic), 'size': len(diagnostic)}
+        failed = {**ready, 'schema_version': 1, 'phase': 'report-rejected',
+                  'localhost_marker_sha256': release.sha(release.canonical(ready)),
+                  'report_from_date': obj.report_from_date, 'report_to_date': DATE,
+                  'failure_type': 'RuntimeError', 'diagnostic': entry}
+        obj.fetch = Mock(return_value=diagnostic)
+        return obj, ready, failed
+
+    def test_failure_receipt_contains_only_private_references_and_hashes(self):
+        obj, ready, failed = self.fixture()
+        with patch.object(release, 'read_private', return_value=release.canonical(failed)):
+            obj.record_probe_failure(ready)
+        self.assertEqual('probe-failure-diagnostics', obj.event.call_args.args[0])
+        self.assertEqual(failed['diagnostic'], obj.event.call_args.kwargs['diagnostic'])
+        self.assertNotIn('synthetic private failure', repr(obj.event.call_args))
+
+    def test_foreign_task_project_source_dates_or_success_phase_cannot_be_evidence(self):
+        for key, value in [('task_arn', 'foreign'), ('project', 'roy'), ('source_commit', 'f' * 40),
+                           ('report_from_date', DATE), ('report_to_date', '2026-10-05'), ('phase', 'report-verified'),
+                           ('localhost_marker_sha256', '0' * 64), ('output_manifest_key', 'untrusted')]:
+            obj, ready, failed = self.fixture()
+            failed[key] = value
+            with self.subTest(field=key), patch.object(release, 'read_private', return_value=release.canonical(failed)):
+                with self.assertRaisesRegex(RuntimeError, 'binding'):
+                    obj.record_probe_failure(ready)
+            obj.fetch.assert_not_called()
+            obj.event.assert_not_called()
+
+    def test_cross_project_diagnostic_path_size_or_hash_tampering_rejects(self):
+        for field, value in [('key', 'daily-reports/vevo/latest/data_quality.json'), ('size', True),
+                             ('size', release.DIAGNOSTIC_LIMIT + 1), ('sha256', '0' * 64)]:
+            obj, ready, failed = self.fixture()
+            failed['diagnostic'][field] = value
+            with self.subTest(field=field), patch.object(release, 'read_private', return_value=release.canonical(failed)):
+                with self.assertRaises(RuntimeError):
+                    obj.record_probe_failure(ready)
+            obj.event.assert_not_called()
+
+    def test_absent_evidence_is_recorded_but_access_denied_is_not_treated_as_missing(self):
+        for code in ('NoSuchKey', 'AccessDenied'):
+            obj, ready, _failed = self.fixture()
+            with self.subTest(code=code), patch.object(release, 'read_private', side_effect=ClientError({'Error': {'Code': code}}, 'GetObject')):
+                if code == 'NoSuchKey':
+                    obj.record_probe_failure(ready)
+                    obj.event.assert_called_once_with('probe-failure-diagnostics', diagnostic_status='missing')
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'read-failed'):
+                        obj.record_probe_failure(ready)
+
+    def test_unavailable_file_marker_cannot_smuggle_an_extra_file_reference(self):
+        obj, ready, failed = self.fixture()
+        failed['diagnostic'] = {'status': 'missing'}
+        with patch.object(release, 'read_private', return_value=release.canonical(failed)):
+            obj.record_probe_failure(ready)
+        obj.fetch.assert_not_called()
+        failed['diagnostic']['key'] = 'foreign'
+        with patch.object(release, 'read_private', return_value=release.canonical(failed)), self.assertRaisesRegex(RuntimeError, 'scope'):
+            obj.record_probe_failure(ready)
+
+    def test_terminal_failed_probe_still_rejects_after_preserving_diagnostics(self):
+        obj, ready, _failed = self.fixture()
+        ready['marker'] = obj.policy.probe_marker
+        obj.release_id, obj.owned_task = ready['release_id'], ready['task_arn']
+        obj.clock, obj.timeout = Mock(return_value=0), 100
+        obj.checkpoint, obj.verify_host, obj.record_probe_failure = Mock(), Mock(), Mock()
+        obj.task = Mock(return_value={'lastStatus': 'STOPPED', 'containers': [{'exitCode': 1}]})
+        raw = release.canonical(ready)
+        signal = release.canonical({'phase': 'host-authorized', 'release_id': obj.release_id,
+                                    'task_arn': obj.owned_task, 'ready_sha256': release.sha(raw)})
+        with patch.object(release, 'read_private', side_effect=[raw, signal]), self.assertRaisesRegex(RuntimeError, 'probe-not-successful'):
+            obj.wait_probe()
+        obj.record_probe_failure.assert_called_once_with(ready)
+        self.assertFalse(any(call.args[0] == 'probe-complete' for call in obj.event.call_args_list))
+
+
 def definition():
     return {"family": "vevo-reporting-daily", "networkMode": "awsvpc", "cpu": "1024", "memory": "2048",
             "taskRoleArn": f"arn:aws:iam::{release.ACCOUNT}:role/BiznisWebReportingTaskRole-vevo",

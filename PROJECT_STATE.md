@@ -1,3 +1,7 @@
+## 2026-10-07 — Both reporting release fixes verified locally
+
+Reviewed shared country-coverage accounting, the narrowly bound VEVO source exception and private failed-probe diagnostics. All 1,380 tests in the 77-module CI union, reporting smoke, critical Ruff and diff checks pass; eight real Google project/period reconciliations and fresh recovery/runtime read-only gates pass. Product-specific implementation checkpoints and the pending exact production steps are in `projects/vevo/PROJECT_STATE.md` and `projects/roy/PROJECT_STATE.md`. No reporting runtime mutation has occurred yet.
+
 ## 2026-10-07 — VEVO and ROY production completion explicitly resumed
 
 The owner explicitly instructed completion of both production deployments, fresh reports through 2026-10-06, and use of the new rules in subsequent scheduled runs. This supersedes the earlier stop pending continuation. Clean fetch/prune/pull at main `e13ba0f6cffa1e0dd8f795cc8e24c6a28baade13`; work is on `codex/reporting-production-rules-20261007`. Current product handoffs are `projects/vevo/PROJECT_STATE.md` and `projects/roy/PROJECT_STATE.md`. Repair the narrowly evidenced VEVO historical source exception, explicitly retain unallocated Google country spend without invented country allocation, preserve failed-probe diagnostics, then review/test/merge and deploy both projects sequentially with exact host and publication gates. No production mutation has occurred in this resumed session.

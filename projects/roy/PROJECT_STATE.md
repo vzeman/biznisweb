@@ -1,5 +1,16 @@
 # ROY reporting project state
 
+## Implementation checkpoint: reviewed and ready for CI
+
+Date: 2026-10-07
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-production-rules-20261007`
+What changed: Shared Google coverage now preserves measured countries and account totals with an explicit unallocated residual, identity/period/currency checks, visible coverage and no MER for unknown/unallocated rows. VEVO's existing compensation exception is fingerprint-bound across enrichment, cache and revenue reconciliation; source-confirmed currency rounding is enabled. Failed authorized probes preserve bounded private quality diagnostics before cleanup, without creating successful manifests or weakening gates.
+What is verified: 1,380 tests across the 77-module CI union pass with unchanged source during execution; reporting smoke, critical Ruff and diff checks pass. All eight real Google project/period probes reconcile against independent daily spend. Fresh runtime and paused-recovery read-only gates pass. Full-history monetary source verification is still finishing; production has not changed.
+Known issues: Original report generations and schedules remain in place until the full isolated and live release gates pass. Financial source data and operational diagnostic details remain in ignored private evidence and will be archived with verified hashes.
+Next exact step: Commit/push this checkpoint, merge the PR after CI and source audit checks, wait for the exact ECR image and settings-triggered monthly workflow, then recover VEVO and release ROY sequentially. Verify each new generation, financial contract, protected resources, authenticated HTTP and future dynamic-date schedule before claiming completion.
+
+
 ## Current work: both production releases explicitly resumed
 
 Date: 2026-10-07
