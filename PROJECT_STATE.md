@@ -1,3 +1,13 @@
+## 2026-10-07 — VEVO country reporting corrections in progress
+
+Date: 2026-10-07
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-reporting-corrections-20261007`
+What changed: The owner authorized correction, deployment and a fresh report through 2026-10-06 inclusive. This branch starts at synchronized `origin/main` (`1dcb503f`); it does not include the separate diagnostic PR #602. Implementing the verified Hungarian COD payment identity, identifier-backed localized expense aliases, exact Meta purchase attribution, measured country ad spend and explicit modeled campaign labels. The owner additionally requested an independent HU-versus-CZ ROAS reconciliation before release. No ad campaign changes are authorized or planned.
+What is verified: AWS account `919341186960`, region `eu-central-1`, scheduled service `vevo-daily-report-email`, cluster `vevo-reporting-cluster`, current definition `vevo-reporting-daily:42`, container `reporting`, path `/app`, immutable image `sha256:8b1db0ce85a1696d0f3f4fdb6eaf43db9f8f569f615f5817ae6fb0bc190a4559`. No current Fargate task exists, so instance/task ID and IP are not applicable to the stopped nightly runtime. The candidate must supply its actual task ID and private IP, exact service/path/image and localhost curl marker before any runtime promotion or UI test. Current schedule is enabled at 01:00 Europe/Bratislava; invoices are disabled in the reporting definition.
+Known issues / decisions: Legacy managed-report migration authority and its ROY hardcoded baseline are stale; the old bootstrap deployment workflow must not be used. A narrow image-only release must snapshot current schedules, preserve other services, prove an isolated read-only candidate and validate every period artifact before publishing. Ordinary runner previously published before checking quality; incomplete or critical generations will now be blocked before S3 publication. Existing verified expense values take precedence; genuinely unknown costs remain flagged estimates. Public Git contains technical evidence only. Private diagnosis and its source manifest are retained under `data/vevo/analyses/2026-10-07-country-performance/` in the encrypted reporting artifact bucket. One-off regeneration will explicitly skip email, invoices and credit-note mutations.
+Next exact step: Finish independent country reconciliation and focused/full regressions; commit/push, review and merge via PR, build an exact immutable image, then execute the host gate and regenerate all periods through 2026-10-06. No local persistent process or production mutation has been started in this correction session.
+
 ## 2026-10-02 — Current handoff: ROY independent refresh deployed
 
 Date: 2026-10-02, 15:16 UTC
