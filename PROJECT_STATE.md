@@ -1,3 +1,13 @@
+## 2026-10-07 — VEVO release: verified source, recovered CI collision
+
+Date: 2026-10-07
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-reporting-release-evidence-20261007`
+What changed: PR #603 passed all six checks and merged as `636f586995ff599177035296c4db8d9e6f2d9377`. Exact build `37621549932` succeeded with immutable image `sha256:4c96e3e898b0a3b1f4023d0673a48def5a25d955a363dd2630bfe27ffa01c9c0`. The first release `dec573a760ed45f3a09e1698b61807ac` paused only VEVO reporting and started the isolated candidate, but aborted before publication when its protected-schedule check detected a concurrent monthly accounting deployment.
+What is verified: Candidate task `20c9f28f8cfd44c7a39db5be1abe373f`, private IP `172.31.15.243`, definition `vevo-reporting-daily:43`, `/app`, exact source/image and localhost curl marker passed independent verification. Candidate definition differed from production `:42` only by image; probe role/policy and explicit date/cache/email/financial skips matched committed code. Recovery independently confirmed the exact original enabled VEVO schedule at `:42`, all live output metadata unchanged, owned probe STOPPED (cleanup exit 137), temporary role absent, unused candidate definition INACTIVE and lease released. Private final receipt `data/vevo/reporting/image-releases/dec573a760ed45f3a09e1698b61807ac/0011-failed-before-live-restored.json`, SHA-256 `87172c540479e719395eb75eabf68525df60b9fac24089517a1429545f3a75d8`.
+Known issues / cause: The sole protected change was `monthly-creditnote-export:58` to `:59`. Existing `.github/workflows/deploy-monthly-creditnote-export.yml` automatically triggers on `projects/vevo/settings.json`; Actions run `37621549881` at this same merged source completed successfully. CloudTrail update event `85f13372-39cf-49b6-8dda-22105652e441` records the Linux/Azure GitHub runner, distinct from the Windows reporting controller. This was not a reporting candidate calculation failure. The broad automatic workflow is an existing coupling to remember before future settings changes; do not claim the whole session changed only the VEVO schedule. No manual rollback of the independent monthly target was performed.
+Next exact step: Complete read-only monthly-definition/execute-now verification, then retry the same exact source/image with a fresh release ID and a new snapshot preserving the completed `:59` target. Do not reuse the failed ID or relax drift checks. Keep this evidence branch unmerged until source-bound deployment finishes; release commands use a clean detached checkout at `636f5869`. Final publication and UI verification remain pending. No persistent local process was started.
+
 ## 2026-10-07 — VEVO country reporting corrections in progress
 
 Date: 2026-10-07
