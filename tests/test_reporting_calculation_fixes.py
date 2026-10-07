@@ -3184,7 +3184,8 @@ class ReportingCalculationFixTests(unittest.TestCase):
             (True, "configured_missing_payment_metadata_realized"),
             exporter._realized_revenue_decision(overridden),
         )
-        self.assertFalse(exporter._needs_payment_metadata_for_realized_revenue(overridden))
+        # The reviewed payment identity does not waive monetary reconciliation.
+        self.assertTrue(exporter._needs_payment_metadata_for_realized_revenue(overridden))
         self.assertEqual([overridden], exporter._filter_by_status([overridden], track_excluded=False))
         self.assertTrue(exporter._needs_payment_metadata_for_realized_revenue(another_missing))
 
@@ -3201,7 +3202,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
             exporter._realized_revenue_decision(overridden),
         )
 
-    def test_vevo_realized_override_skips_only_the_exact_enrichment_candidate(self) -> None:
+    def test_vevo_realized_override_still_enriches_monetary_elements(self) -> None:
         exporter = make_exporter("vevo")
         fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
         orders = [
@@ -3226,8 +3227,8 @@ class ReportingCalculationFixTests(unittest.TestCase):
         with patch.object(exporter, "_fetch_order_payment_metadata", side_effect=fetch_metadata):
             exporter._enrich_payment_metadata_for_realized_revenue(orders)
 
-        self.assertEqual(["OTHER-MISSING"], attempted_order_nums)
-        self.assertNotIn("price_elements", orders[0])
+        self.assertEqual(["2602007112", "OTHER-MISSING"], attempted_order_nums)
+        self.assertIn("price_elements", orders[0])
         self.assertIn("price_elements", orders[1])
 
     def test_non_realized_override_configuration_fails_closed(self) -> None:
@@ -3467,12 +3468,12 @@ class ReportingCalculationFixTests(unittest.TestCase):
             exporter._enrich_payment_metadata_for_realized_revenue(orders)
 
         self.assertEqual(
-            ["SUCCESS-FIRST", "SUCCESS-SECOND", "SUCCESS-SECOND"],
+            ["SUCCESS-FIRST", "SUCCESS-SECOND", "PAID-NONCANDIDATE", "SUCCESS-SECOND", "PAID-NONCANDIDATE"],
             attempted_order_nums,
         )
         self.assertEqual([], orders[0]["price_elements"])
         self.assertEqual([], orders[1]["price_elements"])
-        self.assertNotIn("price_elements", orders[2])
+        self.assertEqual([], orders[2]["price_elements"])
         self.assertNotIn("price_elements", orders[3])
         sleep_mock.assert_called_once()
 

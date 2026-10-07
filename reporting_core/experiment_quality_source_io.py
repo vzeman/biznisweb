@@ -53,10 +53,10 @@ RECEIPTED_ORDER_QUERY = """query ExactReceiptedQualityOrder($order_num: String!)
     items {
       item_label ean import_code warehouse_number quantity tax_rate
       price { value is_net_price currency { code } }
-      sum { value is_net_price currency { code } }
-      sum_with_tax { value is_net_price currency { code } }
+      sum { value raw_value is_net_price currency { code } }
+      sum_with_tax { value raw_value is_net_price currency { code } }
     }
-    sum { value is_net_price currency { code } }
+    sum { value raw_value is_net_price currency { code } }
   }
 }
 """
@@ -284,6 +284,7 @@ class ReceiptedOrderSource:
 
 
 _MONEY = {"value": None, "is_net_price": None, "currency": {"code": None}}
+_PRECISE_MONEY = {**_MONEY, "raw_value": None}
 _ORDER_SHAPE = {
     "order_num": None,
     "status": {"id": None, "name": None},
@@ -293,8 +294,8 @@ _ORDER_SHAPE = {
                                   "formatted": None, "is_net_price": None}}],
     "items": [{"item_label": None, "ean": None, "import_code": None,
                "warehouse_number": None, "quantity": None, "tax_rate": None,
-               "price": _MONEY, "sum": _MONEY, "sum_with_tax": _MONEY}],
-    "sum": _MONEY,
+               "price": _MONEY, "sum": _PRECISE_MONEY, "sum_with_tax": _PRECISE_MONEY}],
+    "sum": _PRECISE_MONEY,
 }
 
 

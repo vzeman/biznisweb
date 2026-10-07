@@ -13,6 +13,9 @@ const [source, costs, fixed, examples, meta, google] = await Promise.all([
   read('aggregates/independent_meta_country_daily_20261007.json'),
   read('aggregates/independent_google_country_daily_20261007.json'),
 ]);
+let auditStatus = null;
+try { auditStatus = await read('manual_audit_status_20261007.json'); }
+catch (error) { if (error.code !== 'ENOENT') throw error; }
 if (!source.complete_boundary || !fixed.complete_source_boundary) throw new Error('Incomplete source');
 const sorted = [...source.orders].sort((a,b) => a.date.localeCompare(b.date) || a.order_ref.localeCompare(b.order_ref));
 const byRef = new Map(costs.orders.map(o => [o.order_ref_private, o]));
@@ -44,19 +47,20 @@ function header(sheet, range, labels) {
 function warn(sheet, range, formula) {
   sheet.getRange(range).conditionalFormats.addCustom(formula,{fill:'#FCE7E7',font:{color:'#A32121',bold:true}});
 }
-const basis = b => ({configured_reference_cost:'Konfigurovaná cena',missing_cost_margin_estimate:'Odhad: marža 35 %',explicit_margin_policy:'Model: maržová politika'})[b] || b;
+const basis = b => ({configured_reference_cost:'Konfigurovaná cena',missing_cost_margin_estimate:'Odhad nákladu',explicit_margin_policy:'Model: maržová politika',authoritative_margin_policy:'Model: maržová politika',zero_cost_service_override:'Služba: nulový náklad',zero_cost_service_policy:'Služba: nulový náklad'})[b] || b;
 
 style(products,'A1:S'+(costs.item_rows+7),'Položky objednávok');
 products.getRange('A4').values = [['Zdroj: čerstvé BiznisWeb API + nákladová konfigurácia zo zdrojového commitu v podkladoch. Bez mien a adries.']];
-header(products,'A6:S6',['Objednávka','Krajina','Produkt','Ks','Mena','Cena/ks bez DPH','Riadok bez DPH','Riadok s DPH','DPH %','EUR / mena','EUR pred zľavou','Zľava %','EUR po zľave','Náklad reportu EUR','Marža produktu EUR','Základ nákladu','Referenčný náklad/ks','SKU','Rozdiel nákladu ručne']);
+header(products,'A6:S6',['Objednávka','Krajina','Produkt','Ks','Mena','Cena/ks bez DPH','Riadok bez DPH','Riadok s DPH','DPH %','EUR / mena','EUR pred zľavou','Zľava netto EUR','EUR po zľave','Náklad reportu EUR','Marža produktu EUR','Základ nákladu','Referenčný náklad/ks','SKU','Rozdiel nákladu ručne']);
 let pr=7;
 for (const order of sorted) {
   const co=byRef.get(order.order_ref); if (!co) throw new Error('Missing cost order');
   const first=pr;
   for (const item of co.items) {
     const applied=item.applied_cost_evidence;
-    products.getRange(`A${pr}:S${pr}`).values = [[order.order_ref,order.country,item.label,Number(item.quantity),item.currency,Number(item.api_unit_price_original),Number(item.api_line_net_original),Number(item.api_line_gross_original),Number(item.tax_rate_pct)/100,Number(item.fixed_fx_to_eur),Number(item.net_eur_before_order_discount),Number(item.order_discount_pct)/100,null,Number(item.production.total_expense),null,basis(applied.basis)+(applied.margin_pct?' ('+applied.margin_pct+' %)':''),item.reference_unit_cost_eur===null?null:Number(item.reference_unit_cost_eur),item.sku,Number(item.production.total_expense)-Number(item.cost_eur)]];
-    products.getRange(`M${pr}`).formulas=[[`=ROUND(K${pr}*(1-L${pr}),2)`]];
+    const netDiscount = item.production.item_order_discount_without_tax ?? Math.round(Number(item.net_eur_before_order_discount)*Number(item.order_discount_pct))/100;
+    products.getRange(`A${pr}:S${pr}`).values = [[order.order_ref,order.country,item.label,Number(item.quantity),item.currency,Number(item.api_unit_price_original),Number(item.api_line_net_original),Number(item.api_line_gross_original),Number(item.tax_rate_pct)/100,Number(item.fixed_fx_to_eur),Number(item.net_eur_before_order_discount),netDiscount,null,Number(item.production.total_expense),null,basis(applied.basis)+(applied.margin_pct?' ('+applied.margin_pct+' %)':''),item.reference_unit_cost_eur===null?null:Number(item.reference_unit_cost_eur),item.sku,Number(item.production.total_expense)-Number(item.cost_eur)]];
+    products.getRange(`M${pr}`).formulas=[[`=ROUND(K${pr}-L${pr},2)`]];
     products.getRange(`O${pr}`).formulas=[[`=M${pr}-N${pr}`]];
     pr++;
   }
@@ -64,7 +68,6 @@ for (const order of sorted) {
 }
 products.getRange(`F7:S${pr-1}`).setNumberFormat(money);
 products.getRange(`I7:I${pr-1}`).setNumberFormat('0.0%');
-products.getRange(`L7:L${pr-1}`).setNumberFormat('0.0%');
 products.getRange(`J7:J${pr-1}`).setNumberFormat('0.0000');
 products.getRange(`R7:R${pr-1}`).setNumberFormat('@');
 products.getRange(`R6:R${pr}`).format.columnWidth=22;
@@ -76,9 +79,10 @@ products.freezePanes.freezeRows(6); products.freezePanes.freezeColumns(3);
 products.tables.add(`A6:S${pr-1}`,true,'AuditProducts');
 warn(products,`S7:S${pr-1}`,'ABS(S7)>0.02');
 
-style(orders,'A1:T'+(sorted.length+7),'Objednávky a rozpočítané náklady');
+style(orders,'A1:Z'+(sorted.length+7),'Objednávky a rozpočítané náklady');
 orders.getRange('A4').values=[['Reklama = skutočná útrata krajiny a dňa / uznané objednávky krajiny a dňa. Ide o priemer, nie priradenú konverziu.']];
 header(orders,'A6:T6',['Objednávka','Dátum','Krajina','Stav','Uznaná 1/0','Dôvod','Tržba pred zľavou EUR','Zľava netto EUR','Tržba po zľave EUR','Náklad produktov EUR','Produktová marža EUR','Balné EUR','Doprava netto EUR','Fix / objednávka EUR','Reklama / objednávka EUR','Výsledok po alokácii EUR','Počet odhadov 35 %','Mena','Suma objednávky v mene','Platba ID']);
+header(orders,'U6:Z6',['Tovar s DPH v mene','Doprava s DPH v mene','Platba s DPH v mene','Zaokrúhlenie v mene','Zľava s DPH v mene','Rozdiel súčtu v mene']);
 let r=7;
 for (const o of sorted) {
   const co=byRef.get(o.order_ref), [start,end]=itemRanges.get(o.order_ref);
@@ -90,21 +94,27 @@ for (const o of sorted) {
   orders.getRange(`A${r}:T${r}`).values=[[o.order_ref,serial(o.date),o.country,o.canonical_status,o.included?1:0,o.inclusion_reason,o.net_goods_eur,o.net_goods_eur-o.discount_adjusted_net_goods_eur,null,null,null,o.included?Number(co.model_packaging_eur):0,o.included?Number(co.model_shipping_net_cost_eur):0,o.included?Number(fd.fixed_global_eur)/fd.eligible_orders:0,o.included?(m+g)/count:0,null,co.items.filter(i=>i.applied_cost_evidence.basis==='missing_cost_margin_estimate').length,o.currency,Number(o.provider_order_total_original),o.payment_id]];
   orders.getRange(`I${r}:K${r}`).formulas=[[`=G${r}-H${r}`,`=SUM('Produkty'!N${start}:N${end})`,`=I${r}-J${r}`]];
   orders.getRange(`P${r}`).formulas=[[`=IF(E${r}=1,K${r}-SUM(L${r}:O${r}),"nezahrnutá")`]];
+  const fee = kind => o.price_elements.filter(e=>e.type===kind).reduce((sum,e)=>sum+Number(e.gross_from_single_item_vat_original),0);
+  const grossDiscount=-(o.gross_goods_eur-o.discount_adjusted_gross_goods_eur)/Number(co.fixed_fx_to_eur);
+  orders.getRange(`U${r}:Z${r}`).values=[[Number(o.gross_goods_original),fee('shipping'),fee('payment'),fee('autoround'),grossDiscount,null]];
+  orders.getRange(`Z${r}`).formulas=[[`=ROUND(SUM(U${r}:Y${r})-S${r},2)`]];
   orderRow.set(o.order_ref,r++);
 }
 orders.getRange(`B7:B${r-1}`).setNumberFormat('yyyy-mm-dd');
 orders.getRange(`G7:P${r-1}`).setNumberFormat(money);
 orders.getRange(`S7:S${r-1}`).setNumberFormat(money);
+orders.getRange(`U7:Z${r-1}`).setNumberFormat(money);
 orders.getRange(`A6:A${r}`).format.columnWidth=17;
 orders.getRange(`D6:D${r}`).format.columnWidth=26;
 orders.getRange(`F6:F${r}`).format.columnWidth=31;
 orders.freezePanes.freezeRows(6);orders.freezePanes.freezeColumns(3);
-orders.tables.add(`A6:T${r-1}`,true,'AuditOrders');
+orders.tables.add(`A6:Z${r-1}`,true,'AuditOrders');
 warn(orders,`H7:H${r-1}`,'ABS(H7)>0.02');
+warn(orders,`Z7:Z${r-1}`,'ABS(Z7)>0.02');
 
 style(summary,'A1:K55','VEVO: ručná kontrola reportingu');summary.tabColor='#253E5B';
-summary.getRange('A4').values=[['Stav: nájdená chyba objednávkovej zľavy. Nové výstupy neboli publikované; generovanie je pozastavené.']];
-summary.getRange('A4').format.font.color='#A32121';
+summary.getRange('A4').values=[[auditStatus?.status_text || 'Stav: predbežná kontrola. Potvrdenie opráv a publikovania nie je súčasťou týchto vstupov.']];
+summary.getRange('A4').format.font.color=auditStatus?.published_verified?'#202B37':'#A32121';
 header(summary,'A6:J6',['Dátum','Všetky obj.','Uznané','Vyradené','Tržba pred zľavou EUR','Tržba po zľave EUR','Rozdiel EUR','Fix celkom EUR','Rozdelený fix EUR','Rozdiel fixov EUR']);
 for(let i=0;i<fixed.days.length;i++) {
   const d=fixed.days[i],rr=7+i;dayRow.set(d.date,rr);
@@ -130,7 +140,7 @@ const notes=[
 'Zdroj: BiznisWeb API, kompletné vybrané dni; stav pri získaní dát je v priložených súkromných podkladoch.',
 'Tržby = tovar bez DPH, bez samostatných poplatkov za dopravu a platbu. Meny sa prevádzajú pevným kurzom reportingu.',
 'Náklady produktov sú z konfigurácie. Odhad marže 35 % a explicitná maržová politika nie sú dodávateľské faktúry.',
-'CZ sprepitné má v mape náklad 1 EUR/riadok, SK 0 EUR. Vyžaduje overenie; v tomto súbore zostáva pôvodná mapa.',
+'Sprepitné a poistenie majú podľa pokynu majiteľa nulový náklad. Historická referenčná mapa sa zobrazuje samostatne.',
 'Balné a netto doprava sú modelové sadzby. Reklama na objednávku je priemer krajiny a dňa, nie presná atribúcia.',
 'Dni bez uznaných objednávok nesú fix v celkovom reporte bez alokácie krajine. Dobropisové fulfillment náklady sú globálne.',
 'Centové odchýlky zaokrúhľovania sú oddelené od chyby zľavy. Kontrola nepotvrdzuje bezchybnosť celého historického obdobia.',
@@ -167,12 +177,15 @@ const errs=await wb.inspect({kind:'match',searchTerm:'#REF!|#DIV/0!|#VALUE!|#NAM
 await fs.writeFile(path.join(outputDir,'formula-check.jsonl'),errs.ndjson);
 const totals=summary.getRange('B14:J14').values[0];
 if(totals[0]!==sorted.length || totals[1]!==sorted.filter(o=>o.included).length || Math.abs(totals[8])>0.0001) throw new Error('Reconciliation failed');
+const expectedRevenue=sorted.filter(o=>o.included).reduce((sum,o)=>sum+o.discount_adjusted_net_goods_eur,0);
+if(Math.abs(totals[4]-expectedRevenue)>0.0001) throw new Error('Source revenue reconciliation failed');
+if(orders.getRange(`Z7:Z${r-1}`).values.some(row=>!Number.isFinite(row[0]) || Math.abs(row[0])>0.02)) throw new Error('Native order total reconciliation failed');
 // Verify a representative source edit recalculates a dependent order output, then restore it.
 const old=orders.getRange('H7').values[0][0],before=orders.getRange('I7').values[0][0];
 orders.getRange('H7').values=[[old+1]];
 if(Math.abs(orders.getRange('I7').values[0][0]-(before-1))>0.0001) throw new Error('Recalculation failed');
 orders.getRange('H7').values=[[old]];wb.recalculate();
-for(const [sheetName,range,name] of [['Kontrola','A1:J14','kontrola'],['Príklady','A7:E20','priklady'],['Objednávky','A6:J12','objednavky'],['Produkty','A6:I12','produkty'],['Produkty','J6:S12','produkty-naklady']]) {
+for(const [sheetName,range,name] of [['Kontrola','A1:J14','kontrola'],['Príklady','A7:E20','priklady'],['Objednávky','A6:J12','objednavky'],['Objednávky','S6:Z12','objednavky-sucty'],['Produkty','A6:I12','produkty'],['Produkty','J6:S12','produkty-naklady']]) {
   const preview=await wb.render({sheetName,range,scale:1.4,format:'png'});
   await fs.writeFile(path.join(outputDir,name+'.png'),new Uint8Array(await preview.arrayBuffer()));
 }

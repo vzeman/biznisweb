@@ -18,6 +18,7 @@ import shutil
 import unicodedata
 import sys
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_DOWN
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 import calendar
@@ -166,6 +167,15 @@ WEATHER_SETTINGS: Dict[str, Any] = {
     "locations": []
 }
 ENABLE_EMAIL_STRATEGY_REPORT = False
+
+
+class OrderRevenueReconciliationError(RuntimeError):
+    """Critical source inconsistency: never publish guessed financial values."""
+
+    def __init__(self, order_num: Any, reason: str) -> None:
+        self.order_num = str(order_num or "<missing>")
+        self.reason = reason
+        super().__init__(f"critical_order_revenue_reconciliation: {self.order_num}: {reason}")
 
 
 class PaymentMetadataEnrichmentError(RuntimeError):
@@ -540,6 +550,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         }
         sum {
           value
+          raw_value
           formatted
           is_net_price
           currency {
@@ -549,6 +560,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         }
         sum_with_tax {
           value
+          raw_value
           formatted
           is_net_price
           currency {
@@ -559,6 +571,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
       }
       sum {
         value
+        raw_value
         formatted
         is_net_price
         currency {
@@ -656,6 +669,7 @@ query GetOrdersWithoutPriceElements($filter: OrderFilter, $params: OrderParams) 
         }
         sum {
           value
+          raw_value
           formatted
           is_net_price
           currency {
@@ -665,6 +679,7 @@ query GetOrdersWithoutPriceElements($filter: OrderFilter, $params: OrderParams) 
         }
         sum_with_tax {
           value
+          raw_value
           formatted
           is_net_price
           currency {
@@ -675,6 +690,7 @@ query GetOrdersWithoutPriceElements($filter: OrderFilter, $params: OrderParams) 
       }
       sum {
         value
+        raw_value
         formatted
         is_net_price
         currency {
@@ -795,6 +811,10 @@ class BizniWebExporter:
         self.zero_revenue_gift_product_skus = self._resolve_exact_product_sku_setting(
             "zero_revenue_gift_product_skus"
         )
+        self.zero_cost_service_product_skus = self._resolve_exact_product_sku_setting(
+            "zero_cost_service_product_skus"
+        )
+        self.zero_cost_service_labels = self._resolve_zero_cost_service_labels()
         self.reporting_defaults = resolve_reporting_defaults(project_name, self.project_settings)
         self.realized_revenue_settings = self._resolve_realized_revenue_settings()
         self.project_root_dir = Path("data") / project_name
@@ -1015,6 +1035,23 @@ class BizniWebExporter:
         if len(normalized_values) != len(set(normalized_values)):
             raise ValueError(f"{setting_name} contains duplicate normalized product SKUs")
         return frozenset(normalized_values)
+
+    def _resolve_zero_cost_service_labels(self) -> frozenset[str]:
+        """Exact full labels detect identity drift; they never assign cost by substring."""
+        values = self.project_settings.get("zero_cost_service_labels", [])
+        if not isinstance(values, list) or any(not isinstance(value, str) or not value.strip() for value in values):
+            raise ValueError("zero_cost_service_labels must be a list of non-empty exact labels")
+        normalized = [value.strip().casefold() for value in values]
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("zero_cost_service_labels contains duplicate exact labels")
+        if normalized and not self.zero_cost_service_product_skus:
+            raise ValueError("zero_cost_service_labels requires reviewed service product SKUs")
+        return frozenset(normalized)
+
+    def _assert_zero_cost_service_identity(self, order_num: Any, product_sku: Any, label: Any) -> None:
+        labels = {str(label or "").strip().casefold(), self.canonicalize_reporting_product_label(label).strip().casefold()}
+        if labels & self.zero_cost_service_labels and self._normalize_product_identifier(product_sku) not in self.zero_cost_service_product_skus:
+            raise OrderRevenueReconciliationError(order_num, "zero_cost_service_identity_drift")
 
     @staticmethod
     def _history_float(value: Any, default: float = 0.0) -> float:
@@ -3098,6 +3135,7 @@ class BizniWebExporter:
                     component_label,
                     import_code=component_import_code,
                 )
+                self._assert_zero_cost_service_identity(row.get("order_num"), component_sku, component_label)
                 expense_per_item, expense_source = self._resolve_component_expense(
                     component,
                     component_sku,
@@ -3141,6 +3179,8 @@ class BizniWebExporter:
                 "item_tax_amount",
                 "item_line_sum_original",
                 "item_line_sum_with_tax_original",
+                "item_order_discount_without_tax",
+                "item_order_discount_with_tax",
                 "item_recycle_fee",
             ]
             allocated_amounts = {
@@ -3155,9 +3195,13 @@ class BizniWebExporter:
                 component_revenue = allocated_amounts.get("item_total_without_tax", [0.0] * len(component_specs))[idx]
                 expense_per_item = spec["expense_per_item"]
                 expense_source = spec["expense_source"]
-                if expense_per_item is None:
+                if self._normalize_product_identifier(spec["sku"]) in self.zero_cost_service_product_skus:
+                    expense_per_item = 0.0
+                    expense_source = "zero_cost_service_override"
+                elif expense_per_item is None:
+                    component_discount = allocated_amounts.get("item_order_discount_without_tax", [0.0] * len(component_specs))[idx]
                     expense_per_item, expense_source = self._missing_cost_expense(
-                        component_revenue,
+                        component_revenue + component_discount,
                         component_units,
                     )
                     expense_source = f"bundle_component_{expense_source}"
@@ -3495,7 +3539,10 @@ class BizniWebExporter:
     def _needs_payment_metadata_for_realized_revenue(self, order: Dict[str, Any]) -> bool:
         if self._has_loaded_price_elements(order):
             return False
-        _, reason = self._realized_revenue_decision(order)
+        realized, reason = self._realized_revenue_decision(order)
+        if realized and self.project_settings.get("order_revenue_reconciliation_enabled") is True:
+            # Paid card orders also need monetary elements, not just COD identity.
+            return True
         return reason in {
             "cod_status_missing_payment_metadata",
             "fulfilled_status_missing_payment_metadata",
@@ -5354,6 +5401,16 @@ class BizniWebExporter:
                 # Unknown renames invalidate the day for a fresh ordinary read.
                 for order in orders:
                     self._reporting_order_context(order)
+                if self.project_settings.get("order_revenue_reconciliation_enabled") is True:
+                    for order in orders:
+                        realized, _ = self._realized_revenue_decision(order)
+                        if realized and any(
+                            (item.get("sum") or {}).get("raw_value") is None
+                            or (item.get("sum_with_tax") or {}).get("raw_value") is None
+                            for item in order.get("items") or []
+                        ):
+                            logger.info("Refreshing order cache with source-precision monetary fields for %s", date.strftime('%Y-%m-%d'))
+                            return None
                 unresolved_candidates = [
                     order
                     for order in orders
@@ -6404,6 +6461,185 @@ class BizniWebExporter:
 
         return filtered_orders
     
+    @staticmethod
+    def _allocate_decimal_money(total: Decimal, weights: List[Decimal]) -> List[Decimal]:
+        """Allocate native-currency cents with a stable largest-remainder rule."""
+        cent = Decimal("0.01")
+        total = total.quantize(cent, rounding=ROUND_HALF_UP)
+        denominator = sum(weights, Decimal(0))
+        if not denominator:
+            if total:
+                raise ValueError("nonzero allocation without a positive basis")
+            return [Decimal(0) for _ in weights]
+        exact = [total * weight / denominator for weight in weights]
+        result = [value.quantize(cent, rounding=ROUND_DOWN) for value in exact]
+        remainder = int((total - sum(result)) / cent)
+        ranking = sorted(range(len(weights)), key=lambda index: (-(exact[index] - result[index]), index))
+        for index in ranking[:remainder]:
+            result[index] += cent
+        return result
+
+    def _reconcile_order_item_revenue(self, order: Dict[str, Any]) -> Tuple[List[Dict[str, Decimal]], str]:
+        """Resolve header discounts from source arithmetic, never from its unreliable VAT flag.
+
+        All matching happens in the source currency, before fixed-model FX. The two-cent
+        bound covers the rounding of source monetary totals; it never grows with FX or
+        order value. Non-merchandise charges remain outside merchandise revenue.
+        """
+        cent = Decimal("0.01")
+        tolerance = Decimal("0.02")
+
+        def fail(reason):
+            raise OrderRevenueReconciliationError(order.get("order_num"), reason)
+
+        def money(value):
+            try:
+                parsed = Decimal(str(value))
+            except (InvalidOperation, TypeError, ValueError):
+                fail("missing_or_invalid_monetary_value")
+            if not parsed.is_finite():
+                fail("nonfinite_monetary_value")
+            return parsed
+
+        def rounded(value):
+            return value.quantize(cent, rounding=ROUND_HALF_UP)
+
+        order_sum = order.get("sum") or {}
+        currency = (order_sum.get("currency") or {}).get("code")
+        if currency not in CURRENCY_RATES_TO_EUR:
+            fail("missing_or_unsupported_order_currency")
+        grand_total = money(order_sum.get("value"))
+        if order_sum.get("is_net_price") is True:
+            fail("unsupported_net_order_grand_total")
+        elements = order.get("price_elements")
+        if not isinstance(elements, list):
+            fail("missing_price_elements")
+        lines = []
+        for item in order.get("items") or []:
+            net_source = item.get("sum") or {}
+            gross_source = item.get("sum_with_tax") or {}
+            unit_source = item.get("price") or {}
+            for source in (net_source, gross_source, unit_source):
+                if (source.get("currency") or {}).get("code", currency) != currency:
+                    fail("mixed_order_item_currencies")
+            rate = money(item.get("tax_rate", 0))
+            if rate < 0 or rate > 100:
+                fail("unsupported_item_tax_rate")
+            multiplier = 1 + rate / 100
+            if net_source.get("value") is not None:
+                net = money(net_source["value"])
+                gross = money(gross_source["value"]) if gross_source.get("value") is not None else rounded(net * multiplier)
+            elif gross_source.get("value") is not None:
+                gross = money(gross_source["value"])
+                net = rounded(gross / multiplier)
+            else:
+                net = money(unit_source.get("value")) * money(item.get("quantity", 1))
+                gross = rounded(net * multiplier)
+            # Display values are rounded by shop currency (not necessarily cents).
+            # Validate VAT using the provider's raw amounts when supplied, while
+            # preserving the established displayed line-revenue basis below.
+            check_net = money(net_source["raw_value"]) if net_source.get("raw_value") is not None else net
+            check_gross = money(gross_source["raw_value"]) if gross_source.get("raw_value") is not None else gross
+            if abs(check_gross - check_net * multiplier) > tolerance:
+                fail("item_net_gross_vat_mismatch")
+            lines.append({"net": net, "gross": gross, "multiplier": multiplier})
+        if not lines:
+            fail("missing_merchandise_lines")
+        goods_gross = sum((line["gross"] for line in lines), Decimal(0))
+        goods_net = sum((line["net"] for line in lines), Decimal(0))
+        multipliers = {line["multiplier"] for line in lines}
+        service_totals = {Decimal(0)}
+        discounts = []
+        for element in elements:
+            if not isinstance(element, dict):
+                fail("invalid_price_element")
+            kind = str(element.get("type") or "").strip().lower()
+            price = element.get("price") or {}
+            value = money(price.get("raw_value") if price.get("raw_value") is not None else price.get("value"))
+            if not value:
+                continue
+            if kind in {"shipping", "payment", "autoround"}:
+                if price.get("is_net_price") is True:
+                    possibilities = {rounded(value * multiplier) for multiplier in multipliers}
+                elif price.get("is_net_price") is False:
+                    possibilities = {rounded(value)}
+                else:
+                    fail("missing_service_tax_basis")
+                service_totals = {total + amount for total in service_totals for amount in possibilities}
+                if len(service_totals) > 128:
+                    fail("ambiguous_service_tax_basis")
+            elif kind in {"percent_discount", "absolute_discount", "fixed_discount", "discount"} or value < 0:
+                percent = None
+                if kind == "percent_discount":
+                    percent = abs(money(element.get("value"))) / 100
+                    if percent <= 0 or percent > 1:
+                        fail("invalid_discount_percentage")
+                discounts.append((abs(value), percent))
+            else:
+                fail("unsupported_nonzero_price_element")
+
+        # Keys are merchandise reductions. Different service interpretations are harmless
+        # only when they establish exactly the same merchandise accounting result.
+        matches = {}
+        for service_gross in service_totals:
+            if abs(goods_gross + service_gross - grand_total) <= tolerance:
+                matches[Decimal(0)] = "already_in_item_totals" if discounts else "source_total_verified"
+            if not discounts:
+                continue
+            if goods_net <= 0 or goods_gross <= 0 or any(line["gross"] < 0 for line in lines):
+                fail("unsupported_discount_return_combination")
+            states = {(Decimal(0), Decimal(0))}  # (whole-order reduction, goods reduction)
+            for value, percent in discounts:
+                next_states = set()
+                for total_reduction, goods_reduction in states:
+                    remaining_goods = goods_gross - goods_reduction
+                    remaining_services = service_gross - (total_reduction - goods_reduction)
+                    # Header monetary flags have contradicted actual provider totals. Both
+                    # gross and net representations must be proved by the grand total.
+                    amounts = {rounded(value), rounded(value * goods_gross / goods_net)}
+                    for amount in amounts:
+                        if percent is not None:
+                            expected_goods = rounded(remaining_goods * percent)
+                            if abs(amount - expected_goods) <= tolerance:
+                                next_states.add((total_reduction + amount, goods_reduction + amount))
+                            expected_cart = rounded((remaining_goods + remaining_services) * percent)
+                            if remaining_services and abs(amount - expected_cart) <= tolerance:
+                                next_states.add((total_reduction + amount, goods_reduction + expected_goods))
+                        elif not remaining_services:
+                            # Without an explicit percentage/scope, a discount on a basket
+                            # containing paid services cannot be safely assigned to goods.
+                            next_states.add((total_reduction + amount, goods_reduction + amount))
+                states = next_states
+                if len(states) > 128:
+                    fail("ambiguous_discount_combinations")
+            for total_reduction, goods_reduction in states:
+                if 0 <= goods_reduction <= goods_gross and abs(goods_gross + service_gross - total_reduction - grand_total) <= tolerance:
+                    matches[rounded(goods_reduction)] = "header_discount_allocated"
+        if len(matches) != 1:
+            fail("ambiguous_discount_or_service_allocation" if matches else "grand_total_not_reconciled")
+        reduction, method = next(iter(matches.items()))
+        for line in lines:
+            line["discount_net"] = Decimal(0)
+            line["discount_gross"] = Decimal(0)
+        if reduction:
+            # Allocate to VAT groups first, preserving each group's exact net/gross
+            # reduction. Free lines never acquire discount or revenue.
+            groups = sorted(multipliers)
+            weights = [sum((line["gross"] for line in lines if line["multiplier"] == multiplier and line["gross"] > 0), Decimal(0)) for multiplier in groups]
+            for multiplier, group_reduction in zip(groups, self._allocate_decimal_money(reduction, weights)):
+                indexes = [index for index, line in enumerate(lines) if line["multiplier"] == multiplier and line["gross"] > 0]
+                group_weights = [lines[index]["gross"] for index in indexes]
+                gross_parts = self._allocate_decimal_money(group_reduction, group_weights)
+                net_parts = self._allocate_decimal_money(rounded(group_reduction / multiplier), group_weights)
+                for index, net_part, gross_part in zip(indexes, net_parts, gross_parts):
+                    lines[index]["discount_net"] = net_part
+                    lines[index]["discount_gross"] = gross_part
+                    lines[index]["net"] -= net_part
+                    lines[index]["gross"] -= gross_part
+                    if lines[index]["net"] < 0 or lines[index]["gross"] < 0:
+                        fail("discount_exceeds_merchandise_line")
+        return lines, method
+
     def flatten_order(self, order: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Flatten order data for CSV export - one row per order item"""
         flattened_rows = []
@@ -6417,6 +6653,12 @@ class BizniWebExporter:
         payment = self._price_element_info(order, "payment")
         shipping = self._price_element_info(order, "shipping")
         realized_revenue, realized_revenue_reason = self._realized_revenue_decision(order)
+        reconciled_lines = None
+        reconciliation_method = "not_enabled"
+        if self.project_settings.get("order_revenue_reconciliation_enabled") is True:
+            reconciliation_method = "not_financially_included"
+            if realized_revenue:
+                reconciled_lines, reconciliation_method = self._reconcile_order_item_revenue(order)
         
         # Get order currency
         order_currency = order_sum.get('currency', {}).get('code') if order_sum.get('currency') else 'EUR'
@@ -6446,6 +6688,7 @@ class BizniWebExporter:
             'status_name': status.get('name'),
             'realized_revenue': realized_revenue,
             'realized_revenue_reason': realized_revenue_reason,
+            'order_revenue_reconciliation': reconciliation_method,
             'payment_title': payment.get('title'),
             'payment_reference_id': payment.get('reference_id'),
             'shipping_title': shipping.get('title'),
@@ -6489,7 +6732,7 @@ class BizniWebExporter:
         
         if items:
             item_rows = []
-            for item in items:
+            for item_index, item in enumerate(items):
                 item_price = item.get('price', {}) or {}
                 item_sum = item.get('sum', {}) or {}
                 item_sum_with_tax = item.get('sum_with_tax', {}) or {}
@@ -6551,6 +6794,7 @@ class BizniWebExporter:
                     item_label,
                     import_code=item_import_code,
                 )
+                self._assert_zero_cost_service_identity(order.get("order_num"), product_sku, item_label)
 
                 # Optional exclusion for zero-priced gift lines (e.g. free promo gifts).
                 if (
@@ -6603,7 +6847,10 @@ class BizniWebExporter:
                     and normalized_product_sku in self.zero_revenue_gift_product_skus
                 )
                 authoritative_margin_applied = False
-                if is_zero_revenue_gift_exception:
+                if normalized_product_sku in self.zero_cost_service_product_skus:
+                    expense_per_item = 0.0
+                    expense_source = "zero_cost_service_override"
+                elif is_zero_revenue_gift_exception:
                     expense_per_item = 0.0
                     expense_source = (
                         "zero_revenue_gift_mapped_cost"
@@ -6646,6 +6893,17 @@ class BizniWebExporter:
                                 item_total_without_tax,
                                 item_quantity,
                             )
+                # Header discounts change revenue, not acquisition cost. Even a legacy
+                # margin-based cost estimate retains its pre-header-discount basis.
+                discount_net = 0.0
+                discount_gross = 0.0
+                if reconciled_lines is not None:
+                    reconciled = reconciled_lines[item_index]
+                    item_total_without_tax = self.convert_to_eur(float(reconciled["net"]), item_currency)
+                    item_total_with_tax = self.convert_to_eur(float(reconciled["gross"]), item_currency)
+                    discount_net = self.convert_to_eur(float(reconciled["discount_net"]), item_currency)
+                    discount_gross = self.convert_to_eur(float(reconciled["discount_gross"]), item_currency)
+                    item_tax_amount = item_total_with_tax - item_total_without_tax
                 total_expense = expense_per_item * item_quantity
                 reported_revenue = round(item_total_without_tax, 2)
                 reported_total_expense = round(total_expense, 2)
@@ -6689,6 +6947,8 @@ class BizniWebExporter:
                     'item_unit_price': item_price_value,  # In EUR
                     'item_line_sum_original': item_line_net_original,
                     'item_line_sum_with_tax_original': item_line_gross_original,
+                    'item_order_discount_without_tax': round(discount_net, 2),
+                    'item_order_discount_with_tax': round(discount_gross, 2),
                     'item_total_with_tax': round(item_total_with_tax, 2),  # In EUR
                     'item_total_without_tax': reported_revenue,  # In EUR
                     'item_tax_amount': round(item_tax_amount, 2),  # In EUR
@@ -6753,10 +7013,6 @@ class BizniWebExporter:
 
         # Safety dedup for long historical runs / cursor overlap edge cases.
         orders = self.deduplicate_orders(orders)
-        if period_switcher is None:
-            period_switcher = self._build_period_switcher_bundle(orders, date_from, date_to)
-        embedded_period_reports = self._build_embedded_period_reports(period_switcher)
-
         fixed_cost_reporting = dict((self.project_settings or {}).get("fixed_cost_reporting") or {})
         source_health: Dict[str, Any] = {
             "project": self.project_name,
@@ -6955,8 +7211,35 @@ class BizniWebExporter:
         
         # Flatten all orders
         all_rows = []
+        reconciliation_counts: Dict[str, int] = {}
         for order in orders:
-            all_rows.extend(self.flatten_order(order))
+            try:
+                order_rows = self.flatten_order(order)
+                all_rows.extend(order_rows)
+                if order_rows:
+                    method = order_rows[0].get("order_revenue_reconciliation", "not_enabled")
+                    reconciliation_counts[method] = reconciliation_counts.get(method, 0) + 1
+            except OrderRevenueReconciliationError as exc:
+                source_health.setdefault("qa", {})["order_revenue_reconciliation"] = {
+                    "key": "order_revenue_reconciliation",
+                    "label": "Source order revenue reconciliation",
+                    "status": "critical",
+                    "failure_count": 1,
+                    "failures": [{"order_num": exc.order_num, "reason": exc.reason}],
+                }
+                self._write_data_quality_file(self._finalize_source_health(source_health), date_from, date_to)
+                raise
+        if self.project_settings.get("order_revenue_reconciliation_enabled") is True:
+            source_health.setdefault("qa", {})["order_revenue_reconciliation"] = {
+                "key": "order_revenue_reconciliation",
+                "label": "Source order revenue reconciliation",
+                "status": "ok", "failure_count": 0,
+                "order_methods": reconciliation_counts,
+            }
+        # Validate this source before generating child periods or any report artifacts.
+        if period_switcher is None:
+            period_switcher = self._build_period_switcher_bundle(orders, date_from, date_to)
+        embedded_period_reports = self._build_embedded_period_reports(period_switcher)
         
         # Create filename
         filename = self.output_path(f"export_{date_from.strftime('%Y%m%d')}-{date_to.strftime('%Y%m%d')}.csv")

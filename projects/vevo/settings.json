@@ -42,6 +42,23 @@
   "expense_match_mode": "title_first",
   "expense_alias_fallback": true,
   "measured_country_ads_enabled": true,
+  "order_revenue_reconciliation_enabled": true,
+  "zero_cost_service_product_skus": [
+    "H-36CA74A7",
+    "H-858E1314",
+    "H-68760FE2",
+    "H-A5F3BBB3",
+    "H-26E19C97",
+    "H-50911D59"
+  ],
+  "zero_cost_service_labels": [
+    "Tringelt",
+    "Spropitné",
+    "Borravaló",
+    "Poistenie proti rozbitiu",
+    "Pojištění proti rozbití",
+    "Törés elleni biztosítás"
+  ],
   "product_name_aliases_file": "product_name_aliases.json",
   "production_board": {
     "enabled": true,
