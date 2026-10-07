@@ -2,6 +2,7 @@ import copy
 import json
 import unittest
 from unittest.mock import Mock, patch
+from botocore.exceptions import ClientError
 
 from scripts import vevo_report_image_release as release
 from scripts.vevo_report_image_host import report_arguments
@@ -39,6 +40,316 @@ def artifact_set(*, probe=False, end=DATE):
     entries = {key.removeprefix(prefix): {"key": key, "size": len(raw), "sha256": release.sha(raw)}
                for key, raw in blobs.items()}
     return {"project": "vevo", "artifacts": entries}, blobs, prefix
+
+
+def stopped_release_fixture():
+    old_id = "c" * 32
+    commit, gate = "d" * 40, "e" * 64
+    arn = f"arn:aws:ecs:{release.REGION}:{release.ACCOUNT}:task-definition/vevo-reporting-daily:44"
+    task_prefix = f"arn:aws:ecs:{release.REGION}:{release.ACCOUNT}:task/vevo-reporting-cluster/"
+    source = definition()
+    source["taskDefinitionArn"] = arn[:-2] + "42"
+    scheduled = {"Name": release.SERVICE, "State": "ENABLED", "Target": {
+        "Arn": release.CLUSTER, "EcsParameters": {"TaskDefinitionArn": source["taskDefinitionArn"], "LaunchType": "FARGATE"}}}
+    paused = copy.deepcopy(scheduled)
+    paused["State"] = "DISABLED"
+    paused["Target"]["EcsParameters"]["TaskDefinitionArn"] = arn
+    current = release.image_only_definition(source, IMAGE)
+    current.update(taskDefinitionArn=arn, status="ACTIVE")
+    identity = {"marker": "VEVO_REPORT_PROBE_HOST_OK", "release_id": old_id, "source_commit": commit,
+                "task_arn": task_prefix + "a" * 32, "task_definition": arn, "private_ip": "172.31.1.2",
+                "image_digest": IMAGE.rsplit("@", 1)[1], "instance_id": "N/A:Fargate", "service": release.SERVICE,
+                "path": "/app", "gate_sha256": gate}
+    tasks = []
+    for mode, letter in (("probe", "a"), ("live", "b")):
+        tasks.append({"taskArn": task_prefix + letter * 32, "clusterArn": release.CLUSTER, "taskDefinitionArn": arn,
+                      "startedBy": old_id, "launchType": "FARGATE", "lastStatus": "STOPPED", "desiredStatus": "STOPPED",
+                      "stoppedAt": "2026-10-07T13:00:00+00:00", "startedAt": "2026-10-07T12:00:00+00:00",
+                      "overrides": release.task_overrides(old_id, commit, IMAGE, gate, DATE, probe=mode == "probe"),
+                      "containers": [{"name": "reporting", "lastStatus": "STOPPED", "exitCode": 0 if mode == "probe" else 137,
+                                      "imageDigest": identity["image_digest"], "image": IMAGE,
+                                      "networkInterfaces": [{"privateIpv4Address": "172.31.1.2" if mode == "probe" else "172.31.1.3"}]}]})
+    complete = {**identity, "phase": "report-verified", "localhost_marker_sha256": release.sha(release.canonical(identity)),
+                "provider_writes": False, "email_sent": False, "live_outputs_changed": False,
+                "skip_invoices": True, "skip_inline_guard": True}
+    common = {"schema_version": 1, "release_id": old_id, "source_commit": commit, "report_to_date": DATE,
+              "at": "2026-10-07T13:01:00+00:00"}
+    refs = {mode: task["taskArn"] for mode, task in zip(("probe", "live"), tasks)}
+    records = [
+        {**common, "phase": "preflight-complete", "schedule": scheduled, "source_definition": source,
+         "image": IMAGE, "original_live_outputs": {"generation": {"ETag": "old"}}, "protected_schedules": {}},
+        {**common, "phase": "candidate-registered", "task_definition": arn},
+        {**common, "phase": "probe-complete", "terminal_task": tasks[0], "identity": identity, "complete": complete},
+        {**common, "phase": "live-dispatch-requested", "task_definition": arn, "overrides": tasks[1]["overrides"]},
+        {**common, "phase": "live-dispatched", "task_arn": tasks[1]["taskArn"]},
+        {**common, "phase": "live-failure-paused-review-required", "promoted": True, "rerun_attempted": True,
+         "known_schedule": paused, "known_task_arns": refs, "live_outputs": {"generation": {"ETag": "old"}}},
+    ]
+    return old_id, records, paused, current, tasks
+
+
+class PausedRecoveryTests(unittest.TestCase):
+    def fixture(self):
+        old_id, records, paused, current, tasks = stopped_release_fixture()
+        recovery = release.validate_recovery_receipts(records, old_id, paused, current)
+        recovery.update(previous_owner=old_id, archived_readback=None)
+        obj = object.__new__(release.ImageRelease)
+        obj.recovery, obj.original, obj.original_source = recovery, paused, current
+        obj.schedule = Mock(return_value=paused)
+        obj.definition = Mock(return_value=current)
+        obj.live_outputs = Mock(return_value=records[0]["original_live_outputs"])
+        obj.no_report_tasks = Mock()
+        obj.ecs, obj.iam, obj.s3 = Mock(), Mock(), Mock()
+        obj.ecs.describe_tasks.return_value = {"tasks": tasks, "failures": []}
+        obj.iam.get_role.side_effect = ClientError({"Error": {"Code": "NoSuchEntity"}}, "GetRole")
+        lock = {"schema_version": 1, "owner": old_id, "state": "uncertain", "generation": "f" * 32,
+                "updated_at": "2026-10-07T13:00:00+00:00", "expires_at": "2026-10-07T13:20:00+00:00"}
+        return obj, lock, records, tasks
+
+    def inspect_fixture(self, *, archived=False):
+        obj, lock, records, tasks = self.fixture()
+        obj.release_id, obj.recover_paused_release = "9" * 32, records[0]["release_id"]
+        obj.protected = {}
+        prefix = release.RELEASE_PREFIX + obj.recover_paused_release + "/"
+        blobs = {prefix + f"{index:04d}-{row['phase']}.json": release.canonical(row) for index, row in enumerate(records, 1)}
+        obj.recovery_receipt_sha256 = release.sha(blobs[sorted(blobs)[-1]])
+        obj.s3.list_objects_v2.return_value = {"Contents": [{"Key": key} for key in blobs]}
+        obj.recovery_readback_key = obj.recovery_readback_sha256 = None
+        archive = None
+        if archived:
+            obj.recovery_readback_key = "data/vevo/audit/stopped.json"
+            archive = {"release_id": obj.recover_paused_release, "source_commit": records[0]["source_commit"],
+                       "read_only": True, "preflight_sha256": release.sha(blobs[sorted(blobs)[0]]),
+                       "failed_receipt_sha256": obj.recovery_receipt_sha256,
+                       "schedule": obj.original, "live_outputs": records[0]["original_live_outputs"],
+                       "active_reporting_task_arns": [], "probe_role_absent": True, "candidate_image": IMAGE,
+                       "candidate_status": "ACTIVE", "lease": lock, "at": "2026-10-07T13:05:00+00:00",
+                       "owned_tasks": dict(zip(("probe", "live"), tasks))}
+            blobs[obj.recovery_readback_key] = release.canonical(archive)
+            obj.recovery_readback_sha256 = release.sha(blobs[obj.recovery_readback_key])
+        return obj, lock, blobs, archive
+
+    def test_inspection_binds_exact_failure_hash_and_explicit_archive(self):
+        obj, lock, blobs, _ = self.inspect_fixture(archived=True)
+        tasks = obj.ecs.describe_tasks.return_value["tasks"]
+        obj.ecs.describe_tasks.return_value = {"tasks": [], "failures": [{"arn": task["taskArn"], "reason": "MISSING"} for task in tasks]}
+        with patch.object(release, "read_private", side_effect=lambda s3, key, limit: blobs[key]), \
+             patch.object(release, "committed_gate_sha", return_value="e" * 64), \
+             patch.object(release.binding, "read_object", return_value=(lock, "etag")):
+            proof = obj.inspect_paused_recovery()
+        self.assertEqual(obj.recovery_receipt_sha256, proof["receipt_sha256"])
+        self.assertEqual(obj.recovery_readback_sha256, proof["readback_sha256"])
+        self.assertEqual(2, len(proof["archived_task_arns"]))
+        obj.s3.put_object.assert_not_called()
+
+    def test_bad_receipt_archive_hash_or_archive_identity_never_transfers_lease(self):
+        for change in ("receipt-hash", "archive-hash", "archive-owner", "archive-outputs", "archive-active", "truncated", "sequence"):
+            obj, lock, blobs, archive = self.inspect_fixture(archived=True)
+            if change == "receipt-hash":
+                obj.recovery_receipt_sha256 = "0" * 64
+            elif change == "archive-hash":
+                obj.recovery_readback_sha256 = "0" * 64
+            elif change == "truncated":
+                obj.s3.list_objects_v2.return_value["IsTruncated"] = True
+            elif change == "sequence":
+                obj.s3.list_objects_v2.return_value["Contents"].pop(1)
+            else:
+                if change == "archive-owner":
+                    archive["release_id"] = "8" * 32
+                elif change == "archive-outputs":
+                    archive["live_outputs"] = {"new": True}
+                else:
+                    archive["owned_tasks"]["live"]["lastStatus"] = "RUNNING"
+                blobs[obj.recovery_readback_key] = release.canonical(archive)
+                obj.recovery_readback_sha256 = release.sha(blobs[obj.recovery_readback_key])
+            with self.subTest(change=change), patch.object(release, "read_private", side_effect=lambda s3, key, limit: blobs[key]), \
+                 patch.object(release, "committed_gate_sha", return_value="e" * 64), \
+                 patch.object(release.binding, "read_object", return_value=(lock, "etag")), self.assertRaises(RuntimeError):
+                obj.inspect_paused_recovery()
+            obj.s3.put_object.assert_not_called()
+
+    def test_repeated_recovery_requires_prior_explicit_enable_after_success_intent(self):
+        old_id, records, paused, current, _ = stopped_release_fixture()
+        records[0]["schedule"]["State"] = "DISABLED"
+        with self.assertRaisesRegex(RuntimeError, "original-schedule"):
+            release.validate_recovery_receipts(records, old_id, paused, current)
+        records[0].update(final_schedule_state="ENABLED", recovered_from={"release_id": "8" * 32, "receipt_sha256": "f" * 64})
+        release.validate_recovery_receipts(records, old_id, paused, current)
+
+    def test_exact_stopped_chain_accepts_without_claiming_live_completion(self):
+        old_id, records, paused, current, tasks = stopped_release_fixture()
+        recovery = release.validate_recovery_receipts(records, old_id, paused, current)
+        self.assertEqual(tasks, release.validate_stopped_recovery_tasks(recovery, tasks))
+        self.assertNotIn("live-complete", [row["phase"] for row in records])
+
+    def test_receipt_identity_schedule_definition_and_publication_drift_reject(self):
+        for change in ("release", "source", "latest", "schedule", "definition", "published", "probe-marker", "live-command"):
+            old_id, records, paused, current, _ = stopped_release_fixture()
+            if change == "release":
+                records[2]["release_id"] = "9" * 32
+            elif change == "source":
+                records[2]["source_commit"] = "9" * 40
+            elif change == "latest":
+                records.append({**records[-1], "phase": "unreviewed-later-action"})
+            elif change == "schedule":
+                paused = copy.deepcopy(paused)
+                paused["State"] = "ENABLED"
+            elif change == "definition":
+                current["memory"] = "4096"
+            elif change == "published":
+                records[-1]["live_outputs"] = {"generation": {"ETag": "new"}}
+            elif change == "probe-marker":
+                records[2]["complete"]["localhost_marker_sha256"] = "0" * 64
+            else:
+                records[3]["overrides"] = {"containerOverrides": []}
+            with self.subTest(change=change), self.assertRaises(RuntimeError):
+                release.validate_recovery_receipts(records, old_id, paused, current)
+
+    def test_fresh_stopped_tasks_require_exact_owner_ip_digest_and_safe_command(self):
+        for change in ("active", "foreign", "ip", "digest", "command"):
+            old_id, records, paused, current, tasks = stopped_release_fixture()
+            recovery = release.validate_recovery_receipts(records, old_id, paused, current)
+            if change == "active":
+                tasks[1]["lastStatus"] = "RUNNING"
+            elif change == "foreign":
+                tasks[1]["startedBy"] = "9" * 32
+            elif change == "ip":
+                tasks[0]["containers"][0]["networkInterfaces"] = [{"privateIpv4Address": "172.31.1.9"}]
+            elif change == "digest":
+                tasks[1]["containers"][0]["imageDigest"] = "sha256:" + "9" * 64
+            else:
+                tasks[1]["overrides"]["containerOverrides"][0]["command"] = ["python", "invoice_runner.py"]
+            with self.subTest(change=change), self.assertRaises(RuntimeError):
+                release.validate_stopped_recovery_tasks(recovery, tasks)
+
+    def test_current_boundary_is_fresh_and_read_only(self):
+        obj, lock, _, _ = self.fixture()
+        with patch.object(release.binding, "read_object", return_value=(lock, "etag")):
+            obj.verify_paused_boundary()
+        self.assertEqual("etag", obj.recovery["lease_etag"])
+        obj.no_report_tasks.assert_called_once()
+        obj.ecs.run_task.assert_not_called()
+        obj.s3.put_object.assert_not_called()
+
+    def test_current_output_foreign_lease_role_or_running_task_blocks_recovery(self):
+        for change in ("outputs", "lease-owner", "lease-state", "lease-etag", "role", "running"):
+            obj, lock, _, _ = self.fixture()
+            if change == "outputs":
+                obj.live_outputs.return_value = {"new": True}
+            elif change == "lease-owner":
+                lock["owner"] = "9" * 32
+            elif change == "lease-state":
+                lock["state"] = "active"
+            elif change == "lease-etag":
+                obj.recovery["lease_etag"] = "older-etag"
+            elif change == "role":
+                obj.iam.get_role.side_effect = None
+            else:
+                obj.no_report_tasks.side_effect = RuntimeError("image-release-report-already-running")
+            with self.subTest(change=change), patch.object(release.binding, "read_object", return_value=(lock, "etag")), self.assertRaises(RuntimeError):
+                obj.verify_paused_boundary()
+            obj.s3.put_object.assert_not_called()
+
+    def test_expired_tasks_need_explicit_archive_and_other_failures_never_fallback(self):
+        for reason, archived, succeeds in (("MISSING", False, False), ("MISSING", True, True), ("AccessDenied", True, False)):
+            obj, lock, _, tasks = self.fixture()
+            obj.ecs.describe_tasks.return_value = {"tasks": [], "failures": [{"arn": task["taskArn"], "reason": reason} for task in tasks]}
+            if archived:
+                obj.recovery["archived_readback"] = {"owned_tasks": dict(zip(("probe", "live"), tasks))}
+            with self.subTest(reason=reason, archived=archived), patch.object(release.binding, "read_object", return_value=(lock, "etag")):
+                if succeeds:
+                    obj.verify_paused_boundary()
+                    self.assertEqual(sorted(task["taskArn"] for task in tasks), obj.recovery["archived_task_arns"])
+                else:
+                    with self.assertRaises(RuntimeError):
+                        obj.verify_paused_boundary()
+
+    def test_lease_handoff_is_compare_and_swap_without_release(self):
+        _, lock, _, _ = self.fixture()
+        lease = Mock(owner="9" * 32)
+        with patch.object(release.binding, "read_object", return_value=(lock, "etag")):
+            release.transfer_recovery_lease(lease, lock["owner"], "etag")
+        lease._write.assert_called_once_with("active", "etag")
+        lease.release.assert_not_called()
+        lease.s3.delete_object.assert_not_called()
+
+    def test_foreign_lease_or_cas_race_is_not_retried(self):
+        _, lock, _, _ = self.fixture()
+        lease = Mock(owner="9" * 32)
+        with patch.object(release.binding, "read_object", return_value=(lock, "newer-etag")), self.assertRaisesRegex(RuntimeError, "lease-drift"):
+            release.transfer_recovery_lease(lease, lock["owner"], "etag")
+        lease._write.assert_not_called()
+        lease._write.side_effect = RuntimeError("conditional-write-failed")
+        with patch.object(release.binding, "read_object", return_value=(lock, "etag")), self.assertRaisesRegex(RuntimeError, "conditional-write-failed"):
+            release.transfer_recovery_lease(lease, lock["owner"], "etag")
+        lease._write.assert_called_once()
+
+    def test_handoff_commit_with_lost_write_and_read_response_retains_owned_uncertain(self):
+        for recovery_read_fails in (False, True):
+            obj, old_lock, _, _ = self.fixture()
+            obj.release_id = "9" * 32
+            obj.recovery["lease_etag"] = "old-etag"
+            obj.recovery_receipt_sha256 = "e" * 64
+            obj.lease = release.binding.MigrationLease(obj.s3, owner=obj.release_id)
+            obj.lease_owned = False
+            obj.verify_paused_boundary = Mock()
+            obj.all_schedules = Mock(return_value={release.SERVICE: obj.original})
+            obj.protected, obj.event = {}, Mock()
+            state = {"value": old_lock, "etag": "old-etag", "reads_after_commit": 0}
+            writes = []
+
+            def write(s3, key, value, *, etag):
+                self.assertEqual(state["etag"], etag)
+                writes.append(value["state"])
+                state.update(value=value, etag="committed-" + value["state"])
+                if value["state"] == "active":
+                    raise OSError("lost-write-response")
+                return state["etag"]
+
+            def read(s3, key, **kwargs):
+                if writes:
+                    state["reads_after_commit"] += 1
+                    if state["reads_after_commit"] == 1 or recovery_read_fails:
+                        raise OSError("read-unavailable")
+                return state["value"], state["etag"]
+
+            with self.subTest(recovery_read_fails=recovery_read_fails), \
+                 patch.object(release.binding, "read_object", side_effect=read), \
+                 patch.object(release.binding, "write_object", side_effect=write), self.assertRaises(OSError):
+                obj.acquire_release_lease()
+            self.assertEqual(["active"] if recovery_read_fails else ["active", "uncertain"], writes)
+            self.assertEqual("ownership-unconfirmed" if recovery_read_fails else "owned-uncertain",
+                             obj.event.call_args.kwargs["lease_outcome"])
+            self.assertFalse(obj.lease_owned)
+            obj.ecs.run_task.assert_not_called()
+
+    def test_failed_handoff_never_changes_foreign_generation(self):
+        obj, old_lock, _, _ = self.fixture()
+        obj.release_id = "9" * 32
+        obj.recovery["lease_etag"] = "old-etag"
+        obj.recovery_receipt_sha256 = "e" * 64
+        obj.lease = release.binding.MigrationLease(obj.s3, owner=obj.release_id)
+        obj.verify_paused_boundary = Mock()
+        obj.all_schedules = Mock(return_value={release.SERVICE: obj.original})
+        obj.protected, obj.event = {}, Mock()
+        foreign = {**old_lock, "owner": "8" * 32, "state": "active", "generation": "7" * 32}
+        with patch.object(release.binding, "read_object", side_effect=[(old_lock, "old-etag"), (foreign, "foreign-etag"), (foreign, "foreign-etag")]), \
+             patch.object(release.binding, "write_object", side_effect=RuntimeError("cas-race")) as write, self.assertRaisesRegex(RuntimeError, "cas-race"):
+            obj.acquire_release_lease()
+        write.assert_called_once()
+        self.assertEqual("not-owned-no-write", obj.event.call_args.kwargs["lease_outcome"])
+        obj.ecs.run_task.assert_not_called()
+
+    def test_paused_pre_live_failure_restores_disabled_and_returns_uncertain_owner(self):
+        obj = ImageReleaseTests().failure_object()
+        obj.original["State"] = "DISABLED"
+        obj.recovery = {"previous_owner": "c" * 32}
+        obj.restore_paused_recovery_lease = Mock()
+        obj.recover_failure()
+        obj.update.assert_called_once_with(obj.original)
+        self.assertEqual("DISABLED", obj.update.call_args.args[0]["State"])
+        obj.restore_paused_recovery_lease.assert_called_once()
+        obj.lease.release.assert_not_called()
 
 
 class ImageReleaseTests(unittest.TestCase):

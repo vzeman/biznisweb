@@ -79,14 +79,16 @@ def read_raw(s3, **kwargs):
 
 def source_order(number="test-order"):
     money = {"value": 20.0, "is_net_price": True, "currency": {"code": "EUR"}}
+    net_total = {**copy.deepcopy(money), "raw_value": 20.0}
+    gross_total = {**copy.deepcopy(money), "value": 24.60, "raw_value": 24.60, "is_net_price": False}
     return {
         "order_num": number, "status": {"id": 1, "name": "Paid"},
         "price_elements": [],
         "items": [{"item_label": "Synthetic", "ean": "test-ean", "import_code": None,
                    "warehouse_number": None, "quantity": 1, "tax_rate": 23,
-                   "price": copy.deepcopy(money), "sum": copy.deepcopy(money),
-                   "sum_with_tax": copy.deepcopy(money)}],
-        "sum": copy.deepcopy(money),
+                   "price": copy.deepcopy(money), "sum": net_total,
+                   "sum_with_tax": copy.deepcopy(gross_total)}],
+        "sum": gross_total,
     }
 
 
