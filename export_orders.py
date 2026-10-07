@@ -6845,12 +6845,18 @@ class BizniWebExporter:
                     amounts = {source_rounded(value), source_rounded(value * goods_gross / goods_net)}
                     for amount in amounts:
                         if percent is not None:
-                            expected_goods = source_rounded(remaining_goods * percent)
-                            if abs(amount - expected_goods) <= tolerance:
-                                next_states.add((total_reduction + amount, goods_reduction + amount))
-                            expected_cart = source_rounded((remaining_goods + remaining_services) * percent)
-                            if remaining_services and abs(amount - expected_cart) <= tolerance:
-                                next_states.add((total_reduction + amount, goods_reduction + expected_goods))
+                            # The provider has emitted both compounded discounts and
+                            # separate percentages of the original basket. Each model
+                            # must match this explicit amount and the final source total;
+                            # distinct merchandise allocations still fail below.
+                            bases = {(remaining_goods, remaining_services), (goods_gross, service_gross)}
+                            for base_goods, base_services in bases:
+                                expected_goods = source_rounded(base_goods * percent)
+                                if abs(amount - expected_goods) <= tolerance:
+                                    next_states.add((total_reduction + amount, goods_reduction + amount))
+                                expected_cart = source_rounded((base_goods + base_services) * percent)
+                                if base_services and abs(amount - expected_cart) <= tolerance:
+                                    next_states.add((total_reduction + amount, goods_reduction + expected_goods))
                         elif not remaining_services:
                             # Without an explicit percentage/scope, a discount on a basket
                             # containing paid services cannot be safely assigned to goods.

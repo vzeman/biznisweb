@@ -1,5 +1,15 @@
 # VEVO reporting project state
 
+## 2026-10-07 — Complete-history discount reconciliation verified
+
+The final VEVO primary-source audit now completes without unexplained monetary failures. The additionally evidenced stacked-percentage case supports original or remaining goods/cart bases only when each explicit source amount and the final total prove a unique merchandise allocation. No tolerance, cost rule or source eligibility was weakened. Seven synthetic regressions cover both percentage models, mixed VAT/free lines and ambiguity rejection. All 1,387 tests in the 77-module union, reporting smoke, critical Ruff and independent code review pass. The collector exited normally; confidential source/financial contracts are being hash-bound and archived before dispatch. PR #608 receives this final correction; merge only after refreshed CI and both final source contracts pass. Reporting production has not changed yet.
+
+
+## 2026-10-07 — Full-history discount edge case found before deployment
+
+The complete VEVO source scan exposed one historical order with two explicit percentage discounts calculated from the original merchandise base. The current sequential-only model rejects it despite an exact source grand-total reconciliation. Production dispatch remains blocked. Extend only the evidenced original/remaining-base candidates, retaining explicit source amounts, existing tolerance, grand-total checks and a unique merchandise allocation; add regressions for sequential, original-base and ambiguous cases, then repeat the full primary-source audits and CI. No runtime mutation has occurred. The existing reviewed changes remain in PR #608.
+
+
 ## Implementation checkpoint: reviewed and ready for CI
 
 Date: 2026-10-07

@@ -1,5 +1,10 @@
 # ROY reporting project state
 
+## Final shared implementation check
+
+The complete VEVO history exposed an additional proven original-base percentage-discount chain. The shared reconciliation now accepts it only with unique source-total proof; existing tolerance, product costs and country allocation remain unchanged. All 1,387 tests and smoke/critical lint pass. Repeat the ROY private financial contract hash chain against this final code before merging PR #608; reporting runtime remains unchanged.
+
+
 ## Implementation checkpoint: reviewed and ready for CI
 
 Date: 2026-10-07
