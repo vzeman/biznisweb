@@ -127,10 +127,127 @@ def verify_artifacts(manifest, fetch, *, prefix, to_date, probe):
                     "image-release-payload-end-date")
 
 
+def validate_recovery_receipts(records, release_id, current_schedule, current_definition):
+    """Bind an explicitly reviewed stopped release to this exact paused target."""
+    by_phase = {}
+    for record in records:
+        require(record.get("release_id") == release_id and record.get("schema_version") == 1,
+                "image-release-recovery-receipt-identity")
+        phase = record.get("phase")
+        require(isinstance(phase, str) and phase not in by_phase, "image-release-recovery-receipt-duplicate")
+        by_phase[phase] = record
+    phases = ("preflight-complete", "candidate-registered", "probe-complete", "live-dispatch-requested",
+              "live-dispatched", "live-failure-paused-review-required")
+    require(all(phase in by_phase for phase in phases), "image-release-recovery-chain-incomplete")
+    before, failed = by_phase[phases[0]], by_phase[phases[-1]]
+    require(records[0] is before and records[-1] is failed and failed.get("promoted") is True and failed.get("rerun_attempted") is True
+            and all(record.get("source_commit") == before.get("source_commit")
+                    and record.get("report_to_date") == before.get("report_to_date") for record in records),
+            "image-release-recovery-chain-invalid")
+    require(re.fullmatch(r"[a-f0-9]{40}", before.get("source_commit", "")), "image-release-recovery-source-invalid")
+    date.fromisoformat(before["report_to_date"])
+    candidate_arn = by_phase["candidate-registered"]["task_definition"]
+    require(re.fullmatch(rf"arn:aws:ecs:{REGION}:{ACCOUNT}:task-definition/vevo-reporting-daily:[1-9][0-9]*", candidate_arn),
+            "image-release-recovery-definition-identity")
+    expected = binding.schedule_snapshot(before["schedule"])
+    require(expected.get("Name") == SERVICE and expected.get("State") in {"ENABLED", "DISABLED"}
+            and before.get("final_schedule_state", expected["State"]) == "ENABLED"
+            and (expected["State"] == "ENABLED" or (isinstance(before.get("recovered_from"), dict)
+                 and re.fullmatch(r"[a-f0-9]{32}", before["recovered_from"].get("release_id", ""))
+                 and re.fullmatch(r"[a-f0-9]{64}", before["recovered_from"].get("receipt_sha256", ""))))
+            and expected["Target"]["Arn"] == CLUSTER, "image-release-recovery-original-schedule")
+    expected["State"] = "DISABLED"
+    expected["Target"]["EcsParameters"]["TaskDefinitionArn"] = candidate_arn
+    require(binding.schedule_snapshot(failed["known_schedule"]) == expected
+            and binding.schedule_snapshot(current_schedule) == expected, "image-release-recovery-schedule-drift")
+    candidate = image_only_definition(before["source_definition"], before["image"])
+    candidate["taskDefinitionArn"] = candidate_arn
+    require(current_definition.get("status") == "ACTIVE"
+            and binding.definition_snapshot(current_definition) == binding.definition_snapshot(candidate),
+            "image-release-recovery-definition-drift")
+    tasks = failed.get("known_task_arns", {})
+    probe = by_phase["probe-complete"]
+    require(set(tasks) == {"probe", "live"} and len(set(tasks.values())) == 2
+            and tasks["probe"] == probe["terminal_task"]["taskArn"]
+            and tasks["live"] == by_phase["live-dispatched"]["task_arn"]
+            and by_phase["live-dispatch-requested"]["task_definition"] == candidate_arn,
+            "image-release-recovery-task-chain")
+    identity, complete = probe["identity"], probe["complete"]
+    require(identity.get("marker") == "VEVO_REPORT_PROBE_HOST_OK"
+            and identity.get("task_arn") == tasks["probe"] and identity.get("task_definition") == candidate_arn
+            and identity.get("release_id") == release_id and identity.get("source_commit") == before["source_commit"]
+            and identity.get("image_digest") == before["image"].rsplit("@", 1)[1]
+            and identity.get("instance_id") == "N/A:Fargate" and identity.get("service") == SERVICE
+            and identity.get("path") == "/app" and re.fullmatch(r"[a-f0-9]{64}", identity.get("gate_sha256", ""))
+            and complete.get("phase") == "report-verified"
+            and all(complete.get(key) == value for key, value in identity.items())
+            and complete.get("localhost_marker_sha256") == sha(canonical(identity))
+            and all(complete.get(key) is False for key in ("provider_writes", "email_sent", "live_outputs_changed"))
+            and all(complete.get(key) is True for key in ("skip_invoices", "skip_inline_guard")),
+            "image-release-recovery-probe-proof")
+    expected_live = task_overrides(release_id, before["source_commit"], before["image"],
+                                  identity["gate_sha256"], before["report_to_date"], probe=False)
+    require(by_phase["live-dispatch-requested"]["overrides"] == expected_live,
+            "image-release-recovery-live-command")
+    require(failed["live_outputs"] == before["original_live_outputs"], "image-release-recovery-already-published")
+    return {"before": before, "failed": failed, "probe": probe, "tasks": tasks,
+            "candidate_arn": candidate_arn, "identity": identity}
+
+
+def validate_stopped_recovery_tasks(recovery, tasks, *, archived_arns=frozenset()):
+    """Fresh ECS identities; a stopped live task is never a publication proof."""
+    before, identity = recovery["before"], recovery["identity"]
+    by_arn = {task["taskArn"]: task for task in tasks}
+    require(set(archived_arns).issubset(by_arn), "image-release-recovery-archive-scope")
+    require(len(tasks) == 2 and set(by_arn) == set(recovery["tasks"].values()),
+            "image-release-recovery-tasks-missing")
+    for mode, arn in recovery["tasks"].items():
+        task = by_arn[arn]
+        containers = task.get("containers", [])
+        require((arn in archived_arns or (task.get("clusterArn") == CLUSTER and task.get("launchType") == "FARGATE"))
+                and task.get("taskDefinitionArn") == recovery["candidate_arn"]
+                and task.get("startedBy") == before["release_id"]
+                and task.get("lastStatus") == task.get("desiredStatus") == "STOPPED" and task.get("stoppedAt")
+                and len(containers) == 1 and containers[0].get("name") == "reporting"
+                and containers[0].get("lastStatus") == "STOPPED" and type(containers[0].get("exitCode")) is int
+                and containers[0].get("imageDigest") == identity["image_digest"]
+                and containers[0].get("image") == before["image"]
+                and binding.stamp(binding.normalized(task["stoppedAt"])) >= binding.stamp(binding.normalized(task["startedAt"])),
+                "image-release-recovery-task-not-owned-stopped")
+        ips = [row.get("privateIpv4Address") for row in containers[0].get("networkInterfaces", [])]
+        require(len(ips) == 1 and re.fullmatch(r"(?:[0-9]{1,3}\.){3}[0-9]{1,3}", ips[0] or ""),
+                "image-release-recovery-task-ip")
+        if mode == "probe":
+            require(containers[0]["exitCode"] == 0 and ips == [identity["private_ip"]],
+                    "image-release-recovery-probe-terminal-drift")
+        expected = task_overrides(before["release_id"], before["source_commit"], before["image"],
+                                  identity["gate_sha256"], before["report_to_date"], probe=mode == "probe")
+        actual = copy.deepcopy(task.get("overrides", {}))
+        for row in actual.get("containerOverrides", []):
+            env = binding.unique_environment(row.get("environment", []))
+            row["environment"] = [{"name": key, "value": value} for key, value in sorted(env.items())]
+        require(actual.get("containerOverrides") == expected["containerOverrides"]
+                and (actual.get("taskRoleArn") == expected["taskRoleArn"] if mode == "probe"
+                     else actual.get("taskRoleArn") in (None, before["source_definition"]["taskRoleArn"])),
+                "image-release-recovery-task-command-drift")
+    return binding.normalized(tasks)
+
+
+def transfer_recovery_lease(lease, previous_owner, expected_etag):
+    """Conditional ownership transfer: no released interval or blind deletion."""
+    value, etag = binding.read_object(lease.s3, binding.LOCK_KEY)
+    binding.validate_lock(value)
+    require(value["owner"] == previous_owner and value["state"] == "uncertain"
+            and etag == expected_etag and lease.owner != previous_owner,
+            "image-release-recovery-lease-drift")
+    lease._write("active", etag)
+
+
 class ImageRelease(Deployment):
     """Reuse only independently safe IAM/task helpers; no old binding/pin path."""
 
-    def __init__(self, session, commit, to_date, timeout, *, release_id=None):
+    def __init__(self, session, commit, to_date, timeout, *, release_id=None, recover_paused_release=None,
+                 recovery_receipt_sha256=None, recovery_readback_key=None, recovery_readback_sha256=None):
         super().__init__(session, commit, "", "")
         if release_id is not None:
             self.release_id = release_id
@@ -145,6 +262,10 @@ class ImageRelease(Deployment):
         self.task_records = {}
         self.candidate = None
         self.role_trust = None
+        self.recover_paused_release = recover_paused_release
+        self.recovery_receipt_sha256 = recovery_receipt_sha256
+        self.recovery_readback_key, self.recovery_readback_sha256 = recovery_readback_key, recovery_readback_sha256
+        self.recovery = None
 
     def event(self, phase, **details):
         self.sequence += 1
@@ -329,6 +450,160 @@ class ImageRelease(Deployment):
         self.event("live-complete", identity=marker, terminal_task=task, generation_manifest=manifest,
                    generation_manifest_sha256=sha(raw), email_sent=False, financial_runners_skipped=True)
 
+    def inspect_paused_recovery(self):
+        """Read historical identity proof, then verify every current safety boundary."""
+        previous_id = self.recover_paused_release
+        require(re.fullmatch(r"[a-f0-9]{32}", previous_id or "") and previous_id != self.release_id
+                and re.fullmatch(r"[a-f0-9]{64}", self.recovery_receipt_sha256 or ""),
+                "image-release-recovery-arguments")
+        prefix = RELEASE_PREFIX + previous_id + "/"
+        page = self.s3.list_objects_v2(Bucket=BUCKET, Prefix=prefix, MaxKeys=65, ExpectedBucketOwner=ACCOUNT)
+        keys = sorted(row["Key"] for row in page.get("Contents", []))
+        require(not page.get("IsTruncated") and 1 <= len(keys) <= 64
+                and all(re.fullmatch(re.escape(prefix) + r"[0-9]{4}-[a-z-]+\.json", key) for key in keys),
+                "image-release-recovery-receipts-incomplete")
+        raw_records = [read_private(self.s3, key, 1024 * 1024) for key in keys]
+        require(sha(raw_records[-1]) == self.recovery_receipt_sha256, "image-release-recovery-receipt-hash")
+        records = [json.loads(raw) for raw in raw_records]
+        require(all(key == prefix + f"{index:04d}-{record.get('phase')}.json"
+                    for index, (key, record) in enumerate(zip(keys, records), 1)),
+                "image-release-recovery-receipt-sequence")
+        recovery = validate_recovery_receipts(records, previous_id, self.original, self.original_source)
+        recovery.update(receipt_key=keys[-1], receipt_sha256=sha(raw_records[-1]),
+                        preflight_sha256=sha(raw_records[0]), previous_owner=previous_id)
+        require(recovery["identity"]["gate_sha256"] == committed_gate_sha(recovery["before"]["source_commit"]),
+                "image-release-recovery-gate-source")
+        archived = None
+        require(bool(self.recovery_readback_key) == bool(self.recovery_readback_sha256),
+                "image-release-recovery-readback-arguments")
+        if self.recovery_readback_key:
+            key = self.recovery_readback_key
+            require(key.startswith("data/vevo/") and ".." not in key and key.endswith(".json")
+                    and re.fullmatch(r"[a-f0-9]{64}", self.recovery_readback_sha256 or ""),
+                    "image-release-recovery-readback-scope")
+            raw = read_private(self.s3, key, 256 * 1024)
+            require(sha(raw) == self.recovery_readback_sha256, "image-release-recovery-readback-hash")
+            archived = json.loads(raw)
+            require(archived.get("release_id") == previous_id and archived.get("source_commit") == recovery["before"]["source_commit"]
+                    and archived.get("read_only") is True and archived.get("preflight_sha256") == recovery["preflight_sha256"]
+                    and archived.get("failed_receipt_sha256") == recovery["receipt_sha256"]
+                    and archived.get("schedule") == binding.schedule_snapshot(self.original)
+                    and archived.get("live_outputs") == recovery["before"]["original_live_outputs"]
+                    and archived.get("active_reporting_task_arns") == [] and archived.get("probe_role_absent") is True
+                    and archived.get("candidate_image") == recovery["before"]["image"]
+                    and archived.get("candidate_status") == "ACTIVE"
+                    and archived.get("lease", {}).get("state") == "uncertain"
+                    and archived["lease"].get("owner") == previous_id
+                    and binding.stamp(archived["at"]) >= binding.stamp(recovery["failed"]["at"]),
+                    "image-release-recovery-readback-identity")
+            require(set(archived.get("owned_tasks", {})) == {"probe", "live"}
+                    and all(task.get("taskArn") == recovery["tasks"][mode]
+                            and binding.stamp(task["stoppedAt"]) <= binding.stamp(archived["at"])
+                            for mode, task in archived["owned_tasks"].items()),
+                    "image-release-recovery-readback-tasks")
+            validate_stopped_recovery_tasks(recovery, list(archived["owned_tasks"].values()),
+                                            archived_arns=frozenset(recovery["tasks"].values()))
+        recovery["archived_readback"] = archived
+        self.recovery = recovery
+        self.verify_paused_boundary()
+        return {"release_id": previous_id, "receipt_key": recovery["receipt_key"],
+                "receipt_sha256": recovery["receipt_sha256"], "preflight_sha256": recovery["preflight_sha256"],
+                "readback_key": self.recovery_readback_key, "readback_sha256": self.recovery_readback_sha256,
+                "lease_etag": recovery["lease_etag"], "terminal_tasks": recovery["terminal_tasks"],
+                "archived_task_arns": recovery["archived_task_arns"],
+                "protected_changes_since_stopped_release": {
+                    name: {"before": recovery["before"]["protected_schedules"].get(name), "now": self.protected.get(name)}
+                    for name in sorted(set(self.protected) | set(recovery["before"]["protected_schedules"]))
+                    if self.protected.get(name) != recovery["before"]["protected_schedules"].get(name)}}
+
+    def verify_paused_boundary(self):
+        recovery = self.recovery
+        require(binding.schedule_snapshot(self.schedule()) == binding.schedule_snapshot(self.original),
+                "image-release-recovery-schedule-drift")
+        require(binding.definition_snapshot(self.definition(recovery["candidate_arn"])) ==
+                binding.definition_snapshot(self.original_source), "image-release-recovery-definition-drift")
+        require(self.live_outputs() == recovery["before"]["original_live_outputs"],
+                "image-release-recovery-live-output-drift")
+        self.no_report_tasks()
+        observed = self.ecs.describe_tasks(cluster=CLUSTER, tasks=list(recovery["tasks"].values()))
+        missing = {row.get("arn") for row in observed.get("failures", []) if row.get("reason") == "MISSING"}
+        require(len(missing) == len(observed.get("failures", [])) and missing.issubset(recovery["tasks"].values()),
+                "image-release-recovery-task-read-failed")
+        tasks = observed.get("tasks", [])
+        archive = recovery["archived_readback"]
+        require(not missing or archive is not None, "image-release-recovery-tasks-expired-require-readback")
+        if archive:
+            archived_by_arn = {task["taskArn"]: task for task in archive["owned_tasks"].values()}
+            for task in tasks:
+                previous = archived_by_arn.get(task["taskArn"], {})
+                require(all(binding.normalized(task.get(key)) == previous.get(key) for key in
+                            ("taskDefinitionArn", "startedBy", "stoppedAt", "lastStatus", "desiredStatus"))
+                        and [{key: row.get(key) for key in previous["containers"][0]} for row in task.get("containers", [])]
+                            == previous.get("containers"), "image-release-recovery-archived-task-drift")
+            tasks += [archived_by_arn[arn] for arn in sorted(missing)]
+        recovery["terminal_tasks"] = validate_stopped_recovery_tasks(recovery, tasks, archived_arns=missing)
+        recovery["archived_task_arns"] = sorted(missing)
+        try:
+            self.iam.get_role(RoleName="VevoReportProbe-" + recovery["previous_owner"])
+        except Exception as exc:
+            require(binding.error_code(exc) == "NoSuchEntity", "image-release-recovery-role-read-failed")
+        else:
+            raise RuntimeError("image-release-recovery-probe-role-present")
+        value, etag = binding.read_object(self.s3, binding.LOCK_KEY)
+        binding.validate_lock(value)
+        require(value["state"] == "uncertain" and value["owner"] == recovery["previous_owner"]
+                and etag == recovery.get("lease_etag", etag), "image-release-recovery-lease-drift")
+        recovery["lease_etag"] = etag
+
+    def acquire_release_lease(self):
+        if self.recovery is None:
+            self.lease.acquire()
+        else:
+            self.verify_paused_boundary()
+            require({key: value for key, value in self.all_schedules().items() if key != SERVICE} == self.protected,
+                    "image-release-other-schedule-drift")
+            self.event("paused-recovery-handoff-requested", previous_owner=self.recovery["previous_owner"],
+                       previous_lease_etag=self.recovery["lease_etag"], recovery_receipt_sha256=self.recovery_receipt_sha256)
+            try:
+                transfer_recovery_lease(self.lease, self.recovery["previous_owner"], self.recovery["lease_etag"])
+            except BaseException:
+                self.inspect_failed_lease_handoff()
+                raise
+        self.lease_owned = True
+
+    def inspect_failed_lease_handoff(self):
+        """One recovery read; never replay an uncertain ownership transfer."""
+        outcome = "ownership-unconfirmed"
+        try:
+            value, etag = binding.read_object(self.s3, binding.LOCK_KEY)
+            binding.validate_lock(value)
+            owned = (value["owner"] == self.lease.owner and value["state"] == "active"
+                     and (value == self.lease.pending_value or (self.lease.etag is not None and etag == self.lease.etag)))
+            if owned:
+                self.lease.etag, self.lease.pending_value = etag, None
+                self.event("paused-recovery-handoff-uncertain-requested", confirmed_owner=self.lease.owner,
+                           confirmed_lease_etag=etag)
+                self.lease._write("uncertain", etag)
+                outcome = "owned-uncertain"
+            else:
+                outcome = "not-owned-no-write"
+        except BaseException:
+            # An unavailable readback proves neither ownership nor permission to
+            # overwrite. Any committed active/uncertain lease still excludes work.
+            pass
+        try:
+            self.event("paused-recovery-handoff-failed-inspection-required", lease_outcome=outcome)
+        except BaseException:
+            print(json.dumps({"release_id": self.release_id, "phase": "paused-recovery-handoff-failed-inspection-required",
+                              "lease_outcome": outcome, "receipt_write_failed": True}), flush=True)
+
+    def restore_paused_recovery_lease(self):
+        binding.check_migration(self.s3, lease=self.lease)
+        previous = binding.MigrationLease(self.s3, owner=self.recovery["previous_owner"])
+        self.event("paused-recovery-lease-return-requested", previous_owner=previous.owner)
+        previous._write("uncertain", self.lease.etag)
+        self.lease_owned = False
+
     def run(self):
         exact_source(self.commit)
         require(self.session.client("sts").get_caller_identity()["Account"] == ACCOUNT, "image-release-account-invalid")
@@ -336,7 +611,8 @@ class ImageRelease(Deployment):
         self.image, self.build_id = self.exact_image()
         self.original = self.schedule()
         self.known_schedule = copy.deepcopy(self.original)
-        require(self.original["State"] == "ENABLED" and self.original["Target"]["Arn"] == CLUSTER
+        require(self.original["State"] == ("DISABLED" if self.recover_paused_release else "ENABLED")
+                and self.original["Target"]["Arn"] == CLUSTER
                 and self.original["Target"]["EcsParameters"].get("LaunchType") == "FARGATE", "image-release-schedule-identity")
         self.original_source = self.definition(self.original["Target"]["EcsParameters"]["TaskDefinitionArn"])
         candidate = image_only_definition(self.original_source, self.image)
@@ -357,11 +633,11 @@ class ImageRelease(Deployment):
         self.original_generation = json.loads(read_private(self.s3, "daily-reports/vevo/latest/generation.json"))["generation_id"]
         self.gate_sha = committed_gate_sha(self.commit)
         self.no_report_tasks()
+        recovery_proof = self.inspect_paused_recovery() if self.recover_paused_release else None
         self.event("preflight-complete", schedule=self.original, source_definition=self.original_source,
                    protected_schedules=self.protected, build_run_id=self.build_id, image=self.image,
-                   original_live_outputs=self.original_outputs)
-        self.lease.acquire()
-        self.lease_owned = True
+                   original_live_outputs=self.original_outputs, final_schedule_state="ENABLED", recovered_from=recovery_proof)
+        self.acquire_release_lease()
         try:
             paused = copy.deepcopy(self.original)
             paused["State"] = "DISABLED"
@@ -396,7 +672,7 @@ class ImageRelease(Deployment):
             self.start_task("live")
             self.wait_live()
             final = copy.deepcopy(promoted)
-            final["State"] = self.original["State"]
+            final["State"] = "ENABLED"
             self.update_owned_schedule(final, "report-enable")
             self.checkpoint()
             self.lease.release()
@@ -436,9 +712,13 @@ class ImageRelease(Deployment):
                         "image-release-candidate-still-scheduled")
                 self.ecs.deregister_task_definition(taskDefinition=self.candidate["taskDefinitionArn"])
                 require(self.definition(self.candidate["taskDefinitionArn"])["status"] == "INACTIVE", "image-release-candidate-cleanup")
-            self.lease.release()
-            self.lease_owned = False
-            self.event("failed-before-live-restored", schedule=self.original, all_owned_tasks_stopped=True)
+            if getattr(self, "recovery", None) is not None:
+                self.restore_paused_recovery_lease()
+            else:
+                self.lease.release()
+                self.lease_owned = False
+            self.event("failed-before-live-restored", schedule=self.original, all_owned_tasks_stopped=True,
+                       paused_recovery_owner=(self.recovery["previous_owner"] if getattr(self, "recovery", None) else None))
         except BaseException:
             if self.lease_owned:
                 self.lease.retain_uncertain()
@@ -452,6 +732,10 @@ def main():
     parser.add_argument("--commit")
     parser.add_argument("--to-date")
     parser.add_argument("--release-id")
+    parser.add_argument("--recover-paused-release")
+    parser.add_argument("--recovery-receipt-sha256")
+    parser.add_argument("--recovery-readback-key")
+    parser.add_argument("--recovery-readback-sha256")
     parser.add_argument("--timeout-seconds", type=int, default=7200)
     args = parser.parse_args()
     import boto3
@@ -474,11 +758,16 @@ def main():
                                                        "at", "promoted", "rerun_attempted", "known_task_arns")}))
         return
     require(args.commit and args.to_date and 300 <= args.timeout_seconds <= 14400, "image-release-arguments-invalid")
+    require(bool(args.recover_paused_release) == bool(args.recovery_receipt_sha256)
+            and (args.recover_paused_release or not (args.recovery_readback_key or args.recovery_readback_sha256)),
+            "image-release-recovery-arguments")
     date.fromisoformat(args.to_date)
     release_id = args.release_id or uuid.uuid4().hex
     require(re.fullmatch(r"[a-f0-9]{32}", release_id), "image-release-id-invalid")
     try:
-        ImageRelease(session, args.commit, args.to_date, args.timeout_seconds, release_id=release_id).run()
+        ImageRelease(session, args.commit, args.to_date, args.timeout_seconds, release_id=release_id,
+                     recover_paused_release=args.recover_paused_release, recovery_receipt_sha256=args.recovery_receipt_sha256,
+                     recovery_readback_key=args.recovery_readback_key, recovery_readback_sha256=args.recovery_readback_sha256).run()
     except Exception as exc:
         reason = str(exc)
         if not re.fullmatch(r"(?:image-release|report|runtime)-[a-z0-9-]+", reason):

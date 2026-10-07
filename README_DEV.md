@@ -157,3 +157,43 @@ back that image. Inspect receipts, exact ECS tasks, logs and the live manifest
 before a separately reviewed recovery. Never clear an uncertain lease or repeat
 `run` merely to retry. Other schedules and foreign resources are never repaired
 or rolled back by this helper.
+
+For a separately reviewed, stopped release whose live outputs are unchanged,
+the same `run` accepts `--recover-paused-release <old-id>` and
+`--recovery-receipt-sha256 <reviewed-latest-failure-sha>`. This is an explicit
+recovery contract, not a generic disabled-schedule override. It checks the
+immutable receipt chain, exact paused schedule/definition, stopped owned task
+identities, successful probe host proof, unchanged outputs, absent temporary
+role and the previous uncertain lease. If ECS has expired a stopped task, supply
+`--recovery-readback-key <private-S3-key>` and
+`--recovery-readback-sha256 <reviewed-sha>` for the previously archived independent
+terminal readback. That fallback applies only to ECS `MISSING`, never a failed
+or conflicting read. Keep a durable private post-stop readback before ECS task
+history expires.
+
+Recovery conditionally transfers the lease without deleting it or enabling the
+old target. The new probe and live run retain the paused state; only successful
+new publication enables the schedule. A confirmed pre-live failure restores the
+old disabled target and conditionally returns its uncertain lease. A live or
+uncertain failure still requires inspection. Other schedules are captured anew
+after concurrent CI finishes, with changes since the stopped release recorded
+in recovery evidence, then strictly protected for the whole new release.
+
+## Private VEVO order-audit workbook
+
+`projects/vevo/manual_audit_workbook.mjs` presents the private order/item audit
+without fetching data or modifying reporting. It reads the complete source and
+classification JSON, the independent item-cost and overhead JSON, selected
+examples, and measured Meta/Google country-day extracts. Input filenames are
+explicit in the builder. Keep these business records in ignored `data/` and in
+the encrypted private artifact archive, never public Git.
+
+Use the Codex Spreadsheets skill and its bundled dependency loader. Copy the
+committed builder into an ignored working directory, create a `node_modules`
+junction/symlink there to the loader's bundled packages, and invoke the bundled
+Node executable with the absolute input and output directory arguments. The
+copy is generated from this repository; no local-only source is required. Do
+not install packages into or modify the bundled runtime. The builder verifies
+sample counts and overhead, scans formula errors, tests recalculation, renders
+all sheets and exports one workbook. Review the rendered ranges and update the
+stated audit/release status before sharing a final, recalculated version.
