@@ -58,8 +58,9 @@ def main():
               'action_attribution_windows': json.dumps(['7d_click', '1d_view']),
               'action_report_time': 'impression'}
     output = {'generated_at': datetime.now(timezone.utc).isoformat(), 'metadata': metadata,
-              'definition': 'Meta reported actions, 7-day click + 1-day view; impression date. '
-                            'Use exact offsite_conversion.fb_pixel_purchase, never sum overlapping action types.'}
+              'definition': 'Meta actions include separately requested 7d_click and 1d_view windows, '
+                            'plus API value; impression date. Do not sum windows or overlapping action types. '
+                            'The companion summary uses explicit 7d_click purchases.'}
     for key, override in [('country_monthly', {'level': 'account', 'breakdowns': 'country'}),
                           ('account_monthly', {'level': 'account'}),
                           ('campaign_monthly', {'level': 'campaign', 'fields': fields + ',campaign_id,campaign_name'}),
