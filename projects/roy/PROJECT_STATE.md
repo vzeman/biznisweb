@@ -1,5 +1,40 @@
 # ROY reporting project state
 
+## 2026-10-07 — Final source contracts and private evidence complete
+
+Both complete-history monetary audits pass against final exporter SHA-256 `3225fec206fc1296ff9dca9497e7bf47cc5b34a2baf60c514748dabc59833a41`. The ROY financial rows are exactly unchanged from its prior independent audited contract; the VEVO contract includes the strictly evidenced compensation and stacked-discount cases. All eight saved live Google results also pass the final validator and an independent Decimal replay; the reviewed geo functions are unchanged. Both financial publication verifiers are prepared. The full 1,387-test regression, smoke, lint and independent review pass. All recorded finite audit/test processes have exited; no listening service was started.
+
+All 56 private evidence files and the manifest are archived with AES256 encryption, expected-owner checks, conditional creation and complete SHA-256 readback: `data/reporting/analyses/2026-10-07-production-rules/pre-deploy-20261007T170115Z-6d35cea43871/`; manifest SHA-256 `f7d319319a618b2719a5ca987f6e08c19dfa13bc9d653d63191a9aaa16eb7c14`. This supplements the previously immutable source archives referenced in its monetary manifest. No financial figures or order references are added to public documentation.
+
+Current dispatch hold: GitHub repeatedly returned a remote internal server error when pushing the final correction commit, while fetch/API reads and push permissions pass; the branch has no divergent remote commits. Keep the final commits intact, use ordinary non-force synchronization only, and finish refreshed PR #608 CI before merge/build. No production reporting runtime has been changed. Once GitHub accepts the push, the next exact step remains the verified sequential VEVO recovery and ROY release, fresh publication through 2026-10-06, HTTP/artifact checks and enabled future schedules with dynamic dates.
+
+
+## Final shared implementation check
+
+The complete VEVO history exposed an additional proven original-base percentage-discount chain. The shared reconciliation now accepts it only with unique source-total proof; existing tolerance, product costs and country allocation remain unchanged. All 1,387 tests and smoke/critical lint pass. Repeat the ROY private financial contract hash chain against this final code before merging PR #608; reporting runtime remains unchanged.
+
+
+## Implementation checkpoint: reviewed and ready for CI
+
+Date: 2026-10-07
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-production-rules-20261007`
+What changed: Shared Google coverage now preserves measured countries and account totals with an explicit unallocated residual, identity/period/currency checks, visible coverage and no MER for unknown/unallocated rows. VEVO's existing compensation exception is fingerprint-bound across enrichment, cache and revenue reconciliation; source-confirmed currency rounding is enabled. Failed authorized probes preserve bounded private quality diagnostics before cleanup, without creating successful manifests or weakening gates.
+What is verified: 1,380 tests across the 77-module CI union pass with unchanged source during execution; reporting smoke, critical Ruff and diff checks pass. All eight real Google project/period probes reconcile against independent daily spend. Fresh runtime and paused-recovery read-only gates pass. Full-history monetary source verification is still finishing; production has not changed.
+Known issues: Original report generations and schedules remain in place until the full isolated and live release gates pass. Financial source data and operational diagnostic details remain in ignored private evidence and will be archived with verified hashes.
+Next exact step: Commit/push this checkpoint, merge the PR after CI and source audit checks, wait for the exact ECR image and settings-triggered monthly workflow, then recover VEVO and release ROY sequentially. Verify each new generation, financial contract, protected resources, authenticated HTTP and future dynamic-date schedule before claiming completion.
+
+
+## Current work: both production releases explicitly resumed
+
+Date: 2026-10-07
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-production-rules-20261007`
+What changed: The owner explicitly requested completion of VEVO and ROY production deployment, regenerated reports through 2026-10-06 and permanent adoption by future scheduled runs. This supersedes the earlier stop pending continuation. The clean session fetched/pruned and pulled exact main `e13ba0f6cffa1e0dd8f795cc8e24c6a28baade13` before implementation.
+What is verified: Prior monetary corrections and private order audits remain the implementation baseline. The last verified ROY runtime is the original enabled :77 and generation `20261006T235744Z`; fresh identity and recurring-date gates now pass. Fresh read-only hard gate passed: AWS account `919341186960`, region `eu-central-1`, Fargate cluster `vevo-reporting-cluster`; no active reporting task, hence instance/IP are not applicable until candidate start. VEVO service `vevo-daily-report-email` is DISABLED on :44 and ROY `roy-daily-report-email` ENABLED on :77. Both immutable OCI configurations independently confirm `/app`. Both schedules use `Europe/Bratislava`, preserve their full-history start dates, and have no fixed end date; subsequent runs calculate yesterday. Private identity proof SHA-256 `ea6b38a5bb1f3eda62ef036ab589ef2311a168e94773640cc32cf569ea016d1c`. Candidate task/IP/image and localhost marker gates must still pass before provider access and publication.
+Known issue: Google physical-country spend does not cover the full account daily total over the production history. Retain the account total and explicitly disclose unallocated country spend; never invent SK/CZ/HU attribution or disable strict identity, period and conservation checks. Failed probes also need private quality diagnostics preserved before publication rejection.
+Next exact step: Implement and review shared coverage handling plus failure diagnostics with tests; then merge/build and wait for the dependent monthly workflow. Release VEVO and ROY sequentially from the same reviewed source, regenerate without email/financial side effects, independently verify all periods and ensure both enabled schedule targets run the new image. Record terminal evidence and clean up finite task-owned processes. No production change has occurred in this resumed session.
+
 ## Current handoff: corrected code merged; production publication blocked
 
 Date: 2026-10-07

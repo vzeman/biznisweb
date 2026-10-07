@@ -31,6 +31,9 @@ BUCKET = f"biznisweb-reporting-artifacts-{ACCOUNT}-{REGION}"
 PREFIX = "data/vevo/reporting/runtime/probes/"
 SERVICE = "vevo-daily-report-email"
 MARKER = "VEVO_REPORT_PROBE_HOST_OK"
+DIAGNOSTIC_LIMIT = 8 * 1024 * 1024
+DIAGNOSTIC_STATUSES = frozenset({"available", "missing", "invalid-path", "invalid-json", "too-large", "unreadable"})
+FAILURE_TYPES = frozenset({"RuntimeError", "ValueError", "FileNotFoundError", "SystemExit", "KeyboardInterrupt", "other"})
 
 
 def require(value, code):
@@ -111,6 +114,69 @@ def verify_quality(value):
     require(value.get("qa_status") in {"ok", "pass", "warning"}
             and type(value.get("qa_failure_count")) is int and value["qa_failure_count"] == 0
             and value.get("qa_errors") == [], "probe-report-qa-failed")
+
+
+def retain_failure_diagnostics(s3, prefix, identity, ready_sha, path, *, from_date, to_date,
+                               failure_type, policy=VEVO):
+    """Keep only this release's DQ file; never treat rejection evidence as output."""
+    release_id = identity["release_id"]
+    require(prefix == policy.probe_prefix + release_id + "/"
+            and re.fullmatch(r"[a-f0-9]{32}", release_id)
+            and identity.get("project") == policy.project
+            and ready_sha == sha(canonical(identity)), "probe-diagnostic-binding-invalid")
+    for value in (from_date, to_date):
+        require(re.fullmatch(r"\d{4}-\d{2}-\d{2}", value), "probe-diagnostic-date-invalid")
+        datetime.strptime(value, "%Y-%m-%d")
+    expected_name = f"data_quality_{from_date.replace('-', '')}-{to_date.replace('-', '')}__migration_{release_id}.json"
+    path = Path(path)
+    diagnostic = {"status": "missing"}
+    try:
+        if path.name != expected_name or path.resolve().parent != (ROOT / "data" / policy.project).resolve() or path.is_symlink():
+            diagnostic = {"status": "invalid-path"}
+        elif path.exists():
+            with path.open("rb") as source:
+                raw = source.read(DIAGNOSTIC_LIMIT + 1)
+            if not raw or len(raw) > DIAGNOSTIC_LIMIT:
+                diagnostic = {"status": "too-large"}
+            else:
+                try:
+                    require(isinstance(json.loads(raw), dict), "probe-diagnostic-json-invalid")
+                except (ValueError, UnicodeError, RuntimeError):
+                    diagnostic = {"status": "invalid-json"}
+                else:
+                    key = prefix + "artifacts/diagnostics/data_quality.json"
+                    put_private(s3, key, raw, policy=policy)
+                    diagnostic = {"status": "available", "key": key, "sha256": sha(raw), "size": len(raw)}
+    except OSError:
+        diagnostic = {"status": "unreadable"}
+    failure = {**identity, "schema_version": 1, "phase": "report-rejected",
+               "localhost_marker_sha256": ready_sha, "report_from_date": from_date, "report_to_date": to_date,
+               "failure_type": failure_type if failure_type in FAILURE_TYPES else "other", "diagnostic": diagnostic}
+    raw = canonical(failure)
+    key = prefix + "markers/failed.json"
+    put_private(s3, key, raw, policy=policy)
+    return {"key": key, "sha256": sha(raw), "diagnostic": diagnostic}
+
+
+def run_authorized_probe(s3, prefix, identity, ready_sha, *, policy=VEVO):
+    """Preserve bounded private failure evidence even when runner rejects before upload."""
+    import daily_report_runner as runner
+    flags = runner.parse_args(["--project", policy.project])
+    from_date = runner.normalize_date(flags.from_date)
+    to_date = runner.normalize_date(runner.resolve_to_date(flags.to_date, flags.timezone))
+    paths = runner.build_artifact_set(policy.project, from_date, to_date,
+                                      output_tag="migration_" + identity["release_id"]).as_dict()
+    try:
+        return report_probe(s3, prefix, identity["release_id"], policy=policy)
+    except BaseException as exc:
+        try:
+            retain_failure_diagnostics(s3, prefix, identity, ready_sha, paths["data_quality_json"],
+                                       from_date=from_date, to_date=to_date, failure_type=type(exc).__name__, policy=policy)
+        except Exception:
+            # Do not replace the original failure or emit provider/financial details.
+            # The controller records missing evidence and still rejects the probe.
+            print("REPORT_PROBE_FAILURE_DIAGNOSTICS_UNAVAILABLE", flush=True)
+        raise
 
 
 def isolate_outputs(s3, prefix, runner, paths, *, policy=VEVO):
@@ -296,7 +362,7 @@ def main():
     with closing(boto3.client("s3", region_name=REGION, config=Config(connect_timeout=5, read_timeout=20,
                     retries={"total_max_attempts": 1}))) as s3:
         ready_sha = await_authorization(s3, prefix, identity, policy=policy)
-        manifest = report_probe(s3, prefix, args.release_id, policy=policy)
+        manifest = run_authorized_probe(s3, prefix, identity, ready_sha, policy=policy)
         complete = {**identity, "phase": "report-verified", "localhost_marker_sha256": ready_sha,
                     "output_manifest_key": manifest["key"], "output_manifest_sha256": manifest["sha256"],
                     "provider_writes": False, "email_sent": False, "live_outputs_changed": False,

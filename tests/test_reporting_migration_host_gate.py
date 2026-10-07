@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts import reporting_migration_host_gate as host
+from scripts.reporting_image_release_policy import PROJECTS
 
 
 class S3:
@@ -29,6 +30,118 @@ class S3:
 
 
 QUALITY = {'is_partial': False, 'qa_status': 'ok', 'qa_failure_count': 0, 'qa_errors': []}
+
+
+class FailureDiagnosticTests(unittest.TestCase):
+    def context(self, root, project='vevo'):
+        policy = PROJECTS[project]
+        identity = {'project': project, 'release_id': 'a' * 32, 'task_arn': 'owned-task',
+                    'source_commit': 'b' * 40, 'image_digest': 'sha256:' + 'c' * 64}
+        path = root / 'data' / project / ('data_quality_20250924-20261006__migration_' + 'a' * 32 + '.json')
+        path.parent.mkdir(parents=True)
+        kwargs = dict(from_date='2025-09-24', to_date='2026-10-06', failure_type='RuntimeError', policy=policy)
+        return identity, path, policy.probe_prefix + 'a' * 32 + '/', kwargs
+
+    def test_rejected_quality_preserved_privately_with_bound_hash_for_both_projects(self):
+        for project in PROJECTS:
+            with self.subTest(project=project), TemporaryDirectory() as folder:
+                root, s3 = Path(folder).resolve(), S3()
+                identity, path, prefix, kwargs = self.context(root, project)
+                raw = json.dumps({**QUALITY, 'qa_status': 'critical', 'qa_failure_count': 1,
+                                  'qa_errors': ['synthetic private diagnostic']}).encode()
+                path.write_bytes(raw)
+                with patch.object(host, 'ROOT', root):
+                    result = host.retain_failure_diagnostics(s3, prefix, identity, host.sha(host.canonical(identity)), path, **kwargs)
+                marker = json.loads(s3.objects[result['key']])
+                self.assertEqual('report-rejected', marker['phase'])
+                self.assertEqual(host.sha(raw), marker['diagnostic']['sha256'])
+                self.assertEqual(raw, s3.objects[marker['diagnostic']['key']])
+                self.assertEqual({prefix + 'markers/failed.json', prefix + 'artifacts/diagnostics/data_quality.json'}, set(s3.puts))
+                self.assertNotIn('synthetic private diagnostic', s3.objects[result['key']].decode())
+
+    def test_unavailable_diagnostic_never_uploads_arbitrary_or_malformed_files(self):
+        for scenario, status in [('missing', 'missing'), ('outside', 'invalid-path'), ('old-tag', 'invalid-path'),
+                                 ('malformed', 'invalid-json'), ('array', 'invalid-json'), ('large', 'too-large')]:
+            with self.subTest(scenario=scenario), TemporaryDirectory() as folder:
+                root, s3 = Path(folder).resolve(), S3()
+                identity, path, prefix, kwargs = self.context(root)
+                if scenario == 'outside':
+                    path = root / path.name
+                elif scenario == 'old-tag':
+                    path = path.with_name(path.name.replace('a' * 32, 'b' * 32))
+                if scenario != 'missing':
+                    path.write_bytes(b'invalid{' if scenario == 'malformed' else b'[]' if scenario == 'array' else b'{}' + b' ' * 200)
+                with patch.object(host, 'ROOT', root), patch.object(host, 'DIAGNOSTIC_LIMIT', 100):
+                    result = host.retain_failure_diagnostics(s3, prefix, identity, host.sha(host.canonical(identity)), path, **kwargs)
+                self.assertEqual({'status': status}, result['diagnostic'])
+                self.assertEqual([prefix + 'markers/failed.json'], s3.puts)
+
+    def test_foreign_project_prefix_or_host_hash_fails_before_private_write(self):
+        with TemporaryDirectory() as folder:
+            root, s3 = Path(folder).resolve(), S3()
+            identity, path, prefix, kwargs = self.context(root)
+            for bad_prefix, ready_hash in [(prefix.replace('/vevo/', '/roy/'), host.sha(host.canonical(identity))),
+                                            (prefix, '0' * 64)]:
+                with self.subTest(prefix=bad_prefix), self.assertRaisesRegex(RuntimeError, 'binding'):
+                    host.retain_failure_diagnostics(s3, bad_prefix, identity, ready_hash, path, **kwargs)
+            self.assertEqual([], s3.puts)
+
+    def test_runner_prepublication_rejection_is_retained_and_original_error_propagates(self):
+        import daily_report_runner as runner
+        with TemporaryDirectory() as folder:
+            root, s3 = Path(folder).resolve(), S3()
+            identity, path, prefix, kwargs = self.context(root)
+            failure = RuntimeError('synthetic quality rejection')
+            def reject_before_upload(*_a, **_kw):
+                path.write_text(json.dumps({**QUALITY, 'qa_status': 'critical', 'qa_errors': ['synthetic failure']}))
+                raise failure
+            artifact = SimpleNamespace(as_dict=lambda: {'data_quality_json': path})
+            with patch.object(host, 'ROOT', root), patch.dict(host.os.environ, {'REPORT_FROM_DATE': '2025-09-24', 'REPORT_TO_DATE': '2026-10-06'}), \
+                 patch.object(runner, 'build_artifact_set', return_value=artifact), patch.object(host, 'report_probe', reject_before_upload):
+                with self.assertRaises(RuntimeError) as caught:
+                    host.run_authorized_probe(s3, prefix, identity, host.sha(host.canonical(identity)))
+            self.assertIs(failure, caught.exception)
+            self.assertEqual('available', json.loads(s3.objects[prefix + 'markers/failed.json'])['diagnostic']['status'])
+            self.assertFalse(any(key.endswith(('complete.json', 'output-manifest.json')) for key in s3.puts))
+
+    def test_diagnostic_write_failure_never_masks_the_original_report_failure(self):
+        failure = RuntimeError('original rejection')
+        identity = {'release_id': 'a' * 32}
+        with patch.dict(host.os.environ, {'REPORT_FROM_DATE': '2025-09-24', 'REPORT_TO_DATE': '2026-10-06'}), \
+             patch.object(host, 'report_probe', side_effect=failure), \
+             patch.object(host, 'retain_failure_diagnostics', side_effect=RuntimeError('write failed')), \
+             patch('builtins.print') as output:
+            with self.assertRaises(RuntimeError) as caught:
+                host.run_authorized_probe(S3(), host.PREFIX + 'a' * 32 + '/', identity, 'hash')
+            self.assertIs(failure, caught.exception)
+            output.assert_called_once_with('REPORT_PROBE_FAILURE_DIAGNOSTICS_UNAVAILABLE', flush=True)
+
+    def test_real_runner_quality_rejects_before_publisher_and_retains_exact_release_file(self):
+        import daily_report_runner as runner
+        import export_orders
+        with TemporaryDirectory() as folder:
+            root, s3 = Path(folder).resolve(), S3()
+            identity, path, prefix, _kwargs = self.context(root)
+            quality = {**QUALITY, 'qa_status': 'critical', 'qa_failure_count': 1, 'qa_errors': ['synthetic critical coverage']}
+            artifact = SimpleNamespace(as_dict=lambda: {'data_quality_json': path}, required_daily_runner_outputs=lambda: {})
+            env = {'REPORT_PROJECT': 'vevo', 'REPORT_SKIP_INVOICES': 'true', 'REPORT_SKIP_CREDITNOTE_STORNO_GUARD': 'true',
+                   'REPORT_SKIP_EMAIL': 'true', 'REPORT_S3_BUCKET': host.BUCKET, 'REPORT_S3_PREFIX': 'daily-reports/vevo',
+                   'REPORT_FROM_DATE': '2025-09-24', 'REPORT_TO_DATE': '2026-10-06'}
+            with patch.object(host, 'ROOT', root), patch.dict(host.os.environ, env), \
+                 patch.object(runner, 'build_artifact_set', return_value=artifact) as build, \
+                 patch.object(runner, 'load_dotenv'), patch.object(runner, 'load_project_env'), \
+                 patch.object(runner, 'load_project_settings', return_value={}), \
+                 patch.object(runner, 'resolve_reporting_defaults', return_value={}), \
+                 patch.object(export_orders, 'main', side_effect=lambda: path.write_text(json.dumps(quality))), \
+                 patch.object(host, 'isolate_outputs') as publisher:
+                with self.assertRaisesRegex(RuntimeError, 'Refusing to publish'):
+                    host.run_authorized_probe(s3, prefix, identity, host.sha(host.canonical(identity)))
+            publisher.assert_not_called()
+            self.assertEqual(2, build.call_count)
+            self.assertTrue(all(call.args == ('vevo', '2025-09-24', '2026-10-06')
+                                and call.kwargs == {'output_tag': 'migration_' + 'a' * 32} for call in build.call_args_list))
+            marker = json.loads(s3.objects[prefix + 'markers/failed.json'])
+            self.assertEqual(quality, json.loads(s3.objects[marker['diagnostic']['key']]))
 
 
 class HostGateTests(unittest.TestCase):

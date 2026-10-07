@@ -3170,6 +3170,9 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
     def test_vevo_realized_override_is_exact_audited_and_status_bounded(self) -> None:
         exporter = make_exporter("vevo")
+        # Isolate the older payment-identity contract; exact monetary evidence is
+        # exercised with complete synthetic source data in its dedicated suite.
+        exporter.realized_revenue_settings["missing_price_elements_compensation_reconciliation"] = {}
         fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
         overridden = {
             "order_num": "2602007112",
@@ -3204,6 +3207,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
     def test_vevo_realized_override_still_enriches_monetary_elements(self) -> None:
         exporter = make_exporter("vevo")
+        exporter.realized_revenue_settings["missing_price_elements_compensation_reconciliation"] = {}
         fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
         orders = [
             {
@@ -3669,7 +3673,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
             "pur_date": "2026-06-01 10:00:00",
             "status": {"name": "Platba online - zaplatené"},
             "price_elements": [price_element("payment", "Bankovým prevodom", "6")],
-            "sum": {"value": 123.0, "currency": {"code": "EUR"}},
+            "sum": {"value": 123.0, "raw_value": 123.0, "currency": {"code": "EUR"}},
             "customer": {"email": "a@example.com"},
             "items": [
                 {
@@ -3677,13 +3681,14 @@ class ReportingCalculationFixTests(unittest.TestCase):
                     "ean": "",
                     "quantity": 1,
                     "tax_rate": 23,
-                    "price": {"value": 100.0, "currency": {"code": "EUR"}},
-                    "sum": {"value": 100.0, "currency": {"code": "EUR"}},
-                    "sum_with_tax": {"value": 123.0, "currency": {"code": "EUR"}},
+                    "price": {"value": 100.0, "raw_value": 100.0, "currency": {"code": "EUR"}},
+                    "sum": {"value": 100.0, "raw_value": 100.0, "currency": {"code": "EUR"}},
+                    "sum_with_tax": {"value": 123.0, "raw_value": 123.0, "currency": {"code": "EUR"}},
                 }
             ],
         }
 
+        order["price_elements"][0]["price"]["raw_value"] = 0
         rows = exporter.flatten_order(order)
 
         self.assertEqual("Bankovým prevodom", rows[0]["payment_title"])

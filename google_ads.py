@@ -5,7 +5,7 @@ Google Ads API integration for fetching marketing spend data
 
 import os
 import json
-import math
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -85,7 +85,12 @@ class GoogleAdsClient:
         return self.cache_dir / f"google_ads_{suffix}_{from_str}_{to_str}.json"
 
     def get_country_spend(self, date_from: datetime, date_to: datetime) -> Dict[str, Any]:
-        """Physical user country, summing all targeting flags; no order-share allocation."""
+        """Keep measured countries intact and retain the account residual separately.
+
+        Google geographic reports can differ from account totals. The difference
+        is unallocated spend, not evidence of any particular user's country:
+        https://support.google.com/google-ads/answer/2453994
+        """
         result = {
             'status': 'disabled' if not self.is_configured else 'unavailable',
             'basis': 'google_user_location', 'currency': None,
@@ -103,16 +108,28 @@ class GoogleAdsClient:
                 return [row for batch in service.search_stream(customer_id=customer_id, query=statement)
                         for row in batch.results]
 
-            account = query('SELECT customer.currency_code FROM customer LIMIT 1')
-            result['currency'] = account[0].customer.currency_code if account else None
-            if result['currency'] != 'EUR':
-                raise ValueError('Google country spend requires verified EUR account')
+            def micros(row):
+                value = row.metrics.cost_micros
+                if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                    raise ValueError('Invalid Google cost micros')
+                if str(row.customer.id) != customer_id:
+                    raise ValueError('Google spend account identity mismatch')
+                return value
+
             rows = query(
-                'SELECT user_location_view.country_criterion_id, '
+                'SELECT customer.id, user_location_view.country_criterion_id, '
                 'user_location_view.targeting_location, metrics.cost_micros '
                 'FROM user_location_view '
                 f"WHERE segments.date BETWEEN '{result['date_from']}' AND '{result['date_to']}'"
             )
+            account = query(
+                'SELECT customer.id, customer.currency_code, metrics.cost_micros FROM customer '
+                f"WHERE segments.date BETWEEN '{result['date_from']}' AND '{result['date_to']}'"
+            )
+            if len(account) != 1 or account[0].customer.currency_code != 'EUR':
+                raise ValueError('Google country spend requires verified EUR account total')
+            account_micros = micros(account[0])
+            result.update(currency='EUR', customer_id=customer_id)
             country_ids = sorted({int(row.user_location_view.country_criterion_id) for row in rows
                                   if int(row.user_location_view.country_criterion_id) > 0})
             codes = {}
@@ -124,15 +141,39 @@ class GoogleAdsClient:
                 )
                 codes = {int(row.geo_target_constant.id): str(row.geo_target_constant.country_code).lower()
                          for row in constants}
-            countries = {}
+                if set(codes) != set(country_ids) or any(not re.fullmatch('[a-z]{2}', code) for code in codes.values()):
+                    raise ValueError('Google country code coverage unavailable')
+            country_micros = {}
+            seen = set()
             for row in rows:
-                country = codes.get(int(row.user_location_view.country_criterion_id)) or 'unknown'
-                spend = float(row.metrics.cost_micros) / 1_000_000
-                if not math.isfinite(spend) or spend < 0:
-                    raise ValueError('Invalid Google country spend')
-                countries[country] = countries.get(country, 0.0) + spend
+                location = row.user_location_view
+                identity = (int(location.country_criterion_id), location.targeting_location)
+                if identity[0] < 0 or identity in seen:
+                    raise ValueError('Invalid or duplicate Google country row')
+                seen.add(identity)
+                country = codes[identity[0]] if identity[0] else 'unknown'
+                country_micros[country] = country_micros.get(country, 0) + micros(row)
+            geo_micros = sum(country_micros.values())
+            residual_micros = account_micros - geo_micros
+            if residual_micros < 0:
+                # Integer micros have no floating-point reconciliation noise.
+                raise ValueError('Google country spend exceeds account total')
+            reported = {country: value / 1_000_000 for country, value in country_micros.items()}
+            countries = dict(reported)
+            if residual_micros:
+                countries['unallocated'] = residual_micros / 1_000_000
+            unknown_micros = country_micros.get('unknown', 0)
             result.update(status='ok', spend_by_country=countries,
-                          total_spend=round(sum(countries.values()), 6))
+                          total_spend=account_micros / 1_000_000,
+                          account_total_spend=account_micros / 1_000_000,
+                          reported_geo_total_spend=geo_micros / 1_000_000,
+                          reported_spend_by_country=reported,
+                          reported_unknown_spend=unknown_micros / 1_000_000,
+                          unallocated_spend=residual_micros / 1_000_000,
+                          country_coverage_ratio=(geo_micros - unknown_micros) / account_micros if account_micros else 1.0,
+                          country_coverage_status='partial' if residual_micros or unknown_micros else 'complete',
+                          residual_basis='account_total_minus_user_location',
+                          account_query_rows=len(account), geo_query_rows=len(rows))
         except Exception as exc:
             result['error_code'] = type(exc).__name__
             logger.warning('Google country spend unavailable (%s)', type(exc).__name__)

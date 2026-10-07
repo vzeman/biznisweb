@@ -1002,6 +1002,8 @@ def generate_modern_dashboard(
             "fb_spend_basis",
             "google_spend_basis",
             "spend_attribution_status",
+            "google_country_coverage_ratio",
+            "google_country_coverage_status",
         ],
         limit=6,
     )
@@ -3852,6 +3854,23 @@ def generate_modern_dashboard(
         geo_spend_note = f"{geo_period['date_from']} - {geo_period['date_to']}. " + geo_spend_note
     geo_spend_note += ' Net MER = all realized net merchandise sales / Meta + Google spend; it is not platform-attributed ROAS.'
     geo_spend_note += ' Country contribution excludes separate creditnote fulfillment adjustments and fixed overhead on days without orders; it does not reconcile to company net profit.'
+    geo_spend_note_sk = geo_spend_note
+    google_geo = geo_period.get('google_ads') or {}
+    if google_geo.get('status') == 'ok' and google_geo.get('country_coverage_ratio') is not None:
+        coverage = float(google_geo['country_coverage_ratio']) * 100
+        residual = float(google_geo.get('unallocated_spend', 0))
+        unknown = float(google_geo.get('reported_unknown_spend', 0))
+        geo_spend_note += (
+            f' Google country coverage: {coverage:.2f}%. Unallocated: EUR {residual:.2f}; reported unknown: EUR {unknown:.2f}.'
+            ' Totals include both. SK/CZ/HU costs are not estimated from this gap. Country MER and contribution use identified costs;'
+            ' incomplete coverage may overstate country performance. UNKNOWN and UNALLOCATED have no MER.'
+        )
+        geo_spend_note_sk += (
+            f' Pokrytie krajiny Google nákladov: {coverage:.2f} %. Nepriradené (UNALLOCATED): {residual:.2f} EUR;'
+            f' neznáma krajina (UNKNOWN): {unknown:.2f} EUR. Celkové náklady zahŕňajú obe položky.'
+            ' Rozdiel neodhadujeme pre SK/CZ/HU. Krajinské MER a príspevok k zisku používajú identifikované náklady;'
+            ' neúplné pokrytie môže nadhodnotiť výsledok krajiny. UNKNOWN a UNALLOCATED nemajú MER.'
+        )
     geo_warning_items = list(geo_qa.get("warnings") or [])
     geo_warning_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in geo_warning_items)
     geo_warning_block_html = (
@@ -5533,7 +5552,7 @@ def generate_modern_dashboard(
                         <div class="chart-shell"><canvas id="geoProfitabilityChart"></canvas></div>
                     </div>
                     <div class="panel table-card" style="margin-top:18px;">
-                        <div class="card-head"><div><h3><span class="lang-en">Geo profitability</span><span class="lang-sk hidden">Geo profitabilita</span></h3><p><span class="lang-en">{escape(geo_spend_note)}</span><span class="lang-sk hidden">{escape(geo_spend_note)}</span></p></div></div>
+                        <div class="card-head"><div><h3><span class="lang-en">Geo profitability</span><span class="lang-sk hidden">Geo profitabilita</span></h3><p><span class="lang-en">{escape(geo_spend_note)}</span><span class="lang-sk hidden">{escape(geo_spend_note_sk)}</span></p></div></div>
                         <table>
                             <thead><tr><th><span class="lang-en">Country</span><span class="lang-sk hidden">Krajina</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th>Meta spend</th><th>Google spend</th><th><span class="lang-en">Net MER (all shop sales / ads)</span><span class="lang-sk hidden">Ciste trzby / reklama (MER)</span></th><th><span class="lang-en">Contribution ex fixed</span><span class="lang-sk hidden">Kontribucia bez fixov</span></th><th><span class="lang-en">Contribution incl. fixed</span><span class="lang-sk hidden">Kontribucia s fixami</span></th><th><span class="lang-en">Margin ex fixed</span><span class="lang-sk hidden">Marza bez fixov</span></th><th><span class="lang-en">Margin incl. fixed</span><span class="lang-sk hidden">Marza s fixami</span></th><th>FB CPO</th></tr></thead>
                             <tbody>{geo_rows_html}</tbody>

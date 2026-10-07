@@ -154,6 +154,27 @@ hashes and the outcome in the product's `PROJECT_STATE.md`. The helper does not 
 validity of historical `runtime/current.json`; its current-target proof is
 separate, and the shared lease only provides deployment exclusion.
 
+Failed authorized probes retain only the exact project/release-tagged quality JSON
+under their private diagnostic prefix, plus a separate hash-bound failure marker.
+The controller preserves its key/hash/status before cleanup. Failure evidence is
+never a successful artifact manifest, never changes live aliases, and never
+permits promotion. Missing or malformed diagnostics do not weaken rejection.
+
+Google measured country costs are reconciled to the same-period account total.
+The provider's reported `unknown` country remains separate from `unallocated`
+(account cost minus the full physical-country report). Neither residual is
+assigned to SK/CZ/HU; both remain in company advertising costs. Reported country
+values, account/currency/date identity and independent daily totals must still
+reconcile. Coverage is visible beside country results, and unknown/unallocated
+rows have no MER. Partial country coverage is a disclosed warning, while source
+errors, negative residuals or inconsistent totals block publication.
+
+The existing audited VEVO compensation exception is bound to its canonical
+source fingerprint and zero-VAT, single-line native-total evidence. It does not
+fabricate missing provider price elements or expand order eligibility; changed
+source fields fail closed. Client settings hold this evidence separately from
+the reusable validator and source currency rounding rules.
+
 Before live dispatch, a known failure stops only the owned task, removes its
 verified temporary role, restores the owned original schedule and deactivates
 the unused candidate. An uncertain launch retains the exclusion lease and paused

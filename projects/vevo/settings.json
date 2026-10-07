@@ -43,6 +43,14 @@
   "expense_alias_fallback": true,
   "measured_country_ads_enabled": true,
   "order_revenue_reconciliation_enabled": true,
+  "order_currency_rounding_precision": {
+    "EUR": 2,
+    "CZK": 1,
+    "HUF": 0,
+    "PLN": 2,
+    "RON": 2,
+    "USD": 2
+  },
   "zero_cost_service_product_skus": [
     "H-36CA74A7",
     "H-858E1314",
@@ -225,6 +233,12 @@
     ],
     "missing_payment_metadata_realized_order_overrides": {
       "2602007112": "Verified in VEVO administration on 2026-08-13: shipped damage-compensation order for Slovak Parcel Service, 21.15 EUR net, intentionally has no delivery or payment method."
+    },
+    "missing_price_elements_compensation_reconciliation": {
+      "2602007112": {
+        "source_sha256": "b55f578c8cb9bd0caa543f230c88d915bd1040770282990e59ea24f644b92fb3",
+        "audit_reason": "Existing administration-verified compensation with no delivery/payment; exact source monetary snapshot reverified on 2026-10-07. Missing provider elements remain absent, and any monetary/status identity drift fails closed."
+      }
     }
   },
   "excluded_order_statuses": [

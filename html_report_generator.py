@@ -4877,6 +4877,20 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             else 'Estimated allocation: Meta campaign names and Google daily order shares. Fixed overhead is allocated; these are not measured country ad costs.'
         )
         geo_spend_note += ' Country contribution excludes separate creditnote fulfillment adjustments and fixed overhead on days without orders; it does not reconcile to company net profit.'
+        google_geo = (geo_profitability.get('spend_attribution') or {}).get('google_ads') or {}
+        if google_geo.get('status') == 'ok' and google_geo.get('country_coverage_ratio') is not None:
+            coverage = float(google_geo['country_coverage_ratio']) * 100
+            residual = float(google_geo.get('unallocated_spend', 0))
+            unknown = float(google_geo.get('reported_unknown_spend', 0))
+            geo_spend_note += (
+                f' Google country coverage: {coverage:.2f}%. Unallocated: EUR {residual:.2f}; reported unknown: EUR {unknown:.2f}.'
+                ' Totals include both; SK/CZ/HU costs are not estimated from this gap. Country MER and contribution use identified costs;'
+                ' incomplete coverage may overstate country performance. UNKNOWN and UNALLOCATED have no MER.'
+                f' Pokrytie krajiny Google nákladov: {coverage:.2f} %. Nepriradené (UNALLOCATED): {residual:.2f} EUR;'
+                f' neznáma krajina (UNKNOWN): {unknown:.2f} EUR. Celkové náklady zahŕňajú obe položky.'
+                ' Rozdiel neodhadujeme pre SK/CZ/HU. Krajinské MER a príspevok k zisku používajú identifikované náklady;'
+                ' neúplné pokrytie môže nadhodnotiť výsledok krajiny. UNKNOWN a UNALLOCATED nemajú MER.'
+            )
         if geo_table is not None and not geo_table.empty:
             html_content += f"""
 
@@ -4902,6 +4916,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <th class="number">Packaging</th>
                         <th class="number">Net Shipping</th>
                         <th class="number">FB Spend</th>
+                        <th class="number">Google Spend</th>
+                        <th class="number">Net MER (all shop sales / ads)</th>
                         <th class="number">Post-Ad Contribution Profit</th>
                         <th class="number">Post-Ad Contribution Margin %</th>
                         <th class="number">FB CPO</th>
@@ -4919,6 +4935,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">&#8364;{row.get('packaging_cost', 0):,.2f}</td>
                         <td class="number">&#8364;{row.get('shipping_net_cost', row.get('shipping_subsidy_cost', 0)):,.2f}</td>
                         <td class="number">{_measurement_value(row.get('fb_ads_spend'), currency=True)}</td>
+                        <td class="number">{_measurement_value(row.get('google_ads_spend'), currency=True)}</td>
+                        <td class="number">{_measurement_value(row.get('net_mer'))}</td>
                         <td class="number">{_measurement_value(row.get('contribution_profit'), currency=True)}</td>
                         <td class="number">{_measurement_value(row.get('contribution_margin_pct'), percent=True)}</td>
                         <td class="number">{_measurement_value(row.get('fb_cpo'), currency=True)}</td>

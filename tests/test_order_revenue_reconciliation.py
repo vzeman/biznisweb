@@ -35,18 +35,19 @@ class OrderRevenueReconciliationTests(unittest.TestCase):
         gross = float((Decimal(str(net)) * (1 + Decimal(str(vat)) / 100)).quantize(Decimal(".01")))
         return {
             "item_label": label, "quantity": 1, "tax_rate": vat,
-            "price": {"value": net, "currency": {"code": currency}},
-            "sum": {"value": net, "currency": {"code": currency}},
-            "sum_with_tax": {"value": gross, "currency": {"code": currency}},
+            "price": {"value": net, "raw_value": net, "currency": {"code": currency}},
+            "sum": {"value": net, "raw_value": net, "currency": {"code": currency}},
+            "sum_with_tax": {"value": gross, "raw_value": gross, "currency": {"code": currency}},
         }
 
     @staticmethod
     def element(kind, amount, *, net=True, value=""):
-        return {"type": kind, "value": value, "price": {"value": amount, "raw_value": amount, "is_net_price": net}}
+        displayed = Decimal(str(amount)).quantize(Decimal(".01"))
+        return {"type": kind, "value": value, "price": {"value": displayed, "raw_value": amount, "is_net_price": net}}
 
     def order(self, *, total=108, items=None, elements=None, currency="EUR"):
         return {
-            "order_num": "SYNTHETIC-DISCOUNT", "sum": {"value": total, "is_net_price": False, "currency": {"code": currency}},
+            "order_num": "SYNTHETIC-DISCOUNT", "sum": {"value": total, "raw_value": total, "is_net_price": False, "currency": {"code": currency}},
             "items": items if items is not None else [self.item(currency=currency)],
             "price_elements": elements if elements is not None else [self.element("percent_discount", -12, value="10")],
         }
@@ -104,6 +105,66 @@ class OrderRevenueReconciliationTests(unittest.TestCase):
         self.assertEqual([108, 99, 0], [row["item_total_with_tax"] for row in rows])
         self.assertEqual(20, sum(row["item_order_discount_without_tax"] for row in rows))
         self.assertEqual(23, sum(row["item_order_discount_with_tax"] for row in rows))
+
+    def test_multiple_percentages_can_use_original_goods_basis_when_source_proves_it(self):
+        elements = [self.element("shipping", 5), self.element("percent_discount", -12, value="10"),
+                    self.element("percent_discount", -24, value="20")]
+        order = self.order(total=90, elements=elements)
+        before = copy.deepcopy(order)
+        row = self.exporter.flatten_order(order)[0]
+        self.assertEqual(70, row["item_total_without_tax"])
+        self.assertEqual(84, row["item_total_with_tax"])
+        self.assertEqual(30, row["item_order_discount_without_tax"])
+        self.assertEqual(7, row["total_expense"])
+        self.assertEqual(63, row["profit_before_ads"])
+        self.assertEqual(before, order)
+
+    def test_original_goods_and_remaining_cart_ambiguity_is_rejected(self):
+        # The second amount can be 20% of original goods or the remaining cart;
+        # both explain the total but assign a different part to merchandise.
+        elements = [self.element("shipping", 10), self.element("percent_discount", -12, value="10"),
+                    self.element("percent_discount", -24, value="20")]
+        with self.assertRaisesRegex(OrderRevenueReconciliationError, "ambiguous_discount_or_service_allocation"):
+            self.exporter.flatten_order(self.order(total=96, elements=elements))
+
+    def test_original_then_remaining_percentage_chain_is_independently_proved(self):
+        elements = [self.element("shipping", 5), self.element("percent_discount", -12, value="10"),
+                    self.element("percent_discount", -24, value="20"), self.element("percent_discount", -42, value="50")]
+        row = self.exporter.flatten_order(self.order(total=48, elements=elements))[0]
+        self.assertEqual(35, row["item_total_without_tax"])
+        self.assertEqual(42, row["item_total_with_tax"])
+        self.assertEqual(7, row["total_expense"])
+
+    def test_original_percentage_discounts_preserve_mixed_vat_allocation(self):
+        items = [self.item(100, 20), self.item(100, 10), self.item(0, 20)]
+        elements = [self.element("percent_discount", -23, value="10"), self.element("percent_discount", -46, value="20")]
+        rows = self.exporter.flatten_order(self.order(total=161, items=items, elements=elements))
+        self.assertEqual([70, 70, 0], [row["item_total_without_tax"] for row in rows])
+        self.assertEqual([84, 77, 0], [row["item_total_with_tax"] for row in rows])
+
+    def test_multiple_compounded_percentages_keep_remaining_goods_basis(self):
+        elements = [self.element("shipping", 10), self.element("percent_discount", -12, value="10"),
+                    self.element("percent_discount", -21.6, value="20")]
+        row = self.exporter.flatten_order(self.order(total=98.4, elements=elements))[0]
+        self.assertEqual(72, row["item_total_without_tax"])
+        self.assertEqual(86.4, row["item_total_with_tax"])
+        self.assertEqual(7, row["total_expense"])
+
+    def test_original_cart_percentages_preserve_goods_and_service_allocation(self):
+        elements = [self.element("shipping", 10), self.element("percent_discount", -13.2, value="10"),
+                    self.element("percent_discount", -26.4, value="20")]
+        rows = self.exporter.flatten_order(self.order(total=92.4, elements=elements))
+        self.assertEqual(70, rows[0]["item_total_without_tax"])
+        self.assertEqual(84, rows[0]["item_total_with_tax"])
+        self.assertEqual(36, rows[0]["item_order_discount_with_tax"])
+
+    def test_multiple_discounts_cannot_explain_arbitrary_amount_or_grand_total(self):
+        for amount, total in [(-23, 97), (-24, 95)]:
+            with self.subTest(amount=amount, total=total):
+                elements = [self.element("shipping", 10), self.element("percent_discount", -12, value="10"),
+                            self.element("percent_discount", amount, value="20")]
+                with self.assertRaisesRegex(OrderRevenueReconciliationError, "grand_total_not_reconciled"):
+                    self.exporter.flatten_order(self.order(total=total, elements=elements))
 
     def test_largest_remainder_preserves_exact_cents_and_never_touches_free_line(self):
         parts = self.exporter._allocate_decimal_money(Decimal(".05"), [Decimal(1), Decimal(1), Decimal(1), Decimal(0)])
@@ -181,7 +242,7 @@ class OrderRevenueReconciliationTests(unittest.TestCase):
                 row = self.exporter.flatten_order(order)[0]
                 self.assertEqual(expected_eur, row["item_total_without_tax"])
                 item["sum"].pop("raw_value")
-                with self.assertRaisesRegex(OrderRevenueReconciliationError, "vat_mismatch"):
+                with self.assertRaisesRegex(OrderRevenueReconciliationError, "missing_or_invalid_monetary_value"):
                     self.exporter.flatten_order(order)
 
     def test_full_and_fallback_queries_request_raw_money_fields(self):
@@ -193,9 +254,12 @@ class OrderRevenueReconciliationTests(unittest.TestCase):
 
     def test_legacy_value_only_eligible_cache_is_refreshed_under_strict_policy(self):
         order = self.order()
+        for item in order["items"]:
+            for key in ("price", "sum", "sum_with_tax"):
+                item[key].pop("raw_value")
         with tempfile.TemporaryDirectory() as directory:
             cache_file = Path(directory) / "synthetic.json"
-            cache_file.write_text(json.dumps({"schema_version": ORDER_CACHE_SCHEMA_VERSION, "orders": [order]}), encoding="utf-8")
+            cache_file.write_text(json.dumps({"schema_version": ORDER_CACHE_SCHEMA_VERSION, "orders": [order]}, default=float), encoding="utf-8")
             with patch.object(self.exporter, "get_cache_filename", return_value=cache_file), patch.object(self.exporter, "_reporting_order_context", side_effect=lambda value: value):
                 self.assertIsNone(self.exporter.load_from_cache(datetime(2026, 9, 1)))
                 self.exporter.project_settings["order_revenue_reconciliation_enabled"] = False
