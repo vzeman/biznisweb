@@ -1794,6 +1794,7 @@ class BizniWebExporter:
         cost_per_order: Optional[Dict[str, Any]],
         fb_campaigns: Optional[List[Dict[str, Any]]],
         total_orders: int,
+        measurement_status: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         reconciliation = ((cost_per_order or {}).get("fb_spend_reconciliation") or {})
         summary = ((cost_per_order or {}).get("campaign_attribution_summary") or {})
@@ -1810,6 +1811,10 @@ class BizniWebExporter:
         estimated_orders_total = cls._safe_float(summary.get("estimated_orders_total"))
         oversubscription_ratio = cls._safe_float(summary.get("oversubscription_ratio"))
         warnings: List[str] = []
+        failures = []
+        if measurement_status is not None and measurement_status.get('status') != 'ok':
+            failures.append('Meta campaign purchase measurement is unavailable; exact 7-day click purchases could not be verified.')
+            warnings.extend(failures)
 
         if (daily_source_spend or 0) > 0 and (campaign_source_spend is None or campaign_source_spend <= 0):
             warnings.append("Campaign-level Facebook spend is missing while daily Facebook spend exists.")
@@ -1849,7 +1854,7 @@ class BizniWebExporter:
                 f"{platform_cost_mismatch_count} campaign row(s) have platform CPA that does not match spend/platform conversions."
             )
 
-        status = "warning" if warnings else "ok"
+        status = "error" if failures else ("warning" if warnings else "ok")
         message = (
             "Campaign attribution QA passed: coverage, attribution totals, and platform CPA are within tolerance."
             if not warnings
@@ -1860,6 +1865,9 @@ class BizniWebExporter:
             "label": "Campaign Attribution QA",
             "status": status,
             "healthy": not warnings,
+            "failure_count": len(failures),
+            "failures": failures,
+            "purchase_measurement": measurement_status or {},
             "message": message,
             "warnings": warnings,
             "coverage_ratio": round(coverage_ratio, 4) if coverage_ratio is not None else None,
@@ -2044,6 +2052,11 @@ class BizniWebExporter:
         total_orders = 0.0
         total_revenue = 0.0
         unallocated_google_spend = 0.0
+        spend_attribution = (geo_profitability or {}).get('spend_attribution') or {}
+        spend_failures = list(spend_attribution.get('failures') or [])
+        warnings.extend(spend_failures)
+        if spend_attribution.get('mode') == 'estimated' and not geo_df.empty:
+            warnings.append('Country ads are modeled allocations: Meta campaign names and Google daily order shares; not measured country spend.')
 
         if not geo_df.empty and "confidence_status" in geo_df.columns:
             if "orders" in geo_df.columns:
@@ -2107,12 +2120,14 @@ class BizniWebExporter:
         return {
             "key": "geo",
             "label": "Geo confidence",
-            "status": "warning" if warnings else "ok",
+            "status": "error" if spend_failures else ("warning" if warnings else "ok"),
             "healthy": not warnings,
             "message": message,
             "warnings": warnings,
             "warning_count": len(warnings),
-            "failure_count": 0,
+            "failure_count": len(spend_failures),
+            "failures": spend_failures,
+            "spend_attribution": spend_attribution,
             "ignore_count": ignore_count,
             "observe_count": observe_count,
             "ready_count": ready_count,
@@ -3882,6 +3897,41 @@ class BizniWebExporter:
         )
 
     def _resolve_product_expense(
+        self,
+        product_sku: str,
+        item_label: str,
+        import_code: Any = None,
+        warehouse_number: Any = None,
+        ean: Any = None,
+    ) -> Tuple[Optional[float], Optional[str]]:
+        """Keep raw cost precedence, then optionally try one reviewed project alias."""
+        resolved = self._resolve_product_expense_for_label(
+            product_sku,
+            item_label,
+            import_code=import_code,
+            warehouse_number=warehouse_number,
+            ean=ean,
+        )
+        if resolved[0] is not None or self.project_settings.get("expense_alias_fallback") is not True:
+            return resolved
+
+        canonical_label = self.canonicalize_reporting_product_label(item_label)
+        if not canonical_label or canonical_label == str(item_label or "").strip():
+            return resolved
+        # Reuse original identifiers so canonical compound costs retain their specificity.
+        # Calling the label resolver directly prevents alias chains/cycles from recursing.
+        alias_resolved = self._resolve_product_expense_for_label(
+            product_sku,
+            canonical_label,
+            import_code=import_code,
+            warehouse_number=warehouse_number,
+            ean=ean,
+        )
+        if alias_resolved[0] is None:
+            return resolved
+        return alias_resolved[0], f"canonical_alias:{alias_resolved[1]}"
+
+    def _resolve_product_expense_for_label(
         self,
         product_sku: str,
         item_label: str,
@@ -7015,7 +7065,10 @@ class BizniWebExporter:
         )
         day_hour_heatmap = self.analyze_day_hour_heatmap(analytics_df)
         country_analysis, city_analysis = self.analyze_geographic(analytics_df)
-        geo_profitability = self.analyze_geo_profitability(analytics_df, fb_campaigns)
+        country_ads = self._fetch_country_ads(
+            date_from, date_to, fb_daily_spend, google_ads_daily_spend,
+        )
+        geo_profitability = self.analyze_geo_profitability(analytics_df, fb_campaigns, country_ads=country_ads)
         b2b_analysis = self.analyze_b2b_vs_b2c(analytics_df)
         product_margins = self.analyze_product_margins(analytics_df)
         product_trends = self.analyze_product_trends(analytics_df)
@@ -7176,6 +7229,10 @@ class BizniWebExporter:
             cost_per_order=cost_per_order,
             fb_campaigns=fb_campaigns,
             total_orders=int(analytics_df["order_num"].nunique()) if "order_num" in analytics_df.columns else len(orders),
+            measurement_status=(
+                getattr(self.fb_client, 'campaign_measurement_status', {'status': 'unavailable'})
+                if (self.project_settings or {}).get('measured_country_ads_enabled', False) else None
+            ),
         )
         source_health.setdefault("qa", {})["geo"] = self._build_geo_qa(
             country_analysis=country_analysis,
@@ -12252,15 +12309,89 @@ class BizniWebExporter:
         print(f"Geographic analysis complete: {len(country_agg)} countries, showing top 20 cities")
         return country_agg, city_agg
 
-    def analyze_geo_profitability(self, df: pd.DataFrame, fb_campaigns: list = None) -> dict:
+    def _fetch_country_ads(self, date_from, date_to, fb_daily_spend, google_daily_spend):
+        if not (self.project_settings or {}).get('measured_country_ads_enabled', False):
+            return None
+        result = {
+            'date_from': date_from.strftime('%Y-%m-%d'),
+            'date_to': date_to.strftime('%Y-%m-%d'),
+            'expected_totals': {
+                'facebook_ads': sum((fb_daily_spend or {}).values()),
+                'google_ads': sum((google_daily_spend or {}).values()),
+            },
+        }
+        for key, client in [('facebook_ads', self.fb_client), ('google_ads', self.google_ads_client)]:
+            try:
+                result[key] = client.get_country_spend(date_from, date_to)
+            except Exception as exc:
+                result[key] = {'status': 'unavailable', 'error_code': type(exc).__name__}
+        return result
+
+    def _validate_country_ads(self, country_ads):
+        """Validate source identity, period and conservation before displaying measured economics."""
+        if country_ads is None:
+            return {
+                'mode': 'estimated', 'failure_count': 0, 'failures': [],
+                'facebook_ads': {'status': 'estimated', 'basis': 'campaign_name_estimate'},
+                'google_ads': {'status': 'estimated', 'basis': 'daily_order_share_estimate'},
+                'fixed_cost_basis': 'daily_order_share_estimate',
+            }
+        result = {'mode': 'measured', 'failure_count': 0, 'failures': [],
+                  'date_from': country_ads.get('date_from'), 'date_to': country_ads.get('date_to'),
+                  'fixed_cost_basis': 'daily_order_share_estimate'}
+        for key, basis in [('facebook_ads', 'meta_country_breakdown'), ('google_ads', 'google_user_location')]:
+            source = dict(country_ads.get(key) or {})
+            problem = None
+            values = source.get('spend_by_country')
+            total = self._safe_float(source.get('total_spend'))
+            expected = self._safe_float((country_ads.get('expected_totals') or {}).get(key))
+            if source.get('status') != 'ok':
+                problem = 'country spend source unavailable'
+            elif source.get('basis') != basis or source.get('currency') != 'EUR':
+                problem = 'country spend basis or EUR currency unverified'
+            elif any(source.get(field) != country_ads.get(field) or not source.get(field)
+                     for field in ('date_from', 'date_to')):
+                problem = 'country spend date range mismatch'
+            elif not isinstance(values, dict) or total is None or expected is None:
+                problem = 'country spend coverage unavailable'
+            elif not np.isfinite(total) or not np.isfinite(expected) or total < 0 or expected < 0:
+                problem = 'invalid country spend totals'
+            else:
+                parsed = {str(country).lower(): self._safe_float(value) for country, value in values.items()}
+                if any(value is None or not np.isfinite(value) or value < 0 for value in parsed.values()):
+                    problem = 'invalid country spend amount'
+                elif abs(sum(parsed.values()) - total) > 0.05 or abs(total - expected) > 0.05:
+                    problem = 'country spend does not reconcile to daily/account spend'
+                else:
+                    source['spend_by_country'] = parsed
+                    source['reconciliation_delta_eur'] = round(total - expected, 6)
+                    source['outside_sk_cz_hu_eur'] = round(sum(value for country, value in parsed.items()
+                                                             if country not in {'sk', 'cz', 'hu'}), 6)
+            if problem:
+                source['status'] = 'unavailable'
+                source['validation_error'] = problem
+                result['failures'].append(f'{key}: {problem}.')
+            result[key] = source
+        result['failure_count'] = len(result['failures'])
+        return result
+
+    def analyze_geo_profitability(self, df: pd.DataFrame, fb_campaigns: list = None, country_ads: dict = None) -> dict:
         """
-        Analyze SK/CZ/HU profitability with estimated FB spend attribution by campaign name.
+        Analyze country profitability using measured provider spend when requested.
         Returns country-level contribution margin and FB CPO.
         """
         print("\nAnalyzing geo profitability (SK/CZ/HU)...")
 
-        orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
-        order_level = self._build_order_geo_frame(df, orders_df).rename(columns={"geo_country": "country"}).copy()
+        attribution = self._validate_country_ads(country_ads)
+        measured = attribution['mode'] == 'measured'
+        if df.empty:
+            revenue_col = 'order_revenue_net'
+            order_level = pd.DataFrame(columns=['country', 'order_num', revenue_col, 'product_cost',
+                                               'packaging_cost', 'shipping_net_cost', 'allocated_google_spend',
+                                               'allocated_fixed_overhead'])
+        else:
+            orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+            order_level = self._build_order_geo_frame(df, orders_df).rename(columns={"geo_country": "country"}).copy()
         order_level['country'] = order_level['country'].fillna('unknown').astype(str).str.lower().str.strip()
 
         # Normalize common country aliases.
@@ -12275,13 +12406,19 @@ class BizniWebExporter:
             'maÄŹarsko': 'hu',
         }
         order_level['country'] = order_level['country'].replace(alias_map)
-        order_level = order_level[order_level['country'].isin(['sk', 'cz', 'hu'])]
+        if measured:
+            order_level['country'] = order_level['country'].map(
+                lambda country: country if country in {'sk', 'cz', 'hu', 'unknown'} else 'other'
+            )
+        else:
+            order_level = order_level[order_level['country'].isin(['sk', 'cz', 'hu'])]
 
-        if order_level.empty:
+        if order_level.empty and not measured:
             return {
                 'table': pd.DataFrame(),
                 'fb_spend_by_country': {'sk': 0.0, 'cz': 0.0, 'hu': 0.0},
-                'fb_spend_unattributed': 0.0
+                'fb_spend_unattributed': 0.0,
+                'spend_attribution': attribution,
             }
 
         geo = order_level.groupby('country').agg({
@@ -12294,6 +12431,12 @@ class BizniWebExporter:
             'allocated_fixed_overhead': 'sum'
         }).reset_index()
         geo.columns = ['country', 'orders', 'revenue', 'product_cost', 'packaging_cost', 'shipping_net_cost', 'google_ads_spend', 'fixed_cost']
+        if measured:
+            country_keys = set(geo['country']) | {'sk', 'cz', 'hu'}
+            for provider in ('facebook_ads', 'google_ads'):
+                country_keys.update(country if country in {'sk', 'cz', 'hu', 'unknown'} else 'other'
+                                    for country in (attribution[provider].get('spend_by_country') or {}))
+            geo = geo.set_index('country').reindex(sorted(country_keys), fill_value=0).reset_index()
         geo['shipping_subsidy_cost'] = geo['shipping_net_cost']
 
         fb_spend_by_country = {'sk': 0.0, 'cz': 0.0, 'hu': 0.0}
@@ -12318,33 +12461,50 @@ class BizniWebExporter:
                 fb_spend_unattributed += spend
 
         geo['fb_ads_spend'] = geo['country'].map(fb_spend_by_country).fillna(0)
+        if measured:
+            for provider, column in [('facebook_ads', 'fb_ads_spend'), ('google_ads', 'google_ads_spend')]:
+                source = attribution[provider]
+                if source.get('status') != 'ok':
+                    geo[column] = np.nan
+                    continue
+                grouped = {}
+                for country, spend in source['spend_by_country'].items():
+                    key = country if country in {'sk', 'cz', 'hu', 'unknown'} else 'other'
+                    grouped[key] = grouped.get(key, 0.0) + spend
+                geo[column] = geo['country'].map(grouped).fillna(0.0)
+            fb_spend_by_country = dict(zip(geo['country'], geo['fb_ads_spend']))
+            fb_spend_unattributed = attribution['facebook_ads'].get('outside_sk_cz_hu_eur', 0.0)
+        geo['fb_spend_basis'] = attribution['facebook_ads'].get('basis', 'unavailable')
+        geo['google_spend_basis'] = attribution['google_ads'].get('basis', 'unavailable')
+        geo['spend_attribution_status'] = 'unavailable' if attribution['failure_count'] else attribution['mode']
         geo['paid_ads_spend'] = geo['fb_ads_spend'] + geo['google_ads_spend']
+        geo['net_mer'] = geo['revenue'] / geo['paid_ads_spend'].where(geo['paid_ads_spend'] > 0, np.nan)
         geo['gross_profit'] = geo['revenue'] - geo['product_cost']
         geo['contribution_cost_without_fixed'] = geo['product_cost'] + geo['packaging_cost'] + geo['shipping_net_cost'] + geo['paid_ads_spend']
         geo['contribution_profit_without_fixed'] = geo['revenue'] - geo['contribution_cost_without_fixed']
         geo['contribution_margin_without_fixed_pct'] = geo.apply(
-            lambda row: round((row['contribution_profit_without_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 2),
+            lambda row: round((row['contribution_profit_without_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else np.nan, 2),
             axis=1
         )
         geo['contribution_cost_with_fixed'] = geo['contribution_cost_without_fixed'] + geo['fixed_cost']
         geo['contribution_profit_with_fixed'] = geo['revenue'] - geo['contribution_cost_with_fixed']
         geo['contribution_margin_with_fixed_pct'] = geo.apply(
-            lambda row: round((row['contribution_profit_with_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else 0, 2),
+            lambda row: round((row['contribution_profit_with_fixed'] / row['revenue'] * 100) if row['revenue'] > 0 else np.nan, 2),
             axis=1
         )
         geo['contribution_cost'] = geo['contribution_cost_with_fixed']
         geo['contribution_profit'] = geo['contribution_profit_with_fixed']
         geo['contribution_margin_pct'] = geo['contribution_margin_with_fixed_pct']
         geo['fb_cpo'] = geo.apply(
-            lambda row: round((row['fb_ads_spend'] / row['orders']) if row['orders'] > 0 else 0, 2),
+            lambda row: round((row['fb_ads_spend'] / row['orders']) if row['orders'] > 0 else np.nan, 2),
             axis=1
         )
         geo['google_cpo'] = geo.apply(
-            lambda row: round((row['google_ads_spend'] / row['orders']) if row['orders'] > 0 else 0, 2),
+            lambda row: round((row['google_ads_spend'] / row['orders']) if row['orders'] > 0 else np.nan, 2),
             axis=1
         )
         geo['paid_cpo'] = geo.apply(
-            lambda row: round((row['paid_ads_spend'] / row['orders']) if row['orders'] > 0 else 0, 2),
+            lambda row: round((row['paid_ads_spend'] / row['orders']) if row['orders'] > 0 else np.nan, 2),
             axis=1
         )
         geo['avg_order_value'] = geo.apply(
@@ -12353,6 +12513,11 @@ class BizniWebExporter:
         )
         geo_meta = geo['orders'].apply(lambda value: self._geo_confidence_payload(value, level="country"))
         geo = pd.concat([geo, pd.DataFrame(geo_meta.tolist(), index=geo.index)], axis=1)
+        if attribution['failure_count']:
+            geo['confidence_status'] = 'unavailable'
+            geo['confidence_label'] = 'Spend unavailable'
+            geo['confidence_score'] = 0.0
+            geo['hide_economics'] = True
         geo['contribution_profit_without_fixed_guarded'] = geo.apply(
             lambda row: row['contribution_profit_without_fixed'] if not bool(row.get('hide_economics')) else np.nan,
             axis=1,
@@ -12398,7 +12563,8 @@ class BizniWebExporter:
         return {
             'table': geo,
             'fb_spend_by_country': {k: round(v, 2) for k, v in fb_spend_by_country.items()},
-            'fb_spend_unattributed': round(fb_spend_unattributed, 2)
+            'fb_spend_unattributed': round(fb_spend_unattributed, 2),
+            'spend_attribution': attribution,
         }
 
     def analyze_b2b_vs_b2c(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -17105,14 +17271,9 @@ class BizniWebExporter:
                         'attribution_method': '0.6_click_share + 0.4_spend_share',
                     })
 
-            # Sort by estimated CPO (best first)
-            campaign_attribution.sort(
-                key=lambda row: (
-                    row['estimated_cpo']
-                    if row.get('estimated_cpo') is not None and row['estimated_cpo'] > 0
-                    else float('inf')
-                )
-            )
+            # This allocation model cannot establish sales performance. List by
+            # spend for inspection rather than rewarding cheap-click campaigns.
+            campaign_attribution.sort(key=lambda row: row['spend'], reverse=True)
             result['campaign_attribution'] = campaign_attribution
             estimated_orders_total = sum(row['estimated_orders'] for row in campaign_attribution)
             result['campaign_attribution_summary'] = {

@@ -1,10 +1,17 @@
 """Verified Hungarian COD identity must follow the existing realization policy."""
+import os
 import unittest
+from unittest.mock import patch
 
 from tests.test_report_status_identity import exporter, order
 
 
 class VevoCountryPolicyTests(unittest.TestCase):
+    def setUp(self):
+        environment = patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+
     def test_verified_country_cod_methods_share_realization_policy(self):
         exp = exporter()
         exp.prepare_reporting_status_identity()

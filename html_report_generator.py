@@ -11,6 +11,12 @@ import json
 from html import escape
 
 
+def _measurement_value(value, *, currency=False, percent=False):
+    if value is None or pd.isna(value):
+        return 'N/A'
+    return ('&#8364;' if currency else '') + f'{float(value):,.2f}' + ('%' if percent else '')
+
+
 def _fix_common_mojibake(text: str) -> str:
     """
     Repair common mojibake artifacts that appear when UTF-8 text was
@@ -2410,7 +2416,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
-                <p style="color: #718096; margin-bottom: 15px;">Performance breakdown by campaign. Click headers to sort. Focus on campaigns with best conversion rates and lowest cost per conversion.</p>
+                <p style="color: #718096; margin-bottom: 15px;">Meta website purchases use the exact purchase event, 7-day click attribution and impression date; these are not reconciled fulfilled orders.</p>
                 <table>
                     <thead>
                         <tr>
@@ -2423,9 +2429,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             <th class="number">CTR</th>
                             <th class="number">CPC</th>
                             <th class="number">CPM</th>
-                            <th class="number">Conversions</th>
-                            <th class="number">Conv. Rate</th>
-                            <th class="number">Cost/Conv</th>
+                            <th class="number">Meta purchases (7d click)</th>
+                            <th class="number">Purchases / all clicks</th>
+                            <th class="number">Cost/Meta purchase</th>
                             <th class="number">% of Spend</th>
                         </tr>
                     </thead>
@@ -2444,7 +2450,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     frequency = campaign.get('frequency', 0)
                     conversions = campaign.get('conversions', 0)
                     conversion_rate = campaign.get('conversion_rate', 0)
-                    cost_per_conversion = campaign.get('cost_per_conversion', 0)
+                    cost_per_conversion = campaign.get('cost_per_conversion')
                     spend_pct = (spend / total_campaign_spend * 100) if total_campaign_spend > 0 else 0
                     status = campaign.get('status', 'UNKNOWN')
                     objective = campaign.get('objective', 'UNKNOWN').replace('_', ' ').title()
@@ -2468,7 +2474,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             <td class="number">&#8364;{cpm:.2f}</td>
                             <td class="number">{conversions}</td>
                             <td class="number" style="color: {conv_rate_color}; font-weight: bold;">{conversion_rate:.2f}%</td>
-                            <td class="number">{'&#8364;' + f'{cost_per_conversion:.2f}' if cost_per_conversion > 0 else '-'}</td>
+                            <td class="number">{_measurement_value(cost_per_conversion, currency=True)}</td>
                             <td class="number">{spend_pct:.1f}%</td>
                         </tr>"""
 
@@ -2521,8 +2527,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Campaign Cost Per Conversion Comparison</h2>
-            <p class="chart-explanation">Cost per conversion comparison - lower bars indicate more efficient conversion spending</p>
+            <h2 class="chart-title">Cost Per Meta Purchase (7-Day Click)</h2>
+            <p class="chart-explanation">Cost per exact Meta website purchase attributed within 7 days of a click. No-purchase campaigns have unavailable CPA.</p>
             <canvas id="campaignCostPerConversionChart"></canvas>
         </div>"""
 
@@ -2666,11 +2672,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="table-container">
             <div class="collapsible-header expanded" onclick="toggleCollapse(this)">
-                <h2 class="table-title">Estimated Campaign Attribution</h2>
+                <h2 class="table-title">Modeled Campaign Allocation</h2>
                 <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content expanded">
-                <p style="color: #718096; margin-bottom: 15px;">Estimated orders attributed to each campaign based on click and spend distribution (60% click-weighted, 40% spend-weighted). Best performers are listed first.</p>
+                <p style="color: #718096; margin-bottom: 15px;">Modeled allocation of orders and revenue: 60% click share + 40% spend share. This is not measured sales attribution and cannot establish campaign sales performance. Listed by spend.</p>
                 <table>
                     <thead>
                         <tr>
@@ -4865,12 +4871,18 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     if geo_profitability and isinstance(geo_profitability, dict):
         geo_table = geo_profitability.get('table')
         unattributed_fb = geo_profitability.get('fb_spend_unattributed', 0)
+        geo_spend_note = (
+            'Measured ad recipient country (Meta) and physical user country (Google). Orders use delivery/invoice country. Fixed overhead is allocated by daily order share.'
+            if (geo_profitability.get('spend_attribution') or {}).get('mode') == 'measured'
+            else 'Estimated allocation: Meta campaign names and Google daily order shares. Fixed overhead is allocated; these are not measured country ad costs.'
+        )
+        geo_spend_note += ' Country contribution excludes separate creditnote fulfillment adjustments and fixed overhead on days without orders; it does not reconcile to company net profit.'
         if geo_table is not None and not geo_table.empty:
             html_content += f"""
 
         <div class="chart-container">
             <h2 class="chart-title">SK/CZ/HU Profitability (Post-Ad Contribution + FB CPO)</h2>
-            <p class="chart-explanation">Country-level post-ad contribution view using net revenue, product costs, packaging, net shipping, and estimated FB spend by campaign naming (fixed overhead excluded). Unattributed FB spend (not mapped to SK/CZ/HU): &#8364;{unattributed_fb:,.2f}.</p>
+            <p class="chart-explanation">{escape(geo_spend_note)} Contribution includes allocated fixed overhead. Meta spend outside SK/CZ/HU: &#8364;{unattributed_fb:,.2f}.</p>
             <canvas id="geoProfitabilityChart"></canvas>
         </div>
 
@@ -4906,10 +4918,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <td class="number">&#8364;{row.get('product_cost', 0):,.2f}</td>
                         <td class="number">&#8364;{row.get('packaging_cost', 0):,.2f}</td>
                         <td class="number">&#8364;{row.get('shipping_net_cost', row.get('shipping_subsidy_cost', 0)):,.2f}</td>
-                        <td class="number">&#8364;{row.get('fb_ads_spend', 0):,.2f}</td>
-                        <td class="number {'profit-positive' if row.get('contribution_profit', 0) >= 0 else 'profit-negative'}">&#8364;{row.get('contribution_profit', 0):,.2f}</td>
-                        <td class="number {'profit-positive' if row.get('contribution_margin_pct', 0) >= 0 else 'profit-negative'}">{row.get('contribution_margin_pct', 0):.2f}%</td>
-                        <td class="number">&#8364;{row.get('fb_cpo', 0):,.2f}</td>
+                        <td class="number">{_measurement_value(row.get('fb_ads_spend'), currency=True)}</td>
+                        <td class="number">{_measurement_value(row.get('contribution_profit'), currency=True)}</td>
+                        <td class="number">{_measurement_value(row.get('contribution_margin_pct'), percent=True)}</td>
+                        <td class="number">{_measurement_value(row.get('fb_cpo'), currency=True)}</td>
                     </tr>"""
 
             html_content += """
@@ -8605,7 +8617,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             }});
         }}
 
-        // Campaign Cost Per Conversion Comparison Chart
+        // Cost Per Meta Purchase (7-Day Click) Chart
         const campaignCostPerConversionCtx = document.getElementById('campaignCostPerConversionChart');
         if (campaignCostPerConversionCtx) {{
             const campaignCostPerConversions = {json.dumps([c.get('cost_per_conversion', 0) for c in active_campaigns_js])};
@@ -10542,8 +10554,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         geo_table = geo_profitability.get('table')
         if geo_table is not None and not geo_table.empty:
             geo_labels = [str(c).upper() for c in geo_table['country'].tolist()]
-            geo_margin = geo_table['contribution_margin_pct'].tolist()
-            geo_cpo = geo_table['fb_cpo'].tolist()
+            geo_margin = [None if pd.isna(value) else value for value in geo_table['contribution_margin_pct'].tolist()]
+            geo_cpo = [None if pd.isna(value) else value for value in geo_table['fb_cpo'].tolist()]
             html_content += f"""
 
         // Geo Profitability Chart

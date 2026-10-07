@@ -6,6 +6,7 @@ Facebook Ads API integration for fetching marketing spend data
 import os
 import json
 import re
+import math
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -21,6 +22,10 @@ load_dotenv(encoding="utf-8-sig")
 # Set up logging
 logger = get_logger('facebook_ads')
 
+ADS_MEASUREMENT_SCHEMA_VERSION = 2
+PURCHASE_ACTION = 'offsite_conversion.fb_pixel_purchase'
+PURCHASE_WINDOW = '7d_click'
+
 class FacebookTokenError(RuntimeError):
     """Raised when Facebook OAuth token is invalid or expired."""
 
@@ -32,6 +37,7 @@ class FacebookAdsClient:
         self.app_id = os.getenv('FACEBOOK_APP_ID')
         self.app_secret = os.getenv('FACEBOOK_APP_SECRET')
         self.request_timeout = resolve_timeout(os.getenv('FACEBOOK_API_TIMEOUT_SEC'))
+        self.campaign_measurement_status = {'status': 'unavailable'}
         
         # API version - use latest stable version
         self.api_version = 'v21.0'
@@ -130,6 +136,77 @@ class FacebookAdsClient:
         response.raise_for_status()
         payload = response.json()
         return payload if isinstance(payload, dict) else {}
+
+    def _get_all_rows(self, url: str, params: Dict[str, Any], context: str) -> List[Dict[str, Any]]:
+        """Follow bounded cursor pagination without following token-bearing next URLs."""
+        query = dict(params)
+        rows = []
+        seen = set()
+        for _ in range(100):
+            payload = self._get_json(url, query, context)
+            if 'error' in payload or not isinstance(payload.get('data'), list):
+                raise ValueError('Invalid Meta Insights response')
+            rows.extend(payload['data'])
+            paging = payload.get('paging') or {}
+            if not paging.get('next'):
+                return rows
+            cursor = (paging.get('cursors') or {}).get('after')
+            if not cursor or cursor in seen:
+                raise ValueError('Meta pagination did not advance')
+            seen.add(cursor)
+            query['after'] = cursor
+        raise ValueError('Meta pagination exceeded page limit')
+
+    @staticmethod
+    def _action_count(actions: List[Dict[str, Any]], action_type: str) -> float:
+        matches = [action for action in actions if action.get('action_type') == action_type]
+        if len(matches) > 1:
+            raise ValueError('Duplicate canonical Meta action')
+        if matches and PURCHASE_WINDOW not in matches[0]:
+            raise ValueError('Canonical Meta action missing requested attribution window')
+        value = float(matches[0].get(PURCHASE_WINDOW, 0)) if matches else 0.0
+        if not math.isfinite(value) or value < 0:
+            raise ValueError('Invalid Meta action count')
+        return value
+
+    def get_country_spend(self, date_from: datetime, date_to: datetime) -> Dict[str, Any]:
+        """Measured ad-recipient country spend; failed requests never become zero."""
+        result = {
+            'status': 'disabled' if not self.is_configured else 'unavailable',
+            'basis': 'meta_country_breakdown', 'currency': None,
+            'date_from': date_from.strftime('%Y-%m-%d'),
+            'date_to': date_to.strftime('%Y-%m-%d'),
+            'spend_by_country': {}, 'total_spend': None,
+        }
+        if not self.is_configured:
+            return result
+        try:
+            account = self._get_json(f'{self.base_url}/{self.ad_account_id}',
+                                     {'fields': 'currency'}, 'Meta account currency')
+            result['currency'] = account.get('currency')
+            if result['currency'] != 'EUR':
+                raise ValueError('Meta country spend requires verified EUR account')
+            rows = self._get_all_rows(f'{self.base_url}/{self.ad_account_id}/insights', {
+                'fields': 'spend', 'level': 'account', 'breakdowns': 'country',
+                'time_range': json.dumps({'since': result['date_from'], 'until': result['date_to']}),
+                'limit': 500,
+            }, 'Meta country spend')
+            countries = {}
+            for row in rows:
+                country = str(row.get('country') or 'unknown').strip().lower()
+                if not re.fullmatch('[a-z]{2}', country):
+                    country = 'unknown'
+                spend = float(row.get('spend', 0))
+                if not math.isfinite(spend) or spend < 0:
+                    raise ValueError('Invalid Meta country spend')
+                countries[country] = countries.get(country, 0.0) + spend
+            result.update(status='ok', spend_by_country=countries,
+                          total_spend=round(sum(countries.values()), 6))
+        except Exception as exc:
+            # Exception strings and request URLs can contain credentials.
+            result['error_code'] = type(exc).__name__
+            logger.warning('Meta country spend unavailable (%s)', type(exc).__name__)
+        return result
     
     def get_cache_filename(self, date_from: datetime, date_to: datetime) -> Path:
         """Generate cache filename for a date range"""
@@ -156,6 +233,8 @@ class FacebookAdsClient:
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                if data.get('measurement_schema_version') != ADS_MEASUREMENT_SCHEMA_VERSION:
+                    return None
                 # Check if cache is still valid
                 cached_at = datetime.fromisoformat(data.get('cached_at', ''))
                 if (datetime.now() - cached_at).days > 30:  # Expire cache after 30 days
@@ -172,6 +251,7 @@ class FacebookAdsClient:
         
         try:
             cache_data = {
+                'measurement_schema_version': ADS_MEASUREMENT_SCHEMA_VERSION,
                 'date_from': date_from.strftime('%Y-%m-%d'),
                 'date_to': date_to.strftime('%Y-%m-%d'),
                 'cached_at': datetime.now().isoformat(),
@@ -228,7 +308,7 @@ class FacebookAdsClient:
             }
 
             # Make the API request
-            data = self._get_json(url, params, "Error fetching Facebook Ads data")
+            data = {'data': self._get_all_rows(url, params, "Error fetching Facebook Ads data")}
 
             # Process the response
             daily_spend = {}
@@ -299,7 +379,7 @@ class FacebookAdsClient:
                 'limit': 500
             }
 
-            data = self._get_json(url, params, "Error fetching detailed Facebook Ads metrics")
+            data = {'data': self._get_all_rows(url, params, "Error fetching detailed Facebook Ads metrics")}
             daily_metrics = {}
 
             if 'data' in data:
@@ -339,6 +419,12 @@ class FacebookAdsClient:
         Returns:
             List of campaign spend data with metrics
         """
+        self.campaign_measurement_status = {
+            'status': 'unavailable' if self.is_configured else 'disabled',
+            'purchase_action_type': PURCHASE_ACTION,
+            'purchase_attribution_window': PURCHASE_WINDOW,
+            'purchase_report_time': 'impression',
+        }
         if not self.is_configured:
             return []
 
@@ -355,7 +441,7 @@ class FacebookAdsClient:
                 'limit': 500
             }
 
-            campaigns_data = self._get_json(campaigns_url, campaigns_params, "Error fetching campaign list")
+            campaigns_data = {'data': self._get_all_rows(campaigns_url, campaigns_params, "Error fetching campaign list")}
 
             campaign_spend = []
 
@@ -371,10 +457,16 @@ class FacebookAdsClient:
                     insights_params = {
                         'fields': 'spend,impressions,clicks,reach,cpc,cpm,ctr,frequency,unique_clicks,cost_per_unique_click,actions,conversions,cost_per_action_type,conversion_values',
                         'time_range': f'{{"since":"{since}","until":"{until}"}}',
-                        'level': 'campaign'
+                        'level': 'campaign',
+                        'action_attribution_windows': json.dumps([PURCHASE_WINDOW]),
+                        'action_report_time': 'impression',
                     }
 
                     insights_data = self._get_json(insights_url, insights_params, "Error fetching campaign insights")
+                    if 'error' in insights_data or not isinstance(insights_data.get('data'), list):
+                        raise ValueError('Invalid Meta campaign Insights response')
+                    if len(insights_data['data']) > 1 or (insights_data.get('paging') or {}).get('next'):
+                        raise ValueError('Unexpected multiple aggregate campaign Insights rows')
 
                     if 'data' in insights_data and insights_data['data']:
                         data = insights_data['data'][0]
@@ -385,37 +477,25 @@ class FacebookAdsClient:
 
                         # Extract conversion data
                         actions = data.get('actions', [])
-                        conversions_count = 0
-                        purchases_count = 0
-                        add_to_cart_count = 0
-
-                        for action in actions:
-                            action_type = action.get('action_type', '')
-                            value = int(action.get('value', 0))
-
-                            if 'purchase' in action_type or 'conversion' in action_type:
-                                conversions_count += value
-                            if action_type == 'offsite_conversion.fb_pixel_purchase':
-                                purchases_count = value
-                            if action_type == 'offsite_conversion.fb_pixel_add_to_cart':
-                                add_to_cart_count = value
+                        purchases_count = self._action_count(actions, PURCHASE_ACTION)
+                        conversions_count = purchases_count  # Backward-compatible field, same exact definition.
+                        add_to_cart_count = self._action_count(actions, 'offsite_conversion.fb_pixel_add_to_cart')
 
                         # Extract cost per action
                         cost_per_action_types = data.get('cost_per_action_type', [])
-                        reported_cost_per_conversion = 0
-                        reported_cost_per_purchase = 0
+                        reported_cost_per_conversion = None
+                        reported_cost_per_purchase = None
 
                         for cpa in cost_per_action_types:
                             action_type = cpa.get('action_type', '')
-                            value = float(cpa.get('value', 0))
+                            value = cpa.get(PURCHASE_WINDOW)
 
                             if action_type == 'offsite_conversion.fb_pixel_purchase':
-                                reported_cost_per_purchase = value
-                            elif 'purchase' in action_type or 'conversion' in action_type:
-                                reported_cost_per_conversion = value if reported_cost_per_conversion == 0 else reported_cost_per_conversion
+                                reported_cost_per_purchase = float(value) if value is not None else None
+                                reported_cost_per_conversion = reported_cost_per_purchase
 
-                        cost_per_conversion = (spend / conversions_count) if conversions_count > 0 else 0
-                        cost_per_purchase = (spend / purchases_count) if purchases_count > 0 else 0
+                        cost_per_conversion = (spend / conversions_count) if conversions_count > 0 else None
+                        cost_per_purchase = (spend / purchases_count) if purchases_count > 0 else None
 
                         # Calculate conversion rate
                         conversion_rate = (conversions_count / clicks * 100) if clicks > 0 else 0
@@ -437,6 +517,10 @@ class FacebookAdsClient:
                             'unique_clicks': int(data.get('unique_clicks', 0)),
                             'cost_per_unique_click': float(data.get('cost_per_unique_click', 0)),
                             'platform_conversions': conversions_count,
+                            'measurement_schema_version': ADS_MEASUREMENT_SCHEMA_VERSION,
+                            'purchase_action_type': PURCHASE_ACTION,
+                            'purchase_attribution_window': PURCHASE_WINDOW,
+                            'purchase_report_time': 'impression',
                             'platform_purchases': purchases_count,
                             'conversions': conversions_count,
                             'purchases': purchases_count,
@@ -452,6 +536,7 @@ class FacebookAdsClient:
 
             # Sort by spend descending
             campaign_spend.sort(key=lambda x: x['spend'], reverse=True)
+            self.campaign_measurement_status['status'] = 'ok'
             logger.info(f"Retrieved data for {len(campaign_spend)} campaigns")
             return campaign_spend
 

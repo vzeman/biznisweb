@@ -732,12 +732,13 @@ def _library_tile_html(
 
 def _geo_confidence_badge_html(status: Any) -> str:
     normalized = str(status or "observe").strip().lower()
-    if normalized not in {"ready", "observe", "ignore"}:
+    if normalized not in {"ready", "observe", "ignore", "unavailable"}:
         normalized = "observe"
     labels = {
         "ready": ("Ready", "Pripravene"),
         "observe": ("Observe", "Sledovat"),
         "ignore": ("Ignore", "Ignorovat"),
+        "unavailable": ("Unavailable", "Nedostupne"),
     }
     en_label, sk_label = labels[normalized]
     return (
@@ -978,6 +979,7 @@ def generate_modern_dashboard(
             "fb_ads_spend",
             "google_ads_spend",
             "paid_ads_spend",
+            "net_mer",
             "contribution_profit_without_fixed",
             "contribution_profit_without_fixed_guarded",
             "contribution_profit_with_fixed",
@@ -997,6 +999,9 @@ def generate_modern_dashboard(
             "confidence_score",
             "low_sample",
             "hide_economics",
+            "fb_spend_basis",
+            "google_spend_basis",
+            "spend_attribution_status",
         ],
         limit=6,
     )
@@ -1243,7 +1248,7 @@ def generate_modern_dashboard(
             campaign_frame = campaign_frame.sort_values("spend", ascending=False)
             fb_campaign_rows = _frame_rows(
                 campaign_frame,
-                ["campaign_name", "spend", "clicks", "impressions", "ctr", "cpc", "cpm", "reach", "platform_conversions", "conversions", "cost_per_platform_conversion", "cost_per_conversion"],
+                ["campaign_name", "spend", "clicks", "impressions", "ctr", "cpc", "cpm", "reach", "platform_conversions", "conversions", "platform_purchases", "cost_per_platform_conversion", "cost_per_conversion", "purchase_action_type", "purchase_attribution_window", "purchase_report_time", "measurement_schema_version"],
                 limit=12,
             )
 
@@ -2588,6 +2593,7 @@ def generate_modern_dashboard(
         "cities": cities,
         "countries": countries,
         "geo_rows": geo_rows,
+        "geo_spend_attribution": (geo_profitability or {}).get("spend_attribution") or {},
         "products": products,
         "product_margin_chart_rows": product_margin_chart_rows,
         "trend_rows": trend_rows,
@@ -3820,10 +3826,13 @@ def generate_modern_dashboard(
             "<tr>"
             f"<td><div class=\"table-label-stack\"><strong>{escape(str(row.get('country') or 'Unknown')).upper()}</strong>"
             f"{_geo_confidence_badge_html(row.get('confidence_status'))}"
-            f"<div class=\"muted-note\"><span class=\"lang-en\">Score {int(round(_num(row.get('confidence_score'))))}%</span><span class=\"lang-sk hidden\">Skore {int(round(_num(row.get('confidence_score'))))}%</span></div>"
+            f"<div class=\"muted-note\">Sample {int(round(_num(row.get('confidence_score'))))}% · Spend: {escape(str(row.get('spend_attribution_status') or 'estimated'))}</div>"
             "</div></td>"
             f"<td>{int(round(_num(row.get('orders'))))}</td>"
             f"<td>{_format_library_tile_value(row.get('revenue'), kind='currency')}</td>"
+            f"<td>{_format_library_tile_value(row.get('fb_ads_spend'), kind='currency')}</td>"
+            f"<td>{_format_library_tile_value(row.get('google_ads_spend'), kind='currency')}</td>"
+            f"<td>{_format_library_tile_value(row.get('net_mer'), decimals=2)}</td>"
             f"<td>{_format_library_tile_value(row.get('contribution_profit_without_fixed_guarded'), kind='currency')}</td>"
             f"<td>{_format_library_tile_value(row.get('contribution_profit_with_fixed_guarded'), kind='currency')}</td>"
             f"<td>{_format_library_tile_value(row.get('contribution_margin_without_fixed_pct_guarded'), kind='percent')}</td>"
@@ -3832,7 +3841,17 @@ def generate_modern_dashboard(
             "</tr>"
         )
         for row in geo_rows
-    ) or '<tr><td colspan="8"><span class="lang-en">No geo profitability data available.</span><span class="lang-sk hidden">Geo profitabilita nie je dostupna.</span></td></tr>'
+    ) or '<tr><td colspan="11"><span class="lang-en">No geo profitability data available.</span><span class="lang-sk hidden">Geo profitabilita nie je dostupna.</span></td></tr>'
+    geo_spend_note = (
+        'Ads: Meta recipient country and Google physical user country. Orders: delivery/invoice country. Fixed overhead is allocated by daily order share.'
+        if ((geo_profitability or {}).get('spend_attribution') or {}).get('mode') == 'measured'
+        else 'Estimated ads allocation: Meta campaign names and Google daily order shares. Fixed overhead is also allocated; these are not measured country ad costs.'
+    )
+    geo_period = (geo_profitability or {}).get('spend_attribution') or {}
+    if geo_period.get('date_from') and geo_period.get('date_to'):
+        geo_spend_note = f"{geo_period['date_from']} - {geo_period['date_to']}. " + geo_spend_note
+    geo_spend_note += ' Net MER = all realized net merchandise sales / Meta + Google spend; it is not platform-attributed ROAS.'
+    geo_spend_note += ' Country contribution excludes separate creditnote fulfillment adjustments and fixed overhead on days without orders; it does not reconcile to company net profit.'
     geo_warning_items = list(geo_qa.get("warnings") or [])
     geo_warning_items_html = "".join(f"<li>{escape(str(item))}</li>" for item in geo_warning_items)
     geo_warning_block_html = (
@@ -4065,7 +4084,7 @@ def generate_modern_dashboard(
     ) or '<tr><td colspan="6"><span class="lang-en">No mature-cohort retention data available.</span><span class="lang-sk hidden">Data zrelych kohort nie su dostupne.</span></td></tr>'
 
     fb_campaign_rows_html = "".join(
-        f"<tr><td>{escape(str(row.get('campaign_name') or 'Unknown'))}</td><td>?{_num(row.get('spend')):,.2f}</td><td>{int(round(_num(row.get('clicks'))))}</td><td>{_num(row.get('ctr')):.2f}%</td><td>?{_num(row.get('cpc')):,.2f}</td><td>{int(round(_num(row.get('platform_conversions', row.get('conversions')))))}</td></tr>"
+        f"<tr><td>{escape(str(row.get('campaign_name') or 'Unknown'))}</td><td>?{_num(row.get('spend')):,.2f}</td><td>{int(round(_num(row.get('clicks'))))}</td><td>{_num(row.get('ctr')):.2f}%</td><td>?{_num(row.get('cpc')):,.2f}</td><td>{_format_library_tile_value(row.get('platform_conversions', row.get('conversions')), decimals=2)}</td></tr>"
         for row in fb_campaign_rows
     ) or '<tr><td colspan="6"><span class="lang-en">No campaign data available.</span><span class="lang-sk hidden">Kampaňové dáta nie sú dostupné.</span></td></tr>'
     campaign_cpo_rows_html = "".join(
@@ -5111,14 +5130,14 @@ def generate_modern_dashboard(
                     </div>
                     <div class="grid-2" style="margin-top:18px;">
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Campaign performance</span><span class="lang-sk hidden">Vykon kampani</span></h3><p><span class="lang-en">Campaign-level Facebook delivery and platform conversions.</span><span class="lang-sk hidden">Facebook delivery a platformove konverzie na urovni kampani.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Campaign performance</span><span class="lang-sk hidden">Vykon kampani</span></h3><p><span class="lang-en">Meta website purchases: exact purchase event, 7-day click attribution, impression date. Platform purchases are not reconciled fulfilled orders.</span><span class="lang-sk hidden">Meta nakupy na webe: presny purchase event, 7 dni po kliknuti, datum impresie. Nie su to overene vybavene objednavky.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Clicks</span><span class="lang-sk hidden">Kliky</span></th><th>CTR</th><th>CPC</th><th><span class="lang-en">Platform conv.</span><span class="lang-sk hidden">Platform konv.</span></th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Clicks</span><span class="lang-sk hidden">Kliky</span></th><th>CTR</th><th>CPC</th><th><span class="lang-en">Meta purchases (7d click)</span><span class="lang-sk hidden">Meta nakupy (7d klik)</span></th></tr></thead>
                                 <tbody>{fb_campaign_rows_html}</tbody>
                             </table>
                         </div>
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Campaign attribution estimate</span><span class="lang-sk hidden">Odhad atribucie kampani</span></h3><p><span class="lang-en">Estimated attributed orders, attributed CPO and ROAS by campaign.</span><span class="lang-sk hidden">Odhad atribuovanych objednavok, atribucneho CPO a ROAS podla kampane.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Modeled campaign allocation</span><span class="lang-sk hidden">Modelova alokacia kampani</span></h3><p><span class="lang-en">Allocation: 60% click share + 40% spend share. It is not observed sales attribution and cannot establish campaign sales performance.</span><span class="lang-sk hidden">Alokacia: 60 % podiel klikov + 40 % podiel vydavkov. Nie je to merana atribucia predaja ani dokaz vykonu kampane.</span></p></div></div>
                             <table>
                                 <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Attributed orders est.</span><span class="lang-sk hidden">Odhad atrib. obj.</span></th><th><span class="lang-en">Cost / attributed order</span><span class="lang-sk hidden">Naklad / atrib. obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th>ROAS</th></tr></thead>
                                 <tbody>{campaign_cpo_rows_html}</tbody>
@@ -5170,7 +5189,7 @@ def generate_modern_dashboard(
                     </div>
                     <div class="grid-2" style="margin-top:18px;">
                         <div class="panel chart-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Campaign efficiency comparison</span><span class="lang-sk hidden">Porovnanie efektivity kampani</span></h3><p><span class="lang-en">CTR, CPC and cost per conversion on one campaign view.</span><span class="lang-sk hidden">CTR, CPC a cost per conversion v jednom kampanovom pohlade.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Campaign efficiency comparison</span><span class="lang-sk hidden">Porovnanie efektivity kampani</span></h3><p><span class="lang-en">Campaign spend, CTR and CPC in one view.</span><span class="lang-sk hidden">Vydavky kampane, CTR a CPC v jednom pohlade.</span></p></div></div>
                             <div class="chart-shell"><canvas id="campaignEfficiencyChart"></canvas></div>
                         </div>
                         <div class="panel chart-card">
@@ -5514,9 +5533,9 @@ def generate_modern_dashboard(
                         <div class="chart-shell"><canvas id="geoProfitabilityChart"></canvas></div>
                     </div>
                     <div class="panel table-card" style="margin-top:18px;">
-                        <div class="card-head"><div><h3><span class="lang-en">Geo profitability</span><span class="lang-sk hidden">Geo profitabilita</span></h3><p><span class="lang-en">Country-level contribution view from the richer report.</span><span class="lang-sk hidden">Country-level contribution pohlad z bohatsieho reportu.</span></p></div></div>
+                        <div class="card-head"><div><h3><span class="lang-en">Geo profitability</span><span class="lang-sk hidden">Geo profitabilita</span></h3><p><span class="lang-en">{escape(geo_spend_note)}</span><span class="lang-sk hidden">{escape(geo_spend_note)}</span></p></div></div>
                         <table>
-                            <thead><tr><th><span class="lang-en">Country</span><span class="lang-sk hidden">Krajina</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Contribution ex fixed</span><span class="lang-sk hidden">Kontribucia bez fixov</span></th><th><span class="lang-en">Contribution incl. fixed</span><span class="lang-sk hidden">Kontribucia s fixami</span></th><th><span class="lang-en">Margin ex fixed</span><span class="lang-sk hidden">Marza bez fixov</span></th><th><span class="lang-en">Margin incl. fixed</span><span class="lang-sk hidden">Marza s fixami</span></th><th>FB CPO</th></tr></thead>
+                            <thead><tr><th><span class="lang-en">Country</span><span class="lang-sk hidden">Krajina</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th>Meta spend</th><th>Google spend</th><th><span class="lang-en">Net MER (all shop sales / ads)</span><span class="lang-sk hidden">Ciste trzby / reklama (MER)</span></th><th><span class="lang-en">Contribution ex fixed</span><span class="lang-sk hidden">Kontribucia bez fixov</span></th><th><span class="lang-en">Contribution incl. fixed</span><span class="lang-sk hidden">Kontribucia s fixami</span></th><th><span class="lang-en">Margin ex fixed</span><span class="lang-sk hidden">Marza bez fixov</span></th><th><span class="lang-en">Margin incl. fixed</span><span class="lang-sk hidden">Marza s fixami</span></th><th>FB CPO</th></tr></thead>
                             <tbody>{geo_rows_html}</tbody>
                         </table>
                     </div>
@@ -8583,8 +8602,8 @@ def generate_modern_dashboard(
             }}
             if (hasRows(DATA.fb_campaign_rows)) {{
                 marketingStandaloneItems.push(
-                    {{ id: 'mktCampaignConvRateStandaloneChart', title: {{ en: 'Campaign conversion rate', sk: 'Konverzny pomer kampani' }}, desc: {{ en: 'Conversions divided by clicks by campaign.', sk: 'Konverzie delene klikmi podla kampane.' }} }},
-                    {{ id: 'mktCampaignCostPerConvStandaloneChart', title: {{ en: 'Campaign cost per conversion', sk: 'Naklad na konverziu kampani' }}, desc: {{ en: 'Cost per conversion by campaign.', sk: 'Naklad na konverziu podla kampane.' }} }},
+                    {{ id: 'mktCampaignConvRateStandaloneChart', title: {{ en: 'Meta purchases / clicks', sk: 'Meta nakupy / kliky' }}, desc: {{ en: '7-day click Meta purchases divided by all ad clicks; not checkout conversion rate.', sk: 'Meta nakupy do 7 dni po kliknuti / vsetky reklamne kliky; nie konverzia checkoutu.' }} }},
+                    {{ id: 'mktCampaignCostPerConvStandaloneChart', title: {{ en: 'Cost per Meta purchase', sk: 'Naklad na Meta nakup' }}, desc: {{ en: 'Exact website purchase, 7-day click; unavailable for zero purchases.', sk: 'Presny nakup na webe, 7 dni po kliknuti; pri nule nakupov nedostupne.' }} }},
                     {{ id: 'mktCampaignCtrStandaloneChart', title: {{ en: 'Campaign CTR', sk: 'CTR kampani' }}, desc: {{ en: 'CTR comparison by campaign.', sk: 'Porovnanie CTR podla kampani.' }} }},
                     {{ id: 'mktCampaignCpcStandaloneChart', title: {{ en: 'Campaign CPC', sk: 'CPC kampani' }}, desc: {{ en: 'CPC comparison by campaign.', sk: 'Porovnanie CPC podla kampani.' }} }},
                     {{ id: 'mktCampaignSpendPieStandaloneChart', title: {{ en: 'Campaign spend share', sk: 'Podiel spendu kampani' }}, desc: {{ en: 'Share of Meta spend by campaign.', sk: 'Podiel Meta spendu podla kampani.' }} }},
@@ -8592,7 +8611,7 @@ def generate_modern_dashboard(
             }}
             if (hasRows(DATA.campaign_cpo)) {{
                 marketingStandaloneItems.push(
-                    {{ id: 'mktCampaignCpoStandaloneChart', title: {{ en: 'Campaign CPO', sk: 'CPO kampani' }}, desc: {{ en: 'Estimated CPO by campaign.', sk: 'Odhadovane CPO podla kampani.' }} }},
+                    {{ id: 'mktCampaignCpoStandaloneChart', title: {{ en: 'Modeled campaign CPO', sk: 'Modelove CPO kampani' }}, desc: {{ en: '60/40 click/spend allocation; not measured acquisition performance.', sk: 'Alokacia kliky/vydavky 60/40; nie merany akvizicny vykon.' }} }},
                     {{ id: 'mktCampaignRoasStandaloneChart', title: {{ en: 'Campaign ROAS', sk: 'ROAS kampani' }}, desc: {{ en: 'Estimated ROAS by campaign.', sk: 'Odhadovane ROAS podla kampani.' }} }},
                 );
             }}
@@ -8657,7 +8676,7 @@ def generate_modern_dashboard(
                 }});
                 new Chart(document.getElementById('mktCampaignConvRateStandaloneChart'), {{
                     type: 'bar',
-                    data: {{ labels, datasets: [{{ label: 'Conversion rate %', data: convRate, backgroundColor: 'rgba(31,157,102,.68)', borderRadius: 8 }}] }},
+                    data: {{ labels, datasets: [{{ label: 'Meta purchases / all clicks %', data: convRate, backgroundColor: 'rgba(31,157,102,.68)', borderRadius: 8 }}] }},
                     options: horizontalBarOptions(),
                 }});
             }}
@@ -8666,7 +8685,7 @@ def generate_modern_dashboard(
                     type: 'bar',
                     data: {{
                         labels: DATA.fb_campaign_rows.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
-                        datasets: [{{ label: 'Cost / platform conversion', data: DATA.fb_campaign_rows.map(x => Number(x.cost_per_platform_conversion || x.cost_per_conversion || 0)), backgroundColor: 'rgba(207,80,96,.68)', borderRadius: 8 }}],
+                        datasets: [{{ label: 'Cost / Meta purchase (7d click)', data: DATA.fb_campaign_rows.map(x => x.cost_per_platform_conversion == null ? null : Number(x.cost_per_platform_conversion)), backgroundColor: 'rgba(207,80,96,.68)', borderRadius: 8 }}],
                     }},
                     options: horizontalBarOptions(),
                 }});

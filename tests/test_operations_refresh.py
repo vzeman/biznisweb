@@ -1,4 +1,5 @@
 import copy
+import os
 from contextlib import ExitStack
 import json
 from pathlib import Path
@@ -17,6 +18,7 @@ from tests.test_roy_operations_dashboard import make_project_settings
 class IndependentRefreshTests(unittest.TestCase):
     def setUp(self):
         self.stack = ExitStack()
+        self.stack.enter_context(patch.dict(os.environ, {"REPORT_PROJECT": "roy"}))
         self.threads = []
         self.release = threading.Event()
         real_thread = threading.Thread

@@ -5,6 +5,7 @@ Google Ads API integration for fetching marketing spend data
 
 import os
 import json
+import math
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -82,6 +83,60 @@ class GoogleAdsClient:
         login_part = (self.login_customer_id or "").replace('-', '')
         suffix = customer_part if not login_part else f"{customer_part}_{login_part}"
         return self.cache_dir / f"google_ads_{suffix}_{from_str}_{to_str}.json"
+
+    def get_country_spend(self, date_from: datetime, date_to: datetime) -> Dict[str, Any]:
+        """Physical user country, summing all targeting flags; no order-share allocation."""
+        result = {
+            'status': 'disabled' if not self.is_configured else 'unavailable',
+            'basis': 'google_user_location', 'currency': None,
+            'date_from': date_from.strftime('%Y-%m-%d'),
+            'date_to': date_to.strftime('%Y-%m-%d'),
+            'spend_by_country': {}, 'total_spend': None,
+        }
+        if not self.is_configured or self.client is None:
+            return result
+        try:
+            service = self.client.get_service('GoogleAdsService')
+            customer_id = self.customer_id.replace('-', '')
+
+            def query(statement):
+                return [row for batch in service.search_stream(customer_id=customer_id, query=statement)
+                        for row in batch.results]
+
+            account = query('SELECT customer.currency_code FROM customer LIMIT 1')
+            result['currency'] = account[0].customer.currency_code if account else None
+            if result['currency'] != 'EUR':
+                raise ValueError('Google country spend requires verified EUR account')
+            rows = query(
+                'SELECT user_location_view.country_criterion_id, '
+                'user_location_view.targeting_location, metrics.cost_micros '
+                'FROM user_location_view '
+                f"WHERE segments.date BETWEEN '{result['date_from']}' AND '{result['date_to']}'"
+            )
+            country_ids = sorted({int(row.user_location_view.country_criterion_id) for row in rows
+                                  if int(row.user_location_view.country_criterion_id) > 0})
+            codes = {}
+            if country_ids:
+                constants = query(
+                    'SELECT geo_target_constant.id, geo_target_constant.country_code '
+                    'FROM geo_target_constant WHERE geo_target_constant.id IN ('
+                    + ','.join(str(value) for value in country_ids) + ')'
+                )
+                codes = {int(row.geo_target_constant.id): str(row.geo_target_constant.country_code).lower()
+                         for row in constants}
+            countries = {}
+            for row in rows:
+                country = codes.get(int(row.user_location_view.country_criterion_id)) or 'unknown'
+                spend = float(row.metrics.cost_micros) / 1_000_000
+                if not math.isfinite(spend) or spend < 0:
+                    raise ValueError('Invalid Google country spend')
+                countries[country] = countries.get(country, 0.0) + spend
+            result.update(status='ok', spend_by_country=countries,
+                          total_spend=round(sum(countries.values()), 6))
+        except Exception as exc:
+            result['error_code'] = type(exc).__name__
+            logger.warning('Google country spend unavailable (%s)', type(exc).__name__)
+        return result
     
     def should_use_cache(self, date: datetime) -> bool:
         """Determine if cache should be used for a given date"""

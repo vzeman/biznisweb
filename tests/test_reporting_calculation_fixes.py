@@ -1841,7 +1841,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
         )
         self.assertEqual(0, qa["attributed_cpa_mismatches"])
 
-    def test_campaign_attribution_preserves_ranking_near_rounding_boundaries(self) -> None:
+    def test_campaign_allocation_preserves_precision_and_lists_by_spend(self) -> None:
         exporter = make_exporter(project_name="vevo")
         frame = pd.DataFrame(
             [
@@ -1863,8 +1863,8 @@ class ReportingCalculationFixTests(unittest.TestCase):
         result = exporter.analyze_cost_per_order(frame, fb_campaigns=campaigns)
         rows = result["campaign_attribution"]
 
-        self.assertEqual(["a", "b", "c"], [row["campaign_id"] for row in rows])
-        self.assertEqual([0.249, 0.251, 0.5], [row["attributed_orders_est"] for row in rows])
+        self.assertEqual(["c", "b", "a"], [row["campaign_id"] for row in rows])
+        self.assertEqual([0.5, 0.251, 0.249], [row["attributed_orders_est"] for row in rows])
         self.assertEqual([1.0, 1.0, 1.0], [row["cost_per_attributed_order"] for row in rows])
         self.assertEqual(100.0, sum(row["estimated_revenue"] for row in rows))
 

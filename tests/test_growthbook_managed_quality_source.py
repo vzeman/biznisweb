@@ -650,6 +650,8 @@ class ManagedSourceTests(unittest.TestCase):
                     source.download_health(ENV["HEALTH_RUN_ID"], ENV["GITHUB_SHA"], expected_hash)
 
     def test_full_synthetic_capture_uses_real_adapters_without_network_or_publishing(self):
+        import export_orders as reporting
+
         current, activation, reconciliation, clients, state = fake_runtime()
         current = replace(current, eligible=1)
         first = event(received_at=current.window.from_utc)
@@ -673,7 +675,8 @@ class ManagedSourceTests(unittest.TestCase):
         response.headers = {"Content-Type": "application/json"}
         response.iter_content.return_value = [json.dumps({"data": {"getOrder": source_order("123")}}).encode()]
         phases = []
-        with patch("dotenv.load_dotenv", return_value=False), patch("requests.Session", return_value=session), \
+        with patch.dict(reporting.__dict__), \
+             patch("dotenv.load_dotenv", return_value=False), patch("requests.Session", return_value=session), \
              patch.object(source.time, "sleep"), patch.object(Path, "mkdir") as mkdir, \
              patch.object(source, "read_stable_retained_raw_source", wraps=read_stable_retained_raw_source) as raw_read, \
              patch.dict(os.environ, {"REPORT_PROJECT": "vevo", "BIZNISWEB_API_TOKEN": "", "VEVO_BIZNISWEB_API_TOKEN": ""}):
