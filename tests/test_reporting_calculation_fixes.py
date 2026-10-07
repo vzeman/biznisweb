@@ -3609,6 +3609,9 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
     def test_cache_invalidates_only_candidates_without_list_price_elements(self) -> None:
         exporter = make_exporter("roy")
+        # Isolate the legacy payment-metadata cache contract. Monetary cache
+        # completeness is covered separately with reconciliation enabled.
+        exporter.project_settings["order_revenue_reconciliation_enabled"] = False
         fulfilled_status = exporter.realized_revenue_settings["prepaid_fulfilled_statuses"][0]
         paid_status = exporter.realized_revenue_settings["paid_statuses"][0]
         order_date = datetime(2026, 6, 1)

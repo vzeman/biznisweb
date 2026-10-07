@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Current-target VEVO image release, isolated probe, and one report-only rerun.
+"""Allowlisted current-target image release, isolated probe, and report-only rerun.
 
 This deliberately does not publish or claim a legacy managed-runtime binding.
-It shares that deployer's exclusion lease, preserves all other schedules, and
+VEVO shares its legacy exclusion lease; ROY owns a separate CAS lease. Both
+protect the peer lease, outputs and all other schedules, and
 records private receipts before each mutation. An uncertain dispatch is never
 automatically retried; use ``status`` to inspect its retained receipt first.
 """
@@ -12,6 +13,7 @@ import argparse
 import copy
 from datetime import date, datetime, timezone
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -24,9 +26,10 @@ from scripts import reporting_runtime_binding as binding  # noqa: E402
 from scripts.deploy_order_automations import TASK_FIELDS  # noqa: E402
 from scripts.deploy_vevo_report import Deployment  # noqa: E402
 from scripts.reporting_migration_host_gate import (  # noqa: E402
-    ACCOUNT, BUCKET, PREFIX, REGION, SERVICE, canonical, read_private, require, sha, verify_quality,
+    ACCOUNT, BUCKET, REGION, SERVICE, canonical, read_private, require, sha, verify_quality,
 )
-from scripts.vevo_report_image_host import MARKER as LIVE_MARKER  # noqa: E402
+from scripts.reporting_image_release_policy import PROJECTS, VEVO, project_policy
+from scripts.reporting_image_release_lease import ScopedImageLease, read_lease, require_roy_idle
 
 CLUSTER = binding.POLICY["cluster"]
 RELEASE_PREFIX = "data/vevo/reporting/image-releases/"
@@ -58,9 +61,12 @@ def committed_gate_sha(commit):
                                       cwd=ROOT, timeout=45))
 
 
-def image_only_definition(source, image):
-    require(source.get("family") == "vevo-reporting-daily" and source.get("networkMode") == "awsvpc",
+def image_only_definition(source, image, *, policy=VEVO):
+    require(source.get("family") == policy.family and source.get("networkMode") == "awsvpc",
             "image-release-definition-identity")
+    require(source.get("taskRoleArn") == f"arn:aws:iam::{ACCOUNT}:role/BiznisWebReportingTaskRole-{policy.project}"
+            and source.get("executionRoleArn") == f"arn:aws:iam::{ACCOUNT}:role/ecsTaskExecutionRole",
+            "image-release-source-role-identity")
     result = {key: copy.deepcopy(source[key]) for key in TASK_FIELDS if key in source}
     containers = result.get("containerDefinitions", [])
     require(len(containers) == 1 and containers[0].get("name") == "reporting", "image-release-container-identity")
@@ -69,12 +75,12 @@ def image_only_definition(source, image):
             and not container.get("entryPoint") and container.get("workingDirectory", "/app") == "/app",
             "image-release-source-command")
     env = binding.unique_environment(container.get("environment", []))
-    require(env.get("REPORT_PROJECT") == "vevo" and env.get("REPORT_S3_BUCKET") == BUCKET
-            and env.get("REPORT_S3_PREFIX", "").strip("/") == "daily-reports/vevo",
+    require(env.get("REPORT_PROJECT") == policy.project and env.get("REPORT_S3_BUCKET") == BUCKET
+            and env.get("REPORT_S3_PREFIX", "").strip("/") == policy.sink,
             "image-release-source-project-or-sink")
     require(env.get("REPORT_SKIP_INVOICES") == "true", "image-release-source-invoice-skip-required")
     require(not {"REPORT_PROJECT", "REPORT_SKIP_INVOICES", "REPORT_SKIP_CREDITNOTE_STORNO_GUARD",
-                 "REPORT_SKIP_EMAIL", "REPORT_S3_BUCKET", "REPORT_S3_PREFIX", "REPORT_TO_DATE"}.intersection(
+                 "REPORT_SKIP_EMAIL", "REPORT_S3_BUCKET", "REPORT_S3_PREFIX", "REPORT_TO_DATE", "REPORT_FROM_DATE"}.intersection(
                     row["name"] for row in container.get("secrets", [])), "image-release-control-secret-collision")
     pattern = rf"{ACCOUNT}\.dkr\.ecr\.{REGION}\.amazonaws\.com/vevo-reporting@sha256:[a-f0-9]{{64}}"
     require(re.fullmatch(pattern, image) and re.fullmatch(pattern, container.get("image", "")),
@@ -83,27 +89,29 @@ def image_only_definition(source, image):
     return result
 
 
-def task_overrides(release_id, commit, image, gate_sha, to_date, *, probe):
+def task_overrides(release_id, commit, image, gate_sha, to_date, *, probe, policy=VEVO):
     date.fromisoformat(to_date)
     command = ["python", "scripts/reporting_migration_host_gate.py" if probe else "scripts/vevo_report_image_host.py",
         "--release-id", release_id, "--source-commit", commit, "--image-digest", image.rsplit("@", 1)[1],
         "--gate-sha256", gate_sha]
+    if policy != VEVO:
+        command += ["--project", policy.project]
     if not probe:
         command += ["--to-date", to_date]
-    env = {"REPORT_PROJECT": "vevo", "REPORT_SKIP_EMAIL": "true", "REPORT_SKIP_INVOICES": "true",
+    env = {"REPORT_PROJECT": policy.project, "REPORT_SKIP_EMAIL": "true", "REPORT_SKIP_INVOICES": "true",
            "REPORT_SKIP_CREDITNOTE_STORNO_GUARD": "true", "REPORT_TO_DATE": to_date,
            "REPORT_FORCE_NO_CACHE": "true", "REPORT_FORCE_CLEAR_CACHE": "true"}
     result = {"containerOverrides": [{"name": "reporting", "command": command,
                "environment": [{"name": key, "value": value} for key, value in sorted(env.items())]}]}
     if probe:
-        result["taskRoleArn"] = f"arn:aws:iam::{ACCOUNT}:role/VevoReportProbe-{release_id}"
+        result["taskRoleArn"] = f"arn:aws:iam::{ACCOUNT}:role/{policy.role_prefix}{release_id}"
     return result
 
 
-def verify_artifacts(manifest, fetch, *, prefix, to_date, probe):
+def verify_artifacts(manifest, fetch, *, prefix, to_date, probe, policy=VEVO, from_date=None):
     entries = manifest.get("artifacts", {})
     expected = EXPECTED_ARTIFACTS | ({"data_quality.json"} if probe else set())
-    require(manifest.get("project") == "vevo" and set(entries) == expected, "image-release-manifest-identity")
+    require(manifest.get("project") == policy.project and set(entries) == expected, "image-release-manifest-identity")
     for name, entry in entries.items():
         require(isinstance(entry, dict) and entry.get("key") == prefix + name
                 and type(entry.get("size")) is int and 0 < entry["size"] <= 64 * 1024 * 1024
@@ -116,13 +124,15 @@ def verify_artifacts(manifest, fetch, *, prefix, to_date, probe):
             verify_quality(json.loads(raw))
         else:
             payload = json.loads(raw)
-            require(payload.get("project") == "vevo", "image-release-payload-project")
+            require(payload.get("project") == policy.project, "image-release-payload-project")
             verify_quality(payload.get("source_health"))
             # Use the requested payload interval, never the last observed order.
             switcher = payload.get("period_switcher", {})
             current = switcher.get("current_key")
             expected_period = "full" if name == "dashboard_payload_latest.json" else name.removeprefix("dashboard_payload_").removesuffix(".json")
             require(current == expected_period, "image-release-payload-period")
+            if from_date is not None and expected_period == "full":
+                require(str(payload.get("date_from", ""))[:10] == from_date, "image-release-payload-start-date")
             require(str(payload.get("date_to", ""))[:10] == to_date,
                     "image-release-payload-end-date")
 
@@ -246,15 +256,24 @@ def transfer_recovery_lease(lease, previous_owner, expected_etag):
 class ImageRelease(Deployment):
     """Reuse only independently safe IAM/task helpers; no old binding/pin path."""
 
+    policy = VEVO
+
     def __init__(self, session, commit, to_date, timeout, *, release_id=None, recover_paused_release=None,
-                 recovery_receipt_sha256=None, recovery_readback_key=None, recovery_readback_sha256=None):
+                 recovery_receipt_sha256=None, recovery_readback_key=None, recovery_readback_sha256=None,
+                 project="vevo", retained_peer_release=None, retained_peer_lease_sha256=None, retained_peer_lease_etag=None):
+        self.policy = project_policy(project)
+        require(not recover_paused_release or self.policy == VEVO, "image-release-recovery-project-unsupported")
         super().__init__(session, commit, "", "")
         if release_id is not None:
             self.release_id = release_id
-            self.prefix = PREFIX + release_id + "/"
-            self.lease = binding.MigrationLease(self.s3, owner=release_id)
+        self.prefix = self.policy.probe_prefix + self.release_id + "/"
+        self.lease = (binding.MigrationLease(self.s3, owner=self.release_id) if self.policy == VEVO else
+                      ScopedImageLease(self.s3, owner=self.release_id, project=self.policy.project))
+        self.retained_peer_release = retained_peer_release
+        self.retained_peer_lease_sha256, self.retained_peer_lease_etag = retained_peer_lease_sha256, retained_peer_lease_etag
+        self.peer_snapshot = None
         self.to_date, self.timeout = to_date, timeout
-        self.receipt_prefix = RELEASE_PREFIX + self.release_id + "/"
+        self.receipt_prefix = self.policy.release_prefix + self.release_id + "/"
         self.sequence = 0
         self.promoted = self.rerun_attempted = self.lease_owned = False
         self.last_checkpoint = 0.0
@@ -267,10 +286,92 @@ class ImageRelease(Deployment):
         self.recovery_readback_key, self.recovery_readback_sha256 = recovery_readback_key, recovery_readback_sha256
         self.recovery = None
 
+    def schedule(self, name=None):
+        return super().schedule(name or self.policy.service)
+
+    def probe_role_name(self):
+        return self.policy.role_prefix + self.release_id
+
+    def probe_policy(self):
+        return self.policy.probe_policy(self.release_id)
+
+    def exclusion(self):
+        own = os.environ.get("GITHUB_RUN_ID")
+        for status in ("queued", "in_progress"):
+            for page in range(1, 6):
+                rows = gh(f"repos/vzeman/biznisweb/actions/runs?status={status}&per_page=100&page={page}")["workflow_runs"]
+                for row in rows:
+                    name = Path(row.get("path", "")).name
+                    sensitive = (name.startswith(("deploy-", "collect-", "build-vevo-growthbook-"))
+                                 or name in {"production-reporting-smoke.yml", "production-invoice-smoke.yml"})
+                    require((own is not None and str(row["id"]) == own) or not sensitive,
+                            "image-release-competing-workflow")
+                if len(rows) < 100:
+                    break
+            else:
+                raise RuntimeError("image-release-workflow-exclusion-incomplete")
+
+    def output_snapshot(self, policy):
+        result = {}
+        for name in sorted(EXPECTED_ARTIFACTS | {"generation.json"}):
+            key = policy.sink + "/latest/" + name
+            value = self.s3.head_object(Bucket=BUCKET, Key=key, ExpectedBucketOwner=ACCOUNT)
+            require(type(value.get("ContentLength")) is int and value["ContentLength"] > 0
+                    and value.get("ETag"), "image-release-live-output-missing")
+            result[key] = binding.normalized({key: value[key] for key in
+                ("ETag", "ContentLength", "LastModified", "VersionId") if key in value})
+        return result
+
+    def live_outputs(self):
+        return self.output_snapshot(self.policy)
+
+    def inspect_peer_boundary(self):
+        peer = PROJECTS["roy" if self.policy == VEVO else "vevo"]
+        found = read_lease(self.s3, peer.project, optional=True)
+        schedule = self.protected[peer.service]
+        if self.policy == VEVO:
+            require_roy_idle(self.s3)
+            require(not any((self.retained_peer_release, self.retained_peer_lease_sha256, self.retained_peer_lease_etag)),
+                    "image-release-peer-arguments-invalid")
+        elif found is not None and found[0]["state"] == "uncertain":
+            require(re.fullmatch(r"[a-f0-9]{32}", self.retained_peer_release or "")
+                    and re.fullmatch(r"[a-f0-9]{64}", self.retained_peer_lease_sha256 or "")
+                    and isinstance(self.retained_peer_lease_etag, str) and self.retained_peer_lease_etag,
+                    "image-release-retained-peer-proof-required")
+            value, etag = found
+            binding.validate_lock(value)
+            require(value["owner"] == self.retained_peer_release and value["state"] == "uncertain"
+                    and sha(binding.canonical_bytes(value)) == self.retained_peer_lease_sha256
+                    and etag == self.retained_peer_lease_etag, "image-release-retained-peer-identity")
+            require(schedule.get("State") == "DISABLED" and schedule["Target"]["Arn"] == CLUSTER
+                    and re.fullmatch(rf"arn:aws:ecs:{REGION}:{ACCOUNT}:task-definition/{peer.family}:[1-9][0-9]*",
+                                    schedule["Target"]["EcsParameters"]["TaskDefinitionArn"]),
+                    "image-release-retained-peer-schedule")
+        else:
+            require(found is None or found[0]["state"] == "released", "image-release-peer-active")
+            require(not any((self.retained_peer_release, self.retained_peer_lease_sha256, self.retained_peer_lease_etag)),
+                    "image-release-peer-arguments-invalid")
+        self.peer_snapshot = {"project": peer.project, "lease": found,
+                              "schedule": schedule, "outputs": self.output_snapshot(peer)}
+        self.verify_peer_boundary()
+
+    def verify_peer_boundary(self):
+        require(self.peer_snapshot is not None, "image-release-peer-preflight-required")
+        peer = project_policy(self.peer_snapshot["project"])
+        require(read_lease(self.s3, peer.project, optional=True) == self.peer_snapshot["lease"],
+                "image-release-peer-lease-drift")
+        require(binding.schedule_snapshot(self.schedule(peer.service)) == self.peer_snapshot["schedule"],
+                "image-release-peer-schedule-drift")
+        require(self.output_snapshot(peer) == self.peer_snapshot["outputs"], "image-release-peer-output-drift")
+        for policy in PROJECTS.values():
+            require(not [task for task in self.tasks(policy.family)
+                         if task["lastStatus"] != "STOPPED" and task["taskArn"] != self.owned_task],
+                    "image-release-foreign-report-running")
+
     def event(self, phase, **details):
         self.sequence += 1
         value = {"schema_version": 1, "release_id": self.release_id, "phase": phase,
-                 "source_commit": self.commit, "report_to_date": self.to_date,
+                 "source_commit": self.commit, "report_to_date": self.to_date, "project": self.policy.project,
                  "at": datetime.now(timezone.utc).isoformat(), "legacy_current_binding_changed": False,
                  "promoted": self.promoted, "rerun_attempted": self.rerun_attempted,
                  "known_task_arns": self.task_records, **details}
@@ -288,23 +389,27 @@ class ImageRelease(Deployment):
                 name = row["Name"]
                 require(name not in result, "image-release-duplicate-schedule")
                 result[name] = binding.schedule_snapshot(self.scheduler.get_schedule(Name=name, GroupName="default"))
-        require(SERVICE in result, "image-release-report-schedule-missing")
+        require(self.policy.service in result, "image-release-report-schedule-missing")
         return result
 
     def checkpoint(self, *, poll=False):
         if poll and self.clock() - self.last_checkpoint < 45:
             return
+        self.verify_peer_boundary()
+        self.exclusion()
         self.lease.renew()
         current = self.all_schedules()
-        require({key: value for key, value in current.items() if key != SERVICE} == self.protected,
+        require({key: value for key, value in current.items() if key != self.policy.service} == self.protected,
                 "image-release-other-schedule-drift")
-        require(current[SERVICE] == binding.schedule_snapshot(self.known_schedule), "image-release-current-schedule-drift")
+        require(current[self.policy.service] == binding.schedule_snapshot(self.known_schedule), "image-release-current-schedule-drift")
         self.last_checkpoint = self.clock()
         print(json.dumps({"release_id": self.release_id, "phase": "runtime-checkpoint",
                           "task_mode": self.task_mode, "owned_task": self.owned_task}), flush=True)
 
     def no_report_tasks(self):
-        require(not [task for task in self.tasks() if task["lastStatus"] != "STOPPED"], "image-release-report-already-running")
+        for policy in PROJECTS.values():
+            require(not [task for task in self.tasks(policy.family) if task["lastStatus"] != "STOPPED"],
+                    "image-release-report-already-running")
 
     def update_owned_schedule(self, desired, phase):
         self.checkpoint()
@@ -315,7 +420,7 @@ class ImageRelease(Deployment):
     def task(self):
         task = super().task()
         expected = task_overrides(self.release_id, self.commit, self.image, self.gate_sha, self.to_date,
-                                  probe=self.task_mode == "probe")
+                                  probe=self.task_mode == "probe", policy=self.policy)
         actual = task.get("overrides", {})
         actual_containers = copy.deepcopy(actual.get("containerOverrides"))
         require(isinstance(actual_containers, list) and len(actual_containers) == 1,
@@ -336,7 +441,7 @@ class ImageRelease(Deployment):
         self.no_report_tasks()
         self.task_mode = mode
         self.probe_definition = self.candidate
-        overrides = task_overrides(self.release_id, self.commit, self.image, self.gate_sha, self.to_date, probe=mode == "probe")
+        overrides = task_overrides(self.release_id, self.commit, self.image, self.gate_sha, self.to_date, probe=mode == "probe", policy=self.policy)
         network = self.original["Target"]["EcsParameters"]["NetworkConfiguration"]["awsvpcConfiguration"]
         network = {key[:1].lower() + key[1:]: value for key, value in network.items()}
         self.event(mode + "-dispatch-requested", task_definition=self.candidate["taskDefinitionArn"], overrides=overrides,
@@ -365,7 +470,7 @@ class ImageRelease(Deployment):
                     require(binding.error_code(exc) in {"NoSuchKey", "404"}, "image-release-ready-read-failed")
                 else:
                     ready = json.loads(raw)
-                    require(ready.get("marker") == "VEVO_REPORT_PROBE_HOST_OK", "image-release-ready-marker")
+                    require(ready.get("marker") == self.policy.probe_marker, "image-release-ready-marker")
                     self.verify_host(task, ready)
                     self.event("probe-host-verified-before-provider", identity=ready)
                     signal = canonical({"phase": "host-authorized", "release_id": self.release_id,
@@ -388,7 +493,8 @@ class ImageRelease(Deployment):
         raw = read_private(self.s3, key)
         require(complete.get("output_manifest_key") == key and sha(raw) == complete.get("output_manifest_sha256"),
                 "image-release-probe-manifest-hash")
-        verify_artifacts(json.loads(raw), self.fetch, prefix=self.prefix + "artifacts/", to_date=self.to_date, probe=True)
+        verify_artifacts(json.loads(raw), self.fetch, prefix=self.prefix + "artifacts/", to_date=self.to_date,
+                         probe=True, policy=self.policy, from_date=self.report_from_date)
         require(self.live_outputs() == self.original_outputs, "image-release-probe-changed-live-output")
         self.event("probe-complete", identity=ready, complete=complete, terminal_task=task)
 
@@ -397,7 +503,8 @@ class ImageRelease(Deployment):
         ips = [row["privateIpv4Address"] for row in container.get("networkInterfaces", [])]
         require(marker.get("task_arn") == self.owned_task and marker.get("task_definition") == self.candidate["taskDefinitionArn"]
                 and ips == [marker.get("private_ip")] and marker.get("image_digest") == container.get("imageDigest") == self.image.rsplit("@", 1)[1]
-                and marker.get("path") == "/app" and marker.get("service") == SERVICE and marker.get("instance_id") == "N/A:Fargate"
+                and marker.get("path") == "/app" and marker.get("service") == self.policy.service
+                and marker.get("project") == self.policy.project and marker.get("instance_id") == "N/A:Fargate"
                 and marker.get("release_id") == self.release_id and marker.get("source_commit") == self.commit
                 and marker.get("gate_sha256") == self.gate_sha, "image-release-host-identity-invalid")
 
@@ -413,7 +520,7 @@ class ImageRelease(Deployment):
             page = self.session.client("logs").get_log_events(**request, **({"nextToken": token} if token else {}))
             for row in page.get("events", []):
                 message = row.get("message", "")
-                if message.startswith(LIVE_MARKER + " "):
+                if message.startswith(self.policy.live_marker + " "):
                     markers.append(json.loads(message.split(" ", 1)[1]))
             next_token = page.get("nextForwardToken")
             if next_token == token:
@@ -439,13 +546,14 @@ class ImageRelease(Deployment):
         self.verify_host(task, marker)
         require(marker.get("report_to_date") == self.to_date and all(marker.get(key) is True
                 for key in ("skip_email", "skip_invoices", "skip_inline_guard")), "image-release-live-safety-marker")
-        manifest_key = "daily-reports/vevo/latest/generation.json"
+        manifest_key = self.policy.sink + "/latest/generation.json"
         raw = read_private(self.s3, manifest_key)
         manifest = json.loads(raw)
         generation = manifest.get("generation_id", "")
         require(re.fullmatch(r"[0-9]{8}T[0-9]{6}Z", generation) and generation != self.original_generation,
                 "image-release-live-generation-not-new")
-        verify_artifacts(manifest, self.fetch, prefix="daily-reports/vevo/" + generation + "/", to_date=self.to_date, probe=False)
+        verify_artifacts(manifest, self.fetch, prefix=self.policy.sink + "/" + generation + "/", to_date=self.to_date, probe=False,
+                         policy=self.policy, from_date=self.report_from_date)
         require(read_private(self.s3, manifest_key) == raw, "image-release-live-pointer-changed")
         self.event("live-complete", identity=marker, terminal_task=task, generation_manifest=manifest,
                    generation_manifest_sha256=sha(raw), email_sent=False, financial_runners_skipped=True)
@@ -556,11 +664,17 @@ class ImageRelease(Deployment):
         recovery["lease_etag"] = etag
 
     def acquire_release_lease(self):
+        self.verify_peer_boundary()
         if self.recovery is None:
-            self.lease.acquire()
+            self.event("lease-acquire-requested", lease_key=self.policy.lease_key)
+            try:
+                self.lease.acquire()
+            except BaseException:
+                self.inspect_failed_lease_handoff()
+                raise
         else:
             self.verify_paused_boundary()
-            require({key: value for key, value in self.all_schedules().items() if key != SERVICE} == self.protected,
+            require({key: value for key, value in self.all_schedules().items() if key != self.policy.service} == self.protected,
                     "image-release-other-schedule-drift")
             self.event("paused-recovery-handoff-requested", previous_owner=self.recovery["previous_owner"],
                        previous_lease_etag=self.recovery["lease_etag"], recovery_receipt_sha256=self.recovery_receipt_sha256)
@@ -570,12 +684,18 @@ class ImageRelease(Deployment):
                 self.inspect_failed_lease_handoff()
                 raise
         self.lease_owned = True
+        try:
+            self.verify_peer_boundary()
+        except BaseException:
+            self.event("lease-acquired-peer-drift-inspection-required", lease_key=self.policy.lease_key)
+            self.lease.retain_uncertain()
+            raise
 
     def inspect_failed_lease_handoff(self):
         """One recovery read; never replay an uncertain ownership transfer."""
         outcome = "ownership-unconfirmed"
         try:
-            value, etag = binding.read_object(self.s3, binding.LOCK_KEY)
+            value, etag = self.lease._read()
             binding.validate_lock(value)
             owned = (value["owner"] == self.lease.owner and value["state"] == "active"
                      and (value == self.lease.pending_value or (self.lease.etag is not None and etag == self.lease.etag)))
@@ -615,28 +735,39 @@ class ImageRelease(Deployment):
                 and self.original["Target"]["Arn"] == CLUSTER
                 and self.original["Target"]["EcsParameters"].get("LaunchType") == "FARGATE", "image-release-schedule-identity")
         self.original_source = self.definition(self.original["Target"]["EcsParameters"]["TaskDefinitionArn"])
-        candidate = image_only_definition(self.original_source, self.image)
+        require(self.original_source.get("status") == "ACTIVE", "image-release-source-definition-inactive")
+        candidate = image_only_definition(self.original_source, self.image, policy=self.policy)
         require(candidate["containerDefinitions"][0]["image"] != self.original_source["containerDefinitions"][0]["image"],
                 "image-release-already-current")
         # Ensure the scheduled path remains report-only, including its existing overrides.
         schedule_input = json.loads(self.original["Target"].get("Input", "{}"))
+        require(isinstance(schedule_input, dict) and set(schedule_input).issubset({"containerOverrides"}),
+                "image-release-scheduled-override-scope")
         overrides = schedule_input.get("containerOverrides", [])
         require(all(row.get("name") == "reporting" and not row.get("command") for row in overrides),
                 "image-release-scheduled-command-override")
         effective = binding.unique_environment(self.original_source["containerDefinitions"][0].get("environment", []))
         for row in overrides:
             effective.update(binding.unique_environment(row.get("environment", [])))
+        require(effective.get("REPORT_PROJECT") == self.policy.project and effective.get("REPORT_S3_BUCKET") == BUCKET
+                and effective.get("REPORT_S3_PREFIX") == self.policy.sink, "image-release-scheduled-project-or-sink")
         require(effective.get("REPORT_SKIP_INVOICES") == "true"
                 and effective.get("REPORT_SKIP_CREDITNOTE_STORNO_GUARD") == "true", "image-release-scheduled-financial-boundary")
-        self.protected = {key: value for key, value in self.all_schedules().items() if key != SERVICE}
+        self.protected = {key: value for key, value in self.all_schedules().items() if key != self.policy.service}
+        self.inspect_peer_boundary()
+        self.exclusion()
         self.original_outputs = self.live_outputs()
-        self.original_generation = json.loads(read_private(self.s3, "daily-reports/vevo/latest/generation.json"))["generation_id"]
+        self.original_generation = json.loads(read_private(self.s3, self.policy.sink + "/latest/generation.json"))["generation_id"]
+        self.report_from_date = effective.get("REPORT_FROM_DATE")
+        require(self.report_from_date and date.fromisoformat(self.report_from_date) <= date.fromisoformat(self.to_date),
+                "image-release-history-start-required")
         self.gate_sha = committed_gate_sha(self.commit)
         self.no_report_tasks()
         recovery_proof = self.inspect_paused_recovery() if self.recover_paused_release else None
         self.event("preflight-complete", schedule=self.original, source_definition=self.original_source,
                    protected_schedules=self.protected, build_run_id=self.build_id, image=self.image,
-                   original_live_outputs=self.original_outputs, final_schedule_state="ENABLED", recovered_from=recovery_proof)
+                   original_live_outputs=self.original_outputs, final_schedule_state="ENABLED", recovered_from=recovery_proof,
+                   protected_peer=self.peer_snapshot)
         self.acquire_release_lease()
         try:
             paused = copy.deepcopy(self.original)
@@ -647,6 +778,7 @@ class ImageRelease(Deployment):
                 self.no_report_tasks()
                 self.checkpoint(poll=True)
                 self.sleep(10)
+            self.checkpoint()
             self.event("candidate-register-requested", definition=candidate)
             self.candidate = self.ecs.register_task_definition(**candidate)["taskDefinition"]
             registered = {key: self.candidate[key] for key in TASK_FIELDS if key in self.candidate}
@@ -654,7 +786,7 @@ class ImageRelease(Deployment):
             self.production_definition = self.candidate
             self.probe_definition = self.candidate
             self.event("candidate-registered", task_definition=self.candidate["taskDefinitionArn"])
-            self.event("probe-role-create-requested", role_arn=f"arn:aws:iam::{ACCOUNT}:role/VevoReportProbe-{self.release_id}")
+            self.event("probe-role-create-requested", role_arn=f"arn:aws:iam::{ACCOUNT}:role/{self.probe_role_name()}")
             self.create_role()
             self.start_task("probe")
             self.wait_probe()
@@ -729,6 +861,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("run", "status"))
     parser.add_argument("--profile")
+    parser.add_argument("--project", choices=tuple(PROJECTS), default="vevo")
+    parser.add_argument("--retained-peer-release")
+    parser.add_argument("--retained-peer-lease-sha256")
+    parser.add_argument("--retained-peer-lease-etag")
     parser.add_argument("--commit")
     parser.add_argument("--to-date")
     parser.add_argument("--release-id")
@@ -748,7 +884,7 @@ def main():
     if args.mode == "status":
         require(args.release_id and re.fullmatch(r"[a-f0-9]{32}", args.release_id), "image-release-id-required")
         s3 = session.client("s3")
-        prefix = RELEASE_PREFIX + args.release_id + "/"
+        prefix = project_policy(args.project).release_prefix + args.release_id + "/"
         keys = [row["Key"] for page in s3.get_paginator("list_objects_v2").paginate(Bucket=BUCKET, Prefix=prefix,
                 ExpectedBucketOwner=ACCOUNT) for row in page.get("Contents", [])]
         require(bool(keys), "image-release-receipts-missing")
@@ -767,7 +903,10 @@ def main():
     try:
         ImageRelease(session, args.commit, args.to_date, args.timeout_seconds, release_id=release_id,
                      recover_paused_release=args.recover_paused_release, recovery_receipt_sha256=args.recovery_receipt_sha256,
-                     recovery_readback_key=args.recovery_readback_key, recovery_readback_sha256=args.recovery_readback_sha256).run()
+                     recovery_readback_key=args.recovery_readback_key, recovery_readback_sha256=args.recovery_readback_sha256,
+                     project=args.project, retained_peer_release=args.retained_peer_release,
+                     retained_peer_lease_sha256=args.retained_peer_lease_sha256,
+                     retained_peer_lease_etag=args.retained_peer_lease_etag).run()
     except Exception as exc:
         reason = str(exc)
         if not re.fullmatch(r"(?:image-release|report|runtime)-[a-z0-9-]+", reason):

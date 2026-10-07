@@ -107,32 +107,39 @@ Canonical product split:
 
 Use `PROJECT_STATE.md` only for this repo plus short integration notes.
 
-## VEVO report image release and dated regeneration
+## ROY and VEVO report image release and dated regeneration
 
 After a reviewed PR is merged and its exact `build-and-push-ecr.yml` run succeeds,
 use a clean checkout whose HEAD equals fetched `origin/main`. Resolve the real
-current Fargate task/IP (or confirmed absence), `vevo-daily-report-email`, and
+current Fargate task/IP (or confirmed absence), the selected report service, and
 `/app` before dispatch. The committed helper uses the current schedule target,
 not the obsolete original revision pins in the first managed migration runbook.
 
 ```text
-python scripts/vevo_report_image_release.py run --profile codex --commit <full-main-SHA> --to-date YYYY-MM-DD
-python scripts/vevo_report_image_release.py status --profile codex --release-id <32-character-release-id>
+python scripts/vevo_report_image_release.py run --project roy --profile codex --commit <full-main-SHA> --to-date YYYY-MM-DD
+python scripts/vevo_report_image_release.py status --project roy --profile codex --release-id <32-character-release-id>
 ```
 
 `--profile` is optional when the usual AWS credential chain is configured.
+`--project` is restricted to `roy` and `vevo` (legacy default). The immutable
+policy binds ROY to `roy-daily-report-email`, `roy-reporting-daily`, and
+`daily-reports/roy-sk`; VEVO uses its existing service, family and sink. Wait for
+every settings-triggered monthly accounting deployment to finish before starting
+this controller, because all other schedules become protected baseline state.
 `--timeout-seconds` bounds each report task (default 7200; allowed 300–14400).
 An optional fresh `--release-id` binds dispatch idempotency and private evidence;
 never reuse an ID to retry an uncertain run. `status` is read-only. It shows the
 last retained phase and exact owned task ARNs, without financial data or secrets.
 
 The helper proves the successful exact-main build and immutable image, snapshots
-all default-group schedules, and takes the existing reporting migration lease.
-It pauses only VEVO reporting, verifies a quiet dispatch window, then clones its
+all default-group schedules, and takes the selected project's CAS lease. ROY uses
+`data/roy/reporting/runtime/image-release.json`; VEVO retains its legacy migration
+lease. Both mutation paths reject an active or uncertain ROY peer lease. The
+controller pauses only the selected reporting schedule, verifies a quiet dispatch window, then clones its
 task definition with only the image changed. The diagnostic task uses an isolated
 temporary role and the existing query-only report probe. Actual task/IP/image,
 `curl localhost` marker, explicit authorization, all full/7d/30d/90d artifacts,
-quality and requested end date must pass before promotion. A finite live entry
+quality and the exact full-history start and requested end date must pass before promotion. A finite live entry
 then repeats the local host marker and regenerates through the requested date
 with fresh reads and explicit email/invoice/creditnote-guard skips. The helper
 verifies the new live manifest and every artifact hash before restoring the
@@ -141,9 +148,9 @@ one-off task; normal schedule configuration is preserved. UI verification follow
 these host/output gates.
 
 Receipts are encrypted and read back under private
-`data/vevo/reporting/image-releases/<release-id>/`; candidate evidence remains
-under `data/vevo/reporting/runtime/probes/<release-id>/`. Record safe references,
-hashes and the outcome in `PROJECT_STATE.md`. The helper does not update or claim
+`data/<project>/reporting/image-releases/<release-id>/`; candidate evidence remains
+under `data/<project>/reporting/runtime/probes/<release-id>/`. Record safe references,
+hashes and the outcome in the product's `PROJECT_STATE.md`. The helper does not update or claim
 validity of historical `runtime/current.json`; its current-target proof is
 separate, and the shared lease only provides deployment exclusion.
 
@@ -151,14 +158,24 @@ Before live dispatch, a known failure stops only the owned task, removes its
 verified temporary role, restores the owned original schedule and deactivates
 the unused candidate. An uncertain launch retains the exclusion lease and paused
 schedule for inspection. Any failure after live dispatch preserves the proven
-candidate image with VEVO reporting paused: output might already have published,
+candidate image with the selected reporting schedule paused: output might already have published,
 so the helper never automatically reruns, sends email, rewrites aliases or rolls
 back that image. Inspect receipts, exact ECS tasks, logs and the live manifest
 before a separately reviewed recovery. Never clear an uncertain lease or repeat
 `run` merely to retry. Other schedules and foreign resources are never repaired
 or rolled back by this helper.
 
-For a separately reviewed, stopped release whose live outputs are unchanged,
+ROY may proceed around an explicitly reviewed uncertain VEVO release only with
+all three `--retained-peer-release`, `--retained-peer-lease-sha256` (SHA-256 of
+canonical JSON bytes), and `--retained-peer-lease-etag` arguments. The exact peer
+owner/body/ETag, disabled schedule and published outputs are protected before
+and after lease acquisition and throughout the release. It never clears or
+transfers that VEVO lease. An absent/released peer needs no retained arguments;
+an active peer, including stale active, always blocks. Partial or irrelevant
+proof arguments also block. Legacy deployment callers must have read access to
+the ROY lease key: AccessDenied is uncertainty, never an absent lease.
+
+For a separately reviewed, stopped VEVO release whose live outputs are unchanged,
 the same `run` accepts `--recover-paused-release <old-id>` and
 `--recovery-receipt-sha256 <reviewed-latest-failure-sha>`. This is an explicit
 recovery contract, not a generic disabled-schedule override. It checks the

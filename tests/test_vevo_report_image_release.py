@@ -15,7 +15,8 @@ DATE = "2026-10-06"
 
 def definition():
     return {"family": "vevo-reporting-daily", "networkMode": "awsvpc", "cpu": "1024", "memory": "2048",
-            "taskRoleArn": "production-role", "executionRoleArn": "execution-role",
+            "taskRoleArn": f"arn:aws:iam::{release.ACCOUNT}:role/BiznisWebReportingTaskRole-vevo",
+            "executionRoleArn": f"arn:aws:iam::{release.ACCOUNT}:role/ecsTaskExecutionRole",
             "containerDefinitions": [{"name": "reporting", "image": OLD_IMAGE,
                 "environment": [{"name": key, "value": value} for key, value in {
                     "REPORT_PROJECT": "vevo", "REPORT_S3_BUCKET": release.BUCKET,
@@ -293,6 +294,7 @@ class PausedRecoveryTests(unittest.TestCase):
             obj.lease = release.binding.MigrationLease(obj.s3, owner=obj.release_id)
             obj.lease_owned = False
             obj.verify_paused_boundary = Mock()
+            obj.verify_peer_boundary = Mock()
             obj.all_schedules = Mock(return_value={release.SERVICE: obj.original})
             obj.protected, obj.event = {}, Mock()
             state = {"value": old_lock, "etag": "old-etag", "reads_after_commit": 0}
@@ -330,6 +332,7 @@ class PausedRecoveryTests(unittest.TestCase):
         obj.recovery_receipt_sha256 = "e" * 64
         obj.lease = release.binding.MigrationLease(obj.s3, owner=obj.release_id)
         obj.verify_paused_boundary = Mock()
+        obj.verify_peer_boundary = Mock()
         obj.all_schedules = Mock(return_value={release.SERVICE: obj.original})
         obj.protected, obj.event = {}, Mock()
         foreign = {**old_lock, "owner": "8" * 32, "state": "active", "generation": "7" * 32}
@@ -439,6 +442,7 @@ class ImageReleaseTests(unittest.TestCase):
         obj.release_id, obj.task_mode, obj.owned_task = "c" * 32, None, None
         obj.clock = lambda: 100
         obj.lease = Mock()
+        obj.verify_peer_boundary, obj.exclusion = Mock(), Mock()
         obj.known_schedule = {"Name": release.SERVICE, "State": "DISABLED"}
         obj.protected = {"roy-daily-report-email": {"Name": "roy-daily-report-email", "State": "ENABLED",
                          "Target": {"EcsParameters": {"TaskDefinitionArn": "roy:777"}}}}

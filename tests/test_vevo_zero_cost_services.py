@@ -61,7 +61,7 @@ class VevoZeroCostServiceTests(unittest.TestCase):
         expected = {self.exporter.get_reporting_product_sku("", label) for label in SERVICE_LABELS}
         self.assertEqual(expected, actual)
         self.assertEqual(set(SERVICE_LABELS), set(self.exporter.project_settings["zero_cost_service_labels"]))
-        self.assertNotIn("zero_cost_service_product_skus", load_project_settings("roy"))
+        self.assertNotEqual(actual, set(load_project_settings("roy")["zero_cost_service_product_skus"]))
 
     def test_zero_cost_wins_over_mapped_cost_and_margin_policy_at_every_revenue_sign(self):
         self.exporter._rebuild_product_expense_indexes({label: 7.0 for label in SERVICE_LABELS})
@@ -112,8 +112,9 @@ class VevoZeroCostServiceTests(unittest.TestCase):
 
     def test_roy_does_not_inherit_vevo_zero_cost_services(self):
         exporter = self.make_exporter("roy")
-        exporter._rebuild_product_expense_indexes({"Spropitné": 7.0})
-        row = exporter.flatten_order(self.order("Spropitné"))[0]
+        exporter.project_settings["order_revenue_reconciliation_enabled"] = False
+        exporter._rebuild_product_expense_indexes({"Poistenie proti rozbitiu": 7.0})
+        row = exporter.flatten_order(self.order("Poistenie proti rozbitiu"))[0]
         self.assertEqual(14.0, row["total_expense"])
         self.assertNotEqual("zero_cost_service_override", row["expense_source"])
 

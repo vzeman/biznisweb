@@ -189,6 +189,7 @@ class OrderRevenueReconciliationTests(unittest.TestCase):
             text = print_ast(getattr(query, "document", query))
             self.assertIn("sum {\n        value\n        raw_value", text)
             self.assertIn("sum_with_tax {\n          value\n          raw_value", text)
+            self.assertIn("price {\n          value\n          raw_value", text)
 
     def test_legacy_value_only_eligible_cache_is_refreshed_under_strict_policy(self):
         order = self.order()
@@ -202,6 +203,7 @@ class OrderRevenueReconciliationTests(unittest.TestCase):
 
     def test_other_projects_keep_legacy_contract_without_opt_in(self):
         exporter = BizniWebExporter(api_url="https://example.com", api_token="synthetic", project_name="roy", enable_period_bundle=False, order_facts_only=True)
+        exporter.project_settings["order_revenue_reconciliation_enabled"] = False
         row = exporter.flatten_order(self.order())[0]
         self.assertEqual(100, row["item_total_without_tax"])
         self.assertEqual("not_enabled", row["order_revenue_reconciliation"])
