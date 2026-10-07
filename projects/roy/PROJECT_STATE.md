@@ -1,5 +1,22 @@
 # ROY reporting project state
 
+## Current handoff: release not dispatched after shared source-query defect
+
+Date: 2026-10-07
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-country-blocker-20261007`
+What changed: PR #608 merged as `6f62a89ffe4fbaa84333ceed999d35bb11eb74e4` with all six CI checks passing. Exact ECR build `37656548074` succeeded with image `sha256:4af12a4dc81033a2709f4a678fdcd7851d401df30800e3511f4f7b4e04ef644a`; the dependent monthly workflow settled before release checks. The sequential release stopped before ROY dispatch because an independent full-history comparison exposed a shared order-query omission. No ROY task, candidate promotion or fresh reporting generation was performed in this resumed release.
+
+What is verified: ROY source financial rows still exactly match the audited monetary contract; zero service-cost, discount and bundle-cost corrections remain merged. The new read-only scope check proves the shared query issue also changes country assignment in ROY: the production queries omit `delivery_address`, although the report is designed to prefer delivery country over invoice country. Source rows with different delivery and invoice countries affect complete history and the 90-day/August period. September, 7-day and 30-day source country memberships are unchanged. This is a contract-based source diagnosis, not a claim that a newly published ROY CSV was checked. References and financial values remain in private evidence.
+
+Current runtime: Account `919341186960`, region `eu-central-1`, service `roy-daily-report-email`, original definition `roy-reporting-daily:77` remains ENABLED with image `sha256:638e628781783c2b4897f93c97eaec8a2c1db31f96fc18b03a30155e77b7283f` and original generation `20261006T235744Z`. Its lease and published output metadata remained unchanged against the sequential-release baseline. No local ROY controller or persistent test service was started. The new calculation rules have not been adopted by its production schedule.
+
+Known issues: The source-query delivery-country omission is a genuine shared blocker. Separately, the private country verifier must distinguish precise advertising aggregates from sums of rounded display values; the newly diagnosed advertising false positive does not invalidate the existing exact Google account/country proof. Keep the measured Google residual explicitly unallocated; never invent country spend or weaken raw total reconciliation.
+
+Private evidence: Current diagnosis `roy_delivery_query_scope_diagnosis.json`, SHA-256 `a9dd9563f917795f487987c242560fdabcd00c49b62da273b90125a823977f4f`, is archived under `data/reporting/analyses/2026-10-07-production-rules/blocked-20261007T180813Z-d0ed2b45cb29/data/reporting-production-rules-20261007/`. Shared archive manifest SHA-256 `cf61deaebacda7f1520312a4cb103564eee840861c9b612b62995ab35409a4d3`; all files passed encrypted full SHA readback. The terminal protected-peer proof confirms this project's lease, schedule and output metadata remain unchanged. Existing source/monetary archives remain immutable; no commercial values or order references are committed.
+
+Next exact step: Work is stopped under the owner's stop-on-error rule. On continuation, fix and regression-test both production order queries and the independent precision contract, then repeat ROY complete-history order/item/country/fixed-cost validation before dispatch. Finish and verify the recovered peer release first, or use only an explicitly validated retained-peer release path. Build from reviewed Git source, probe before live generation through the requested date, and verify all periods, authenticated HTTP and the enabled dynamic-date schedule. Do not claim completion from merged code alone.
+
 ## 2026-10-07 — Final source contracts and private evidence complete
 
 Both complete-history monetary audits pass against final exporter SHA-256 `3225fec206fc1296ff9dca9497e7bf47cc5b34a2baf60c514748dabc59833a41`. The ROY financial rows are exactly unchanged from its prior independent audited contract; the VEVO contract includes the strictly evidenced compensation and stacked-discount cases. All eight saved live Google results also pass the final validator and an independent Decimal replay; the reviewed geo functions are unchanged. Both financial publication verifiers are prepared. The full 1,387-test regression, smoke, lint and independent review pass. All recorded finite audit/test processes have exited; no listening service was started.
