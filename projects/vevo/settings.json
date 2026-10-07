@@ -40,6 +40,8 @@
     "prefer_import_code": true
   },
   "expense_match_mode": "title_first",
+  "expense_alias_fallback": true,
+  "measured_country_ads_enabled": true,
   "product_name_aliases_file": "product_name_aliases.json",
   "production_board": {
     "enabled": true,
@@ -179,7 +181,8 @@
     ],
     "cod_payment_ids": [
       "7",
-      "10"
+      "10",
+      "16"
     ],
     "prepaid_fulfilled_statuses": [
       "Odoslana"

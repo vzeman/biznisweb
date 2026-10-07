@@ -408,6 +408,20 @@ def build_data_quality_summary(data_quality: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def validate_publish_quality(value: Any, source: str) -> None:
+    """Keep an incomplete or critically invalid generation off the live pointer."""
+    valid = (
+        isinstance(value, dict)
+        and value.get("is_partial") is False
+        and value.get("qa_status") in {"ok", "pass", "warning"}
+        and type(value.get("qa_failure_count")) is int
+        and value["qa_failure_count"] == 0
+        and value.get("qa_errors") == []
+    )
+    if not valid:
+        raise RuntimeError(f"Refusing to publish unverified or incomplete reporting data: {source}")
+
+
 def resolve_period_live_artifacts(paths: Dict[str, Path]) -> Dict[str, Dict[str, Path]]:
     """Resolve generated 7D/30D/90D report and payload pairs from the full payload."""
     latest_payload_path = paths.get("dashboard_payload_latest_json")
@@ -499,6 +513,7 @@ def _canonical_live_artifact_paths(project: str, paths: Dict[str, Path]) -> Dict
         "dashboard_payload_30d.json": "30d",
         "dashboard_payload_90d.json": "90d",
     }
+    generation_to_date = None
     for filename, expected_period in expected_period_by_payload.items():
         payload_path = canonical[filename]
         try:
@@ -515,6 +530,16 @@ def _canonical_live_artifact_paths(project: str, paths: Dict[str, Path]) -> Dict
                 f"expected project={normalized_project}, period={expected_period}; "
                 f"got project={payload_project or 'missing'}, period={payload_period or 'missing'}."
             )
+        if normalized_project in STRICT_LIVE_REPORT_PROJECTS:
+            validate_publish_quality(payload.get("source_health"), filename)
+            try:
+                start = datetime.strptime(payload["date_from"], "%Y-%m-%d").date()
+                end = datetime.strptime(payload["date_to"], "%Y-%m-%d").date()
+            except (KeyError, TypeError, ValueError) as exc:
+                raise RuntimeError(f"Invalid report dates: {filename}") from exc
+            if start > end or (generation_to_date is not None and end != generation_to_date):
+                raise RuntimeError(f"Report period end mismatch: {filename}")
+            generation_to_date = end
 
     return canonical
 
@@ -541,6 +566,8 @@ def s3_upload_outputs(project: str, paths: Dict[str, Path]) -> Dict[str, str]:
     expires = int(os.getenv("REPORT_S3_PRESIGN_EXPIRES_SEC", "604800"))
     uploaded_object_keys: set[str] = set()
     canonical_artifacts = _canonical_live_artifact_paths(project, paths)
+    if str(project).strip().lower() in STRICT_LIVE_REPORT_PROJECTS:
+        validate_publish_quality(load_data_quality(paths.get("data_quality_json")), "data_quality.json")
     expected_live_artifact_count = len(STABLE_LIVE_ARTIFACT_NAMES) + sum(
         len(names) for names in PERIOD_LIVE_ARTIFACT_NAMES.values()
     )
@@ -1589,8 +1616,14 @@ def main() -> None:
     if missing:
         raise FileNotFoundError(f"Expected output files not found: {missing}")
 
-    s3_upload_outputs(project, output_paths)
     data_quality = load_data_quality(output_paths.get("data_quality_json"))
+    if project in STRICT_LIVE_REPORT_PROJECTS:
+        validate_publish_quality(data_quality, "data_quality.json")
+        canonical = _canonical_live_artifact_paths(project, output_paths)
+        full_payload = json.loads(canonical["dashboard_payload_latest.json"].read_text(encoding="utf-8-sig"))
+        if full_payload.get("date_from") != from_date or full_payload.get("date_to") != to_date:
+            raise RuntimeError("Generated report dates do not match the requested reporting window")
+    s3_upload_outputs(project, output_paths)
     put_metric("ReportQaWarnings", int(data_quality.get("qa_warning_count") or 0), project, reporting_defaults)
     put_metric("ReportQaFailures", int(data_quality.get("qa_failure_count") or 0), project, reporting_defaults)
     put_metric(

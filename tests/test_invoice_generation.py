@@ -147,6 +147,9 @@ class InvoiceGenerationTests(unittest.TestCase):
             data_dir = Path(tmp)
             report_latest = data_dir / "report_latest.html"
             payload_latest = data_dir / "dashboard_payload_latest.json"
+            quality_path = data_dir / "data_quality.json"
+            quality = {"is_partial": False, "qa_status": "warning", "qa_failure_count": 0, "qa_errors": []}
+            quality_path.write_text(json.dumps(quality), encoding="utf-8")
             report_latest.write_text("full", encoding="utf-8")
 
             embedded_specs = []
@@ -160,6 +163,8 @@ class InvoiceGenerationTests(unittest.TestCase):
                     json.dumps(
                         {
                             "project": "vevo",
+                            "date_from": "2026-07-01", "date_to": "2026-07-14",
+                            "source_health": quality,
                             "period_switcher": {"current_key": period},
                         }
                     ),
@@ -171,6 +176,8 @@ class InvoiceGenerationTests(unittest.TestCase):
                 json.dumps(
                     {
                         "project": "vevo",
+                        "date_from": "2026-07-01", "date_to": "2026-07-14",
+                        "source_health": quality,
                         "period_switcher": {
                             "current_key": "full",
                             "_embedded_specs": embedded_specs,
@@ -195,6 +202,7 @@ class InvoiceGenerationTests(unittest.TestCase):
                     {
                         "report_latest_html": report_latest,
                         "dashboard_payload_latest_json": payload_latest,
+                        "data_quality_json": quality_path,
                     },
                 )
 
@@ -432,6 +440,8 @@ class InvoiceGenerationTests(unittest.TestCase):
     def test_daily_report_runner_restores_output_tag_after_creditnote_guard(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
+            payload_path = tmp_path / "payload.json"
+            payload_path.write_text(json.dumps({"date_from": "2026-06-17", "date_to": "2026-06-17"}), encoding="utf-8")
             required_outputs = {
                 "report_html": tmp_path / "report.html",
                 "export_csv": tmp_path / "export.csv",
@@ -478,7 +488,8 @@ class InvoiceGenerationTests(unittest.TestCase):
                 patch.object(daily_runner, "run_export", side_effect=export_side_effect) as run_export_mock, \
                 patch.object(daily_runner, "build_artifact_set", return_value=FakeArtifactSet()), \
                 patch.object(daily_runner, "s3_upload_outputs"), \
-                patch.object(daily_runner, "load_data_quality", return_value={}), \
+                patch.object(daily_runner, "load_data_quality", return_value={"is_partial": False, "qa_status": "ok", "qa_failure_count": 0, "qa_errors": []}), \
+                patch.object(daily_runner, "_canonical_live_artifact_paths", return_value={"dashboard_payload_latest.json": payload_path}), \
                 patch.object(daily_runner, "put_metric"):
                 daily_runner.main()
 

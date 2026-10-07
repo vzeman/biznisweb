@@ -106,3 +106,54 @@ Canonical product split:
 - If a branch starts representing a separate product, stop and move that product into its own repository.
 
 Use `PROJECT_STATE.md` only for this repo plus short integration notes.
+
+## VEVO report image release and dated regeneration
+
+After a reviewed PR is merged and its exact `build-and-push-ecr.yml` run succeeds,
+use a clean checkout whose HEAD equals fetched `origin/main`. Resolve the real
+current Fargate task/IP (or confirmed absence), `vevo-daily-report-email`, and
+`/app` before dispatch. The committed helper uses the current schedule target,
+not the obsolete original revision pins in the first managed migration runbook.
+
+```text
+python scripts/vevo_report_image_release.py run --profile codex --commit <full-main-SHA> --to-date YYYY-MM-DD
+python scripts/vevo_report_image_release.py status --profile codex --release-id <32-character-release-id>
+```
+
+`--profile` is optional when the usual AWS credential chain is configured.
+`--timeout-seconds` bounds each report task (default 7200; allowed 300–14400).
+An optional fresh `--release-id` binds dispatch idempotency and private evidence;
+never reuse an ID to retry an uncertain run. `status` is read-only. It shows the
+last retained phase and exact owned task ARNs, without financial data or secrets.
+
+The helper proves the successful exact-main build and immutable image, snapshots
+all default-group schedules, and takes the existing reporting migration lease.
+It pauses only VEVO reporting, verifies a quiet dispatch window, then clones its
+task definition with only the image changed. The diagnostic task uses an isolated
+temporary role and the existing query-only report probe. Actual task/IP/image,
+`curl localhost` marker, explicit authorization, all full/7d/30d/90d artifacts,
+quality and requested end date must pass before promotion. A finite live entry
+then repeats the local host marker and regenerates through the requested date
+with fresh reads and explicit email/invoice/creditnote-guard skips. The helper
+verifies the new live manifest and every artifact hash before restoring the
+original enabled schedule. Its date, cache and email skips apply only to that
+one-off task; normal schedule configuration is preserved. UI verification follows
+these host/output gates.
+
+Receipts are encrypted and read back under private
+`data/vevo/reporting/image-releases/<release-id>/`; candidate evidence remains
+under `data/vevo/reporting/runtime/probes/<release-id>/`. Record safe references,
+hashes and the outcome in `PROJECT_STATE.md`. The helper does not update or claim
+validity of historical `runtime/current.json`; its current-target proof is
+separate, and the shared lease only provides deployment exclusion.
+
+Before live dispatch, a known failure stops only the owned task, removes its
+verified temporary role, restores the owned original schedule and deactivates
+the unused candidate. An uncertain launch retains the exclusion lease and paused
+schedule for inspection. Any failure after live dispatch preserves the proven
+candidate image with VEVO reporting paused: output might already have published,
+so the helper never automatically reruns, sends email, rewrites aliases or rolls
+back that image. Inspect receipts, exact ECS tasks, logs and the live manifest
+before a separately reviewed recovery. Never clear an uncertain lease or repeat
+`run` merely to retry. Other schedules and foreign resources are never repaired
+or rolled back by this helper.
