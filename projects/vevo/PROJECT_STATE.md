@@ -1,5 +1,14 @@
 # VEVO reporting project state
 
+## 2026-10-07 — Final source contracts and private evidence complete
+
+Both complete-history monetary audits pass against final exporter SHA-256 `3225fec206fc1296ff9dca9497e7bf47cc5b34a2baf60c514748dabc59833a41`. The ROY financial rows are exactly unchanged from its prior independent audited contract; the VEVO contract includes the strictly evidenced compensation and stacked-discount cases. All eight saved live Google results also pass the final validator and an independent Decimal replay; the reviewed geo functions are unchanged. Both financial publication verifiers are prepared. The full 1,387-test regression, smoke, lint and independent review pass. All recorded finite audit/test processes have exited; no listening service was started.
+
+All 56 private evidence files and the manifest are archived with AES256 encryption, expected-owner checks, conditional creation and complete SHA-256 readback: `data/reporting/analyses/2026-10-07-production-rules/pre-deploy-20261007T170115Z-6d35cea43871/`; manifest SHA-256 `f7d319319a618b2719a5ca987f6e08c19dfa13bc9d653d63191a9aaa16eb7c14`. This supplements the previously immutable source archives referenced in its monetary manifest. No financial figures or order references are added to public documentation.
+
+Current dispatch hold: GitHub repeatedly returned a remote internal server error when pushing the final correction commit, while fetch/API reads and push permissions pass; the branch has no divergent remote commits. Keep the final commits intact, use ordinary non-force synchronization only, and finish refreshed PR #608 CI before merge/build. No production reporting runtime has been changed. Once GitHub accepts the push, the next exact step remains the verified sequential VEVO recovery and ROY release, fresh publication through 2026-10-06, HTTP/artifact checks and enabled future schedules with dynamic dates.
+
+
 ## 2026-10-07 — Complete-history discount reconciliation verified
 
 The final VEVO primary-source audit now completes without unexplained monetary failures. The additionally evidenced stacked-percentage case supports original or remaining goods/cart bases only when each explicit source amount and the final total prove a unique merchandise allocation. No tolerance, cost rule or source eligibility was weakened. Seven synthetic regressions cover both percentage models, mixed VAT/free lines and ambiguity rejection. All 1,387 tests in the 77-module union, reporting smoke, critical Ruff and independent code review pass. The collector exited normally; confidential source/financial contracts are being hash-bound and archived before dispatch. PR #608 receives this final correction; merge only after refreshed CI and both final source contracts pass. Reporting production has not changed yet.

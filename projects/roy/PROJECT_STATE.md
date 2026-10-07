@@ -1,5 +1,14 @@
 # ROY reporting project state
 
+## 2026-10-07 — Final source contracts and private evidence complete
+
+Both complete-history monetary audits pass against final exporter SHA-256 `3225fec206fc1296ff9dca9497e7bf47cc5b34a2baf60c514748dabc59833a41`. The ROY financial rows are exactly unchanged from its prior independent audited contract; the VEVO contract includes the strictly evidenced compensation and stacked-discount cases. All eight saved live Google results also pass the final validator and an independent Decimal replay; the reviewed geo functions are unchanged. Both financial publication verifiers are prepared. The full 1,387-test regression, smoke, lint and independent review pass. All recorded finite audit/test processes have exited; no listening service was started.
+
+All 56 private evidence files and the manifest are archived with AES256 encryption, expected-owner checks, conditional creation and complete SHA-256 readback: `data/reporting/analyses/2026-10-07-production-rules/pre-deploy-20261007T170115Z-6d35cea43871/`; manifest SHA-256 `f7d319319a618b2719a5ca987f6e08c19dfa13bc9d653d63191a9aaa16eb7c14`. This supplements the previously immutable source archives referenced in its monetary manifest. No financial figures or order references are added to public documentation.
+
+Current dispatch hold: GitHub repeatedly returned a remote internal server error when pushing the final correction commit, while fetch/API reads and push permissions pass; the branch has no divergent remote commits. Keep the final commits intact, use ordinary non-force synchronization only, and finish refreshed PR #608 CI before merge/build. No production reporting runtime has been changed. Once GitHub accepts the push, the next exact step remains the verified sequential VEVO recovery and ROY release, fresh publication through 2026-10-06, HTTP/artifact checks and enabled future schedules with dynamic dates.
+
+
 ## Final shared implementation check
 
 The complete VEVO history exposed an additional proven original-base percentage-discount chain. The shared reconciliation now accepts it only with unique source-total proof; existing tolerance, product costs and country allocation remain unchanged. All 1,387 tests and smoke/critical lint pass. Repeat the ROY private financial contract hash chain against this final code before merging PR #608; reporting runtime remains unchanged.
