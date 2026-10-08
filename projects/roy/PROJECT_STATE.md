@@ -1,3 +1,13 @@
+## 2026-10-08 — ROY candidate host independently verified
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; keep unmerged during deployment)
+What is verified: Release `9a666b8a81ee4ce1ac6c0e25d78db677` owns candidate task `f2cd5212b2f74982b0afc1201d2ab6df`, definition :80, IP `172.31.47.30`, service `roy-daily-report-email`, path `/app`. Exact source `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2`, image `sha256:ab3a7131e354fc684f9d8278158ec0f832c6e82c4d9bb0dd4bb5ad731c89f5b6` and localhost marker/authorization chain pass independent readback. Host proof SHA-256 `463175ae7dee18fe7ef043dc9a94c8973535a924baad0f0f907a5cb61ad0d2ef`; phase 0010 receipt `09386efa479ed2e8cfe03f7713ec37797f96b7920cf1fb7151eb8db929aec09f`. All twelve protected schedules, peer state and existing own publication remain unchanged.
+Current runtime: Isolated full-history calculation is running. No financial approval or live publication is claimed; both App Runner UI promotions remain pending.
+Next exact step: Verify all four actual probe periods against frozen primary and refreshed raw advertising sources, plus actual JSON/HTML. Publish the passing independent review, finish live financial/runtime/HTTP verification, then perform both report-only UI promotions from the frozen source.
+
+
 ## 2026-10-08 — ROY corrective release started
 
 Date: 2026-10-08
