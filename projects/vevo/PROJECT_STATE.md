@@ -1,3 +1,13 @@
+## 2026-10-08 — VEVO live runtime and HTTP verified; source restatement documented
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; main remains frozen)
+What is verified: Release `c3e23947aff44621886a41678e1564e7` completed at 12:29 UTC with generation `20261008T122907Z`. Terminal receipt SHA-256 `de01f137ce05bcaec81d2965e42955b458db725aa5e92d303d343b82986b66e4`; generation manifest SHA-256 `9ecf83fbb809ec15307c7768e79c381735b79ebaf182ba592027deb0d071a3bf`. Independent runtime/HTTP proof SHA-256 `827863ff4a531ba22365422fd98f0357d2c4b98a11afa7e2ff57a79706bc05ff` confirms all eight authenticated public JSON/HTML outputs match the new generation after exact localhost host gates. The reporting schedule is ENABLED on definition :48 with future dates still dynamic, lease released, temporary role absent and both owned tasks STOPPED/exit 0. Protected schedules and peer state remain unchanged. Controller/wrapper PIDs are absent with no listeners, cleanup SHA-256 `781cf3e2210bc8aa05a650ef831c7387965ea6dc6f672f3ef9b65f5e8181da43`.
+Source restatement: Independent fresh readback of every original all-status order on the affected date proves one status-only transition from shipped to uncollected/cancelled; all native amounts, items, discounts and countries are unchanged. Canonical eligibility replay and cutoff-bound credit/fulfillment checks explain its removal under the owner's retained current-status policy. Native review SHA-256 `8bf0e272f8a61a95376ade80b3d0748daefa2900d0051d80ceeb54666ac3a621`. The original contract comparison is intentionally preserved as failed, SHA-256 `a26fcabfd744b8a385e63f0bb5cb18df00c69051432e07e269055f4d7886a1e8`: actual complete CSV differs only by that removed line, with no extra, duplicate or changed remaining rows. Advertising checks pass. This is not attributed to a formula change.
+Current verification boundary: A new immutable derived expected contract and complete post-publication verification are being finalized; the approved probe contract/review and all failed evidence stay unchanged. Technical publication success alone is not a final financial verification claim. App Runner image promotion and the peer release remain pending.
+Next exact step: Independently verify/archive the explicit native-source amendment and strict full published-row comparison, then dispatch ROY with the same source/image/financial/HTTP gates. Only after both report verifications, finish both report-only App Runner promotions, actual before/after comparison, final evidence archive and documentation PR.
+
 ## 2026-10-08 — VEVO approved review archived; live regeneration running
 
 Date: 2026-10-08
