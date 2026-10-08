@@ -126,7 +126,8 @@ policy binds ROY to `roy-daily-report-email`, `roy-reporting-daily`, and
 `daily-reports/roy-sk`; VEVO uses its existing service, family and sink. Wait for
 every settings-triggered monthly accounting deployment to finish before starting
 this controller, because all other schedules become protected baseline state.
-`--timeout-seconds` bounds each report task (default 7200; allowed 300–14400).
+`--timeout-seconds` bounds each report task and the independent-review wait
+(default 7200; allowed 300–14400).
 An optional fresh `--release-id` binds dispatch idempotency and private evidence;
 never reuse an ID to retry an uncertain run. `status` is read-only. It shows the
 last retained phase and exact owned task ARNs, without financial data or secrets.
