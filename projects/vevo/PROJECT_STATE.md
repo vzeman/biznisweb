@@ -1,3 +1,12 @@
+## 2026-10-08 — Report-only UI promotion held on shared credit guard defect
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614)
+What is verified: VEVO generation `20261008T122907Z` and its enabled dynamic-date reporting schedule remain verified. The independent peer-release observer confirms this project's lease and all nine published artifacts are unchanged. No App Runner promotion or local UI process was started.
+Known issue: The shared credit-order source guard compares different currency query shapes (`{symbol, code}` versus `{code}`) as whole dictionaries. A qualifying creditnote can fail despite identical currency code and order money. Current VEVO publication is financially verified; the shared defect still needs correction for future qualifying creditnotes. Do not claim the overall deployment complete or promote source `94ad0b3` again.
+Next exact step: After a new reviewed shared-code fix, exact build and renewed source-bound financial/runtime gates, complete this project's report-only UI promotion and actual host/HTTP/browser verification. Retain all current evidence and the approved gift/current-status/model policies; do not bypass the source guard.
+
 ## 2026-10-08 — VEVO financial publication fully verified
 
 Date: 2026-10-08
@@ -204,12 +213,3 @@ What is verified: The session started with a clean checkout, fetched/pruned and 
 Known issue: The strict monetary metadata path conflicts with an existing audited, status-bounded historical compensation-order exception. Repair only the evidenced exception while still proving its monetary totals; do not fabricate absent elements, broaden eligibility or omit the order. Shared zero-tax/net-total handling already landed with ROY, but VEVO needs complete-history verification. Shared Google country reporting must explicitly retain account spend whose physical country is unavailable without assigning it to a shop or bypassing total checks.
 
 Next exact step: Repair the narrow source exception and country-spend coverage with regressions, and preserve private failure diagnostics. Run full local/CI and primary-source checks, merge through a PR, wait for the exact image and dependent monthly workflow, then run a fresh bound VEVO recovery and ROY release sequentially. Each full-history probe, live generation, future schedule target, financial reconciliation and HTTP/UI check must be verified. No business/provider writes, report emails or invoice/creditnote mutations are part of the one-off regeneration. No persistent local process has been started.
-## 2026-10-08 — Report-only UI promotion held on shared credit guard defect
-
-Date: 2026-10-08
-Repo: `vzeman/biznisweb`
-Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614)
-What is verified: VEVO generation `20261008T122907Z` and its enabled dynamic-date reporting schedule remain verified. The independent peer-release observer confirms this project's lease and all nine published artifacts are unchanged. No App Runner promotion or local UI process was started.
-Known issue: The shared credit-order source guard compares different currency query shapes (`{symbol, code}` versus `{code}`) as whole dictionaries. A qualifying creditnote can fail despite identical currency code and order money. Current VEVO publication is financially verified; the shared defect still needs correction for future qualifying creditnotes. Do not claim the overall deployment complete or promote source `94ad0b3` again.
-Next exact step: After a new reviewed shared-code fix, exact build and renewed source-bound financial/runtime gates, complete this project's report-only UI promotion and actual host/HTTP/browser verification. Retain all current evidence and the approved gift/current-status/model policies; do not bypass the source guard.
-
