@@ -117,8 +117,8 @@ def verify_quality(value):
 
 
 def retain_failure_diagnostics(s3, prefix, identity, ready_sha, path, *, from_date, to_date,
-                               failure_type, policy=VEVO):
-    """Keep only this release's DQ file; never treat rejection evidence as output."""
+                               failure_type, policy=VEVO, publication_diagnostics=None):
+    """Keep this release's private QA evidence; never authorize rejected output."""
     release_id = identity["release_id"]
     require(prefix == policy.probe_prefix + release_id + "/"
             and re.fullmatch(r"[a-f0-9]{32}", release_id)
@@ -130,6 +130,7 @@ def retain_failure_diagnostics(s3, prefix, identity, ready_sha, path, *, from_da
     expected_name = f"data_quality_{from_date.replace('-', '')}-{to_date.replace('-', '')}__migration_{release_id}.json"
     path = Path(path)
     diagnostic = {"status": "missing"}
+    content = None
     try:
         if path.name != expected_name or path.resolve().parent != (ROOT / "data" / policy.project).resolve() or path.is_symlink():
             diagnostic = {"status": "invalid-path"}
@@ -144,11 +145,26 @@ def retain_failure_diagnostics(s3, prefix, identity, ready_sha, path, *, from_da
                 except (ValueError, UnicodeError, RuntimeError):
                     diagnostic = {"status": "invalid-json"}
                 else:
-                    key = prefix + "artifacts/diagnostics/data_quality.json"
-                    put_private(s3, key, raw, policy=policy)
-                    diagnostic = {"status": "available", "key": key, "sha256": sha(raw), "size": len(raw)}
+                    content = raw
     except OSError:
         diagnostic = {"status": "unreadable"}
+    if publication_diagnostics is not None:
+        require(isinstance(publication_diagnostics, dict)
+                and publication_diagnostics.get("schema_version") == 1
+                and publication_diagnostics.get("project") == policy.project
+                and publication_diagnostics.get("report_from_date") == from_date
+                and publication_diagnostics.get("report_to_date") == to_date
+                and set(publication_diagnostics.get("periods", {})) == {"latest", "7d", "30d", "90d"},
+                "probe-period-diagnostic-binding-invalid")
+        full_quality = json.loads(content) if content is not None else {"full_data_quality_read_status": diagnostic["status"]}
+        content = canonical({**full_quality, "publication_diagnostics": publication_diagnostics})
+    if content is not None:
+        if len(content) > DIAGNOSTIC_LIMIT:
+            diagnostic = {"status": "too-large"}
+        else:
+            key = prefix + "artifacts/diagnostics/data_quality.json"
+            put_private(s3, key, content, policy=policy)
+            diagnostic = {"status": "available", "key": key, "sha256": sha(content), "size": len(content)}
     failure = {**identity, "schema_version": 1, "phase": "report-rejected",
                "localhost_marker_sha256": ready_sha, "report_from_date": from_date, "report_to_date": to_date,
                "failure_type": failure_type if failure_type in FAILURE_TYPES else "other", "diagnostic": diagnostic}
@@ -170,8 +186,14 @@ def run_authorized_probe(s3, prefix, identity, ready_sha, *, policy=VEVO):
         return report_probe(s3, prefix, identity["release_id"], policy=policy)
     except BaseException as exc:
         try:
+            diagnostics = None
+            if paths.get("dashboard_payload_latest_json") is not None:
+                diagnostics = getattr(exc, "publication_diagnostics", None)
+                if diagnostics is None:
+                    diagnostics = runner.collect_publication_diagnostics(policy.project, paths, from_date, to_date)
             retain_failure_diagnostics(s3, prefix, identity, ready_sha, paths["data_quality_json"],
-                                       from_date=from_date, to_date=to_date, failure_type=type(exc).__name__, policy=policy)
+                                       from_date=from_date, to_date=to_date, failure_type=type(exc).__name__, policy=policy,
+                                       publication_diagnostics=diagnostics)
         except Exception:
             # Do not replace the original failure or emit provider/financial details.
             # The controller records missing evidence and still rejects the probe.
