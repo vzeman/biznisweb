@@ -1,3 +1,14 @@
+## 2026-10-08 — Stopped release archived; original ROY runtime restored
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; overall deployment incomplete)
+What is verified: Fresh native source comparison and an unchanged-production-method offline replay prove the currency projection defect, not an economic or identity change. Root-cause proof SHA-256 `e0096c160f2dc003e9db8bf728e0e30628a972b5b1eac369abe46b9cd7327114`; independent review `2147e28d38e146fbc6c5bbe68da63610e9fd58997792ce840e886ecae74ba33e`. ROY release `9a666b8a81ee4ce1ac6c0e25d78db677` never reached approval/live publication. Terminal receipt `29609ea42937d18ca426ebce02d47e9fa0a7aaf93bdb19042678ed085b36dc31` and independent readback `6642030020404b9d2a0e21bcd157306dee232cdf4183d5a95dd67f247ec4dd78` confirm exact original ENABLED definition :77 restored, candidate :80 INACTIVE, task STOPPED/exit 1, lease released, temporary role absent, no active reporting tasks, all twelve protected schedules and eighteen pre-release report artifacts unchanged. Original ROY generation remains `20261008T000535Z`.
+Private archive: 51 new/changed evidence files plus manifest at `data/reporting/analyses/2026-10-08-methodology-fixes/blocked-20261008T130915Z-098655eb8ba0/`, SHA-256 `c001d78bd175a08c9db67f087e7000502756e4e2474457a341d31783e518408c`. Parent pre-deploy and VEVO-verified manifests remain intact. Terminal archive-process records are additionally stored under `closure/manifest.json`, SHA-256 `5bac49bcb1994d8a6e2ce109dcf13f098f246c2cb93da92f5b0c801ab1ffe033`. Every archived object passed AES256, expected-owner, conditional-create and complete GET/hash verification. All known finite controller/diagnostic/archive processes exited; no persistent local service or UI candidate was started.
+Known issues: Shared credit-order guard repair and both UI promotions remain outstanding. The private UI invocation ledger was prepared but never run; its post-spawn ledger/inspection exception path needs an owned-child wait/finally before any future use. Do not interpret the saved VEVO-only comparison as a completed two-project financial comparison.
+Next exact step: Resume with a new reviewed branch/PR correcting canonical currency comparison and actual-query-shape regression coverage, without weakening real ID/date/status/money mismatch checks. Rebuild and rebind exact source/image contracts, rerun required financial and release gates, then finish both report-only UI promotions and the two-project actual financial comparison. Preserve this stopped release and all failed evidence; no retry or correction was performed after the owner's stop-on-error gate.
+
+
 ## 2026-10-08 — ROY release stopped on currency-shape defect; UI releases held
 
 Date: 2026-10-08
