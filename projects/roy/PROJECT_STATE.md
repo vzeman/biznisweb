@@ -1,3 +1,12 @@
+## 2026-10-08 — Final code validation and reporting UI release path
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-fixes-20261008`
+What changed: Final report-only App Runner deployment mode is documented in `projects/REPORT_DASHBOARD_RELEASE.md`; it reads report surfaces only, binds immutable source/image/host proof and preserves all schedules/leases. It must follow both report runtime/HTTP validations. The accepted cost guard now handles an explicitly reconciled native negative merchandise line without changing the existing signed cost model; unsupported/malformed amounts remain blocking.
+What is verified: All 1,476 tests across 88 modules, smoke, critical lint and independent review pass. Complete fresh source, monetary contract and all four period cost guards pass; source/status refresh effects are separately documented privately. No production release is claimed. Finite regression processes exited with no listeners, and no local persistent runtime was started.
+Next exact step: Complete PR #613 exact-head CI/build and private source archive, release ROY after the verified VEVO recovery, publish through 2026-10-07 and verify enabled future dynamic-date reporting. Finish the separate report-only UI image promotion only after both report HTTP gates pass. Archive actual evidence and report financial impact with source refreshes identified separately.
+
 ## 2026-10-08 — Corrected financial rules verified; release pending
 
 Date: 2026-10-08

@@ -30,6 +30,48 @@ def qa(rows, settings=SETTINGS):
 
 
 class CostEstimatePolicyTests(unittest.TestCase):
+    @staticmethod
+    def signed_source_row():
+        return row(item_quantity=2, item_total_without_tax=-100, expense_per_item=-32.5,
+                   total_expense=-65, profit_before_ads=-35, item_currency="EUR",
+                   item_line_sum_original=-100, item_line_sum_with_tax_original=-123,
+                   item_unit_price_original=-50, item_unit_price=-50,
+                   item_total_with_tax=-123, item_tax_amount=-23, item_tax_rate=23,
+                   item_order_discount_with_tax=0, order_revenue_reconciliation="source_total_verified")
+
+    def test_signed_native_source_can_preserve_existing_margin_cost_without_money_changes(self):
+        item = self.signed_source_row()
+        before = copy.deepcopy(item)
+        settings = {**SETTINGS, "currency_rates_to_eur": {"EUR": 1}}
+        result = assess([item], settings=settings)
+        self.assertTrue(result["approved"])
+        self.assertEqual(1, result["verified_signed_source_rows"])
+        self.assertEqual(before, item)
+        self.assertEqual(0, assess([item], settings={})["verified_signed_source_rows"])
+
+    def test_signed_cost_without_native_evidence_and_coupled_tampering_stays_critical(self):
+        settings = {**SETTINGS, "currency_rates_to_eur": {"EUR": 1}}
+        mutations = [
+            {"item_line_sum_original": None}, {"item_line_sum_original": 100},
+            {"item_line_sum_with_tax_original": -122}, {"item_unit_price_original": -49},
+            {"item_unit_price": -49}, {"item_total_with_tax": -122}, {"item_tax_amount": -22},
+            {"item_tax_rate": 20}, {"item_order_discount_without_tax": 1},
+            {"item_order_discount_with_tax": 1}, {"order_revenue_reconciliation": "not_financially_included"},
+            {"item_currency": "USD"}, {"total_expense": -64, "profit_before_ads": -36},
+            {"item_total_without_tax": 100}, {"expense_per_item": 32.5},
+            {"expense_per_item": -32, "total_expense": -64, "profit_before_ads": -36},
+            {"expense_source": "bundle_component:bundle_component_missing_cost_margin_35_fallback", "bundle_component_flag": True},
+            {"expense_source": "unrecognized_provider_cost"},
+        ]
+        for mutation in mutations:
+            with self.subTest(mutation=mutation):
+                item = {**self.signed_source_row(), **mutation}
+                self.assertFalse(assess([item], settings=settings)["approved"])
+                self.assertEqual("critical", qa([item], settings=settings)["status"])
+        for rate in (0, -1, "NaN", True):
+            with self.subTest(rate=rate):
+                self.assertFalse(assess([self.signed_source_row()], settings={**SETTINGS, "currency_rates_to_eur": {"EUR": rate}})["approved"])
+
     def test_explicit_accepted_model_changes_coverage_severity_not_money_or_threshold(self):
         rows = [row()]
         before = copy.deepcopy(rows)

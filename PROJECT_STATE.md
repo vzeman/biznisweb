@@ -1,3 +1,14 @@
+## 2026-10-08 — Final release code reviewed and verified
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-fixes-20261008`
+What changed: Added a narrowly scoped `--report-only` mode to the existing App Runner image deployment CLI. It verifies four report periods, exact host/task/IP/source/image, localhost marker, authentication, protected schedules/leases and candidate/public byte equality. It omits provider credentials and operations/warehouse routes, changes only the selected service image and preserves immutable encrypted receipts. Ambiguous dispatch is never blindly repeated. The reproducible cross-platform commands and cleanup/recovery boundaries are in `projects/REPORT_DASHBOARD_RELEASE.md`.
+Source compatibility correction: The first complete ROY primary replay exposed one legitimate historical negative merchandise line rejected by the new cost guard. Its existing signed cost model is now accepted only with explicit native net/gross/unit/quantity/FX/tax evidence, zero header discounts, the strict source reconciliation marker and unchanged cost/profit algebra. Unknown, mutated or unsupported signed rows remain critical. No monetary values or eligibility rules changed; the failed attempt remains in the private evidence archive.
+What is verified: All 1,476 tests in 88 modules pass with unchanged checked source, plus final reporting smoke and critical Ruff. Independent deployment review reran the focused release tests with no blocker. ROY's complete new source and all four period monetary/cost contracts pass; VEVO's complete scan remains in progress. The recorded finite regression processes are absent with no listening ports. No local persistent service was started.
+Current runtime: Both reporting releases and the two reporting UI image promotions are still pending. Original VEVO paused recovery state and original enabled ROY schedule are unchanged. PR #613 contains the reviewed correction; final exact-head CI, merge/build, fresh-source archive and production gates remain mandatory.
+Next exact step: Complete final PR CI, merge and verify the immutable exact-source ECR build and dependent monthly workflow. Freeze/archive both source contracts, then run VEVO recovery followed by ROY, requiring independent source/display checks before live publication. Verify both actual publications and future dynamic-date schedules before the separate sequential report-only UI image promotions. Compare identical calendar periods and identify real status refreshes separately from calculation changes.
+
 ## 2026-10-08 — Financial and semantic corrections verified; production pending
 
 Date: 2026-10-08

@@ -34,7 +34,7 @@ def assess_configured_cost_estimates(
     policy = settings.get("cost_estimate_publication", {})
     enabled = isinstance(policy, dict) and policy.get("allow_configured_margin_fallback") is True
     errors: Counter = Counter()
-    fallback_rows = verified_rows = invalid_rows = 0
+    fallback_rows = verified_rows = invalid_rows = verified_signed_source_rows = 0
 
     def number(value):
         if isinstance(value, bool) or value is None:
@@ -80,10 +80,46 @@ def assess_configured_cost_estimates(
             unit_cost = number(row.get("expense_per_item"))
             total_cost = number(row.get("total_expense"))
             profit = number(row.get("profit_before_ads"))
-            if quantity <= 0 or min(revenue, discount, unit_cost, total_cost) < 0:
+            if quantity <= 0 or discount < 0:
                 raise ValueError("invalid_quantity_or_negative_amount")
             cent = Decimal("0.01")
             noise = Decimal("0.000000001")
+            signed_source = min(revenue, unit_cost, total_cost) < 0
+            if signed_source:
+                # A negative native merchandise line can already produce a
+                # signed cost under the configured margin model. Verify its
+                # source money before accepting that existing accounting value;
+                # this is neither an inferred inventory return nor a cost edit.
+                if (revenue >= 0 or unit_cost > 0 or total_cost > 0 or discount != 0
+                        or source != expected_source
+                        or row.get("order_revenue_reconciliation") != "source_total_verified"
+                        or number(row.get("item_order_discount_with_tax")) != 0):
+                    raise ValueError("unverified_signed_source_line")
+                currency = row.get("item_currency")
+                rates = settings.get("currency_rates_to_eur")
+                if not isinstance(rates, Mapping) or not isinstance(currency, str) or currency not in rates:
+                    raise ValueError("signed_source_currency_unknown")
+                fx = number(rates[currency])
+                native_net = number(row.get("item_line_sum_original"))
+                native_gross = number(row.get("item_line_sum_with_tax_original"))
+                native_unit = number(row.get("item_unit_price_original"))
+                converted_unit = number(row.get("item_unit_price"))
+                gross = number(row.get("item_total_with_tax"))
+                tax = number(row.get("item_tax_amount"))
+                tax_rate = number(row.get("item_tax_rate"))
+                if (fx <= 0 or max(native_net, native_gross, native_unit, converted_unit, gross) >= 0
+                        or tax > 0 or tax_rate < 0 or tax_rate > 100):
+                    raise ValueError("signed_source_amount_invalid")
+                if (abs(native_unit * quantity - native_net) > noise
+                        or abs(native_unit * fx - converted_unit) > noise
+                        or abs(native_net * fx - revenue) > Decimal("0.005") + noise
+                        or abs(native_gross * fx - gross) > Decimal("0.005") + noise):
+                    raise ValueError("signed_source_money_mismatch")
+                multiplier = 1 + tax_rate / 100
+                if (abs(gross - revenue - tax) > noise
+                        or abs(gross - revenue * multiplier) > Decimal("0.005") * (1 + multiplier) + noise
+                        or any(abs(value - value.quantize(cent)) > noise for value in (gross, tax))):
+                    raise ValueError("signed_source_tax_mismatch")
             if any(abs(value - value.quantize(cent)) > noise for value in (revenue, discount, total_cost, profit)):
                 raise ValueError("noncent_reported_amount")
             # Acquisition cost is estimated before header discounts. Source net
@@ -100,6 +136,7 @@ def assess_configured_cost_estimates(
             if abs(profit - native_profit) > noise:
                 raise ValueError("reported_profit_mismatch")
             verified_rows += 1
+            verified_signed_source_rows += int(signed_source)
         except (ValueError, InvalidOperation, OverflowError) as exc:
             invalid_rows += 1
             reason = str(exc) if isinstance(exc, ValueError) else "invalid_numeric_range"
@@ -107,5 +144,6 @@ def assess_configured_cost_estimates(
     approved = enabled and fallback_rows > 0 and invalid_rows == 0 and verified_rows == fallback_rows
     return {"enabled": enabled, "approved": approved, "fallback_rows": fallback_rows,
             "verified_rows": verified_rows, "invalid_rows": invalid_rows,
+            "verified_signed_source_rows": verified_signed_source_rows,
             "invalid_reasons": dict(sorted(errors.items())),
             "basis": "verified_configured_margin_estimate" if approved else "strict_cost_coverage"}
