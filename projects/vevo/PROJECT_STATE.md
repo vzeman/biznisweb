@@ -1,3 +1,12 @@
+## 2026-10-08 — Complete source contract and production image verified
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (documentation only)
+What changed: Reporting corrections are merged in PR #613 at `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2`; exact immutable image is `sha256:ab3a7131e354fc684f9d8278158ec0f832c6e82c4d9bb0dd4bb5ad731c89f5b6`. All 1,476 tests and final PR checks pass. Fresh complete primary-source contract SHA-256 `f214e687155c5416dc0c79dd24c1820fd9d6e11d52e4b5cf66c6230f428500f6` and monetary audit `4f01e7583bad5747f29e1faa17b1f60c00f19e79ada7029cfa38a8e7c6245f00` pass all four periods and bind the exact merged calculator/dependencies. Independent primary review confirms the existing project policies and no unexplained monetary mismatch.
+Current runtime: Publication and UI image promotion remain pending. VEVO remains paused under retained owner `0e7b025d8532474a8df8bcc4fed03a9f`, definition :46 and generation `20261006T231826Z`. No new production result is asserted from offline evidence. Source status refreshes are separately explained in the private comparison, not counted as calculation defects.
+Next exact step: Finish private archival and the dependent monthly workflow; recover the exact retained owner and complete the independent probe/live/HTTP release gates. Regenerate through 2026-10-07, verify enabled future dynamic dates, and only then finish the report-only UI image stage after both projects pass runtime/HTTP. Keep financial/customer evidence private and finish this documentation handoff after terminal validation.
+
 ## 2026-10-08 — Final code validation and reporting UI release path
 
 Date: 2026-10-08

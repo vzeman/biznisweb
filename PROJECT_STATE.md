@@ -1,3 +1,13 @@
+## 2026-10-08 — Verified immutable release candidate; production release pending
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (documentation only)
+What changed: PR #613 passed all six final-head checks and merged as `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2`. All 1,476 local regression tests passed. Exact build `37767593769` succeeded with immutable image `sha256:ab3a7131e354fc684f9d8278158ec0f832c6e82c4d9bb0dd4bb5ad731c89f5b6`; independent OCI/source receipt SHA-256 `7596c599b3bdba27494e7ee75a51e296fc881b8fa6569724c1815360b85f6caf` confirms `/app`. The merged tree is byte-identical to the tested head and remains a clean detached checkout for deployment; this separate documentation branch must not change main until both report and UI release gates finish.
+What is verified: Both fresh complete primary sources and monetary contracts pass. Independent review confirms exact Git/source/catalogue/dependency bindings, unique membership, preserved countries, all four period cost guards, zero-cost services, approved ROY gifts and exactly-once issued-credit adjustment. Review SHA-256 `64971252ecf5cd38dd587618d354d497a551ecea012950600ad80709bcd39aa1`. Real current-status changes are documented privately and kept separate from calculation effects. Earlier incomplete provider attempts and the signed-cost guard rejection are preserved as unsuccessful evidence, not overwritten.
+Current runtime: No corrected report or reporting UI publication is claimed yet. The related monthly accounting workflow `37767593774` is still settling and must complete before capturing the protected release boundary. Private pre-deploy archive is being prepared. VEVO retains its original paused recovery owner; ROY retains its original enabled report schedule. Local persistent runtime was not started.
+Next exact step: Complete and verify the encrypted pre-deploy archive and settled monthly workflow, then conditionally recover VEVO and finish its probe, independent financial/display approval, live publication and runtime/HTTP verification. Release ROY sequentially with the same gates. Only after both report verifications, promote both UI images using the committed report-only mode. Confirm future dynamic-date schedules and actual before/after values, archive terminal evidence, update this handoff and merge its documentation PR.
+
 ## 2026-10-08 — Final release code reviewed and verified
 
 Date: 2026-10-08
