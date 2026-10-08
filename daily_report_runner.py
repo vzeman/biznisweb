@@ -408,18 +408,131 @@ def build_data_quality_summary(data_quality: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def publish_quality_invalid_fields(value: Any) -> List[str]:
+    """The publication predicate, with field names safe to retain as diagnostics."""
+    if not isinstance(value, dict):
+        return ["source_health"]
+    checks = {
+        "is_partial": value.get("is_partial") is False,
+        "qa_status": isinstance(value.get("qa_status"), str) and value["qa_status"] in {"ok", "pass", "warning"},
+        "qa_failure_count": type(value.get("qa_failure_count")) is int and value["qa_failure_count"] == 0,
+        "qa_errors": value.get("qa_errors") == [],
+    }
+    return [name for name, valid in checks.items() if not valid]
+
+
 def validate_publish_quality(value: Any, source: str) -> None:
     """Keep an incomplete or critically invalid generation off the live pointer."""
-    valid = (
-        isinstance(value, dict)
-        and value.get("is_partial") is False
-        and value.get("qa_status") in {"ok", "pass", "warning"}
-        and type(value.get("qa_failure_count")) is int
-        and value["qa_failure_count"] == 0
-        and value.get("qa_errors") == []
-    )
-    if not valid:
+    if publish_quality_invalid_fields(value):
         raise RuntimeError(f"Refusing to publish unverified or incomplete reporting data: {source}")
+
+
+def collect_publication_diagnostics(project: str, paths: Dict[str, Path],
+                                    from_date: str, to_date: str) -> Dict[str, Any]:
+    """Read bounded, generation-local QA evidence without approving any artifact.
+
+    This runs before the first strict check, so one bad period cannot hide later
+    periods' exact fields. Only QA/identity fields leave the payload; the payload
+    itself and customer-level data are never copied into the failure marker.
+    """
+    full_path = paths.get("dashboard_payload_latest_json")
+    root = full_path.parent.resolve() if full_path is not None else None
+
+    def reject_nonfinite(_value):
+        raise ValueError("nonfinite-json-number")
+
+    def read_payload(path):
+        if path is None or root is None:
+            return {"read_status": "missing", "invalid_fields": ["artifact"]}, None
+        try:
+            resolved = path.resolve()
+            relative = resolved.relative_to(root)
+            if path.is_symlink():
+                raise ValueError("symlink")
+        except (OSError, ValueError):
+            return {"read_status": "invalid-path", "invalid_fields": ["artifact"]}, None
+        result = {"file": relative.as_posix(), "read_status": "missing", "invalid_fields": ["artifact"]}
+        try:
+            with path.open("rb") as source:
+                raw = source.read(64 * 1024 * 1024 + 1)
+            if len(raw) > 64 * 1024 * 1024:
+                result["read_status"] = "too-large"
+                return result, None
+            result.update(sha256=hashlib.sha256(raw).hexdigest(), size=len(raw))
+            payload = json.loads(raw.decode("utf-8-sig"), parse_constant=reject_nonfinite)
+            if not isinstance(payload, dict):
+                raise ValueError("not-object")
+            result["read_status"] = "available"
+            return result, payload
+        except FileNotFoundError:
+            return result, None
+        except OSError:
+            result["read_status"] = "unreadable"
+        except (UnicodeError, ValueError):
+            result["read_status"] = "invalid-json"
+        return result, None
+
+    full_result, full = read_payload(full_path)
+    candidates = {"latest": full_path}
+    switcher = (full or {}).get("period_switcher")
+    specs = switcher.get("_embedded_specs", []) if isinstance(switcher, dict) else []
+    for spec in specs if isinstance(specs, list) else []:
+        if not isinstance(spec, dict) or not isinstance(spec.get("key"), str) or spec["key"] not in PERIOD_LIVE_ARTIFACT_NAMES:
+            continue
+        raw = spec.get("report_path")
+        if not isinstance(raw, str) or not raw:
+            continue
+        report = Path(raw)
+        if not report.is_absolute():
+            report = ROOT_DIR / report
+        candidate = report.with_name(report.name.replace("report_", "dashboard_payload_", 1).replace(".html", ".json"))
+        if not candidate.exists():
+            candidate = report.parent / "dashboard_payload_latest.json"
+        candidates[spec["key"]] = candidate
+
+    periods = {}
+    for period in ("latest", "7d", "30d", "90d"):
+        result, payload = (full_result, full) if period == "latest" else read_payload(candidates.get(period))
+        if payload is not None:
+            health = payload.get("source_health")
+            switcher = payload.get("period_switcher")
+            current = switcher.get("current_key") if isinstance(switcher, dict) else None
+            result.update(project=payload.get("project"), period=current,
+                          date_from=payload.get("date_from"), date_to=payload.get("date_to"), source_health=health)
+            invalid = ["source_health." + field if field != "source_health" else field
+                       for field in publish_quality_invalid_fields(health)]
+            if str(payload.get("project") or "").strip().lower() != project:
+                invalid.append("project")
+            if current != ("full" if period == "latest" else period):
+                invalid.append("period_switcher.current_key")
+            try:
+                start = datetime.strptime(payload["date_from"], "%Y-%m-%d").date()
+                end = datetime.strptime(payload["date_to"], "%Y-%m-%d").date()
+                if start > end or payload["date_to"] != to_date:
+                    invalid.append("date_range")
+                if period == "latest" and payload["date_from"] != from_date:
+                    invalid.append("date_from")
+            except (KeyError, TypeError, ValueError):
+                invalid.append("date_range")
+            result["invalid_fields"] = invalid
+        periods[period] = result
+    return {"schema_version": 1, "project": project, "report_from_date": from_date,
+            "report_to_date": to_date, "periods": periods}
+
+
+def validate_generated_report(project: str, paths: Dict[str, Path], data_quality: Any,
+                              from_date: str, to_date: str) -> None:
+    diagnostics = collect_publication_diagnostics(project, paths, from_date, to_date)
+    try:
+        validate_publish_quality(data_quality, "data_quality.json")
+        canonical = _canonical_live_artifact_paths(project, paths)
+        full_payload = json.loads(canonical["dashboard_payload_latest.json"].read_text(encoding="utf-8-sig"))
+        if full_payload.get("date_from") != from_date or full_payload.get("date_to") != to_date:
+            raise RuntimeError("Generated report dates do not match the requested reporting window")
+    except Exception as exc:
+        # The host wrapper retains this privately. Never print QA/provider values.
+        exc.publication_diagnostics = diagnostics
+        raise
 
 
 def resolve_period_live_artifacts(paths: Dict[str, Path]) -> Dict[str, Dict[str, Path]]:
@@ -1266,12 +1379,12 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
     overview_lines = [
         "RYCHLY PREHLAD",
         f"- Cele obdobie: {int(total['orders'] or 0)} objednavok, obrat bez DPH {_fmt_eur(float(total['revenue'] or 0))}, cisty zisk po reklamach a fixoch {_fmt_eur(float(total['profit'] or 0))}.",
-        f"- Poslednych 7 dni: obrat {_fmt_eur(float(w7['revenue'] or 0))}, cisty zisk {_fmt_eur(float(w7['profit'] or 0))}, spend {_fmt_eur(float(w7['ads'] or 0))}, ROAS {float(w7['roas'] or 0):.2f}x.",
+        f"- Poslednych 7 dni: obrat {_fmt_eur(float(w7['revenue'] or 0))}, cisty zisk {_fmt_eur(float(w7['profit'] or 0))}, spend {_fmt_eur(float(w7['ads'] or 0))}, shop MER {float(w7['roas'] or 0):.2f}x.",
         f"- Posledny den ({last_date.isoformat()}): {int(last_row['orders'] or 0)} objednavok, obrat {_fmt_eur(float(last_row['revenue'] or 0))}, zisk {_fmt_eur(float(last_row['profit'] or 0))}, AOV {_fmt_eur(float(last_row['aov'] or 0))}.",
     ]
     if w7["cac"] is not None:
         overview_lines.append(
-            f"- Cena za noveho zakaznika za 7 dni je {_fmt_eur(float(w7['cac']))}; na jednu objednavku pred reklamou ostava {_fmt_eur(float(w7['contribution_per_order'] or 0))}."
+            f"- Zmiesany CAC za 7 dni je {_fmt_eur(float(w7['cac']))}; na jednu objednavku pred reklamou ostava {_fmt_eur(float(w7['contribution_per_order'] or 0))}."
         )
 
     good_lines = ["CO JE DOBRE"]
@@ -1279,7 +1392,7 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         good_lines.append(f"- Poslednych 7 dni je biznis stale v pluse: {_fmt_eur(float(w7['profit'] or 0))}.")
     if (w7["roas"] or 0) > 2.5:
         good_lines.append(
-            f"- Reklama stale funguje: z 1 EUR do reklam sa vracia {float(w7['roas'] or 0):.2f} EUR v obrate."
+            f"- Shop MER je {float(w7['roas'] or 0):.2f}x: celkovy obrat shopu na 1 EUR reklamnych nakladov. Samotny pomer nedokazuje ucinnost kampani."
         )
     if (w30["returning_customer_rate"] or 0) > 20:
         good_lines.append(
@@ -1287,7 +1400,7 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         )
     if (w30["contribution_margin"] or 0) > 40:
         good_lines.append(
-            f"- Pred reklamou ostava z obratu {_fmt_pct(float(w30['contribution_margin'] or 0))}, takze je tam priestor na akviziciu."
+            f"- Pred reklamou ostava z obratu {_fmt_pct(float(w30['contribution_margin'] or 0))}."
         )
     if len(good_lines) == 1:
         good_lines.append("- V datoch nie je momentalne jeden extra silny pozitivny signal, skor zmiesany obraz.")
@@ -1299,7 +1412,7 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         )
     if profit_7_change is not None and profit_7_change < -10:
         weaker_lines.append(
-            f"- Zisk za poslednych 7 dni klesol o {_fmt_pct(abs(profit_7_change))}, co je vyrazne rychlejsi pokles ako samotny obrat."
+            f"- Zisk za poslednych 7 dni klesol o {_fmt_pct(abs(profit_7_change))}."
         )
     if aov_7_change is not None and aov_7_change < -8:
         weaker_lines.append(
@@ -1307,11 +1420,11 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         )
     if cac_7_change is not None and cac_7_change > 15:
         weaker_lines.append(
-            f"- Ziskanie noveho zakaznika je drahsie: CAC narastol o {_fmt_pct(cac_7_change)}."
+            f"- Zmiesany CAC narastol o {_fmt_pct(cac_7_change)}: reklamne naklady na evidovaneho noveho zakaznika su vyssie."
         )
     if roas_7_change is not None and roas_7_change < -15:
         weaker_lines.append(
-            f"- Reklama je slabsia ako minuly tyzden: 7d ROAS klesol o {_fmt_pct(abs(roas_7_change))}."
+            f"- Shop MER za 7 dni klesol o {_fmt_pct(abs(roas_7_change))}; ide o pomer celeho shopu, nie hodnotenie jednotlivych kampani."
         )
     if ret_30_change is not None and ret_30_change < -8:
         weaker_lines.append(
@@ -1321,22 +1434,22 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         weaker_lines.append("- Nevidim ziadny kriticky problem, skor bezne kolisanie.")
 
     insight_lines = [
-        "CO TO PRAVDEPODOBNE SPOSOBILO",
+        "CO UKAZUJU SUHRNNE DATA",
         f"- {revenue_driver}",
     ]
     if orders_7_change is not None and aov_7_change is not None and orders_7_change > 0 and aov_7_change < 0:
         insight_lines.append(
-            "- Objednavok je viac, ale ludia nechavaju menej penazi v jednom kosiku. Problem nie je dopyt, ale hodnota objednavky."
+            "- Evidovanych objednavok je viac a ich priemerna hodnota je nizsia. Z toho samotneho nevieme urcit zmenu dopytu."
         )
     if (w7["ads"] or 0) > 0 and (w7_prev["ads"] or 0) > 0:
         ads_change_7 = _pct_change(float(w7["ads"] or 0), float(w7_prev["ads"] or 0))
         if ads_change_7 is not None and revenue_7_change is not None and ads_change_7 > 10 and revenue_7_change < ads_change_7:
             insight_lines.append(
-                f"- Spend za 7 dni sa zmenil o {_format_change(ads_change_7)}, ale obrat len o {_format_change(revenue_7_change)}. Reklama momentalne taha slabsi efekt."
+                f"- Spend za 7 dni sa zmenil o {_format_change(ads_change_7)}, ale obrat len o {_format_change(revenue_7_change)}. Je to sucasny vyvoj dvoch velicin, nie dokaz priciny."
             )
     if w30["payback_orders"] is not None:
         insight_lines.append(
-            f"- Navratnost akvizicie vychadza na {float(w30['payback_orders']):.2f} objednavky. Cim blizsie k 1, tym bezpecnejsie sa da skalovat reklama."
+            f"- Modelovy odhad navratnosti vychadza na {float(w30['payback_orders']):.2f} objednavky. Sam o sebe nepotvrdzuje bezpecnost zvysenia reklamneho rozpoctu."
         )
     elif daily_payback is not None:
         insight_lines.append(f"- Denny odhad navratnosti vychadza na {daily_payback:.2f} objednavky.")
@@ -1348,7 +1461,7 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         )
     if (roas_7_change is not None and roas_7_change < -15) or (cac_7_change is not None and cac_7_change > 15):
         action_lines.append(
-            "- Nescalovat reklamu naslepo. Najprv pozriet kampane s najslabsim ROAS/CAC a obmedzit tie, ktore neprinasaju dost hodnoty."
+            "- Pred zmenou reklamneho rozpoctu porovnat platformovu atribuciu, dozretie objednavok a marzu podla kampani. Samotny shop MER/CAC neurcuje, ktoru kampan obmedzit."
         )
     if ret_30_change is not None and ret_30_change < -8:
         action_lines.append(
@@ -1365,6 +1478,8 @@ def build_report_summary(file_paths: Dict[str, Path]) -> str:
         "POZNAMKA K DATAM",
         "- Tento text sa pocita priamo z aktualneho aggregate_by_date a export CSV z danej behovej sady, nie zo starej sablony summary.",
         "- Obrat aj nakupne ceny su v tomto reportingu bez DPH.",
+        "- Shop MER = celkovy obrat shopu bez DPH / reklamne naklady; zahrna aj organicke a opakovane nakupy. Nie je to platformovy ROAS ani meranie prirastku sposobeneho reklamou.",
+        "- Zmiesany CAC = reklamne naklady / evidovani novi zakaznici zo vsetkych zdrojov; nejde o atribuciu zakaznikov reklame.",
     ]
     if w30["cac"] is None:
         context_lines.append("- CAC v casti porovnani moze byt miestami prazdne, ak v danom okne nebolo dost novych zakaznikov.")
@@ -1618,11 +1733,7 @@ def main() -> None:
 
     data_quality = load_data_quality(output_paths.get("data_quality_json"))
     if project in STRICT_LIVE_REPORT_PROJECTS:
-        validate_publish_quality(data_quality, "data_quality.json")
-        canonical = _canonical_live_artifact_paths(project, output_paths)
-        full_payload = json.loads(canonical["dashboard_payload_latest.json"].read_text(encoding="utf-8-sig"))
-        if full_payload.get("date_from") != from_date or full_payload.get("date_to") != to_date:
-            raise RuntimeError("Generated report dates do not match the requested reporting window")
+        validate_generated_report(project, output_paths, data_quality, from_date, to_date)
     s3_upload_outputs(project, output_paths)
     put_metric("ReportQaWarnings", int(data_quality.get("qa_warning_count") or 0), project, reporting_defaults)
     put_metric("ReportQaFailures", int(data_quality.get("qa_failure_count") or 0), project, reporting_defaults)

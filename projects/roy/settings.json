@@ -90,6 +90,9 @@
   "shipping_net_per_order": -0.2,
   "fixed_monthly_cost": 7600,
   "missing_cost_margin_pct": 35,
+  "cost_estimate_publication": {
+    "allow_configured_margin_fallback": true
+  },
   "zero_cost_service_product_skus": [
     "H-36CA74A7",
     "H-4A782878"

@@ -14,6 +14,7 @@ on:
       - scripts/deploy_vevo_report.py
       - scripts/reporting_identity_probe.py
       - scripts/reporting_migration_host_gate.py
+      - scripts/dashboard_routing_host_gate.py
       - scripts/vevo_report_image_release.py
       - scripts/vevo_report_image_host.py
       - scripts/reporting_image_release_policy.py
@@ -122,6 +123,8 @@ jobs:
           python -m unittest tests.test_seeded_invoice_retry tests.test_reviewed_invoice_reconciliation
           python -m unittest tests.test_creditnote_storno_runner tests.test_creditnote_automation_deployment
           python -m unittest tests.test_api_read_backoff
+          python -m unittest tests.test_partial_credit_adjustments tests.test_cfo_credit_adjustments tests.test_refund_status_population tests.test_reporting_financial_adjustments tests.test_report_period_failure_diagnostics tests.test_report_summary_advertising_language tests.test_reporting_marketing_semantics tests.test_live_dashboard_marketing_semantics tests.test_customer_lifetime_credit_aggregation tests.test_report_dashboard_image_release
+          python -m unittest tests.test_cost_estimate_publication_policy
           python -m unittest tests.test_vevo_reporting_country_policy tests.test_vevo_localized_product_costs tests.test_vevo_zero_cost_services tests.test_roy_reporting_policies tests.test_roy_revenue_reconciliation tests.test_order_revenue_reconciliation tests.test_compensation_revenue_reconciliation tests.test_ads_measurement tests.test_live_report_quality_gate tests.test_vevo_report_image_release tests.test_reporting_image_release_policy tests.test_roy_report_image_release
           python -m unittest tests.test_order_status_identity tests.test_status_identity_integration tests.test_explicit_target_integration
           python -m unittest tests.test_reporting_runtime_binding tests.test_reporting_runtime_binding_review tests.test_growthbook_aa_infra_health_evidence tests.test_growthbook_aa_infra_health_workflow tests.test_growthbook_aa_infra_health_log_cli

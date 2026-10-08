@@ -928,6 +928,9 @@ class BizniWebExporter:
         self.excluded_status_orders = []  # Track all excluded status orders for lifecycle proxy reporting
         self.creditnote_audit_context_orders: Tuple[Dict[str, Any], ...] = ()
         self._creditnote_order_nums_cache: Optional[set[str]] = None
+        self._creditnote_source_snapshot = None
+        self._creditnote_source_error = None
+        self._credit_adjustments_by_order = {}
         self._creditnote_status_change_audit_cache: Optional[Dict[str, Any]] = None
         self._rebuild_product_expense_indexes(PRODUCT_EXPENSES)
         self.product_cost_bundle_rules_by_label = self._build_product_cost_bundle_rule_index()
@@ -1735,6 +1738,9 @@ class BizniWebExporter:
             child_exporter._product_inventory_snapshot_cache = (
                 self._product_inventory_snapshot_cache
             )
+            child_exporter._creditnote_source_snapshot = copy.deepcopy(self._creditnote_source_snapshot)
+            child_exporter._creditnote_source_error = self._creditnote_source_error
+            child_exporter._credit_adjustments_by_order = copy.deepcopy(self._credit_adjustments_by_order)
             spec['report_path'] = child_exporter.output_path(
                 f"report_{spec['date_from'].strftime('%Y%m%d')}-{spec['date_to'].strftime('%Y%m%d')}.html"
             )
@@ -2429,7 +2435,17 @@ class BizniWebExporter:
         report_date_from: Optional[Any] = None,
         report_date_to: Optional[Any] = None,
     ) -> Dict[str, Any]:
+        from reporting_core.cost_estimate_policy import assess_configured_cost_estimates
+
         df = export_df.copy() if isinstance(export_df, pd.DataFrame) else pd.DataFrame()
+        estimate_validation = assess_configured_cost_estimates(
+            df.to_dict("records"), settings=getattr(self, "project_settings", {}) or {},
+            margin_pct=MISSING_COST_MARGIN_PCT,
+        )
+        estimate_failures = (
+            [f"{estimate_validation['invalid_rows']} cost estimate row(s) fail the configured model's source or monetary identity checks."]
+            if estimate_validation["invalid_rows"] else []
+        )
         required = {
             "item_label",
             "product_sku",
@@ -2443,13 +2459,14 @@ class BizniWebExporter:
             return {
                 "key": "product_expense_coverage",
                 "label": "Product cost coverage",
-                "status": "ok",
-                "healthy": True,
+                "status": "critical" if estimate_failures else "ok",
+                "healthy": not estimate_failures,
                 "message": "Product cost coverage QA skipped because the item-level expense payload is unavailable.",
                 "warnings": [],
-                "failures": [],
+                "failures": estimate_failures,
                 "warning_count": 0,
-                "failure_count": 0,
+                "failure_count": len(estimate_failures),
+                "estimate_validation": estimate_validation,
             }
 
         item_df = df.loc[df["item_label"].notna()].copy()
@@ -2457,13 +2474,14 @@ class BizniWebExporter:
             return {
                 "key": "product_expense_coverage",
                 "label": "Product cost coverage",
-                "status": "ok",
-                "healthy": True,
+                "status": "critical" if estimate_failures else "ok",
+                "healthy": not estimate_failures,
                 "message": "Product cost coverage QA skipped because there are no item rows in this export window.",
                 "warnings": [],
-                "failures": [],
+                "failures": estimate_failures,
                 "warning_count": 0,
-                "failure_count": 0,
+                "failure_count": len(estimate_failures),
+                "estimate_validation": estimate_validation,
             }
 
         for column in ("item_quantity", "item_total_without_tax", "profit_before_ads", "expense_per_item"):
@@ -2727,7 +2745,7 @@ class BizniWebExporter:
         ] + zero_revenue_gift_missing_items
 
         warnings: List[str] = []
-        failures: List[str] = []
+        failures: List[str] = list(estimate_failures)
         if fallback_rows > 0:
             warnings.append(
                 f"{fallback_rows} item row(s) ({fallback_row_share_pct:.2f}%) use a configured missing-cost fallback."
@@ -2763,9 +2781,11 @@ class BizniWebExporter:
             warnings.append(f"{unknown_source_rows} item row(s) are missing expense_source metadata.")
 
         if fallback_revenue_share_pct >= 10 or fallback_profit_share_pct >= 10:
-            failures.append(
-                f"Missing-cost fallback affects {fallback_revenue_share_pct:.2f}% of item revenue and {fallback_profit_share_pct:.2f}% of pre-ad item profit, so SKU-level profit metrics need product_expenses cleanup."
-            )
+            concentration = f"Missing-cost fallback affects {fallback_revenue_share_pct:.2f}% of item revenue and {fallback_profit_share_pct:.2f}% of pre-ad item profit."
+            if estimate_validation["approved"]:
+                warnings.append(concentration + " Publication uses the explicitly accepted configured-margin cost model; all fallback rows reconcile, but these remain estimates rather than observed purchase costs.")
+            else:
+                failures.append(concentration + " SKU-level profit metrics need product_expenses cleanup.")
         elif fallback_row_share_pct >= 10:
             warnings.append(
                 f"Missing-cost fallback covers {fallback_row_share_pct:.2f}% of item rows; verify product_expenses coverage before using SKU-level profit decisions."
@@ -2822,6 +2842,7 @@ class BizniWebExporter:
             "fallback_unit_share_pct": fallback_unit_share_pct,
             "fallback_revenue_share_pct": fallback_revenue_share_pct,
             "fallback_profit_share_pct": fallback_profit_share_pct,
+            "estimate_validation": estimate_validation,
             "authoritative_margin_rows": authoritative_rows,
             "authoritative_margin_units": round(authoritative_units, 2),
             "authoritative_margin_revenue": round(authoritative_revenue, 2),
@@ -4528,6 +4549,7 @@ class BizniWebExporter:
         self,
         df: pd.DataFrame,
         revenue_col: Optional[str] = None,
+        require_customer_email: bool = True,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, str]:
         resolved_revenue_col = revenue_col or ("order_revenue_net" if "order_revenue_net" in df.columns else "order_total")
 
@@ -4538,11 +4560,11 @@ class BizniWebExporter:
         orders_df["purchase_datetime"] = pd.to_datetime(orders_df["purchase_date"], errors="coerce")
         orders_df = orders_df.dropna(subset=["purchase_datetime"]).copy()
         orders_df["customer_email"] = orders_df["customer_email"].astype(str).str.strip().str.lower()
-        orders_df = orders_df[
-            orders_df["customer_email"].notna()
-            & orders_df["customer_email"].ne("")
-            & orders_df["customer_email"].ne("nan")
-        ].copy()
+        if require_customer_email:
+            orders_df = orders_df[
+                orders_df["customer_email"].notna()
+                & ~orders_df["customer_email"].isin(["", "nan", "none"])
+            ].copy()
         orders_df = self._attach_customer_history_flags(orders_df)
         orders_df["purchase_date_only"] = orders_df["purchase_datetime"].dt.date
         orders_df["cohort_month"] = orders_df["customer_first_purchase_datetime"].fillna(
@@ -4569,7 +4591,9 @@ class BizniWebExporter:
             - orders_df["shipping_net_cost"]
         )
 
-        orders_per_day = orders_df.groupby("purchase_date_only")["order_num"].nunique()
+        financial_orders = df[["order_num", "purchase_date"]].drop_duplicates("order_num").copy()
+        financial_orders["purchase_date_only"] = pd.to_datetime(financial_orders["purchase_date"]).dt.date
+        orders_per_day = financial_orders.groupby("purchase_date_only")["order_num"].nunique()
         daily_fixed_cost_map = {
             d: round(self.get_daily_fixed_cost(pd.Timestamp(d)), 2)
             for d in orders_df["purchase_date_only"].drop_duplicates().tolist()
@@ -4610,11 +4634,11 @@ class BizniWebExporter:
         item_df["purchase_datetime"] = pd.to_datetime(item_df["purchase_date"], errors="coerce")
         item_df = item_df.dropna(subset=["purchase_datetime"]).copy()
         item_df["customer_email"] = item_df["customer_email"].astype(str).str.strip().str.lower()
-        item_df = item_df[
-            item_df["customer_email"].notna()
-            & item_df["customer_email"].ne("")
-            & item_df["customer_email"].ne("nan")
-        ].copy()
+        if require_customer_email:
+            item_df = item_df[
+                item_df["customer_email"].notna()
+                & ~item_df["customer_email"].isin(["", "nan", "none"])
+            ].copy()
 
         order_item_revenue = item_df.groupby("order_num")["item_total_without_tax"].sum().rename("order_item_revenue")
         order_item_cost = item_df.groupby("order_num")["total_expense"].sum().rename("order_item_cost")
@@ -5225,6 +5249,9 @@ class BizniWebExporter:
 
         order_net_map = df.groupby('order_num')['item_total_without_tax'].sum().to_dict()
         df['order_revenue_net'] = df['order_num'].map(order_net_map).fillna(0).round(2)
+        df['order_revenue_before_credits'] = df['order_revenue_net']
+        if 'order_credit_net_adjustment' in df.columns:
+            df['order_revenue_net'] = (df['order_revenue_net'] + df['order_credit_net_adjustment']).round(2)
         return df
 
     def deduplicate_orders(self, orders: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -5960,17 +5987,108 @@ class BizniWebExporter:
         if self._creditnote_order_nums_cache is not None:
             return set(self._creditnote_order_nums_cache)
 
-        from creditnote_export import _creditnote_order_nums, build_creditnote_export_rows, fetch_project_creditnotes
+        from creditnote_export import normalize_creditnote_automation_context
 
-        raw_rows, _reported_total = fetch_project_creditnotes(self.project_name)
-        creditnote_rows = build_creditnote_export_rows(
-            self.project_name,
-            raw_rows,
-            date(2000, 1, 1),
-            datetime.utcnow().date(),
-        )
-        self._creditnote_order_nums_cache = set(_creditnote_order_nums(creditnote_rows))
+        rows = self._issued_creditnote_rows(getattr(self, "_creditnote_report_cutoff", datetime.utcnow()))
+        self._creditnote_order_nums_cache = set(normalize_creditnote_automation_context(rows))
         return set(self._creditnote_order_nums_cache)
+
+    def _creditnote_snapshot(self):
+        """One complete, immutable source for costs, adjustments and all periods.
+
+        A failed read stays failed for this generation; a later independent read
+        must never turn missing financial costs into apparently healthy data.
+        """
+        if getattr(self, "_creditnote_source_error", None):
+            raise RuntimeError("Creditnote source failed earlier in this generation") from self._creditnote_source_error
+        if getattr(self, "_creditnote_source_snapshot", None) is None:
+            from creditnote_export import fetch_project_creditnotes
+            try:
+                rows, total = fetch_project_creditnotes(self.project_name)
+                if len(rows) != total:
+                    raise RuntimeError("Incomplete creditnote source snapshot")
+                self._creditnote_source_snapshot = (copy.deepcopy(rows), total)
+            except Exception as exc:
+                self._creditnote_source_error = exc
+                raise
+        return copy.deepcopy(self._creditnote_source_snapshot)
+
+    def _prepare_order_credit_adjustments(self, orders, date_to):
+        """Bind issued partial credits to included orders without allocating products."""
+        from creditnote_export import normalize_creditnote_automation_context, parse_creditnote_datetime
+        from order_status_safety import fetch_order_safety_context
+        from reporting_core.credit_adjustments import CreditAdjustmentError, build_order_credit_adjustment
+
+        raw_rows, _ = self._creditnote_snapshot()
+        self._creditnote_report_cutoff = date_to
+        context = normalize_creditnote_automation_context(raw_rows)
+        raw_by_id = {str(row["creditnote_id"]): row for row in raw_rows}
+        for order in orders:
+            order_num = str(order.get("order_num") or "")
+            if order_num in self._credit_adjustments_by_order:
+                continue
+            documents = []
+            for document in context.get(order_num, []):
+                if document["state"] in {"open", "voided"}:
+                    continue
+                if document["state"] != "issued":
+                    raise CreditAdjustmentError("credit_document_state_unknown")
+                created = parse_creditnote_datetime(raw_by_id[document["id"]].get("created"))
+                if created is None:
+                    raise CreditAdjustmentError("credit_document_date_unknown")
+                if created.date() <= date_to.date():
+                    documents.append(document)
+            if not documents:
+                continue
+            detail = fetch_order_safety_context(self.client, order_num)
+            # A later source edit must not bind a credit to stale order money.
+            for key in ("id", "order_num", "pur_date"):
+                if str(detail.get(key)) != str(order.get(key)):
+                    raise CreditAdjustmentError("credit_order_source_changed")
+            for key in ("value", "currency"):
+                if (detail.get("sum") or {}).get(key) != (order.get("sum") or {}).get(key):
+                    raise CreditAdjustmentError("credit_order_source_changed")
+            source_status = (self._reporting_order_context(order).get("status") or {}).get("id")
+            if source_status is None or str((detail.get("status") or {}).get("id")) != str(source_status):
+                raise CreditAdjustmentError("credit_order_status_changed")
+            adjustment = build_order_credit_adjustment(
+                detail, documents, project=self.project_name, source_project=self.project_name,
+                source_complete=True, financially_included=True,
+                currency_rates_to_eur=self.project_settings.get("currency_rates_to_eur") or CURRENCY_RATES_TO_EUR,
+            )
+            self._credit_adjustments_by_order[order_num] = adjustment
+
+    def _issued_creditnote_rows(self, date_to):
+        from creditnote_export import normalize_creditnote_automation_context, parse_creditnote_datetime
+
+        rows, _ = self._creditnote_snapshot()
+        context = normalize_creditnote_automation_context(rows)
+        documents = {document["id"]: document for values in context.values() for document in values}
+        issued = []
+        for row in rows:
+            state = documents[str(row["creditnote_id"])]["state"]
+            if state in {"open", "voided"}:
+                continue
+            created = parse_creditnote_datetime(row.get("created"))
+            if state != "issued" or created is None:
+                raise RuntimeError("Creditnote source has unknown document state/date")
+            if created.date() <= date_to.date():
+                issued.append(row)
+        return issued
+
+    def _add_order_credit_adjustment_columns(self, df):
+        """Repeated order fields: consumers must deduplicate before summing."""
+        adjustments = getattr(self, "_credit_adjustments_by_order", {})
+        for column, key in (
+            ("order_credit_net_adjustment", "revenue_credit_adjustment"),
+            ("order_credit_gross_adjustment", "credit_gross_adjustment"),
+            ("order_credit_tax_adjustment", "credit_tax_adjustment"),
+        ):
+            df[column] = df["order_num"].map(
+                {number: float(row[key]) for number, row in adjustments.items()}
+            ).fillna(0.0)
+        df["order_credit_allocation"] = "unallocated_order_credit"
+        return df
 
     def _creditnote_shipped_statuses(self) -> Tuple[str, ...]:
         from creditnote_export import creditnote_shipped_statuses
@@ -6117,10 +6235,11 @@ class BizniWebExporter:
         date_agg: pd.DataFrame,
     ) -> Dict[str, Any]:
         """Build visible credit-note metrics for the main daily report."""
-        from creditnote_export import build_creditnote_export_rows, build_creditnote_reporting_audit, fetch_project_creditnotes
+        from creditnote_export import build_creditnote_export_rows, build_creditnote_reporting_audit, normalize_creditnote_automation_context, parse_creditnote_datetime, _carrier_key, _order_shipping_info
 
         project_upper = self.project_name.upper()
-        raw_rows, reported_total = fetch_project_creditnotes(self.project_name)
+        _all_raw_rows, reported_total = self._creditnote_snapshot()
+        raw_rows = self._issued_creditnote_rows(date_to)
         creditnote_rows = build_creditnote_export_rows(
             self.project_name,
             raw_rows,
@@ -6132,6 +6251,36 @@ class BizniWebExporter:
             creditnote_rows,
             {self.project_name: context},
         )
+
+        # Document throughput and purchase-cohort return incidence are different
+        # metrics. Count each credited order once against the same order cohort.
+        document_context = normalize_creditnote_automation_context(raw_rows)
+        created_by_id = {str(row["creditnote_id"]): parse_creditnote_datetime(row.get("created")) for row in raw_rows}
+        cohort = {
+            str(order.get("order_num")): order
+            for order in context["all_orders"]
+            if self._order_purchase_datetime(order) is not None
+            and date_from.date() <= self._order_purchase_datetime(order).date() <= date_to.date()
+        }
+        cohort_carriers = {}
+        cohort_credited = set()
+        for number, order in cohort.items():
+            shipping = _order_shipping_info(order)
+            carrier, _ = _carrier_key(shipping.get("title"), shipping.get("reference_id"))
+            bucket = cohort_carriers.setdefault(carrier, {"orders": set(), "credited": set()})
+            bucket["orders"].add(number)
+            for document in document_context.get(number, []):
+                if document["state"] in {"open", "voided"}:
+                    continue
+                created = created_by_id[document["id"]]
+                if document["state"] != "issued" or created is None:
+                    raise RuntimeError("Creditnote cohort source has unknown document state/date")
+                if created.date() <= date_to.date():
+                    bucket["credited"].add(number)
+                    cohort_credited.add(number)
+        existing_carriers = {str(row.get("Prepravca") or "Unknown carrier") for row in carrier_rows}
+        for carrier in sorted(set(cohort_carriers) - existing_carriers):
+            carrier_rows.append({"Eshop": project_upper, "Prepravca": carrier})
 
         missing_rate_currencies: set[str] = set()
         currency_buckets: Dict[str, Dict[str, Any]] = {}
@@ -6204,7 +6353,7 @@ class BizniWebExporter:
         sent_creditnoted_order_count = int(audit.get("sent_creditnoted_orders") or 0)
         creditnoted_order_count = sent_creditnoted_order_count
         creditnote_count = len(enriched_rows)
-        overall_rate_pct = round((creditnote_count / realized_orders_total) * 100, 2) if realized_orders_total else 0.0
+        overall_rate_pct = round(len(cohort_credited) / len(cohort) * 100, 2) if cohort else None
 
         normalized_carrier_rows = []
         for row in carrier_rows:
@@ -6214,15 +6363,17 @@ class BizniWebExporter:
             realized_count = int(row.get("Realized objednavky") or 0)
             creditnote_order_count = int(row.get("Dobropisovane objednavky") or 0)
             carrier_creditnote_count = int(row.get("Dobropisy") or 0)
-            rate_pct = row.get("Dobropis rate %")
-            rate_value = float(rate_pct) if rate_pct is not None else None
-            rate_index = round((rate_value / overall_rate_pct), 2) if rate_value is not None and overall_rate_pct > 0 else None
+            cohort_bucket = cohort_carriers.get(carrier, {"orders": set(), "credited": set()})
+            cohort_count = len(cohort_bucket["orders"])
+            cohort_credit_count = len(cohort_bucket["credited"])
+            rate_value = round(cohort_credit_count / cohort_count * 100, 2) if cohort_count else None
+            rate_index = round(rate_value / overall_rate_pct, 2) if rate_value is not None and (overall_rate_pct or 0) > 0 else None
             amount_bucket = carrier_amounts.get(carrier) or {}
             outlier = bool(
                 rate_value is not None
-                and realized_count >= 5
-                and carrier_creditnote_count >= 2
-                and overall_rate_pct > 0
+                and cohort_count >= 5
+                and cohort_credit_count >= 2
+                and (overall_rate_pct or 0) > 0
                 and rate_value >= max(overall_rate_pct * 2.0, overall_rate_pct + 3.0)
             )
             normalized_carrier_rows.append(
@@ -6233,8 +6384,11 @@ class BizniWebExporter:
                     "creditnoted_orders": creditnote_order_count,
                     "creditnotes": carrier_creditnote_count,
                     "creditnote_rate_pct": rate_value,
+                    "cohort_orders": cohort_count,
+                    "cohort_creditnoted_orders": cohort_credit_count,
+                    "rate_basis": "unique_issued_credited_orders_over_all_purchase_cohort_orders",
                     "rate_index": rate_index,
-                    "rate_delta_pct": round((rate_value or 0.0) - overall_rate_pct, 2) if rate_value is not None else None,
+                    "rate_delta_pct": round(rate_value - overall_rate_pct, 2) if rate_value is not None and overall_rate_pct is not None else None,
                     "credited_gross_eur": round(float(amount_bucket.get("credited_gross_eur") or 0.0), 2),
                     "credited_net_eur": round(float(amount_bucket.get("credited_net_eur") or 0.0), 2),
                     "outlier": outlier,
@@ -6265,6 +6419,10 @@ class BizniWebExporter:
             "all_creditnoted_orders": len(creditnoted_order_nums),
             "sent_creditnoted_orders": sent_creditnoted_order_count,
             "realized_orders": realized_orders_total,
+            "cohort_orders": len(cohort),
+            "cohort_creditnoted_orders": len(cohort_credited),
+            "rate_basis": "unique_issued_credited_orders_over_all_purchase_cohort_orders",
+            "document_count_basis": "creditnotes_created_in_report_period",
             "creditnote_rate_pct": overall_rate_pct,
             "credited_gross_eur": round(gross_eur, 2),
             "credited_net_eur": round(net_eur, 2),
@@ -6313,11 +6471,7 @@ class BizniWebExporter:
         if not excluded_by_num:
             return pd.DataFrame(columns=columns)
 
-        try:
-            creditnote_order_nums = self._fetch_creditnote_order_nums()
-        except Exception as exc:
-            logger.warning("Could not load creditnote fulfillment cost source for %s: %s", self.project_name, exc)
-            return pd.DataFrame(columns=columns)
+        creditnote_order_nums = self._fetch_creditnote_order_nums()
 
         rows = []
         packaging_cost = float(PACKAGING_COST_PER_ORDER)
@@ -7307,7 +7461,7 @@ class BizniWebExporter:
                 "missing_cost_margin_pct": float(MISSING_COST_MARGIN_PCT),
                 "fixed_cost": {
                     "mode": str(fixed_cost_reporting.get("mode") or "configured_overhead"),
-                    "actuals_configured": bool(fixed_cost_reporting.get("actuals_configured", True)),
+                    "actuals_configured": bool(fixed_cost_reporting.get("actuals_configured", False)),
                     "label": str(fixed_cost_reporting.get("label") or "Fixed overhead"),
                     "note": str(fixed_cost_reporting.get("note") or ""),
                     "daily_eur": float(FIXED_DAILY_COST),
@@ -7316,6 +7470,17 @@ class BizniWebExporter:
             },
         }
         
+        # Financial components and child periods must use one complete source.
+        try:
+            self._prepare_order_credit_adjustments(orders, date_to)
+        except Exception as exc:
+            source_health["sources"]["creditnotes"] = self._build_source_entry(
+                key="creditnotes", label="BizniWeb Creditnotes", status="error",
+                mode="admin_api", message=f"Creditnote financial source unavailable: {exc}", healthy=False,
+            )
+            self._write_data_quality_file(self._finalize_source_health(source_health), date_from, date_to)
+            raise
+
         # Fetch Facebook Ads spend data
         fb_daily_spend = {}
         fb_detailed_metrics = {}
@@ -7542,6 +7707,7 @@ class BizniWebExporter:
         # Add consistent product SKU column (project import code if enabled, then EAN, otherwise title hash)
         df = self.add_product_sku_column(df)
         # Add canonical order-level net revenue (unified revenue definition for report analytics)
+        df = self._add_order_credit_adjustment_columns(df)
         df = self.add_order_revenue_net_column(df)
         customer_first_purchase_map = self._build_customer_first_purchase_map(customer_history_orders or orders)
         df = self._add_customer_history_columns(df, customer_first_purchase_map)
@@ -7629,7 +7795,8 @@ class BizniWebExporter:
         customer_concentration = self.analyze_customer_concentration(analytics_df)
         order_status = self.analyze_order_status(analytics_df)
         new_vs_returning_revenue = self.analyze_new_vs_returning_revenue(analytics_df)
-        refunds_analysis = self.analyze_refunds(analytics_df)
+        refund_population = self._build_refund_population_frame(analytics_df, date_from, date_to)
+        refunds_analysis = self.analyze_refunds(refund_population)
 
         # Repeat purchase cohort analysis
         cohort_analysis = self.analyze_repeat_purchase_cohorts(analytics_df)
@@ -7958,6 +8125,13 @@ class BizniWebExporter:
         }).reset_index()
         
         date_agg.columns = ['date', 'total_quantity', 'total_revenue', 'product_expense', 'profit_before_ads', 'fb_ads_spend', 'google_ads_spend', 'unique_orders', 'total_items']
+        date_agg['revenue_before_credits'] = date_agg['total_revenue']
+        date_agg['revenue_credit_adjustment'] = 0.0
+        if 'order_credit_net_adjustment' in df.columns:
+            order_credits = df.drop_duplicates('order_num').groupby('purchase_date_only')['order_credit_net_adjustment'].sum()
+            date_agg['revenue_credit_adjustment'] = date_agg['date'].map(order_credits).fillna(0.0)
+            date_agg['total_revenue'] += date_agg['revenue_credit_adjustment']
+            date_agg['profit_before_ads'] += date_agg['revenue_credit_adjustment']
 
         # Fill in missing dates with zero values for orders but preserve ad spend data
         # Create a complete date range
@@ -7970,6 +8144,8 @@ class BizniWebExporter:
         # Fill missing order-related values with 0
         date_agg['total_quantity'] = date_agg['total_quantity'].fillna(0).astype(int)
         date_agg['total_revenue'] = date_agg['total_revenue'].fillna(0)
+        date_agg['revenue_before_credits'] = date_agg['revenue_before_credits'].fillna(0)
+        date_agg['revenue_credit_adjustment'] = date_agg['revenue_credit_adjustment'].fillna(0)
         date_agg['product_expense'] = date_agg['product_expense'].fillna(0)
         date_agg['profit_before_ads'] = date_agg['profit_before_ads'].fillna(0)
         date_agg['unique_orders'] = date_agg['unique_orders'].fillna(0).astype(int)
@@ -8147,6 +8323,8 @@ class BizniWebExporter:
             'total_revenue': 'sum',
             'product_expense': 'sum',
             'packaging_cost': 'sum',
+            'revenue_before_credits': 'sum',
+            'revenue_credit_adjustment': 'sum',
             'creditnote_fulfillment_orders': 'sum',
             'creditnote_packaging_cost': 'sum',
             'creditnote_shipping_net_cost': 'sum',
@@ -8248,10 +8426,13 @@ class BizniWebExporter:
         # 4. Calculate Customer Lifetime Revenue by Acquisition Date
         print("Calculating customer lifetime revenue by acquisition date...")
 
+        # Direct callers may supply only item rows. Derive canonical order net
+        # before deduplicating, but preserve an already credit-adjusted column.
+        lifetime_rows = df if 'order_revenue_net' in df.columns else self.add_order_revenue_net_column(df.copy())
         # Group by customer to get their first purchase date and total lifetime revenue
-        customer_lifetime = df.groupby('customer_email').agg({
+        customer_lifetime = lifetime_rows.drop_duplicates('order_num').groupby('customer_email').agg({
             'purchase_date_only': 'min',  # First purchase date
-            'item_total_without_tax': 'sum',  # Total lifetime revenue
+            'order_revenue_net': 'sum',  # Order-level revenue after unallocated credits
             'order_num': 'nunique'  # Total number of orders
         }).reset_index()
 
@@ -9913,16 +10094,16 @@ class BizniWebExporter:
         ads_effectiveness: Optional[dict] = None,
         sample_funnel_analysis: Optional[dict] = None,
     ) -> dict:
-        """Build a profit-first Meta budget decision layer with mature LTV cohorts.
+        """Describe Meta spend associations and mature contribution cohorts.
 
         The model deliberately separates four different questions:
         - observed company profit by daily Meta spend tier,
-        - recent incremental response to a budget change,
+        - recent observed differences between equal-length periods,
         - future customer quality by acquisition-day Meta spend,
-        - product-specific sample-entry contribution and safe CAC.
+        - product-specific sample-entry contribution and modeled CAC thresholds.
 
-        Acquisition source remains a paid-day proxy until order-level campaign
-        attribution is available, so no row is presented as causal attribution.
+        Paid-day source assignment and period differences are observational.
+        They do not establish causal lift or an optimal advertising budget.
         """
         empty_result = {
             "summary": {},
@@ -10154,31 +10335,9 @@ class BizniWebExporter:
                     else None
                 )
 
-            adjusted_90d = ltv_adjusted.get(90)
-            if delta_meta_spend_per_day <= 0:
-                verdict = "MONITOR"
-                reason_sk = "Spend sa oproti predchadzajucemu oknu nezvysil; nejde o scale test."
-                tone = "neutral"
-            elif delta_new_customers_per_day <= 0 or (
-                marginal_cac is not None and hard_cac_180d > 0 and marginal_cac > hard_cac_180d
-            ):
-                verdict = "CUT"
-                reason_sk = "Vyssi Meta spend nepriniesol dost novych zakaznikov ani do 180d CAC stropu."
-                tone = "negative"
-            elif adjusted_90d is None or adjusted_90d <= 0 or (
-                marginal_cac is not None and safe_cac_90d > 0 and marginal_cac > safe_cac_90d
-            ):
-                verdict = "HOLD"
-                reason_sk = "Dalsie zvysenie spendu zatial nema bezpecny 90d contribution profit."
-                tone = "warning"
-            elif delta_company_profit_per_day > 0:
-                verdict = "SCALE_ELIGIBLE"
-                reason_sk = "Vyssi spend zvysil nominalny zisk okamzite aj po 90d LTV uprave."
-                tone = "positive"
-            else:
-                verdict = "HOLD"
-                reason_sk = "90d LTV moze krok zachranit, ale okamzity firemny zisk klesol."
-                tone = "warning"
+            verdict = "OBSERVATION"
+            reason_sk = "Pozorovany rozdiel obsahuje vplyvy ostatnych kanalov, sezonnosti a mixu zakaznikov."
+            tone = "neutral"
 
             current_new_customers = float(current["new_customers"].sum())
             previous_new_customers = float(previous["new_customers"].sum())
@@ -10358,9 +10517,6 @@ class BizniWebExporter:
                 recent_rows_df["window_days"] == 7, "marginal_cac"
             ]
             current_marginal_cac = float(current_marginal_cac.iloc[0]) if not current_marginal_cac.empty and pd.notna(current_marginal_cac.iloc[0]) else None
-        sample_fullsize_60_baseline = float(
-            ((sample_funnel_analysis or {}).get("summary") or {}).get("fullsize_any_60d_pct") or 0.0
-        )
         for (item_name, item_sku), group in sample_entry_items.groupby(["item_label", "product_sku"], dropna=False):
             customers = sorted(group["customer_email"].dropna().unique().tolist())
             if len(customers) < 10:
@@ -10385,36 +10541,9 @@ class BizniWebExporter:
             product_ltv_180d = row.get("contribution_ltv_180d_per_customer")
             product_safe_cac_90d = max(float(product_ltv_90d or 0.0) * safety_factor, 0.0) if product_ltv_90d is not None else None
             row["safe_cac_90d"] = round(product_safe_cac_90d, 2) if product_safe_cac_90d is not None else None
-            mature_90d = int(row.get("mature_90d_customers") or 0)
-            fullsize_60d = row.get("fullsize_60d_pct")
-            quality_floor = sample_fullsize_60_baseline * 0.75
-            if mature_90d < 30:
-                paid_action = "EXPERIMENT"
-                paid_reason_sk = "Mala zrela vzorka; nevypinat ani nesklovat bez testu."
-                paid_tone = "neutral"
-            elif current_marginal_cac is None:
-                paid_action = "MEASURE"
-                paid_reason_sk = "Chyba aktualny marginalny CAC na porovnanie."
-                paid_tone = "neutral"
-            elif product_safe_cac_90d is None or current_marginal_cac > product_safe_cac_90d:
-                if (
-                    (product_ltv_90d is not None and current_marginal_cac > float(product_ltv_90d))
-                    or (fullsize_60d is not None and float(fullsize_60d) < quality_floor)
-                ):
-                    paid_action = "CUT_PAID"
-                    paid_reason_sk = "Aktualny mCAC presahuje produktovu ekonomiku alebo je full-size konverzia slaba."
-                    paid_tone = "negative"
-                else:
-                    paid_action = "HOLD_PAID"
-                    paid_reason_sk = "Produkt je pod 90d bezpecnostnym CAC; dalsi paid spend zatial nezvysovat."
-                    paid_tone = "warning"
-            else:
-                paid_action = "ELIGIBLE_TEST"
-                paid_reason_sk = "90d contribution pokryva aktualny mCAC aj bezpecnostnu rezervu; skalovat iba po krokoch."
-                paid_tone = "positive"
-            row["paid_action"] = paid_action
-            row["paid_reason_sk"] = paid_reason_sk
-            row["paid_tone"] = paid_tone
+            row["paid_action"] = "REVIEW_EVIDENCE"
+            row["paid_reason_sk"] = "Model nepozna produktovu paid atribuciu; zmena spendu celeho uctu nie je produktovy CAC."
+            row["paid_tone"] = "neutral"
             if product_ltv_180d is not None and float(product_ltv_180d) <= 0:
                 row["shop_action"] = "REVIEW_REMOVAL"
                 row["shop_reason_sk"] = "Ani 180d contribution nie je kladna."
@@ -10437,31 +10566,9 @@ class BizniWebExporter:
         )
         latest_7d_row = latest_7d.iloc[0].to_dict() if not latest_7d.empty else {}
         current_meta_spend_per_day = latest_7d_row.get("current_meta_spend_per_day")
-        recent_verdict = str(latest_7d_row.get("verdict") or "MONITOR")
-        if core_low is None or core_high is None:
-            account_action = "EXPERIMENT"
-            account_tone = "neutral"
-            action_reason_sk = "Nie je dost stabilnych spend pasiem na automaticke urcenie denneho koridoru."
-        elif current_meta_spend_per_day is not None and test_ceiling is not None and float(current_meta_spend_per_day) > test_ceiling:
-            account_action = "REDUCE_TO_CORRIDOR"
-            account_tone = "negative"
-            action_reason_sk = "Aktualny priemer je nad robustne overenym profit koridorom."
-        elif recent_verdict == "CUT":
-            account_action = "REDUCE"
-            account_tone = "negative"
-            action_reason_sk = "Posledny scale krok prekrocil contribution CAC strop."
-        elif recent_verdict == "HOLD":
-            account_action = "HOLD"
-            account_tone = "warning"
-            action_reason_sk = "Dalsi rast spendu stopnut, kym 7/14d scale test neprida kladny 90d LTV-upraveny zisk."
-        elif recent_verdict == "SCALE_ELIGIBLE" and current_meta_spend_per_day is not None and test_ceiling is not None and float(current_meta_spend_per_day) < test_ceiling:
-            account_action = f"SCALE_{int(round(scale_step_pct))}_PCT"
-            account_tone = "positive"
-            action_reason_sk = "Scale po jednom kroku; dalsi krok az po kladnom 7d aj 14d nominalnom zisku."
-        else:
-            account_action = "HOLD"
-            account_tone = "warning"
-            action_reason_sk = "Udrzat spend v overenom koridore a zbierat dalsie porovnatelne dni."
+        account_action = "OBSERVATIONAL_ONLY"
+        account_tone = "neutral"
+        action_reason_sk = "Pozorovane suvislosti neurcuju kauzalny efekt ani odporucany rozpocet."
 
         guardrail_rows = pd.DataFrame(
             [
@@ -10469,25 +10576,25 @@ class BizniWebExporter:
                     "band": "GREEN",
                     "marginal_cac_from": 0.0,
                     "marginal_cac_to": round(safe_cac_90d, 2),
-                    "action": f"Scale max {scale_step_pct:.0f}% po potvrdeni 7d aj 14d nominalneho zisku",
+                    "action": "Illustrative contribution threshold",
                 },
                 {
                     "band": "YELLOW",
                     "marginal_cac_from": round(safe_cac_90d, 2),
                     "marginal_cac_to": round(break_even_cac_90d, 2),
-                    "action": "Hold; 90d LTV este pokryva CAC, ale chyba bezpecnostna rezerva",
+                    "action": "Illustrative contribution threshold",
                 },
                 {
                     "band": "ORANGE",
                     "marginal_cac_from": round(break_even_cac_90d, 2),
                     "marginal_cac_to": round(hard_cac_180d, 2),
-                    "action": "Reduce/test; payback sa odklada za 90 dni",
+                    "action": "Illustrative contribution threshold",
                 },
                 {
                     "band": "RED",
                     "marginal_cac_from": round(hard_cac_180d, 2),
                     "marginal_cac_to": None,
-                    "action": "Cut incremental spend; ani 180d contribution ho nepokryva",
+                    "action": "Illustrative contribution threshold",
                 },
             ]
         )
@@ -10514,6 +10621,27 @@ class BizniWebExporter:
             "latest_7d_ltv90_profit_delta_per_day": latest_7d_row.get("ltv_adjusted_profit_90d_per_day"),
         }
 
+        # Legacy numeric fields remain for existing consumers; their semantics
+        # are historical observations, never experimentally verified budgets.
+        summary.update({
+            "objective": "describe_observed_spend_and_contribution",
+            "evidence_basis": "observational_not_causal",
+            "budget_recommendation_available": False,
+            "decision_ready": False,
+            "account_action": "OBSERVATIONAL_ONLY",
+            "account_action_tone": "neutral",
+            "account_action_reason_sk": "Pozorovane suvislosti neurcuju kauzalny efekt ani odporucany rozpocet.",
+            "observed_spend_band_low": summary["recommended_core_spend_low"],
+            "observed_spend_band_high": summary["recommended_core_spend_high"],
+            "observed_spend_band_upper_bound": summary["tested_scale_ceiling"],
+            "legacy_budget_fields_basis": "historical_spend_band_not_recommendation",
+        })
+        if not recent_rows_df.empty:
+            recent_rows_df["evidence_basis"] = "observational_not_causal"
+            recent_rows_df["decision_ready"] = False
+        if not tier_rows_df.empty:
+            tier_rows_df["sample_filter_passed"] = tier_rows_df["decision_eligible"]
+            tier_rows_df["decision_eligible"] = False
         return {
             "summary": summary,
             "ltv_rows": ltv_rows_df,
@@ -10527,7 +10655,9 @@ class BizniWebExporter:
                 "profit_basis": "CM1 contribution before ads for LTV; observed CM3 for daily company profit",
                 "maturity_rule": "customer must be fully observed through each 30/60/90/180d horizon",
                 "tier_rule": f"EUR 10 Meta bins; at least {minimum_tier_days} days, five weekdays, and positive smoothed 80% lower bound",
-                "scale_rule": f"maximize nominal profit; move budget by at most {scale_step_pct:.0f}% after both 7d and 14d confirmation",
+                "scale_rule": "No budget prescription: observational associations require independent causal evidence.",
+                "causal_budget_evidence": False,
+                "marginal_cac_basis": "change_in_meta_spend_over_change_in_all_shop_new_customers",
                 "known_limitations": [
                     "Paid-day assignment is not click- or campaign-level attribution.",
                     "Recent scale windows are observational and may contain promo, seasonality, weather, and Google overlap.",
@@ -12828,7 +12958,7 @@ class BizniWebExporter:
         """Analyze orders by geographic location"""
         print("\nAnalyzing geographic distribution...")
 
-        orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+        orders_df, _, revenue_col = self._build_growth_order_item_frames(df, require_customer_email=False)
         geo_df = self._build_order_geo_frame(df, orders_df)
 
         # By country
@@ -12994,7 +13124,7 @@ class BizniWebExporter:
                                                'packaging_cost', 'shipping_net_cost', 'allocated_google_spend',
                                                'allocated_fixed_overhead'])
         else:
-            orders_df, _, revenue_col = self._build_growth_order_item_frames(df)
+            orders_df, _, revenue_col = self._build_growth_order_item_frames(df, require_customer_email=False)
             order_level = self._build_order_geo_frame(df, orders_df).rename(columns={"geo_country": "country"}).copy()
         order_level['country'] = order_level['country'].fillna('unknown').astype(str).str.lower().str.strip()
 
@@ -16681,22 +16811,19 @@ class BizniWebExporter:
             matched_key_count=matched_key_count,
             overlap_rate=overlap_rate,
         )
-        decision_ready, decision_blockers = self._incrementality_decision_gate(
+        sample_filter_passed, decision_blockers = self._incrementality_decision_gate(
             active_days=int(len(active_days)),
             control_days=int(len(control_days)),
             effective_pair_days=effective_pair_days,
             confidence=confidence,
         )
-        verdict, verdict_reason, verdict_tone = self._build_incrementality_verdict(
-            incremental_profit_without_fixed_per_day=comparison["incremental_profit_without_fixed_per_day"],
-            incremental_profit_with_fixed_per_day=comparison["incremental_profit_with_fixed_per_day"],
-            incremental_cac=incremental_cac,
-            break_even_cac=break_even_cac,
-            confidence=confidence,
-            effective_pair_days=effective_pair_days,
-            decision_ready=decision_ready,
-            decision_blockers=decision_blockers,
-        )
+        # Matching weekdays and meeting a sample floor cannot establish
+        # incrementality: neither treatment assignment nor confounding is controlled.
+        decision_ready = False
+        decision_blockers.append("observational comparison is not causal evidence")
+        verdict = "Observation only"
+        verdict_reason = "Observed period differences do not establish advertising lift or justify a budget change."
+        verdict_tone = "neutral"
         return {
             "key": key,
             "label_en": label_en,
@@ -16708,8 +16835,12 @@ class BizniWebExporter:
             "matched_key_count": matched_key_count,
             "channel_overlap_rate": round(float(overlap_rate or 0.0) * 100, 1) if overlap_rate is not None else None,
             "confidence": confidence,
-            "confidence_note_en": confidence_note,
-            "confidence_note_sk": confidence_note,
+            "confidence_note_en": f"Descriptive sample quality only; not causal confidence. {confidence_note}",
+            "confidence_note_sk": "Kvalita opisnej vzorky, nie istota kauzalneho vplyvu reklamy.",
+            "confidence_basis": "descriptive_sample_quality_not_causal",
+            "evidence_basis": "observational_not_causal",
+            "sample_filter_passed": sample_filter_passed,
+            "budget_recommendation_available": False,
             "decision_ready": decision_ready,
             "decision_blockers": decision_blockers,
             "incremental_roas": round(float(incremental_roas), 3) if incremental_roas is not None else None,
@@ -16719,7 +16850,7 @@ class BizniWebExporter:
             "break_even_cac": round(float(break_even_cac), 2) if break_even_cac is not None else None,
             "verdict": verdict,
             "verdict_reason_en": verdict_reason,
-            "verdict_reason_sk": verdict_reason,
+            "verdict_reason_sk": "Pozorovane rozdiely obdobi nedokazuju vplyv reklamy ani neodovodnuju zmenu rozpoctu.",
             "verdict_tone": verdict_tone,
             **{metric: round(float(value), 4) if value is not None else None for metric, value in comparison.items()},
         }
@@ -16856,6 +16987,10 @@ class BizniWebExporter:
             company_profit_plan_delta = total_company_profit - company_profit_plan_period
 
         metrics = {
+            'metric_basis': 'all_shop_net_revenue_over_paid_ads',
+            'channel_ratio_basis': 'all_shop_net_revenue_over_one_channel_spend_not_attributed_roas',
+            'revenue_credit_adjustment': round(float(date_agg.get('revenue_credit_adjustment', pd.Series(dtype=float)).sum()), 2),
+            'credit_allocation': 'unallocated_order_credit_no_product_or_cogs_reversal',
             'roas': round(total_revenue / total_ad_spend, 2) if total_ad_spend > 0 else 0,
             'roas_fb': round(total_revenue / total_fb_spend, 2) if total_fb_spend > 0 else 0,
             'roas_google': round(total_revenue / total_google_spend, 2) if total_google_spend > 0 else 0,
@@ -17188,6 +17323,65 @@ class BizniWebExporter:
         print(f"Order status analysis complete: {len(status_agg)} final statuses, {len(lifecycle_rows)} lifecycle buckets")
         return order_status
 
+    def _build_refund_population_frame(self, analytics_df, date_from, date_to):
+        """All-status purchase-date cohort for a status proxy, never a cash refund.
+
+        Financially excluded orders must remain in this operational denominator.
+        Product revenue is retained before unallocated order credits; no value
+        from this frame is deducted from the financial aggregates.
+        """
+        columns = ["order_num", "purchase_date", "status_name", "refund_proxy_order_net"]
+        rows = []
+        seen = set()
+
+        def append_order(order_num, purchase_date, status, amount):
+            order_num = str(order_num or "").strip()
+            if not order_num or order_num in seen:
+                return
+            purchase_dt = pd.to_datetime(purchase_date, errors="coerce")
+            if pd.isna(purchase_dt):
+                raise ValueError("refund_population_purchase_date_unknown")
+            if not date_from.date() <= purchase_dt.date() <= date_to.date():
+                return
+            seen.add(order_num)
+            rows.append({
+                "order_num": order_num, "purchase_date": purchase_dt,
+                "status_name": status, "refund_proxy_order_net": float(amount),
+            })
+
+        if analytics_df is not None and not analytics_df.empty:
+            for order_num, group in analytics_df.groupby("order_num", sort=False):
+                first = group.iloc[0]
+                source = {
+                    "order_num": str(order_num), "id": first.get("order_id"),
+                    "status": {"id": first.get("status_id"), "name": first.get("status_name")},
+                }
+                current = self._reporting_order_context(source)
+                status = "" if current.get("status_identity_unbound") else self._status_name(current)
+                if "item_total_without_tax" in group.columns:
+                    amount = pd.to_numeric(group["item_total_without_tax"], errors="raise").sum()
+                elif "order_revenue_before_credits" in group.columns:
+                    amount = first["order_revenue_before_credits"]
+                else:
+                    raise ValueError("refund_population_merchandise_revenue_missing")
+                append_order(order_num, first["purchase_date"], status, amount)
+
+        for order in self.excluded_status_orders or []:
+            order_num = str(order.get("order_num") or "").strip()
+            if not order_num or order_num in seen:
+                continue
+            purchase_dt = self._order_purchase_datetime(order)
+            if purchase_dt is None:
+                raise ValueError("refund_population_purchase_date_unknown")
+            if not date_from.date() <= purchase_dt.date() <= date_to.date():
+                continue
+            current = self._reporting_order_context(order)
+            status = "" if current.get("status_identity_unbound") else self._status_name(current)
+            flattened = self.flatten_order(order)
+            amount = sum(float(row.get("item_total_without_tax") or 0) for row in flattened)
+            append_order(order_num, purchase_dt, status, amount)
+        return pd.DataFrame(rows, columns=columns)
+
     def analyze_refunds(self, df: pd.DataFrame) -> dict:
         """
         Build an operational refund/return proxy from final order statuses.
@@ -17196,7 +17390,22 @@ class BizniWebExporter:
         which is loaded into the creditnote reporting metrics and executive view.
         """
         print("\nAnalyzing refunds/returns...")
-        revenue_col = 'order_revenue_net' if 'order_revenue_net' in df.columns else 'order_total'
+        revenue_col = ('refund_proxy_order_net' if 'refund_proxy_order_net' in df.columns
+                       else 'order_revenue_net' if 'order_revenue_net' in df.columns else 'order_total')
+        population_basis = ('all_order_statuses_purchase_date_cohort' if revenue_col == 'refund_proxy_order_net'
+                            else 'provided_order_status_population')
+        amount_basis = ('original_merchandise_net_of_returned_status_orders' if revenue_col == 'refund_proxy_order_net'
+                        else 'legacy_order_revenue_proxy')
+        if df.empty:
+            return {
+                'summary': {
+                    'total_orders': 0, 'refund_orders': 0, 'refund_rate_pct': 0.0,
+                    'refund_amount': 0.0, 'source': 'order_status',
+                    'population_basis': population_basis, 'amount_basis': amount_basis,
+                    'cash_refund_confirmed': False, 'financial_deduction_applied': False,
+                },
+                'daily': pd.DataFrame(columns=['date', 'total_orders', 'refund_orders', 'refund_amount', 'refund_rate_pct']),
+            }
 
         orders_df = df[['order_num', 'purchase_date', 'status_name', revenue_col]].drop_duplicates(subset=['order_num']).copy()
         orders_df['purchase_datetime'] = pd.to_datetime(orders_df['purchase_date'])
@@ -17250,7 +17459,11 @@ class BizniWebExporter:
             'refund_orders': total_refund_orders,
             'refund_rate_pct': refund_rate_pct,
             'refund_amount': round(total_refund_amount, 2),
-            'source': 'order_status'
+            'source': 'order_status',
+            'population_basis': population_basis,
+            'amount_basis': amount_basis,
+            'cash_refund_confirmed': False,
+            'financial_deduction_applied': False,
         }
 
         print(
@@ -17407,7 +17620,14 @@ class BizniWebExporter:
             if not eligible_spend_effectiveness.empty
             else "N/A"
         )
+        if not spend_effectiveness.empty:
+            spend_effectiveness["sample_filter_passed"] = spend_effectiveness["decision_eligible"]
+            spend_effectiveness["decision_eligible"] = False
         decision_summary = {
+            "evidence_basis": "observational_not_causal",
+            "decision_ready": False,
+            "budget_recommendation_available": False,
+            "spend_band_basis": "historical_total_paid_spend_not_recommended_budget",
             "total_marketing_spend": float((financial_metrics or {}).get("total_ad_spend") or daily_data["total_ad_spend"].sum()),
             "marketing_spend_share_pct": float((financial_metrics or {}).get("marketing_spend_share_pct") or 0.0),
             "cm3_profit": float((financial_metrics or {}).get("cm3_profit") or 0.0),
@@ -17654,7 +17874,7 @@ class BizniWebExporter:
         if correlations.get("spend_orders_correlation", 0) > 0.3:
             recommendations.append("Paid days and order volume move together, but treat this only as a directional signal.")
         elif correlations.get("spend_orders_correlation", 0) < 0:
-            recommendations.append("Higher spend does not line up with more orders, so campaign targeting or timing likely needs work.")
+            recommendations.append("Higher spend and order volume do not move together in this sample; this does not identify a campaign-level cause.")
         if any(
             row.get("channel_overlap_rate") is not None and row.get("channel_overlap_rate", 0) >= 50
             for row in incrementality_comparisons
@@ -17663,22 +17883,23 @@ class BizniWebExporter:
                 "Meta and Google overlap heavily on some paid days, so per-channel conclusions are lower confidence than the all-ads view."
             )
         if not incrementality_comparisons:
-            recommendations.append("There are not enough paid and unpaid days in this range yet to judge ad incrementality.")
+            recommendations.append("There are not enough paid and unpaid days for this descriptive comparison; neither sample size nor weekday matching establishes causal lift.")
         if decision_summary["best_cm3_range"] not in {"N/A", ""}:
             recommendations.append(
-                f"Current data says the healthiest spend corridor for CM3 is {decision_summary['best_cm3_range']}."
+                f"Highest observed CM3 among eligible historical spend bands: {decision_summary['best_cm3_range']}; this is not a recommended budget."
             )
         if decision_summary["paid_day_cm3_win_rate_pct"] is not None and decision_summary["paid_day_cm3_win_rate_pct"] < 50:
             recommendations.append(
-                "Less than half of paid days stay CM3-positive after fixed costs, so scale only inside the profitable spend corridor."
+                "Less than half of paid days are CM3-positive after configured fixed costs. This descriptive result does not establish the effect of a budget change."
             )
         if (
             decision_summary["paid_day_returning_revenue_share_pct"] is not None
             and decision_summary["paid_day_returning_revenue_share_pct"] < 30
         ):
             recommendations.append(
-                "Paid-day revenue is still too dependent on new customers; CRM and remarketing should improve before pushing budget harder."
+                "Returning customers account for less than 30% of paid-day revenue. Customer mix alone does not establish the cause or justify a budget change."
             )
+        recommendations.append("No causal budget prescription: use independently controlled evidence to assess incremental advertising effects.")
         result["recommendations"] = recommendations
 
         print(

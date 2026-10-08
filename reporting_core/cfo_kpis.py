@@ -148,6 +148,9 @@ def _build_daily_rows_from_date_agg(date_agg: pd.DataFrame) -> List[Dict[str, An
             continue
 
         revenue = float(row.get("total_revenue", 0) or 0)
+        # date_agg already includes this order-level contra revenue exactly once.
+        # Preserve its disclosure; never deduct repeated item-export fields here.
+        revenue_credit_adjustment = float(row.get("revenue_credit_adjustment", 0) or 0)
         orders = int(float(row.get("unique_orders", 0) or 0))
         product_costs = float(row.get("product_expense", 0) or 0)
         packaging_costs = float(row.get("packaging_cost", 0) or 0)
@@ -169,6 +172,7 @@ def _build_daily_rows_from_date_agg(date_agg: pd.DataFrame) -> List[Dict[str, An
             {
                 "date": d,
                 "revenue": revenue,
+                "revenue_credit_adjustment": revenue_credit_adjustment,
                 "orders": orders,
                 "units_sold": int(float(row.get("total_quantity", 0) or 0)),
                 "aov": aov,
@@ -201,6 +205,7 @@ def _window_aggregate(
     fixed_daily_cost_eur: float,
 ) -> Dict[str, Optional[float]]:
     revenue = 0.0
+    revenue_credit_adjustment = 0.0
     orders = 0
     ads = 0.0
     fb_ads = 0.0
@@ -217,6 +222,7 @@ def _window_aggregate(
         row = row_by_date.get(d)
         if row:
             revenue += float(row["revenue"])
+            revenue_credit_adjustment += float(row.get("revenue_credit_adjustment", 0.0))
             orders += int(row["orders"])
             ads += float(row["total_ads"])
             fb_ads += float(row["facebook_ads"])
@@ -248,6 +254,7 @@ def _window_aggregate(
 
     return {
         "revenue": revenue,
+        "revenue_credit_adjustment": revenue_credit_adjustment,
         "orders": float(orders),
         "ads": ads,
         "fb_ads": fb_ads,
@@ -388,6 +395,7 @@ def build_cfo_kpi_payload(
             return {}
         return {
             "company_margin_with_fixed": aggregate.get("company_profit_with_fixed"),
+            "revenue_credit_adjustment": aggregate.get("revenue_credit_adjustment", 0.0),
         }
 
     def trend_snapshot(window_days: int, points: int, window_key: str) -> Dict[str, Any]:

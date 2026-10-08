@@ -1,3 +1,33 @@
+## 2026-10-08 — Final code validation and reporting UI release path
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-fixes-20261008`
+What changed: Final report-only App Runner deployment mode is documented in `projects/REPORT_DASHBOARD_RELEASE.md`; it reads report surfaces only, binds immutable source/image/host proof and preserves all schedules/leases. It must follow both report runtime/HTTP validations. The accepted cost guard now handles an explicitly reconciled native negative merchandise line without changing the existing signed cost model; unsupported/malformed amounts remain blocking.
+What is verified: All 1,476 tests across 88 modules, smoke, critical lint and independent review pass. Complete fresh source, monetary contract and all four period cost guards pass; source/status refresh effects are separately documented privately. No production release is claimed. Finite regression processes exited with no listeners, and no local persistent runtime was started.
+Next exact step: Complete PR #613 exact-head CI/build and private source archive, release ROY after the verified VEVO recovery, publish through 2026-10-07 and verify enabled future dynamic-date reporting. Finish the separate report-only UI image promotion only after both report HTTP gates pass. Archive actual evidence and report financial impact with source refreshes identified separately.
+
+## 2026-10-08 — Corrected financial rules verified; release pending
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-fixes-20261008`
+What changed: Shared financial corrections now apply issued partial credits once, bind all credit-derived costs/metrics to one complete source snapshot, use consistent refund/credit cohort populations and retain missing-email orders in country finances. MER and modeled advertising allocations are labeled consistently across generated reports, built-in dashboards and email; observational comparisons no longer issue causal budget advice. The accepted configured-margin cost policy retains every monetary amount while keeping unknown/invalid rows blocking. ROY physical gifts deliberately remain zero cost. Tips and insurance remain zero cost, original eligibility/restatement stays, and fixed overhead is allocated once across countries.
+What is verified: All 1,460 tests in 87 modules pass with unchanged source, plus smoke, critical lint and independent review. Fresh advertising reconciliation passes. Full fresh order-source collection and independent monetary contracts are still pending; tests are not a production publication claim.
+Current runtime: ROY remains enabled on definition :77, generation `20261008T000535Z`. No runtime change has occurred.
+Next exact step: Finish reviewed code/CI and immutable source contracts, then release sequentially after VEVO is independently verified, regenerate through 2026-10-07 and verify enabled future dynamic-date execution. Verify reporting HTTP before the separate read-only reporting UI image promotion. Archive private evidence and separate financial correction effects from source/status changes.
+
+## 2026-10-08 — Authorized methodology corrections and release continuation
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-fixes-20261008`
+What changed: The owner explicitly authorized the remaining reporting defect fixes and continuation of both production releases. Three business policies are now settled: ROY physical gifts intentionally retain zero cost; current order-date/current-status eligibility and later restatement remain; configured modeled-profit assumptions remain. These policies supersede the preceding audit's open questions. Tip/insurance cost remains zero and each project's fixed overhead remains one shared country pool.
+What is verified: Clean fetch/pull and branch creation from `089fff9b7fec32eec79651b1cf809053e10660bd`. A fresh read-only AWS identity gate verified account, Fargate task definitions, services, immutable image working directory `/app`, absent active tasks and stable eighteen-artifact baseline. With no active task, instance ID is not applicable and active private IP is absent; a subsequently launched task still requires its own IP and localhost marker gate before provider reads or UI checks. Private identity proof SHA-256 `1623cf4ff154d14b96adbf1a3234c16a47b8b97ee8a25db85f8de6c13a51035a`; baseline manifest SHA-256 `228c86835f38f6d7051734e1aae7aca861da9912e10e3714c099d41588933907`.
+Diagnostic checkpoint: The shared runner now retains private diagnostics for all four periods before strict rejection; focused runner/host tests pass. ROY's physical-gift zero cost and modeled-cost assumptions remain explicitly accepted. Issued partial credits will be a separate order-level deduction with no invented product allocation or inventory cost reversal; source completeness and line arithmetic remain mandatory.
+Current runtime: ROY remains enabled on :77, generation `20261008T000535Z`. No deployment or provider mutation has occurred in this continuation. A fresh finite read-only source collector is running; source contracts are not yet frozen.
+Next exact step: Correct issued partial-credit reporting without invented inventory/product allocation, refund population and denominators, consistent creditnote source handling, honest MER/observational advertising labels, email-independent country finances, and per-period failure diagnostics. Reproduce the previous seven-day quality rejection without weakening publication gates. Review/test/commit/push, then build the exact source and complete the independently verified sequential report-only releases through 2026-10-07. Archive new private evidence; do not overwrite prior snapshots or add commercial/customer data to public Git.
+
 # ROY reporting project state
 
 ## 2026-10-08 — Read-only economic-methodology audit

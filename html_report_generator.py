@@ -400,7 +400,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     profit_change_7d_pct = _safe_pct_change(profit_last_7, profit_prev_7)
     orders_change_7d_pct = _safe_pct_change(orders_last_7, orders_prev_7)
 
-    roas_value = float(financial_metrics.get('roas', 0)) if financial_metrics else 0.0
+    roas_value = float(financial_metrics.get('mer', financial_metrics.get('roas', 0)) or 0) if financial_metrics else 0.0
     company_margin_value = (
         float(financial_metrics.get('company_profit_margin_pct', 0))
         if financial_metrics else total_roi
@@ -417,7 +417,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     revenue_level = _trend_level(revenue_change_7d_pct, higher_is_better=True)
     profit_level = _trend_level(profit_change_7d_pct, higher_is_better=True)
     orders_level = _trend_level(orders_change_7d_pct, higher_is_better=True)
-    roas_level = "good" if roas_value >= 3 else ("warn" if roas_value >= 1.5 else "bad")
+    roas_level = "neutral"
     margin_level = "good" if company_margin_value >= 20 else ("warn" if company_margin_value >= 8 else "bad")
 
     def _level_labels(level: str) -> tuple[str, str]:
@@ -430,7 +430,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
     rev_en, rev_sk = _level_labels(revenue_level)
     profit_en, profit_sk = _level_labels(profit_level)
     orders_en, orders_sk = _level_labels(orders_level)
-    roas_en, roas_sk = _level_labels(roas_level)
+    roas_en, roas_sk = "Descriptive ratio", "Opisny pomer"
     margin_en, margin_sk = _level_labels(margin_level)
 
     quick_insights_html = f"""
@@ -451,9 +451,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <div class="quick-insight-desc" data-en="Profit moved {profit_change_7d_pct:+.1f}% vs previous 7 days." data-sk="Zisk sa zmenil o {profit_change_7d_pct:+.1f}% oproti predchádzajúcim 7 dňom.">Profit moved {profit_change_7d_pct:+.1f}% vs previous 7 days.</div>
                 </div>
                 <div class="quick-insight-card level-{roas_level}">
-                    <div class="quick-insight-title" data-en="Ad efficiency (ROAS)" data-sk="Efektivita reklamy (ROAS)">Ad efficiency (ROAS)</div>
+                    <div class="quick-insight-title" data-en="Net MER (all ads)" data-sk="Ciste MER (vsetky reklamy)">Net MER (all ads)</div>
                     <div class="quick-insight-value" data-en="{roas_en}" data-sk="{roas_sk}">{roas_en}</div>
-                    <div class="quick-insight-desc" data-en="Current ROAS is {roas_value:.2f}x. Above 3x is usually healthy." data-sk="Aktuálny ROAS je {roas_value:.2f}x. Nad 3x je to zvyčajne zdravé.">Current ROAS is {roas_value:.2f}x. Above 3x is usually healthy.</div>
+                    <div class="quick-insight-desc" data-en="Net MER is {roas_value:.2f}x: all shop net sales / (Meta + Google spend). It does not measure attributed ad sales." data-sk="Ciste MER je {roas_value:.2f}x: vsetky ciste trzby / (Meta + Google naklady). Nemera atribucne priradene predaje.">Net MER is {roas_value:.2f}x: all shop net sales / (Meta + Google spend). It does not measure attributed ad sales.</div>
                 </div>
                 <div class="quick-insight-card level-{margin_level}">
                     <div class="quick-insight-title" data-en="Business margin safety" data-sk="Bezpečnosť firemnej marže">Business margin safety</div>
@@ -471,7 +471,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <li data-en="Start with the quick health cards above. Green means healthy trend, orange means watch, red means action needed." data-sk="Začni hornými rýchlymi kartami. Zelená znamená zdravý trend, oranžová sledovať, červená treba riešiť.">Start with the quick health cards above. Green means healthy trend, orange means watch, red means action needed.</li>
                 <li data-en="Then check Revenue, Net Profit, and Total Costs cards. This gives the fastest business reality check." data-sk="Potom pozri karty Revenue, Net Profit a Total Costs. Toto je najrýchlejší reality check firmy.">Then check Revenue, Net Profit, and Total Costs cards. This gives the fastest business reality check.</li>
                 <li data-en="Use daily charts only for direction: up/down trend is more important than one-day spikes." data-sk="Denné grafy čítaj hlavne trendovo: smer hore/dole je dôležitejší ako jednodňové výkyvy.">Use daily charts only for direction: up/down trend is more important than one-day spikes.</li>
-                <li data-en="If ROAS drops under 2x or CAC rises close to Break-even CAC, marketing needs immediate review." data-sk="Ak ROAS klesne pod 2x alebo CAC rastie blízko Break-even CAC, marketing treba hneď skontrolovať.">If ROAS drops under 2x or CAC rises close to Break-even CAC, marketing needs immediate review.</li>
+                <li data-en="Review changes in MER alongside contribution, customer mix and campaign evidence; no universal MER threshold establishes profitability." data-sk="Zmeny MER posudzujte spolu s kontribuciou, mixom zakaznikov a dokazmi kampani; univerzalny prah MER nedokazuje ziskovost.">Review changes in MER alongside contribution, customer mix and campaign evidence; no universal MER threshold establishes profitability.</li>
             </ul>
         </div>
         <div class="metric-cheatsheet">
@@ -486,8 +486,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                     <p data-en="What remains after all tracked costs. If this drops while revenue grows, costs are rising too fast." data-sk="Čo ostane po všetkých sledovaných nákladoch. Ak klesá pri raste obratu, náklady rastú prirýchlo.">What remains after all tracked costs. If this drops while revenue grows, costs are rising too fast.</p>
                 </div>
                 <div class="metric-tip">
-                    <h4 data-en="ROAS" data-sk="ROAS">ROAS</h4>
-                    <p data-en="Revenue divided by ad spend. Around 3x+ is usually healthy for scaling ads." data-sk="Obrat delený výdavkami na reklamu. Okolo 3x+ je zvyčajne zdravé pre škálovanie reklamy.">Revenue divided by ad spend. Around 3x+ is usually healthy for scaling ads.</p>
+                    <h4 data-en="Net MER" data-sk="Ciste MER">Net MER</h4>
+                    <p data-en="All shop net sales divided by Meta + Google spend. This descriptive ratio includes organic and returning-customer sales; it is not platform-attributed ROAS." data-sk="Vsetky ciste trzby delene Meta + Google nakladmi. Tento opisny pomer zahrna organicke aj opakovane predaje; nejde o platformovu atribuciu.">All shop net sales divided by Meta + Google spend. This descriptive ratio includes organic and returning-customer sales; it is not platform-attributed ROAS.</p>
                 </div>
                 <div class="metric-tip">
                     <h4 data-en="CAC vs Break-even CAC" data-sk="CAC vs bod zvratu CAC">CAC vs Break-even CAC</h4>
@@ -513,7 +513,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             ("orders", "Orders", "Objednavky"),
             ("aov", "AOV", "Priemerna hodnota objednavky"),
             ("cac", "CAC", "CAC"),
-            ("roas", "ROAS", "ROAS"),
+            ("roas", "Net MER", "Ciste MER"),
             ("pre_ad_contribution_margin", "Pre-Ad Contribution Margin", "Pre-Ad kontribucna marza"),
             ("post_ad_margin", "Post-Ad Margin", "Post-Ad marza"),
             ("company_margin_with_fixed", company_margin_label_en, "Firemna marza (vratane fixu)"),
@@ -1880,12 +1880,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         blended_cac_hint = "FB+Google" if blended_cac_scope == "tracked_ads_fb_google" else "tracked channels"
         html_content += f"""
             <div class="card">
-                <div class="card-title">ROAS (All Ads)</div>
-                <div class="card-value {'profit' if roas > 1 else 'cost'}">{roas:.2f}x</div>
+                <div class="card-title">Order credit adjustment (included)</div>
+                <div class="card-value">{_measurement_value(financial_metrics.get('revenue_credit_adjustment'), currency=True)}</div>
+                <div>Already included in net sales and profit; not allocated to products, no COGS reversal.</div>
             </div>
             <div class="card">
-                <div class="card-title">MER</div>
-                <div class="card-value {'profit' if mer > 1 else 'cost'}">{mer:.2f}x</div>
+                <div class="card-title">Net MER (All Ads)</div>
+                <div class="card-value">{mer:.2f}x</div>
+                <div>All shop net sales / (Meta + Google spend); not platform-attributed ROAS.</div>
             </div>
             <div class="card">
                 <div class="card-title">Revenue/Customer (Net)</div>
@@ -2006,7 +2008,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         cac_delta_display = f"{cac_delta:+.4f}" if cac_delta is not None else "N/A"
         html_content += f"""
             <div class="card">
-                <div class="card-title">ROAS Check Delta</div>
+                <div class="card-title">MER Check Delta</div>
                 <div class="card-value {'profit' if abs(roas_delta) <= 0.01 else 'cost'}">{roas_delta:+.4f}</div>
             </div>
             <div class="card">
@@ -2038,7 +2040,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div class="card-value {'cost' if refund_summary.get('refund_rate_pct', 0) > 1 else 'profit'}">{refund_summary.get('refund_rate_pct', 0):.2f}%</div>
             </div>
             <div class="card">
-                <div class="card-title">Refund Amount</div>
+                <div class="card-title">Returned-status order net value</div>
                 <div class="card-value cost">&#8364;{refund_summary.get('refund_amount', 0):,.2f}</div>
             </div>"""
 
@@ -2267,8 +2269,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <canvas id="refundRateChart"></canvas>
             </div>
             <div class="chart-container">
-                <h2 class="chart-title">Refund Amount Trend</h2>
-                <p class="chart-explanation">Daily refunded amount based on orders marked as returned/refunded in order status.</p>
+                <h2 class="chart-title">Returned-status order value trend</h2>
+                <p class="chart-explanation">Original net merchandise value of orders currently in returned/refunded states, grouped by purchase date across all statuses. This is not refunded cash; actual credit documents are separate.</p>
                 <canvas id="refundAmountChart"></canvas>
             </div>
         </div>"""
@@ -2579,8 +2581,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div class="card-value profit">&#8364;{total_revenue_cpo:,.2f}</div>
             </div>
             <div class="card">
-                <div class="card-title">Overall ROAS (FB)</div>
-                <div class="card-value {'profit' if overall_roas > 1 else 'cost'}">{overall_roas:.2f}x</div>
+                <div class="card-title">All shop net sales / Meta spend</div>
+                <div class="card-value">{overall_roas:.2f}x</div>
             </div>
             <div class="card">
                 <div class="card-title">Best Attribution Lag</div>
@@ -2663,7 +2665,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
             html_content += f"""
             </div>
-            <p style="text-align: center; color: #718096; margin-top: 10px;">Best correlation at <strong>{best_lag.replace('_', ' ')}</strong> ({best_lag_corr:.3f}) - suggests orders typically come {best_lag.split('_')[0]} day(s) after seeing ads</p>
+            <p style="text-align: center; color: #718096; margin-top: 10px;">Highest observed correlation at <strong>{best_lag.replace('_', ' ')}</strong> ({best_lag_corr:.3f}); this does not measure when a customer saw an ad or establish attribution.</p>
         </div>"""
 
         # Campaign Attribution Table
@@ -2688,7 +2690,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             <th class="number">Est. Orders</th>
                             <th class="number">Est. CPO</th>
                             <th class="number">Est. Revenue</th>
-                            <th class="number">Est. ROAS</th>
+                            <th class="number">Modeled revenue / spend</th>
                             <th class="number">Click Share</th>
                         </tr>
                     </thead>
@@ -2716,7 +2718,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 else:
                     cpo_color = '#48bb78' if estimated_cpo_value < fb_cpo else '#f56565'
                     estimated_cpo_label = f"&#8364;{estimated_cpo_value:.2f}"
-                roas_color = '#48bb78' if camp['estimated_roas'] > 1 else '#f56565'
+                roas_color = '#718096'
 
                 html_content += f"""
                         <tr>
@@ -2761,7 +2763,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <p class="chart-explanation">Days with lowest cost per order - most efficient ad spend</p>
                 <table>
                     <thead>
-                        <tr><th>Date</th><th class="number">Orders</th><th class="number">FB Spend</th><th class="number">CPO</th><th class="number">ROAS</th></tr>
+                        <tr><th>Date</th><th class="number">Orders</th><th class="number">FB Spend</th><th class="number">CPO</th><th class="number">Net sales / Meta spend</th></tr>
                     </thead>
                     <tbody>"""
                 for day in best_cpo_days:
@@ -2785,7 +2787,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <p class="chart-explanation">Days with highest cost per order - least efficient ad spend</p>
                 <table>
                     <thead>
-                        <tr><th>Date</th><th class="number">Orders</th><th class="number">FB Spend</th><th class="number">CPO</th><th class="number">ROAS</th></tr>
+                        <tr><th>Date</th><th class="number">Orders</th><th class="number">FB Spend</th><th class="number">CPO</th><th class="number">Net sales / Meta spend</th></tr>
                     </thead>
                     <tbody>"""
                 for day in worst_cpo_days:
@@ -2816,8 +2818,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Campaign Estimated ROAS Comparison</h2>
-            <p class="chart-explanation">Estimated Return on Ad Spend by campaign - higher is better. Green = profitable (>1x), Red = unprofitable (<1x)</p>
+            <h2 class="chart-title">Modeled campaign revenue / spend comparison</h2>
+            <p class="chart-explanation">60/40 click/spend allocation of shop revenue, not measured campaign sales. This ratio does not establish campaign profitability.</p>
             <canvas id="campaignRoasChart"></canvas>
         </div>"""
 
@@ -2958,9 +2960,9 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 if best_roas_hour:
                     html_content += f"""
             <div class="card">
-                <div class="card-title">Best ROAS Hour</div>
+                <div class="card-title">Highest modeled sales / Meta spend hour</div>
                 <div class="card-value profit">{best_roas_hour['hour']:02d}:00</div>
-                <div style="color: #718096; font-size: 0.8rem;">ROAS: {best_roas_hour['roas']:.2f}x</div>
+                <div style="color: #718096; font-size: 0.8rem;">Estimated sales / Meta spend: {best_roas_hour['roas']:.2f}x</div>
             </div>"""
 
                 html_content += f"""
@@ -2984,8 +2986,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         </div>
 
         <div class="chart-container">
-            <h2 class="chart-title">Hourly ROAS (Return on Ad Spend)</h2>
-            <p class="chart-explanation">Revenue / Spend by hour. Higher = more profitable. Green = profitable (>1x), Red = unprofitable</p>
+            <h2 class="chart-title">Estimated hourly net sales / Meta spend</h2>
+            <p class="chart-explanation">Estimated net shop sales / Meta spend by hour; sales and spend are not linked to the same customers. This ratio does not establish hourly profitability.</p>
             <canvas id="hourlyRoasChart"></canvas>
         </div>
 
@@ -4876,6 +4878,8 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             if (geo_profitability.get('spend_attribution') or {}).get('mode') == 'measured'
             else 'Estimated allocation: Meta campaign names and Google daily order shares. Fixed overhead is allocated; these are not measured country ad costs.'
         )
+        geo_spend_note += ' Markets follow delivery country with invoice-country fallback, not storefront or language. Trhy su podla krajiny dorucenia, s nahradou fakturacnou krajinou; nejde o jazykovu verziu e-shopu.'
+        geo_spend_note += ' Net MER = all realized net sales / (Meta + Google spend), not platform-attributed ROAS.'
         geo_spend_note += ' Country contribution excludes separate creditnote fulfillment adjustments and fixed overhead on days without orders; it does not reconcile to company net profit.'
         google_geo = (geo_profitability.get('spend_attribution') or {}).get('google_ads') or {}
         if google_geo.get('status') == 'ok' and google_geo.get('country_coverage_ratio') is not None:
@@ -4895,14 +4899,14 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             html_content += f"""
 
         <div class="chart-container">
-            <h2 class="chart-title">SK/CZ/HU Profitability (Post-Ad Contribution + FB CPO)</h2>
+            <h2 class="chart-title">Delivery markets SK/CZ/HU (Post-Ad Contribution + Meta CPO)</h2>
             <p class="chart-explanation">{escape(geo_spend_note)} Contribution includes allocated fixed overhead. Meta spend outside SK/CZ/HU: &#8364;{unattributed_fb:,.2f}.</p>
             <canvas id="geoProfitabilityChart"></canvas>
         </div>
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">Geo Profitability (SK/CZ/HU)</h2>
+                <h2 class="table-title">Delivery-market profitability (SK/CZ/HU)</h2>
                 <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
@@ -5149,7 +5153,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             <div class="section-intro-copy">
                 <div class="section-kicker" data-en="Products" data-sk="Produkty">Products</div>
                 <h2 class="section-heading" data-en="Find what deserves more budget and focus" data-sk="Zisti, ktore produkty si zasluzia viac rozpoctu a pozornosti">Find what deserves more budget and focus</h2>
-                <p class="section-copy" data-en="Use product margins and product trend tables to separate hero SKUs from low-value volume." data-sk="Pomocou produktovych marzi a trendov oddelis hero SKU od objemu s nizkou hodnotou.">Use product margins and product trend tables to separate hero SKUs from low-value volume.</p>
+                <p class="section-copy" data-en="Product figures are before unallocated order credit adjustments. Net sales and profit already include those adjustments separately; product COGS is not reversed." data-sk="Produktove hodnoty su pred nepriradenymi dobropismi objednavok. Ciste trzby a zisk ich uz zahrnaju samostatne; naklady tovaru sa nevracaju.">Product figures are before unallocated order credit adjustments. Net sales and profit already include those adjustments separately; product COGS is not reversed.</p>
             </div>
             {render_period_switcher("section-products", compact=True)}
         </div>
@@ -5278,7 +5282,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
         correlations = ads_effectiveness.get('correlations', {})
         spend_effectiveness = ads_effectiveness.get('spend_effectiveness')
         dow_effectiveness = ads_effectiveness.get('dow_effectiveness')
-        recommendations = ads_effectiveness.get('recommendations', [])
+        # Do not repeat causal scale/cut advice from older correlation payloads.
+        recommendations = [
+            "Historical spend comparisons are observational. Review campaign evidence and controlled tests before changing budgets."
+        ]
         best_roas = ads_effectiveness.get('best_roas_range', 'N/A')
         best_profit = ads_effectiveness.get('best_profit_range', 'N/A')
 
@@ -5296,11 +5303,11 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <div class="card-value">{correlations.get('fb_revenue', 0):.3f}</div>
             </div>
             <div class="card">
-                <div class="card-title">Best ROAS Spend Level</div>
+                <div class="card-title">Highest observed net MER spend band</div>
                 <div class="card-value roi">{best_roas}</div>
             </div>
             <div class="card">
-                <div class="card-title">Best Profit Spend Level</div>
+                <div class="card-title">Highest observed profit spend band</div>
                 <div class="card-value profit">{best_profit}</div>
             </div>
         </div>
@@ -5329,13 +5336,13 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="chart-grid">
             <div class="chart-container">
-                <h2 class="chart-title">FB Spend vs Orders by Range</h2>
-                <p class="chart-explanation">Average orders for each FB spend range. Find the optimal spend level for maximizing orders.</p>
+                <h2 class="chart-title">Total paid spend vs orders by range</h2>
+                <p class="chart-explanation">Observed average orders for each total paid spend range. Correlation does not establish an optimal budget.</p>
                 <canvas id="spendRangeOrdersChart"></canvas>
             </div>
             <div class="chart-container">
-                <h2 class="chart-title">FB Spend vs Revenue by Range</h2>
-                <p class="chart-explanation">Average revenue and ROAS for each FB spend range. Find the optimal spend level for maximizing revenue.</p>
+                <h2 class="chart-title">Total paid spend vs revenue by range</h2>
+                <p class="chart-explanation">Observed average net sales and net MER for each total paid spend range. Other factors can explain differences; this is not a budget recommendation.</p>
                 <canvas id="spendRangeRevenueChart"></canvas>
             </div>
         </div>"""
@@ -5358,7 +5365,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
 
         <div class="table-container">
             <div class="collapsible-header" onclick="toggleCollapse(this)">
-                <h2 class="table-title">FB Spend Effectiveness by Range</h2>
+                <h2 class="table-title">Observed total paid spend ranges</h2>
                 <span class="toggle-icon">&#9662;</span>
             </div>
             <div class="collapsible-content">
@@ -5370,7 +5377,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         <th class="number">Avg Orders</th>
                         <th class="number">Avg Revenue</th>
                         <th class="number">Avg Profit</th>
-                        <th class="number">ROAS</th>
+                        <th class="number">Net MER</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -5406,10 +5413,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 <thead>
                     <tr>
                         <th>Day</th>
-                        <th class="number">Avg FB Spend</th>
+                        <th class="number">Avg total paid spend</th>
                         <th class="number">Avg Orders</th>
                         <th class="number">Avg Revenue</th>
-                        <th class="number">ROAS</th>
+                        <th class="number">Net MER</th>
                     </tr>
                 </thead>
                 <tbody>"""
@@ -5418,7 +5425,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 html_content += f"""
                     <tr>
                         <td>{row['day_of_week']}</td>
-                        <td class="number">&#8364;{row['fb_spend']:.2f}</td>
+                        <td class="number">&#8364;{row.get('total_ad_spend', row.get('fb_spend', 0)):.2f}</td>
                         <td class="number">{row['orders']:.1f}</td>
                         <td class="number">&#8364;{row['revenue']:.2f}</td>
                         <td class="number">{row['roas']:.2f}x</td>
@@ -5736,7 +5743,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             "Avg Customer LTV (Revenue)": "Priemerne LTV zakaznika (trzba)",
             "Customer Acq. Cost (FB)": "Naklad na ziskanie zakaznika (FB)",
             "Revenue LTV/CAC": "LTV/CAC podla trzby",
-            "ROAS (All Ads)": "ROAS (vsetky reklamy)",
+            "Net MER (All Ads)": "Ciste MER (vsetky reklamy)",
             "Revenue/Customer (Net)": "Trzba na zakaznika (bez DPH)",
             "Orders / Customer": "Objednavky na zakaznika",
             "Company Profit Margin": "Firemna marza",
@@ -5761,7 +5768,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             "Payback Period (Days est.)": "Payback obdobie (odhad dni)",
             "Post-Ad Payback (Orders est.)": "Post-Ad payback (odhad objednavok)",
             "Post-Ad Payback (Days est.)": "Post-Ad payback (odhad dni)",
-            "ROAS Check Delta": "Kontrola ROAS delta",
+            "MER Check Delta": "Kontrola MER delta",
             "Margin Check Delta (pp)": "Kontrola marže delta (p. b.)",
             "CAC (FB/New Cust.)": "CAC (FB/novi zakaznici)",
             "CAC Check Delta": "Kontrola CAC delta",
@@ -5849,7 +5856,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
             "NIZKA priorita = pravidelne kampane": "LOW priority = regular campaigns",
             "Poznamka:": "Note:",
             "Ako čítať tento report (jednoducho)": "How to read this report (simple)",
-            "Kontrola ROAS delta": "ROAS Check Delta",
+            "Kontrola MER delta": "MER Check Delta",
             "Kontrola marže delta (p. b.)": "Margin Check Delta (pp)",
             "Kontrola CAC delta": "CAC Check Delta",
             "Skutocna retencia (bez casoveho biasu) - len zrele kohorty (90+ dni)": "True Retention (Time-Bias Free) - Mature Cohorts Only (90+ days)",
@@ -7894,7 +7901,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(refunds_dates)},
                     datasets: [{{
-                        label: 'Refund Amount',
+                        label: 'Returned-status order net value',
                         data: {json.dumps(refunds_amount)},
                         backgroundColor: '#F97316',
                         borderRadius: 4
@@ -7907,7 +7914,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'Refund Amount: &#8364;' + context.parsed.y.toFixed(2);
+                                    return 'Returned-status order net value: &#8364;' + context.parsed.y.toFixed(2);
                                 }}
                             }}
                         }}
@@ -8856,10 +8863,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(camp_names_cpo)},
                     datasets: [{{
-                        label: 'Est. ROAS',
+                        label: 'Modeled revenue / spend',
                         data: {json.dumps(camp_roas)},
-                        backgroundColor: {json.dumps(camp_roas)}.map(v => v >= 1 ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
-                        borderColor: {json.dumps(camp_roas)}.map(v => v >= 1 ? '#48bb78' : '#f56565'),
+                        backgroundColor: 'rgba(113,128,150,0.7)',
+                        borderColor: '#718096',
                         borderWidth: 1,
                         borderRadius: 5
                     }}]
@@ -8874,7 +8881,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'Est. ROAS: ' + context.parsed.x.toFixed(2) + 'x';
+                                    return 'Modeled revenue / spend: ' + context.parsed.x.toFixed(2) + 'x';
                                 }}
                             }}
                         }}
@@ -8887,7 +8894,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             }},
                             title: {{
                                 display: true,
-                                text: 'Estimated ROAS - Green = profitable (â‰Ą1x), Red = unprofitable (<1x)'
+                                text: 'Modeled revenue / spend; no campaign profitability conclusion'
                             }}
                         }}
                     }}
@@ -9227,10 +9234,10 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                 data: {{
                     labels: {json.dumps(hourly_labels)},
                     datasets: [{{
-                        label: 'ROAS',
+                        label: 'Estimated net sales / Meta spend',
                         data: {json.dumps(hourly_roas_js)},
-                        backgroundColor: {json.dumps(hourly_roas_js)}.map(v => v >= 1 ? 'rgba(72, 187, 120, 0.7)' : 'rgba(245, 101, 101, 0.7)'),
-                        borderColor: {json.dumps(hourly_roas_js)}.map(v => v >= 1 ? '#48bb78' : '#f56565'),
+                        backgroundColor: 'rgba(113,128,150,0.7)',
+                        borderColor: '#718096',
                         borderWidth: 1,
                         borderRadius: 5
                     }}]
@@ -9244,7 +9251,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         tooltip: {{
                             callbacks: {{
                                 label: function(context) {{
-                                    return 'ROAS: ' + context.parsed.y.toFixed(2) + 'x';
+                                    return 'Estimated net sales / Meta spend: ' + context.parsed.y.toFixed(2) + 'x';
                                 }}
                             }}
                         }}
@@ -11122,7 +11129,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                         borderRadius: 5,
                         yAxisID: 'y'
                     }}, {{
-                        label: 'ROAS (x)',
+                        label: 'Net MER (x)',
                         data: {json.dumps(range_roas)},
                         type: 'line',
                         borderColor: '#F59E0B',
@@ -11160,7 +11167,7 @@ def generate_html_report(date_agg: pd.DataFrame, date_product_agg: pd.DataFrame,
                             type: 'linear',
                             position: 'right',
                             beginAtZero: true,
-                            title: {{ display: true, text: 'ROAS (x)' }},
+                            title: {{ display: true, text: 'Net MER (x)' }},
                             grid: {{ drawOnChartArea: false }}
                         }}
                     }}

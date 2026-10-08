@@ -104,6 +104,9 @@
     "note": "Temporary management estimate; replace with accounting actuals or an approved monthly budget."
   },
   "missing_cost_margin_pct": 35,
+  "cost_estimate_publication": {
+    "allow_configured_margin_fallback": true
+  },
   "authoritative_margin_override_skus": {
     "H-8F8BF46E": 90,
     "H-342E0874": 90,

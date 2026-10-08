@@ -20,7 +20,7 @@ METRIC_LABELS = {
     "orders": {"en": "Orders", "sk": "Objednávky"},
     "aov": {"en": "AOV (net)", "sk": "Priemerná objednávka (netto)"},
     "cac": {"en": "CAC", "sk": "CAC"},
-    "roas": {"en": "ROAS", "sk": "ROAS"},
+    "roas": {"en": "Net MER", "sk": "Ciste MER"},
     "pre_ad_contribution_margin": {"en": "Pre-ad contribution", "sk": "Pre-ad kontribučná marža"},
     "post_ad_margin": {"en": "Post-ad margin", "sk": "Post-ad marža"},
     "company_margin_with_fixed": {"en": "Company margin (incl. fixed)", "sk": "Firemná marža (s fixom)"},
@@ -804,8 +804,8 @@ def _creditnote_carrier_row_html(row: Dict[str, Any]) -> str:
     return (
         f'<tr class="{row_class}">'
         f'<td>{escape(str(row.get("carrier") or "Unknown carrier"))}</td>'
-        f'<td class="number">{int(round(_num(row.get("realized_orders"))))}</td>'
-        f'<td class="number">{int(round(_num(row.get("creditnoted_orders"))))}</td>'
+        f'<td class="number">{int(round(_num(row.get("cohort_orders", row.get("realized_orders")))))}</td>'
+        f'<td class="number">{int(round(_num(row.get("cohort_creditnoted_orders", row.get("creditnoted_orders")))))}</td>'
         f'<td class="number">{int(round(_num(row.get("creditnotes"))))}</td>'
         f'<td class="number">{rate_html}</td>'
         f'<td class="number">{index_html}</td>'
@@ -1293,6 +1293,7 @@ def generate_modern_dashboard(
             "avg_aov",
             "roas",
             "decision_eligible",
+            "sample_filter_passed",
         ],
         limit=20,
     )
@@ -1304,7 +1305,7 @@ def generate_modern_dashboard(
         )
     )
     incrementality_payload = (ads_effectiveness or {}).get("incrementality") or {}
-    incrementality_primary = incrementality_payload.get("primary") or {}
+    incrementality_primary = dict(incrementality_payload.get("primary") or {})
     incrementality_rows = _frame_rows(
         _to_frame(incrementality_payload.get("comparisons")),
         [
@@ -1335,6 +1336,19 @@ def generate_modern_dashboard(
         ],
         limit=12,
     )
+
+    for row in ([incrementality_primary] if incrementality_primary else []) + incrementality_rows:
+        row.update(
+            decision_ready=False,
+            budget_recommendation_available=False,
+            evidence_basis="observational_not_causal",
+            verdict="Observation only",
+            verdict_tone="neutral",
+            verdict_reason_en="Observed differences do not establish ad lift or justify a budget change.",
+            verdict_reason_sk="Pozorovane rozdiely nedokazuju vplyv reklamy ani neodovodnuju zmenu rozpoctu.",
+            confidence_note_en="Descriptive sample quality, not causal confidence.",
+            confidence_note_sk="Kvalita opisnej vzorky, nie kauzalna istota.",
+        )
 
     advanced_summary = (advanced_dtc_metrics or {}).get("summary", {}) if advanced_dtc_metrics else {}
     bundle_accessory_model = (advanced_dtc_metrics or {}).get("bundle_accessory_model", {}) if advanced_dtc_metrics else {}
@@ -2132,7 +2146,7 @@ def generate_modern_dashboard(
         limit=None,
     )
     meta_profit_scaling = (advanced_dtc_metrics or {}).get("meta_profit_scaling", {}) if advanced_dtc_metrics else {}
-    meta_profit_scaling_summary = (meta_profit_scaling or {}).get("summary") or {}
+    meta_profit_scaling_summary = dict((meta_profit_scaling or {}).get("summary") or {})
     meta_profit_ltv_rows = _frame_rows(
         (meta_profit_scaling or {}).get("ltv_rows"),
         [
@@ -2199,6 +2213,7 @@ def generate_modern_dashboard(
             "smoothed_avg_company_profit",
             "smoothed_company_profit_lcb80",
             "decision_eligible",
+            "sample_filter_passed",
         ],
         limit=None,
     )
@@ -2258,7 +2273,23 @@ def generate_modern_dashboard(
         ["band", "marginal_cac_from", "marginal_cac_to", "action"],
         limit=None,
     )
-    meta_profit_methodology = (meta_profit_scaling or {}).get("methodology") or {}
+    meta_profit_methodology = dict((meta_profit_scaling or {}).get("methodology") or {})
+    # Old payloads can contain prescriptive verdicts from observational data.
+    # Keep their measured/modelled amounts, but never render them as budget advice.
+    if meta_profit_scaling_summary:
+        meta_profit_scaling_summary.update({
+            "account_action": "OBSERVATIONAL_ONLY",
+            "account_action_tone": "neutral",
+            "account_action_reason_sk": "Pozorovane suvislosti neurcuju kauzalny efekt ani odporucany rozpocet.",
+            "budget_recommendation_available": False,
+        })
+        meta_profit_methodology["causal_budget_evidence"] = False
+        for row in meta_profit_recent_rows:
+            row.update(verdict="OBSERVATION", verdict_tone="neutral", verdict_reason_sk="Pozorovany rozdiel, nie kauzalny scale test.")
+        for row in meta_profit_sample_rows:
+            row.update(paid_action="REVIEW_EVIDENCE", paid_tone="neutral", paid_reason_sk="Model nepozna produktovu paid atribuciu.")
+        for row in meta_profit_guardrail_rows:
+            row["action"] = "Illustrative contribution threshold"
     crm_funnel = (advanced_dtc_metrics or {}).get("vevo_crm_funnel_kpis", {}) if advanced_dtc_metrics else {}
     crm_funnel_rows = _frame_rows(
         (crm_funnel or {}).get("segment_rows"),
@@ -2428,8 +2459,8 @@ def generate_modern_dashboard(
         + '</span></p>'
         if not creditnote_available and creditnote_error
         else (
-            '<p class="muted-note"><span class="lang-en">Carrier rate is creditnoted orders divided by realized orders shipped by the same carrier in the reporting window.</span>'
-            '<span class="lang-sk hidden">Miera prepravcu je pocet dobropisovanych objednavok deleny realizovanymi objednavkami odoslanymi rovnakym prepravcom v reportovanom okne.</span></p>'
+            '<p class="muted-note"><span class="lang-en">Carrier rate is unique issued-credit orders / all orders in the same purchase-date cohort and carrier. Document-date creditnote counts are separate.</span>'
+            '<span class="lang-sk hidden">Miera prepravcu je pocet unikatnych objednavok s vystavenym dobropisom / vsetky objednavky rovnakej kohorty podla datumu nakupu a prepravcu. Pocty dokladov podla datumu vystavenia su samostatne.</span></p>'
         )
     )
     google_source_available = _source_has_metric_coverage(source_health, "google_ads")
@@ -2501,6 +2532,7 @@ def generate_modern_dashboard(
 
     library_tiles = [
         {"en": "Total revenue (net)", "sk": "Celkove trzby (net)", "value": total_revenue, "kind": "currency", "tone": "neutral"},
+        {"en": "Order credit adjustment (included)", "sk": "Uprava trzieb o dobropisy (zahrnuta)", "value": _maybe_num((financial_metrics or {}).get("revenue_credit_adjustment")), "kind": "currency", "tone": "neutral", "note_en": "Already included in net sales and profit; not allocated to products, no COGS reversal.", "note_sk": "Uz zahrnute v cistych trzbách a zisku; bez alokacie na produkty a bez vratenia nakladov tovaru."},
         {"en": "Product costs", "sk": "Naklady na produkty", "value": total_product_cost, "kind": "currency", "tone": "negative"},
         {"en": "Packaging costs", "sk": "Naklady na balenie", "value": total_packaging_cost, "kind": "currency", "tone": "negative"},
         {"en": "Net shipping", "sk": "Ciste shipping", "value": total_shipping_subsidy, "kind": "currency", "tone": shipping_tone, "note_en": "positive = cost, negative = shipping profit", "note_sk": "kladne = naklad, zaporne = shipping zisk"},
@@ -2528,7 +2560,7 @@ def generate_modern_dashboard(
         {"en": "Avg customer LTV (revenue)", "sk": "Priemerne customer LTV (trzby)", "value": avg_customer_ltv, "kind": "currency", "tone": "neutral"},
         {"en": "Customer acq. cost", "sk": "Naklad na akviziciu zakaznika", "value": current_fb_cac, "kind": "currency", "tone": "negative"},
         {"en": "Revenue LTV/CAC", "sk": "Revenue LTV/CAC", "value": revenue_ltv_cac, "kind": "multiple", "tone": "positive"},
-        {"en": "ROAS (all ads)", "sk": "ROAS (vsetky reklamy)", "value": _maybe_num((financial_metrics or {}).get("roas")) if _maybe_num((financial_metrics or {}).get("roas")) is not None else blended_roas, "kind": "multiple", "tone": "positive"},
+        {"en": "Net MER (all ads)", "sk": "Ciste MER (vsetky reklamy)", "value": _maybe_num((financial_metrics or {}).get("mer")) if _maybe_num((financial_metrics or {}).get("mer")) is not None else blended_roas, "kind": "multiple", "tone": "neutral", "note_en": "All shop net sales / (Meta + Google spend), including organic and repeat sales; not attributed ROAS.", "note_sk": "Vsetky ciste trzby / (Meta + Google naklady), vratane organickych a opakovanych predajov; nejde o atribucne ROAS."},
         {"en": "MER", "sk": "MER", "value": _maybe_num((financial_metrics or {}).get("mer")), "kind": "multiple", "tone": "positive"},
         {"en": "Revenue/customer (net)", "sk": "Trzby/zakaznik (net)", "value": _maybe_num((financial_metrics or {}).get("revenue_per_customer")), "kind": "currency", "tone": "neutral"},
         {"en": "Orders/customer", "sk": "Objednavky/zakaznik", "value": _maybe_num((financial_metrics or {}).get("orders_per_customer")), "kind": "number", "decimals": 2, "tone": "neutral"},
@@ -2564,14 +2596,14 @@ def generate_modern_dashboard(
         {"en": "Payback period (days est.)", "sk": "Payback period (odhad dni)", "value": _maybe_num((financial_metrics or {}).get("payback_days_estimated")), "kind": "number", "decimals": 0, "tone": "positive", "note_en": "days", "note_sk": "dni"},
         {"en": "Post-ad payback orders est.", "sk": "Post-ad payback objednavky", "value": _maybe_num((financial_metrics or {}).get("post_ad_payback_orders")), "kind": "number", "decimals": 2, "tone": "positive", "note_en": "orders", "note_sk": "objednavky"},
         {"en": "Post-ad payback (days est.)", "sk": "Post-ad payback (odhad dni)", "value": _maybe_num((financial_metrics or {}).get("post_ad_payback_days_estimated")), "kind": "number", "decimals": 0, "tone": "positive", "note_en": "days", "note_sk": "dni"},
-        {"en": "ROAS check delta", "sk": "ROAS check delta", "value": consistency_payload.get("roas_delta"), "kind": "delta", "tone": "positive"},
+        {"en": "MER check delta", "sk": "MER check delta", "value": consistency_payload.get("roas_delta"), "kind": "delta", "tone": "positive"},
         {"en": "Margin check delta", "sk": "Margin check delta", "value": consistency_payload.get("margin_delta"), "kind": "delta", "tone": "positive"},
         {"en": "CAC check delta", "sk": "CAC check delta", "value": consistency_payload.get("cac_delta"), "kind": "delta", "tone": "negative"},
         {"en": "CAC (FB/new cust.)", "sk": "CAC (FB/novy zakaznik)", "value": current_fb_cac, "kind": "currency", "tone": "negative"},
         {"en": "FB spend / orders", "sk": "FB spend / objednavky", "value": avg_fb_cost_per_order, "kind": "currency", "tone": "negative"},
         {"en": "Order-status refund proxy orders", "sk": "Refund proxy podla stavu - objednavky", "value": _maybe_num(refund_summary.get("refund_orders")), "kind": "integer", "tone": "negative", "note_en": "Not the BizniWeb creditnote registry", "note_sk": "Nie je to BizniWeb register dobropisov"},
         {"en": "Order-status refund proxy rate", "sk": "Refund proxy podla stavu - miera", "value": _maybe_num(refund_summary.get("refund_rate_pct")), "kind": "percent", "tone": "negative"},
-        {"en": "Order-status refund proxy amount", "sk": "Refund proxy podla stavu - suma", "value": _maybe_num(refund_summary.get("refund_amount")), "kind": "currency", "tone": "negative"},
+        {"en": "Returned-status order net value", "sk": "Cista hodnota objednavok vo vratkovom stave", "value": _maybe_num(refund_summary.get("refund_amount")), "kind": "currency", "tone": "negative"},
         {"en": "Repeat purchase rate", "sk": "Repeat purchase rate", "value": repeat_purchase_rate, "kind": "percent", "tone": "positive"},
     ]
     full_library_tiles_html = "".join(
@@ -3704,7 +3736,7 @@ def generate_modern_dashboard(
                         <div class="panel table-card">
                             <div class="card-head"><div><h3><span class="lang-en">Forecast table</span><span class="lang-sk hidden">Tabulka forecastu</span></h3></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Recent 30d revenue</span><span class="lang-sk hidden">Trzby poslednych 30 dni</span></th><th><span class="lang-en">Forecast {roy_forecast_horizon_days}d</span><span class="lang-sk hidden">Forecast {roy_forecast_horizon_days}d</span></th><th><span class="lang-en">Forecast units</span><span class="lang-sk hidden">Forecast kusov</span></th><th><span class="lang-en">On hand</span><span class="lang-sk hidden">Na sklade</span></th><th><span class="lang-en">Days of cover</span><span class="lang-sk hidden">Dni pokrytia</span></th><th><span class="lang-en">Projected stockout</span><span class="lang-sk hidden">Odhad vypredania</span></th><th><span class="lang-en">Stock risk</span><span class="lang-sk hidden">Skladove riziko</span></th><th><span class="lang-en">Delta</span><span class="lang-sk hidden">Delta</span></th><th><span class="lang-en">Confidence</span><span class="lang-sk hidden">Istota</span></th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Product</span><span class="lang-sk hidden">Produkt</span></th><th><span class="lang-en">Recent 30d revenue</span><span class="lang-sk hidden">Trzby poslednych 30 dni</span></th><th><span class="lang-en">Forecast {roy_forecast_horizon_days}d</span><span class="lang-sk hidden">Forecast {roy_forecast_horizon_days}d</span></th><th><span class="lang-en">Forecast units</span><span class="lang-sk hidden">Forecast kusov</span></th><th><span class="lang-en">On hand</span><span class="lang-sk hidden">Na sklade</span></th><th><span class="lang-en">Days of cover</span><span class="lang-sk hidden">Dni pokrytia</span></th><th><span class="lang-en">Projected stockout</span><span class="lang-sk hidden">Odhad vypredania</span></th><th><span class="lang-en">Stock risk</span><span class="lang-sk hidden">Skladove riziko</span></th><th><span class="lang-en">Delta</span><span class="lang-sk hidden">Delta</span></th><th><span class="lang-en">Sample quality</span><span class="lang-sk hidden">Kvalita vzorky</span></th></tr></thead>
                                 <tbody>{roy_forecast_rows_html}</tbody>
                             </table>
                         </div>
@@ -3843,7 +3875,7 @@ def generate_modern_dashboard(
             "</tr>"
         )
         for row in geo_rows
-    ) or '<tr><td colspan="11"><span class="lang-en">No geo profitability data available.</span><span class="lang-sk hidden">Geo profitabilita nie je dostupna.</span></td></tr>'
+    ) or '<tr><td colspan="11"><span class="lang-en">No geo profitability data available.</span><span class="lang-sk hidden">Profitabilita dorucovacich trhov nie je dostupna.</span></td></tr>'
     geo_spend_note = (
         'Ads: Meta recipient country and Google physical user country. Orders: delivery/invoice country. Fixed overhead is allocated by daily order share.'
         if ((geo_profitability or {}).get('spend_attribution') or {}).get('mode') == 'measured'
@@ -3852,7 +3884,8 @@ def generate_modern_dashboard(
     geo_period = (geo_profitability or {}).get('spend_attribution') or {}
     if geo_period.get('date_from') and geo_period.get('date_to'):
         geo_spend_note = f"{geo_period['date_from']} - {geo_period['date_to']}. " + geo_spend_note
-    geo_spend_note += ' Net MER = all realized net merchandise sales / Meta + Google spend; it is not platform-attributed ROAS.'
+    geo_spend_note += ' Markets follow delivery country with invoice-country fallback, not storefront or language. Trhy su podla krajiny dorucenia, s nahradou fakturacnou krajinou; nejde o jazykovu verziu e-shopu.'
+    geo_spend_note += ' Net MER = all realized net sales / (Meta + Google spend); it is not platform-attributed ROAS. Ciste MER = vsetky realizovane ciste trzby / (Meta + Google naklady).'
     geo_spend_note += ' Country contribution excludes separate creditnote fulfillment adjustments and fixed overhead on days without orders; it does not reconcile to company net profit.'
     geo_spend_note_sk = geo_spend_note
     google_geo = geo_period.get('google_ads') or {}
@@ -4109,7 +4142,7 @@ def generate_modern_dashboard(
     campaign_cpo_rows_html = "".join(
         f"<tr><td>{escape(str(row.get('campaign_name') or '-'))}</td><td>€{_num(row.get('spend')):,.2f}</td><td>{_format_attributed_order_estimate(row.get('attributed_orders_est', row.get('estimated_orders')), row.get('attribution_sample_status'))}</td><td>{_format_attributed_cpa(row.get('cost_per_attributed_order', row.get('estimated_cpo')), row.get('attribution_sample_status'))}</td><td>€{_num(row.get('estimated_revenue')):,.2f}</td><td>{_num(row.get('estimated_roas')):.2f}x</td></tr>"
         for row in campaign_cpo
-    ) or '<tr><td colspan="6"><span class="lang-en">No campaign attribution data available.</span><span class="lang-sk hidden">Atribucne data kampani nie su dostupne.</span></td></tr>'
+    ) or '<tr><td colspan="6"><span class="lang-en">No campaign allocation estimates available.</span><span class="lang-sk hidden">Odhady alokacie kampani nie su dostupne.</span></td></tr>'
 
     spend_effectiveness_rows_html = "".join(
         (
@@ -4127,7 +4160,7 @@ def generate_modern_dashboard(
             f"<td>{_num(row.get('avg_returning_revenue_share_pct')):.1f}%</td>"
             f"<td>&euro;{_num(row.get('avg_aov')):,.2f}</td>"
             f"<td>{_num(row.get('roas')):.2f}x</td>"
-            f"<td>{'YES' if row.get('decision_eligible') else 'NO'}</td>"
+            f"<td>{'YES' if row.get('sample_filter_passed', row.get('decision_eligible')) else 'NO'}</td>"
             "</tr>"
         )
         for row in spend_effectiveness_rows
@@ -4190,7 +4223,7 @@ def generate_modern_dashboard(
             "</tr>"
         )
         for row in meta_profit_recent_rows
-    ) or '<tr><td colspan="11"><span class="lang-en">No recent scale windows available.</span><span class="lang-sk hidden">Nie su dostupne posledne scale okna.</span></td></tr>'
+    ) or '<tr><td colspan="11"><span class="lang-en">No recent comparison windows available.</span><span class="lang-sk hidden">Nie su dostupne posledne porovnavacie okna.</span></td></tr>'
 
     meta_profit_ltv_rows_html = "".join(
         (
@@ -4236,7 +4269,7 @@ def generate_modern_dashboard(
             f"<td>{_format_mini_value_html(row.get('cm3_win_rate_pct'), kind='percent', decimals=1)}</td>"
             f"<td>{_format_mini_value_html(row.get('new_customer_cac_proxy'), kind='currency')}</td>"
             f"<td>{_format_mini_value_html(row.get('sample_entry_share_pct'), kind='percent', decimals=1)}</td>"
-            f"<td>{_decision_eligible_badge(row.get('decision_eligible'))}</td>"
+            f"<td>{_decision_eligible_badge(row.get('sample_filter_passed', row.get('decision_eligible')))}</td>"
             "</tr>"
         )
         for row in meta_profit_spend_tier_rows
@@ -4302,46 +4335,46 @@ def generate_modern_dashboard(
                     <div class="panel" id="meta-profit-scaling" style="margin-bottom:18px;">
                         <div class="card-head">
                             <div>
-                                <h3><span class="lang-en">Meta profit scaling system</span><span class="lang-sk hidden">System profitoveho skalovania Meta</span></h3>
-                                <p><span class="lang-en">Optimizes nominal euro profit, not maximum ROAS. Mature contribution LTV, recent marginal CAC and observed company profit are kept separate.</span><span class="lang-sk hidden">Optimalizuje nominalny zisk v eurach, nie maximalne ROAS. Oddeluje zrele contribution LTV, posledny marginalny CAC a pozorovany firemny zisk.</span></p>
+                                <h3><span class="lang-en">Meta spend and profit observations</span><span class="lang-sk hidden">Pozorovania Meta spendu a zisku</span></h3>
+                                <p><span class="lang-en">Historical associations, not a causal budget test. Other channels, seasonality and customer mix can explain the differences. No budget recommendation is established.</span><span class="lang-sk hidden">Historicke suvislosti, nie kauzalny test rozpoctu. Rozdiely mozu vysvetlit ine kanaly, sezonnost a mix zakaznikov. Odporucany rozpocet nie je preukazany.</span></p>
                             </div>
                         </div>
                         <div class="library-tile-grid">
-                            <div class="library-tile tone-{meta_action_tone}"><small><span class="lang-en">Account action</span><span class="lang-sk hidden">Akcia pre ucet</span></small><div class="library-tile-value">{meta_action}</div><div class="library-note"><span class="lang-en">Automated profit-first verdict from the latest scale step.</span><span class="lang-sk hidden">{meta_action_reason_sk}</span></div></div>
+                            <div class="library-tile tone-{meta_action_tone}"><small><span class="lang-en">Evidence status</span><span class="lang-sk hidden">Stav dokazov</span></small><div class="library-tile-value">{meta_action}</div><div class="library-note"><span class="lang-en">Observational data cannot prescribe a budget change.</span><span class="lang-sk hidden">{meta_action_reason_sk}</span></div></div>
                             <div class="library-tile tone-neutral"><small><span class="lang-en">Current Meta / day (7d)</span><span class="lang-sk hidden">Aktualna Meta / den (7d)</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('current_meta_spend_per_day_7d'), kind='currency')}</div></div>
-                            <div class="library-tile tone-positive"><small><span class="lang-en">Robust core corridor</span><span class="lang-sk hidden">Robustny core koridor</span></small><div class="library-tile-value">{meta_core_range}</div><div class="library-note"><span class="lang-en">Tested ceiling {_format_library_tile_value(meta_profit_scaling_summary.get('tested_scale_ceiling'), 'currency')}/day</span><span class="lang-sk hidden">Testovany strop {_format_library_tile_value(meta_profit_scaling_summary.get('tested_scale_ceiling'), 'currency')}/den</span></div></div>
-                            <div class="library-tile tone-neutral"><small><span class="lang-en">Latest marginal CAC</span><span class="lang-sk hidden">Posledny marginalny CAC</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('latest_7d_marginal_cac'), kind='currency')}</div></div>
-                            <div class="library-tile tone-positive"><small><span class="lang-en">Safe CAC 90d</span><span class="lang-sk hidden">Bezpecny CAC 90d</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('safe_cac_90d'), kind='currency')}</div><div class="library-note">{_num(meta_profit_scaling_summary.get('safety_buffer_pct')):.0f}% safety buffer</div></div>
-                            <div class="library-tile tone-neutral"><small><span class="lang-en">Absolute CAC ceiling 180d</span><span class="lang-sk hidden">Absolutny CAC strop 180d</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('hard_cac_180d'), kind='currency')}</div></div>
+                            <div class="library-tile tone-positive"><small><span class="lang-en">Historical spend band</span><span class="lang-sk hidden">Historicke pasmo spendu</span></small><div class="library-tile-value">{meta_core_range}</div><div class="library-note"><span class="lang-en">Historical band upper bound {_format_library_tile_value(meta_profit_scaling_summary.get('tested_scale_ceiling'), 'currency')}/day</span><span class="lang-sk hidden">Horna hranica historickeho pasma {_format_library_tile_value(meta_profit_scaling_summary.get('tested_scale_ceiling'), 'currency')}/den</span></div></div>
+                            <div class="library-tile tone-neutral"><small><span class="lang-en">Observed spend / new-customer delta</span><span class="lang-sk hidden">Pomer zmien spendu a novych zakaznikov</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('latest_7d_marginal_cac'), kind='currency')}</div></div>
+                            <div class="library-tile tone-positive"><small><span class="lang-en">90d contribution threshold</span><span class="lang-sk hidden">90d kontribucny prah</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('safe_cac_90d'), kind='currency')}</div><div class="library-note">{_num(meta_profit_scaling_summary.get('safety_buffer_pct')):.0f}% safety buffer</div></div>
+                            <div class="library-tile tone-neutral"><small><span class="lang-en">180d contribution / customer</span><span class="lang-sk hidden">180d kontribucia / zakaznik</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('hard_cac_180d'), kind='currency')}</div></div>
                             <div class="library-tile tone-{_profit_status_class(meta_profit_scaling_summary.get('latest_7d_immediate_profit_delta_per_day'))}"><small><span class="lang-en">Latest immediate profit delta / day</span><span class="lang-sk hidden">Posledna okamzita zmena zisku / den</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('latest_7d_immediate_profit_delta_per_day'), kind='currency')}</div></div>
                             <div class="library-tile tone-{_profit_status_class(meta_profit_scaling_summary.get('latest_7d_ltv90_profit_delta_per_day'))}"><small><span class="lang-en">Latest 90d LTV profit delta / day</span><span class="lang-sk hidden">Posledna 90d LTV zmena zisku / den</span></small><div class="library-tile-value">{_format_mini_value_html(meta_profit_scaling_summary.get('latest_7d_ltv90_profit_delta_per_day'), kind='currency')}</div></div>
                         </div>
                     </div>
                     <div class="panel table-card" style="margin-bottom:18px;">
-                        <div class="card-head"><div><h3><span class="lang-en">Recent scale-step audit</span><span class="lang-sk hidden">Audit poslednych scale krokov</span></h3><p><span class="lang-en">Current 7/14/28 days against the immediately preceding equal weekday mix. The LTV columns add only downstream contribution, avoiding first-order double counting.</span><span class="lang-sk hidden">Aktualnych 7/14/28 dni proti bezprostredne predchadzajucemu rovnakemu mixu dni. LTV pridava iba downstream contribution bez dvojiteho zapocitania prvej objednavky.</span></p></div></div>
-                        <table><thead><tr><th>Window</th><th>Prev Meta/day</th><th>Now Meta/day</th><th>Delta Meta/day</th><th>Delta new/day</th><th>mCAC</th><th>Immediate profit delta/day</th><th>90d LTV profit delta/day</th><th>180d LTV profit delta/day</th><th>Sample share</th><th>Verdict</th></tr></thead><tbody>{meta_profit_recent_rows_html}</tbody></table>
+                        <div class="card-head"><div><h3><span class="lang-en">Recent period comparison</span><span class="lang-sk hidden">Porovnanie poslednych obdobi</span></h3><p><span class="lang-en">Current 7/14/28 days against the immediately preceding equal weekday mix. The LTV columns add only downstream contribution, avoiding first-order double counting.</span><span class="lang-sk hidden">Aktualnych 7/14/28 dni proti bezprostredne predchadzajucemu rovnakemu mixu dni. LTV pridava iba downstream contribution bez dvojiteho zapocitania prvej objednavky.</span></p></div></div>
+                        <table><thead><tr><th>Window</th><th>Prev Meta/day</th><th>Now Meta/day</th><th>Delta Meta/day</th><th>Delta new/day</th><th>Observed spend / new-customer delta</th><th>Immediate profit delta/day</th><th>90d LTV profit delta/day</th><th>180d LTV profit delta/day</th><th>Sample share</th><th>Verdict</th></tr></thead><tbody>{meta_profit_recent_rows_html}</tbody></table>
                     </div>
                     <div class="grid-2" style="margin-bottom:18px;">
                         <div class="panel table-card">
                             <div class="card-head"><div><h3><span class="lang-en">Mature contribution LTV curve</span><span class="lang-sk hidden">Zrela contribution LTV krivka</span></h3><p><span class="lang-en">Only customers fully observed through the horizon are included.</span><span class="lang-sk hidden">Zahrnuti su iba zakaznici plne odsledovani cez cele okno.</span></p></div></div>
-                            <table><thead><tr><th>Window</th><th>Mature</th><th>First contribution</th><th>Downstream</th><th>Total contribution LTV</th><th>Safe CAC</th><th>Repeat</th></tr></thead><tbody>{meta_profit_ltv_rows_html}</tbody></table>
+                            <table><thead><tr><th>Window</th><th>Mature</th><th>First contribution</th><th>Downstream</th><th>Total contribution LTV</th><th>Contribution threshold</th><th>Repeat</th></tr></thead><tbody>{meta_profit_ltv_rows_html}</tbody></table>
                         </div>
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Marginal CAC guardrails</span><span class="lang-sk hidden">Guardrails marginalneho CAC</span></h3><p><span class="lang-en">ROAS may fall while euro profit rises; these bands decide from contribution and payback instead.</span><span class="lang-sk hidden">ROAS moze klesat, kym eurovy zisk rastie; pasma preto rozhoduju z contribution a paybacku.</span></p></div></div>
-                            <table><thead><tr><th>Band</th><th>mCAC from</th><th>mCAC to</th><th>Action</th></tr></thead><tbody>{meta_profit_guardrail_rows_html}</tbody></table>
+                            <div class="card-head"><div><h3><span class="lang-en">Illustrative contribution thresholds</span><span class="lang-sk hidden">Ilustracne kontribucne prahy</span></h3><p><span class="lang-en">Contribution thresholds are model assumptions, not evidence of incremental customer acquisition or safe scaling.</span><span class="lang-sk hidden">Kontribucne prahy su modelove predpoklady, nie dokaz prirastkovej akvizicie alebo bezpecneho skalovania.</span></p></div></div>
+                            <table><thead><tr><th>Band</th><th>mCAC from</th><th>mCAC to</th><th>Interpretation</th></tr></thead><tbody>{meta_profit_guardrail_rows_html}</tbody></table>
                         </div>
                     </div>
                     <div class="panel table-card" style="margin-bottom:18px;">
-                        <div class="card-head"><div><h3><span class="lang-en">Robust Meta spend tiers</span><span class="lang-sk hidden">Robustne pasma Meta spendu</span></h3><p><span class="lang-en">A tier is decision-eligible only with enough days, weekday coverage and a positive smoothed lower profit bound. This blocks one-day outliers from becoming the recommendation.</span><span class="lang-sk hidden">Pasmo je pouzitelne iba s dostatkom dni, pokrytim dni v tyzdni a kladnou vyhladenou spodnou hranicou zisku. Jednodnove outliery tak nemozu vyhrat.</span></p></div></div>
-                        <table><thead><tr><th>Meta range</th><th>Days</th><th>Avg Meta</th><th>Avg CM3</th><th>Median CM3</th><th>Smoothed LCB80</th><th>CM3 win rate</th><th>New-customer CAC proxy</th><th>Sample share</th><th>Eligible</th></tr></thead><tbody>{meta_profit_spend_tier_rows_html}</tbody></table>
+                        <div class="card-head"><div><h3><span class="lang-en">Observed Meta spend tiers</span><span class="lang-sk hidden">Pozorovane pasma Meta spendu</span></h3><p><span class="lang-en">Sample filters require enough days, weekday coverage and a positive smoothed lower profit bound. They do not control confounding or establish an optimal budget.</span><span class="lang-sk hidden">Filter vzorky vyzaduje dostatok dni, pokrytie dni v tyzdni a kladnu vyhladenu spodnu hranicu zisku. Neoddeluje ine vplyvy ani neurcuje optimalny rozpocet.</span></p></div></div>
+                        <table><thead><tr><th>Meta range</th><th>Days</th><th>Avg Meta</th><th>Avg CM3</th><th>Median CM3</th><th>Smoothed LCB80</th><th>CM3 win rate</th><th>New-customer CAC proxy</th><th>Sample share</th><th>Sample filter passed</th></tr></thead><tbody>{meta_profit_spend_tier_rows_html}</tbody></table>
                     </div>
                     <div class="panel table-card" style="margin-bottom:18px;">
-                        <div class="card-head"><div><h3><span class="lang-en">Did high-spend days acquire better future customers?</span><span class="lang-sk hidden">Priniesli high-spend dni kvalitnejsich zakaznikov do buducna?</span></h3><p><span class="lang-en">Maturity-censored customer contribution by first-order-day Meta spend. This is a quality proxy, not click-level attribution.</span><span class="lang-sk hidden">Contribution zakaznika s kontrolou zrelosti podla Meta spendu v den prvej objednavky. Je to quality proxy, nie click-level atribucia.</span></p></div></div>
+                        <div class="card-head"><div><h3><span class="lang-en">Customer cohorts by first-order-day spend</span><span class="lang-sk hidden">Kohorty zakaznikov podla spendu v den prvej objednavky</span></h3><p><span class="lang-en">Maturity-censored customer contribution by first-order-day Meta spend. This is a quality proxy, not click-level attribution.</span><span class="lang-sk hidden">Contribution zakaznika s kontrolou zrelosti podla Meta spendu v den prvej objednavky. Je to quality proxy, nie click-level atribucia.</span></p></div></div>
                         <table><thead><tr><th>Acquisition-day tier</th><th>Days</th><th>New</th><th>Avg Meta</th><th>Sample share</th><th>6x share</th><th>3x share</th><th>Mature 90d</th><th>Contribution LTV 90d</th><th>Repeat 90d</th><th>Contribution LTV 180d</th><th>Confidence</th></tr></thead><tbody>{meta_profit_quality_rows_html}</tbody></table>
                     </div>
                     <div class="panel table-card" style="margin-bottom:18px;">
-                        <div class="card-head"><div><h3><span class="lang-en">Sample-product paid eligibility</span><span class="lang-sk hidden">Paid eligibility vzorkovych produktov</span></h3><p><span class="lang-en">Paid acquisition and shop availability are separate decisions. Safe CAC uses 90d contribution LTV after the configured safety buffer.</span><span class="lang-sk hidden">Paid akvizicia a dostupnost na e-shope su dve rozne rozhodnutia. Safe CAC pouziva 90d contribution LTV po bezpecnostnej rezerve.</span></p></div></div>
-                        <table><thead><tr><th>Sample product</th><th>Customers</th><th>Direct contribution</th><th>Full-size 60d</th><th>Mature 90d</th><th>Contribution LTV 90d</th><th>Downstream 90d</th><th>Safe CAC 90d</th><th>Current mCAC</th><th>LTV 180d</th><th>Paid action</th><th>Shop action</th></tr></thead><tbody>{meta_profit_sample_rows_html}</tbody></table>
+                        <div class="card-head"><div><h3><span class="lang-en">Sample-product contribution observations</span><span class="lang-sk hidden">Pozorovania kontribucie vzorkovych produktov</span></h3><p><span class="lang-en">The contribution threshold uses 90d LTV and a configured buffer. Account-level spend changes do not measure acquisition cost for this product.</span><span class="lang-sk hidden">Kontribucny prah vychadza z 90d LTV a nastavenej rezervy. Zmeny spendu celeho uctu nemeraju akvizicny naklad tohto produktu.</span></p></div></div>
+                        <table><thead><tr><th>Sample product</th><th>Customers</th><th>Direct contribution</th><th>Full-size 60d</th><th>Mature 90d</th><th>Contribution LTV 90d</th><th>Downstream 90d</th><th>90d contribution threshold</th><th>Account spend / new-customer delta</th><th>LTV 180d</th><th>Evidence status</th><th>Shop action</th></tr></thead><tbody>{meta_profit_sample_rows_html}</tbody></table>
                     </div>
                     <div class="panel" style="margin-bottom:18px;padding:18px 20px;">
                         <strong><span class="lang-en">Decision limitations</span><span class="lang-sk hidden">Obmedzenia rozhodnutia</span></strong>
@@ -4543,10 +4576,10 @@ def generate_modern_dashboard(
             attribution_banner_title_en = "Attribution warning"
             attribution_banner_title_sk = "Varovanie atribucie"
             attribution_banner_summary_en = (
-                "Campaign attribution is not fully trustworthy for this period. Treat ROAS, campaign CPO and campaign output as directional until coverage is fixed."
+                "Campaign source coverage is incomplete. Modeled campaign revenue and CPO are allocations, not measured sales attribution."
             )
             attribution_banner_summary_sk = (
-                "Atribucia kampani nie je pre toto obdobie plne doveryhodna. ROAS, kampanove CPO a vykon kampani ber ako orientacne, kym sa coverage neopraví."
+                "Pokrytie zdrojov kampani je neuplne. Modelovane trzby a CPO su alokacie, nie merana atribucia predaja."
             )
         else:
             attribution_banner_title_en = "Attribution needs review"
@@ -4843,7 +4876,7 @@ def generate_modern_dashboard(
                             <div class="hero-kpi"><small><span class="lang-en">Revenue</span><span class="lang-sk hidden">Tržby</span></small><strong>€{total_revenue:,.0f}</strong></div>
                             <div class="hero-kpi"><small><span class="lang-en">Profit</span><span class="lang-sk hidden">Zisk</span></small><strong>€{total_profit:,.0f}</strong></div>
                             <div class="hero-kpi"><small><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednávky</span></small><strong>{total_orders:,}</strong></div>
-                            <div class="hero-kpi"><small><span class="lang-en">Blended ROAS</span><span class="lang-sk hidden">Blended ROAS</span></small><strong>{blended_roas:.2f}x</strong></div>
+                            <div class="hero-kpi"><small><span class="lang-en">Net MER (all ads)</span><span class="lang-sk hidden">Net MER (all ads)</span></small><strong>{blended_roas:.2f}x</strong></div>
                         </div>
                     </div>
                 </section>
@@ -4975,7 +5008,7 @@ def generate_modern_dashboard(
                         <div class="mini-grid">
                             <div class="mini-card"><small><span class="lang-en">Credited gross</span><span class="lang-sk hidden">Dobropisovane brutto</span></small><strong>{_format_mini_value_html(creditnote_summary.get("credited_gross_eur"), kind="currency")}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Creditnotes</span><span class="lang-sk hidden">Pocet dobropisov</span></small><strong>{int(round(_num(creditnote_summary.get("creditnotes"))))}</strong><span class="delta neutral">{int(round(_num(creditnote_summary.get("creditnoted_orders"))))} sent / {int(round(_num(creditnote_summary.get("all_creditnoted_orders") or creditnote_summary.get("creditnoted_orders"))))} all</span></div>
-                            <div class="mini-card"><small><span class="lang-en">Creditnote rate</span><span class="lang-sk hidden">Dobropis rate</span></small><strong>{_format_mini_value_html(creditnote_summary.get("creditnote_rate_pct"), kind="percent", decimals=2)}</strong><span class="delta neutral">{int(round(_num(creditnote_summary.get("realized_orders"))))} sent</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Cohort creditnote rate</span><span class="lang-sk hidden">Miera dobropisov kohorty</span></small><strong>{_format_mini_value_html(creditnote_summary.get("creditnote_rate_pct"), kind="percent", decimals=2)}</strong><span class="delta neutral">{int(round(_num(creditnote_summary.get("cohort_orders", creditnote_summary.get("realized_orders")))))} cohort orders</span></div>
                             <div class="mini-card"><small><span class="lang-en">Revenue audit</span><span class="lang-sk hidden">Kontrola revenue</span></small><strong>{int(round(_num(creditnote_summary.get("revenue_excluded_orders"))))} / {int(round(_num(creditnote_summary.get("revenue_included_orders"))))}</strong><span class="delta neutral">excluded / included</span></div>
                             <div class="mini-card"><small><span class="lang-en">Retained fulfillment cost</span><span class="lang-sk hidden">Ponechany fulfillment naklad</span></small><strong>{_format_mini_value_html(creditnote_summary.get("fulfillment_cost_eur"), kind="currency")}</strong><span class="delta neutral">{int(round(_num(creditnote_summary.get("fulfillment_orders"))))} orders</span></div>
                             <div class="mini-card"><small><span class="lang-en">Carrier outliers</span><span class="lang-sk hidden">Odchylky prepravcov</span></small><strong>{int(round(_num(creditnote_summary.get("outlier_carrier_count"))))}</strong><span class="delta neutral">{_format_mini_value_html(creditnote_summary.get("credited_net_eur"), kind="currency")} net</span></div>
@@ -4984,7 +5017,7 @@ def generate_modern_dashboard(
                         <div class="grid-2" style="margin-top:14px;">
                             <div>
                                 <table>
-                                    <thead><tr><th><span class="lang-en">Carrier</span><span class="lang-sk hidden">Prepravca</span></th><th class="number"><span class="lang-en">Sent</span><span class="lang-sk hidden">Odoslane</span></th><th class="number"><span class="lang-en">Credited sent orders</span><span class="lang-sk hidden">Dobropis. odoslane</span></th><th class="number"><span class="lang-en">Creditnotes</span><span class="lang-sk hidden">Dobropisy</span></th><th class="number"><span class="lang-en">Rate</span><span class="lang-sk hidden">Miera</span></th><th class="number"><span class="lang-en">Index</span><span class="lang-sk hidden">Index</span></th><th class="number"><span class="lang-en">Gross EUR</span><span class="lang-sk hidden">Brutto EUR</span></th><th><span class="lang-en">Flag</span><span class="lang-sk hidden">Flag</span></th></tr></thead>
+                                    <thead><tr><th><span class="lang-en">Carrier</span><span class="lang-sk hidden">Prepravca</span></th><th class="number"><span class="lang-en">All cohort orders</span><span class="lang-sk hidden">Vsetky objednavky kohorty</span></th><th class="number"><span class="lang-en">Credited cohort orders</span><span class="lang-sk hidden">Dobropisovane z kohorty</span></th><th class="number"><span class="lang-en">Creditnotes</span><span class="lang-sk hidden">Dobropisy</span></th><th class="number"><span class="lang-en">Rate</span><span class="lang-sk hidden">Miera</span></th><th class="number"><span class="lang-en">Index</span><span class="lang-sk hidden">Index</span></th><th class="number"><span class="lang-en">Gross EUR</span><span class="lang-sk hidden">Brutto EUR</span></th><th><span class="lang-en">Flag</span><span class="lang-sk hidden">Flag</span></th></tr></thead>
                                     <tbody>{creditnote_carrier_rows_html}</tbody>
                                 </table>
                             </div>
@@ -5005,7 +5038,7 @@ def generate_modern_dashboard(
                             <div class="mini-card"><small><span class="lang-en">CM2 to CM3 drag</span><span class="lang-sk hidden">CM2 na CM3 drag</span></small><strong>{_format_mini_value_html(fixed_overhead_drag, kind="currency")}</strong><span class="delta neutral">{_format_mini_value_html(fixed_overhead_drag_pct, kind="percent")}</span></div>
                             <div class="mini-card"><small><span class="lang-en">Paid-day CM3 win rate</span><span class="lang-sk hidden">Uspesnost paid dni v CM3</span></small><strong>{_format_mini_value_html(paid_day_cm3_win_rate_pct, kind="percent")}</strong></div>
                             <div class="mini-card"><small><span class="lang-en">Returning rev. on paid days</span><span class="lang-sk hidden">Vracajuce trzby v paid dnoch</span></small><strong>{_format_mini_value_html(paid_day_returning_revenue_share_pct, kind="percent")}</strong></div>
-                            <div class="mini-card"><small><span class="lang-en">Best CM3 spend range</span><span class="lang-sk hidden">Najlepsi CM3 spend rozsah</span></small><strong>{escape(best_cm3_range)}</strong><span class="delta neutral">{escape(best_cm3_margin_range)}</span></div>
+                            <div class="mini-card"><small><span class="lang-en">Highest observed CM3 spend band</span><span class="lang-sk hidden">Pasmo s najvyssou pozorovanou CM3</span></small><strong>{escape(best_cm3_range)}</strong><span class="delta neutral">{escape(best_cm3_margin_range)}</span><span class="muted-note">Historical association; not a budget recommendation. Historicka suvislost, nie odporucany rozpocet.</span></div>
                         </div>
                     </div>
                     <div class="grid-2">
@@ -5073,7 +5106,7 @@ def generate_modern_dashboard(
                     </div>
                     <div class="grid-2" style="margin-top:18px;">
                         <div class="panel chart-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Weekly CPO and ROAS</span><span class="lang-sk hidden">Tyzdenne CPO a ROAS</span></h3><p><span class="lang-en">Weekly smoothing of cost per order and ROAS.</span><span class="lang-sk hidden">Tyzdenne vyhladenie ceny objednavky a ROAS.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Weekly CPO</span><span class="lang-sk hidden">Tyzdenne CPO</span></h3><p><span class="lang-en">Weekly smoothing of cost per order.</span><span class="lang-sk hidden">Tyzdenne vyhladenie ceny objednavky.</span></p></div></div>
                             <div class="chart-shell"><canvas id="weeklyCpoChart"></canvas></div>
                         </div>
                         <div class="panel chart-card">
@@ -5087,24 +5120,24 @@ def generate_modern_dashboard(
                             <div class="chart-shell"><canvas id="adsEffectivenessChart"></canvas></div>
                         </div>
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Spend bucket effectiveness</span><span class="lang-sk hidden">Efektivita spend bucketov</span></h3><p><span class="lang-en">Average output by spend range.</span><span class="lang-sk hidden">Priemerny vystup podla spend rozsahu.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Spend bucket effectiveness</span><span class="lang-sk hidden">Efektivita spend bucketov</span></h3><p><span class="lang-en">Observed averages by total paid-spend range. Passing the sample filter does not establish causal lift.</span><span class="lang-sk hidden">Pozorovane priemery podla celkovych reklamnych nakladov. Splneny filter vzorky nedokazuje kauzalny vplyv.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Range</span><span class="lang-sk hidden">Rozsah</span></th><th><span class="lang-en">Days</span><span class="lang-sk hidden">Dni</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk bez fixov</span></th><th><span class="lang-en">Avg profit incl. fixed</span><span class="lang-sk hidden">Priem. zisk s fixami</span></th><th><span class="lang-en">Median profit</span><span class="lang-sk hidden">Median zisku</span></th><th><span class="lang-en">CM3 win rate</span><span class="lang-sk hidden">CM3 uspesnost</span></th><th><span class="lang-en">CM3 margin</span><span class="lang-sk hidden">CM3 marza</span></th><th><span class="lang-en">Returning rev. share</span><span class="lang-sk hidden">Podiel vracajucich sa trz.</span></th><th><span class="lang-en">AOV</span><span class="lang-sk hidden">AOV</span></th><th>ROAS</th><th><span class="lang-en">Eligible</span><span class="lang-sk hidden">Pouzitelne</span></th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Range</span><span class="lang-sk hidden">Rozsah</span></th><th><span class="lang-en">Days</span><span class="lang-sk hidden">Dni</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th><span class="lang-en">Profit ex fixed</span><span class="lang-sk hidden">Zisk bez fixov</span></th><th><span class="lang-en">Avg profit incl. fixed</span><span class="lang-sk hidden">Priem. zisk s fixami</span></th><th><span class="lang-en">Median profit</span><span class="lang-sk hidden">Median zisku</span></th><th><span class="lang-en">CM3 win rate</span><span class="lang-sk hidden">CM3 uspesnost</span></th><th><span class="lang-en">CM3 margin</span><span class="lang-sk hidden">CM3 marza</span></th><th><span class="lang-en">Returning rev. share</span><span class="lang-sk hidden">Podiel vracajucich sa trz.</span></th><th><span class="lang-en">AOV</span><span class="lang-sk hidden">AOV</span></th><th>Net MER</th><th><span class="lang-en">Sample filter passed</span><span class="lang-sk hidden">Filter vzorky splneny</span></th></tr></thead>
                                 <tbody>{spend_effectiveness_rows_html}</tbody>
                             </table>
                         </div>
                     </div>
                     <div class="grid-2" style="margin-top:18px;">
                         <div class="panel">
-                            <div class="card-head"><div><h3><span class="lang-en">Ad impact verdict</span><span class="lang-sk hidden">Verdikt dopadu reklam</span></h3><p><span class="lang-en">Uses ads on/off when available, otherwise falls back to higher-spend vs lower-spend days.</span><span class="lang-sk hidden">Pouziva ads on/off porovnanie ked existuje, inak fallback na vyssi spend vs nizsi spend dni.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Observed advertising comparison</span><span class="lang-sk hidden">Pozorovane porovnanie reklamy</span></h3><p><span class="lang-en">Observational on/off or higher/lower-spend comparisons. These are not controlled experiments and do not establish advertising lift.</span><span class="lang-sk hidden">Pozorovane porovnania dni s reklamou/bez nej alebo s vyssim/nizsim spendom. Nejde o kontrolovany experiment ani dokaz vplyvu reklamy.</span></p></div></div>
                             <div class="library-tile-grid">
                                 <div class="library-tile tone-{incrementality_tone}">
-                                    <small><span class="lang-en">Verdict</span><span class="lang-sk hidden">Verdikt</span></small>
+                                    <small><span class="lang-en">Evidence status</span><span class="lang-sk hidden">Stav dokazov</span></small>
                                     <div class="library-tile-value">{incrementality_verdict}</div>
                                     <div class="library-note"><span class="lang-en">{incrementality_reason_en}</span><span class="lang-sk hidden">{incrementality_reason_sk}</span></div>
                                 </div>
                                 <div class="library-tile tone-neutral">
-                                    <small><span class="lang-en">Confidence</span><span class="lang-sk hidden">Istota</span></small>
+                                    <small><span class="lang-en">Sample quality</span><span class="lang-sk hidden">Kvalita vzorky</span></small>
                                     <div class="library-tile-value">{incrementality_confidence}</div>
                                     <div class="library-note"><span class="lang-en">{incrementality_confidence_note_en}</span><span class="lang-sk hidden">{incrementality_confidence_note_sk}</span></div>
                                 </div>
@@ -5113,36 +5146,36 @@ def generate_modern_dashboard(
                                     <div class="library-tile-value">{escape(str(incrementality_primary.get('label_en') or 'N/A'))}</div>
                                 </div>
                                 <div class="library-tile tone-neutral">
-                                    <small><span class="lang-en">Incremental spend / day</span><span class="lang-sk hidden">Prirastkovy spend / den</span></small>
+                                    <small><span class="lang-en">Observed spend difference / day</span><span class="lang-sk hidden">Pozorovany rozdiel spendu / den</span></small>
                                     <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_total_ad_spend_per_day'), kind="currency")}</div>
                                 </div>
                                 <div class="library-tile tone-positive">
-                                    <small><span class="lang-en">Incremental revenue / day</span><span class="lang-sk hidden">Prirastkova trzba / den</span></small>
+                                    <small><span class="lang-en">Observed revenue difference / day</span><span class="lang-sk hidden">Pozorovany rozdiel trzieb / den</span></small>
                                     <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_revenue_per_day'), kind="currency")}</div>
                                 </div>
                                 <div class="library-tile tone-positive">
-                                    <small><span class="lang-en">Incremental profit / day (pre-fixed)</span><span class="lang-sk hidden">Prirastkovy zisk / den (pred fixami)</span></small>
+                                    <small><span class="lang-en">Observed profit difference / day (pre-fixed)</span><span class="lang-sk hidden">Pozorovany rozdiel zisku / den (pred fixami)</span></small>
                                     <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_profit_without_fixed_per_day'), kind="currency")}</div>
                                 </div>
                                 <div class="library-tile tone-positive">
-                                    <small><span class="lang-en">Incremental company profit / day</span><span class="lang-sk hidden">Prirastkovy firemny zisk / den</span></small>
+                                    <small><span class="lang-en">Observed company profit difference / day</span><span class="lang-sk hidden">Pozorovany rozdiel firemneho zisku / den</span></small>
                                     <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_profit_with_fixed_per_day'), kind="currency")}</div>
                                 </div>
                                 <div class="library-tile tone-neutral">
-                                    <small><span class="lang-en">Incremental ROAS</span><span class="lang-sk hidden">Prirastkovy ROAS</span></small>
+                                    <small><span class="lang-en">Observed revenue delta / spend delta</span><span class="lang-sk hidden">Pomer pozorovanych zmien trzieb a spendu</span></small>
                                     <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_roas'), kind="multiple")}</div>
                                 </div>
                                 <div class="library-tile tone-neutral">
-                                    <small><span class="lang-en">Incremental CAC</span><span class="lang-sk hidden">Prirastkovy CAC</span></small>
+                                    <small><span class="lang-en">Observed spend delta / new-customer delta</span><span class="lang-sk hidden">Pomer zmien spendu a novych zakaznikov</span></small>
                                     <div class="library-tile-value">{_format_mini_value_html(incrementality_primary.get('incremental_cac'), kind="currency")}</div>
                                     <div class="library-note"><span class="lang-en">Break-even CAC {_format_library_tile_value(incrementality_primary.get('break_even_cac'), 'currency')}</span><span class="lang-sk hidden">Break-even CAC {_format_library_tile_value(incrementality_primary.get('break_even_cac'), 'currency')}</span></div>
                                 </div>
                             </div>
                         </div>
                         <div class="panel table-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Incrementality comparison table</span><span class="lang-sk hidden">Tabulka incrementality porovnania</span></h3><p><span class="lang-en">Shows on/off views when possible and higher-spend vs lower-spend fallback when the account is always on.</span><span class="lang-sk hidden">Ukazuje on/off pohlad ked je mozny a fallback vyssi spend vs nizsi spend ked ucet bezi stale.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Observed period comparison table</span><span class="lang-sk hidden">Tabulka pozorovanych rozdielov</span></h3><p><span class="lang-en">Shows on/off views when possible and higher-spend vs lower-spend fallback when the account is always on.</span><span class="lang-sk hidden">Ukazuje on/off pohlad ked je mozny a fallback vyssi spend vs nizsi spend ked ucet bezi stale.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">View</span><span class="lang-sk hidden">Pohlad</span></th><th><span class="lang-en">Method</span><span class="lang-sk hidden">Metoda</span></th><th><span class="lang-en">Paid days</span><span class="lang-sk hidden">Paid dni</span></th><th><span class="lang-en">Control days</span><span class="lang-sk hidden">Kontrolne dni</span></th><th><span class="lang-en">Comparable days</span><span class="lang-sk hidden">Porovnatelne dni</span></th><th><span class="lang-en">Inc. spend/day</span><span class="lang-sk hidden">Inc. spend/den</span></th><th><span class="lang-en">Inc. revenue/day</span><span class="lang-sk hidden">Inc. trzba/den</span></th><th><span class="lang-en">Inc. profit/day pre-fixed</span><span class="lang-sk hidden">Inc. zisk/den pred fixami</span></th><th><span class="lang-en">Inc. company profit/day</span><span class="lang-sk hidden">Inc. firemny zisk/den</span></th><th><span class="lang-en">Inc. ROAS</span><span class="lang-sk hidden">Inc. ROAS</span></th><th><span class="lang-en">Inc. CAC</span><span class="lang-sk hidden">Inc. CAC</span></th><th><span class="lang-en">Verdict</span><span class="lang-sk hidden">Verdikt</span></th><th><span class="lang-en">Confidence</span><span class="lang-sk hidden">Istota</span></th></tr></thead>
+                                <thead><tr><th><span class="lang-en">View</span><span class="lang-sk hidden">Pohlad</span></th><th><span class="lang-en">Method</span><span class="lang-sk hidden">Metoda</span></th><th><span class="lang-en">Paid days</span><span class="lang-sk hidden">Paid dni</span></th><th><span class="lang-en">Control days</span><span class="lang-sk hidden">Kontrolne dni</span></th><th><span class="lang-en">Comparable days</span><span class="lang-sk hidden">Porovnatelne dni</span></th><th><span class="lang-en">Spend difference/day</span><span class="lang-sk hidden">Rozdiel spendu/den</span></th><th><span class="lang-en">Sales difference/day</span><span class="lang-sk hidden">Rozdiel trzieb/den</span></th><th><span class="lang-en">Profit difference/day pre-fixed</span><span class="lang-sk hidden">Rozdiel zisku/den pred fixami</span></th><th><span class="lang-en">Company profit difference/day</span><span class="lang-sk hidden">Rozdiel firemneho zisku/den</span></th><th><span class="lang-en">Observed sales delta / spend delta</span><span class="lang-sk hidden">Observed sales delta / spend delta</span></th><th><span class="lang-en">Observed spend delta / new-customer delta</span><span class="lang-sk hidden">Observed spend delta / new-customer delta</span></th><th><span class="lang-en">Evidence status</span><span class="lang-sk hidden">Stav dokazov</span></th><th><span class="lang-en">Sample quality</span><span class="lang-sk hidden">Kvalita vzorky</span></th></tr></thead>
                                 <tbody>{incrementality_rows_html}</tbody>
                             </table>
                         </div>
@@ -5158,7 +5191,7 @@ def generate_modern_dashboard(
                         <div class="panel table-card">
                             <div class="card-head"><div><h3><span class="lang-en">Modeled campaign allocation</span><span class="lang-sk hidden">Modelova alokacia kampani</span></h3><p><span class="lang-en">Allocation: 60% click share + 40% spend share. It is not observed sales attribution and cannot establish campaign sales performance.</span><span class="lang-sk hidden">Alokacia: 60 % podiel klikov + 40 % podiel vydavkov. Nie je to merana atribucia predaja ani dokaz vykonu kampane.</span></p></div></div>
                             <table>
-                                <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Attributed orders est.</span><span class="lang-sk hidden">Odhad atrib. obj.</span></th><th><span class="lang-en">Cost / attributed order</span><span class="lang-sk hidden">Naklad / atrib. obj.</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th>ROAS</th></tr></thead>
+                                <thead><tr><th><span class="lang-en">Campaign</span><span class="lang-sk hidden">Kampan</span></th><th><span class="lang-en">Spend</span><span class="lang-sk hidden">Spend</span></th><th><span class="lang-en">Modeled orders</span><span class="lang-sk hidden">Modelovane obj.</span></th><th><span class="lang-en">Spend / modeled order</span><span class="lang-sk hidden">Naklad / modelovanu obj.</span></th><th><span class="lang-en">Modeled revenue</span><span class="lang-sk hidden">Modelovane trzby</span></th><th>Modeled net revenue / spend</th></tr></thead>
                                 <tbody>{campaign_cpo_rows_html}</tbody>
                             </table>
                         </div>
@@ -5212,7 +5245,7 @@ def generate_modern_dashboard(
                             <div class="chart-shell"><canvas id="campaignEfficiencyChart"></canvas></div>
                         </div>
                         <div class="panel chart-card">
-                            <div class="card-head"><div><h3><span class="lang-en">Hourly CPO and ROAS</span><span class="lang-sk hidden">Hodinove CPO a ROAS</span></h3><p><span class="lang-en">Estimated hourly order economics from spend and hourly order demand.</span><span class="lang-sk hidden">Odhad hodinovej ekonomiky objednavok zo spendu a hodinoveho dopytu.</span></p></div></div>
+                            <div class="card-head"><div><h3><span class="lang-en">Estimated hourly CPO and sales / Meta spend</span><span class="lang-sk hidden">Odhad hodinoveho CPO a trzieb / Meta spend</span></h3><p><span class="lang-en">Estimated hourly order economics from spend and hourly order demand.</span><span class="lang-sk hidden">Odhad hodinovej ekonomiky objednavok zo spendu a hodinoveho dopytu.</span></p></div></div>
                             <div class="chart-shell"><canvas id="hourlyEfficiencyChart"></canvas></div>
                         </div>
                     </div>
@@ -5548,11 +5581,11 @@ def generate_modern_dashboard(
                         {margin_stability_warning_block_html}
                     </div>
                     <div class="panel chart-card" style="margin-top:18px;">
-                        <div class="card-head"><div><h3><span class="lang-en">Geo profitability chart</span><span class="lang-sk hidden">Graf geo profitability</span></h3><p><span class="lang-en">Country-level revenue, contribution and CPO in one view.</span><span class="lang-sk hidden">Krajiny: trzby, contribution a CPO v jednom pohlade.</span></p></div></div>
+                        <div class="card-head"><div><h3><span class="lang-en">Delivery-market profitability chart</span><span class="lang-sk hidden">Graf profitability dorucovacich trhov</span></h3><p><span class="lang-en">Delivery/invoice markets: revenue, contribution and CPO; not storefront attribution.</span><span class="lang-sk hidden">Trhy podla dorucovacej/fakturacnej krajiny: trzby, kontribucia a CPO; nie atribucia jazykovemu shopu.</span></p></div></div>
                         <div class="chart-shell"><canvas id="geoProfitabilityChart"></canvas></div>
                     </div>
                     <div class="panel table-card" style="margin-top:18px;">
-                        <div class="card-head"><div><h3><span class="lang-en">Geo profitability</span><span class="lang-sk hidden">Geo profitabilita</span></h3><p><span class="lang-en">{escape(geo_spend_note)}</span><span class="lang-sk hidden">{escape(geo_spend_note_sk)}</span></p></div></div>
+                        <div class="card-head"><div><h3><span class="lang-en">Delivery-market profitability</span><span class="lang-sk hidden">Profitabilita dorucovacich trhov</span></h3><p><span class="lang-en">{escape(geo_spend_note)}</span><span class="lang-sk hidden">{escape(geo_spend_note_sk)}</span></p></div></div>
                         <table>
                             <thead><tr><th><span class="lang-en">Country</span><span class="lang-sk hidden">Krajina</span></th><th><span class="lang-en">Orders</span><span class="lang-sk hidden">Objednavky</span></th><th><span class="lang-en">Revenue</span><span class="lang-sk hidden">Trzby</span></th><th>Meta spend</th><th>Google spend</th><th><span class="lang-en">Net MER (all shop sales / ads)</span><span class="lang-sk hidden">Ciste trzby / reklama (MER)</span></th><th><span class="lang-en">Contribution ex fixed</span><span class="lang-sk hidden">Kontribucia bez fixov</span></th><th><span class="lang-en">Contribution incl. fixed</span><span class="lang-sk hidden">Kontribucia s fixami</span></th><th><span class="lang-en">Margin ex fixed</span><span class="lang-sk hidden">Marza bez fixov</span></th><th><span class="lang-en">Margin incl. fixed</span><span class="lang-sk hidden">Marza s fixami</span></th><th>FB CPO</th></tr></thead>
                             <tbody>{geo_rows_html}</tbody>
@@ -5563,7 +5596,7 @@ def generate_modern_dashboard(
                 <section class="section" id="products">
                     <div class="section-head">
                         <h2><span class="lang-en">Products</span><span class="lang-sk hidden">Produkty</span></h2>
-                        <p><span class="lang-en">Top products by profit contribution plus the richer margin and trend views from the earlier report.</span><span class="lang-sk hidden">Top produkty podla zisku, plus bohatsie margin a trend pohlady zo starsieho reportu.</span></p>
+                        <p><span class="lang-en">Product figures are before unallocated order credit adjustments. Net sales and profit already include those adjustments separately; product COGS is not reversed.</span><span class="lang-sk hidden">Produktove hodnoty su pred nepriradenymi dobropismi objednavok. Ciste trzby a zisk ich uz zahrnaju samostatne; naklady tovaru sa nevracaju.</span></p>
                     </div>
                     <div class="grid-2">
                         <div class="panel chart-card">
@@ -5635,7 +5668,7 @@ def generate_modern_dashboard(
                         <p><span class="lang-en">Operational mix, status structure, email segments and reconciliation markers from the full reporting logic.</span><span class="lang-sk hidden">Operativny mix, stavy objednavok, email segmenty a reconciliation markery z plnej reporting logiky.</span></p>
                     </div>
                     <div class="mini-grid" style="margin-bottom:18px;">
-                        <div class="mini-card"><small><span class="lang-en">ROAS check delta</span><span class="lang-sk hidden">ROAS check delta</span></small><strong>{_num(consistency_payload.get('roas_delta')):+.4f}</strong></div>
+                        <div class="mini-card"><small><span class="lang-en">MER check delta</span><span class="lang-sk hidden">MER check delta</span></small><strong>{_num(consistency_payload.get('roas_delta')):+.4f}</strong></div>
                         <div class="mini-card"><small><span class="lang-en">Margin check delta</span><span class="lang-sk hidden">Margin check delta</span></small><strong>{_num(consistency_payload.get('margin_delta')):+.4f}</strong></div>
                         <div class="mini-card"><small><span class="lang-en">CAC check delta</span><span class="lang-sk hidden">CAC check delta</span></small><strong>{_format_mini_value_html(consistency_payload.get('cac_delta'), kind='delta', decimals=4)}</strong></div>
                         <div class="mini-card"><small><span class="lang-en">Top segment</span><span class="lang-sk hidden">Top segment</span></small><strong>{escape(str(segment_rows[0].get('segment') if segment_rows else 'N/A'))}</strong></div>
@@ -6238,7 +6271,7 @@ def generate_modern_dashboard(
                     type: 'line',
                     data: {{ labels: DATA.refunds.dates, datasets: [
                         {{ label: 'Order-status refund proxy rate %', data: DATA.refunds.rate, borderColor: '#cf5060', backgroundColor: 'rgba(207,80,96,.14)', fill: true, tension: .34, borderWidth: 2.5, pointRadius: 0 }},
-                        {{ label: 'Order-status refund proxy amount', data: DATA.refunds.amount, borderColor: '#8a2c3d', borderDash: [8, 6], tension: .34, borderWidth: 2, pointRadius: 0, yAxisID: 'y1' }},
+                        {{ label: 'Returned-status order net value', data: DATA.refunds.amount, borderColor: '#8a2c3d', borderDash: [8, 6], tension: .34, borderWidth: 2, pointRadius: 0, yAxisID: 'y1' }},
                     ] }},
                     options: {{ ...baseOptions(), scales: {{ ...baseOptions().scales, y1: {{ position: 'right', grid: {{ display: false }}, ticks: {{ color: '#8a8178', font: {{ size: 11 }} }}, border: {{ display: false }} }} }} }},
                 }});
@@ -6629,7 +6662,7 @@ def generate_modern_dashboard(
                         labels: hours,
                         datasets: [
                             {{ type: 'line', label: 'Hourly CPO', data: hours.map(h => {{ const row = hourlyMap.get(h) || {{}}; const orders = Number(row.orders || 0); const spend = Number(row.spend || 0); return orders > 0 ? spend / orders : 0; }}), borderColor: '#cf5060', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Hourly ROAS', data: hours.map(h => {{ const row = hourlyMap.get(h) || {{}}; const spend = Number(row.spend || 0); const revenue = Number(row.revenue || 0); return spend > 0 ? revenue / spend : 0; }}), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Estimated net sales / Meta spend', data: hours.map(h => {{ const row = hourlyMap.get(h) || {{}}; const spend = Number(row.spend || 0); const revenue = Number(row.revenue || 0); return spend > 0 ? revenue / spend : 0; }}), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1' }},
                         ],
                     }},
                     options: hourlyEffOpts,
@@ -6958,7 +6991,7 @@ def generate_modern_dashboard(
                 {{ id: 'econCostStackDetailChart', title: {{ en: 'Cost stack detail', sk: 'Detail stacku nakladov' }}, desc: {{ en: 'Total cost, product cost and ad spend on one timeline.', sk: 'Total cost, produktovy cost a reklamny spend na jednej osi.' }} }},
                 {{ id: 'econLogisticsDetailChart', title: {{ en: 'Logistics and fixed costs', sk: 'Logistika a fixne naklady' }}, desc: {{ en: 'Packaging, net shipping and fixed overhead in one view.', sk: 'Balenie, ciste shipping a fixny overhead v jednom pohlade.' }} }},
                 {{ id: 'econAverageTrendDetailChart', title: {{ en: 'Running averages', sk: 'Bezace priemery' }}, desc: {{ en: 'Cumulative average revenue and profit for stability reading.', sk: 'Kumulativny priemer trzby a zisku pre citanie stability.' }} }},
-                {{ id: 'econRoiRoasDetailChart', title: {{ en: 'ROI and ROAS detail', sk: 'Detail ROI a ROAS' }}, desc: {{ en: 'Daily ROI against daily blended ROAS.', sk: 'Denne ROI oproti dennemu blended ROAS.' }} }},
+                {{ id: 'econRoiRoasDetailChart', title: {{ en: 'ROI and MER detail', sk: 'Detail ROI a MER' }}, desc: {{ en: 'Daily ROI against net MER: all shop net sales / (Meta + Google spend).', sk: 'Denne ROI a ciste MER: vsetky ciste trzby / (Meta + Google naklady).' }} }},
                 {{ id: 'econMarginsDetailChart', title: {{ en: 'Margin stack', sk: 'Stack marzi' }}, desc: {{ en: 'Gross, pre-ad and post-ad margins in one line view.', sk: 'Hruba, pre-ad a post-ad marza v jednom pohlade.' }} }},
             ] : [];
             renderGalleryCards('libraryEconomics', economicsItems);
@@ -7052,7 +7085,7 @@ def generate_modern_dashboard(
                         labels: s.dates,
                         datasets: [
                             {{ type: 'line', label: 'ROI %', data: s.roi, borderColor: '#1f9d66', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'ROAS', data: s.roas, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Net MER', data: s.roas, borderColor: '#ff8a1f', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y1' }},
                         ],
                     }},
                     options: roiOpts,
@@ -7074,9 +7107,9 @@ def generate_modern_dashboard(
             }}
 
             const marketingItems = [];
-            if (hasRows(DATA.cpo_daily)) marketingItems.push({{ id: 'mktDailyCpoRoasChart', title: {{ en: 'Daily CPO and ROAS', sk: 'Denne CPO a ROAS' }}, desc: {{ en: 'Daily cost per order against attributed ROAS.', sk: 'Denne CPO oproti atribucnemu ROAS.' }} }});
+            if (hasRows(DATA.cpo_daily)) marketingItems.push({{ id: 'mktDailyCpoRoasChart', title: {{ en: 'Daily CPO and sales / Meta spend', sk: 'Denne CPO a trzby / Meta spend' }}, desc: {{ en: 'All shop net sales / Meta spend; this is not Meta-attributed revenue.', sk: 'Vsetky ciste trzby / Meta spend; nejde o trzby atribucne priradene Meta.' }} }});
             if (hasRows(DATA.weekly_cpo)) marketingItems.push({{ id: 'mktWeeklyCpoChart', title: {{ en: 'Weekly CPO', sk: 'Tyzdenne CPO' }}, desc: {{ en: 'Weekly order acquisition cost and spend.', sk: 'Tyzdenny naklad na objednavku a spend.' }} }});
-            if (hasRows(DATA.campaign_cpo)) marketingItems.push({{ id: 'mktCampaignCpoRoasChart', title: {{ en: 'Campaign attribution economics', sk: 'Ekonomika atribucie kampani' }}, desc: {{ en: 'Estimated campaign CPO and ROAS.', sk: 'Odhadovane kampanove CPO a ROAS.' }} }});
+            if (hasRows(DATA.campaign_cpo)) marketingItems.push({{ id: 'mktCampaignCpoRoasChart', title: {{ en: 'Modeled campaign allocation', sk: 'Modelova alokacia kampani' }}, desc: {{ en: '60/40 click/spend allocation; modeled sales / spend does not establish campaign performance.', sk: 'Alokacia kliky/spend 60/40; modelovane trzby / spend nedokazuju vykon kampane.' }} }});
             if (hasSeries(DATA.fb_daily.dates)) {{
                 marketingItems.push(
                     {{ id: 'mktReachImpressionsChart', title: {{ en: 'Reach and impressions', sk: 'Reach a impresie' }}, desc: {{ en: 'Daily Meta reach compared with impressions.', sk: 'Denn y Meta reach oproti impresiam.' }} }},
@@ -7087,13 +7120,13 @@ def generate_modern_dashboard(
             if (hasRows(DATA.hourly_orders) || hasRows(DATA.fb_hourly)) {{
                 marketingItems.push(
                     {{ id: 'mktHourlySpendOrdersChart', title: {{ en: 'Hourly spend and orders', sk: 'Hodinovy spend a objednavky' }}, desc: {{ en: 'Hour-by-hour response between spend and orders.', sk: 'Hodinova odozva medzi spendom a objednavkami.' }} }},
-                    {{ id: 'mktHourlyRoasCpoChart', title: {{ en: 'Hourly ROAS and CPO', sk: 'Hodinove ROAS a CPO' }}, desc: {{ en: 'Hour-level efficiency by return and cost per order.', sk: 'Hodinova efektivita podla navratnosti a CPO.' }} }},
+                    {{ id: 'mktHourlyRoasCpoChart', title: {{ en: 'Estimated hourly sales / Meta spend and CPO', sk: 'Odhad hodinovych trzieb / Meta spend a CPO' }}, desc: {{ en: 'Hour-level efficiency by return and cost per order.', sk: 'Hodinova efektivita podla navratnosti a CPO.' }} }},
                 );
             }}
             if (hasRows(DATA.fb_dow)) marketingItems.push({{ id: 'mktDowCtrCpcChart', title: {{ en: 'Weekday CTR and CPC', sk: 'CTR a CPC podla dna' }}, desc: {{ en: 'Meta efficiency by day of week.', sk: 'Meta efektivita podla dna v tyzdni.' }} }});
             if (hasRows(DATA.spend_effectiveness_rows)) {{
                 marketingItems.push(
-                    {{ id: 'mktSpendRangeRoasChart', title: {{ en: 'Spend range ROAS', sk: 'ROAS podla spend bucketu' }}, desc: {{ en: 'ROAS by daily spend bucket.', sk: 'ROAS podla bucketu denneho spendu.' }} }},
+                    {{ id: 'mktSpendRangeRoasChart', title: {{ en: 'Spend range net MER', sk: 'Ciste MER podla pasma spendu' }}, desc: {{ en: 'Observed net MER by total daily paid-spend bucket.', sk: 'Pozorovane ciste MER podla pasma celkovych dennych reklamnych nakladov.' }} }},
                     {{ id: 'mktSpendRangeRevenueChart', title: {{ en: 'Spend range revenue and profit', sk: 'Trzba a zisk podla spend bucketu' }}, desc: {{ en: 'Revenue, profit and orders by spend band.', sk: 'Trzba, zisk a objednavky podla spend pasma.' }} }},
                 );
             }}
@@ -7115,7 +7148,7 @@ def generate_modern_dashboard(
                         datasets: [
                             {{ type: 'bar', label: 'FB spend', data: DATA.cpo_daily.map(x => Number(x.fb_spend || 0)), backgroundColor: 'rgba(255,138,31,.42)', borderRadius: 8, yAxisID: 'y' }},
                             {{ type: 'line', label: 'CPO', data: DATA.cpo_daily.map(x => Number(x.cpo || 0)), borderColor: '#cf5060', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'ROAS', data: DATA.cpo_daily.map(x => Number(x.roas || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'All net sales / Meta spend', data: DATA.cpo_daily.map(x => Number(x.roas || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 0, yAxisID: 'y1' }},
                         ],
                     }},
                     options: dailyCpoOpts,
@@ -7141,7 +7174,7 @@ def generate_modern_dashboard(
                         labels: DATA.campaign_cpo.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
                         datasets: [
                             {{ type: 'bar', label: 'Estimated CPO', data: DATA.campaign_cpo.map(x => x.estimated_cpo == null ? null : Number(x.estimated_cpo)), backgroundColor: 'rgba(255,138,31,.65)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'Estimated ROAS', data: DATA.campaign_cpo.map(x => Number(x.estimated_roas || 0)), borderColor: '#1f9d66', tension: .28, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Modeled revenue / spend', data: DATA.campaign_cpo.map(x => Number(x.estimated_roas || 0)), borderColor: '#1f9d66', tension: .28, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
                             {{ type: 'line', label: 'Spend', data: DATA.campaign_cpo.map(x => Number(x.spend || 0)), borderColor: '#4766ff', tension: .28, borderWidth: 2.0, pointRadius: 3, yAxisID: 'y' }},
                         ],
                     }},
@@ -7218,7 +7251,7 @@ def generate_modern_dashboard(
                             labels: hours,
                             datasets: [
                                 {{ type: 'line', label: 'Hourly CPO', data: hours.map(h => {{ const row = hourlyMap.get(h) || {{}}; const orders = Number(row.orders || 0); const spend = Number(row.spend || 0); return orders > 0 ? spend / orders : 0; }}), borderColor: '#cf5060', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y' }},
-                                {{ type: 'line', label: 'Hourly ROAS', data: hours.map(h => {{ const row = hourlyMap.get(h) || {{}}; const spend = Number(row.spend || 0); const revenue = Number(row.revenue || 0); return spend > 0 ? revenue / spend : 0; }}), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1' }},
+                                {{ type: 'line', label: 'Estimated net sales / Meta spend', data: hours.map(h => {{ const row = hourlyMap.get(h) || {{}}; const spend = Number(row.spend || 0); const revenue = Number(row.revenue || 0); return spend > 0 ? revenue / spend : 0; }}), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 2, yAxisID: 'y1' }},
                             ],
                         }},
                         options: hourlyEffOpts,
@@ -7246,7 +7279,7 @@ def generate_modern_dashboard(
                         labels: DATA.spend_effectiveness_rows.map(x => x.spend_range || '-'),
                         datasets: [
                             {{ type: 'bar', label: 'Avg spend', data: DATA.spend_effectiveness_rows.map(x => Number(x.avg_spend || 0)), backgroundColor: 'rgba(255,138,31,.52)', borderRadius: 8, yAxisID: 'y' }},
-                            {{ type: 'line', label: 'ROAS', data: DATA.spend_effectiveness_rows.map(x => Number(x.roas || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
+                            {{ type: 'line', label: 'Net MER', data: DATA.spend_effectiveness_rows.map(x => Number(x.roas || 0)), borderColor: '#1f9d66', tension: .30, borderWidth: 2.2, pointRadius: 3, yAxisID: 'y1' }},
                         ],
                     }},
                     options: spendOpts,
@@ -7355,7 +7388,7 @@ def generate_modern_dashboard(
                 customerItems.push({{ id: 'custReturningVolumeChart', title: {{ en: 'Returning customer volume', sk: 'Objem vracajucich sa zakaznikov' }}, desc: {{ en: 'Share and order volume of returning customers.', sk: 'Podiel a objem objednavok vracajucich sa zakaznikov.' }} }});
             }}
             if (hasSeries(DATA.refunds.dates)) {{
-                customerItems.push({{ id: 'custRefundRateAmountChart', title: {{ en: 'Order-status refund proxy', sk: 'Refund proxy podla stavu' }}, desc: {{ en: 'Status-based proxy through time; real creditnotes are reported separately.', sk: 'Proxy podla stavu v case; realne dobropisy su reportovane osobitne.' }} }});
+                customerItems.push({{ id: 'custRefundRateAmountChart', title: {{ en: 'Order-status refund proxy', sk: 'Refund proxy podla stavu' }}, desc: {{ en: 'Original net merchandise value of returned-status orders by purchase date across all statuses; not refunded cash. Credit documents are separate.', sk: 'Povodna cista hodnota tovaru vratkovych objednavok podla datumu nakupu zo vsetkych stavov; nie vratena hotovost. Dobropisy su samostatne.' }} }});
             }}
             if (hasSeries(DATA.clv.labels)) {{
                 customerItems.push(
@@ -7465,7 +7498,7 @@ def generate_modern_dashboard(
                         labels: DATA.refunds.dates,
                         datasets: [
                             {{ type: 'line', label: 'Order-status refund proxy rate %', data: DATA.refunds.rate, borderColor: '#cf5060', tension: .30, borderWidth: 2.3, pointRadius: 0, yAxisID: 'y1' }},
-                            {{ type: 'bar', label: 'Order-status refund proxy amount', data: DATA.refunds.amount, backgroundColor: 'rgba(138,44,61,.45)', borderRadius: 8, yAxisID: 'y' }},
+                            {{ type: 'bar', label: 'Returned-status order net value', data: DATA.refunds.amount, backgroundColor: 'rgba(138,44,61,.45)', borderRadius: 8, yAxisID: 'y' }},
                         ],
                     }},
                     options: refundOpts,
@@ -8001,7 +8034,7 @@ def generate_modern_dashboard(
             if (hasRows(DATA.order_status_rows)) productItems.push({{ id: 'opsStatusRevenueChart', title: {{ en: 'Order status mix', sk: 'Mix stavov objednavok' }}, desc: {{ en: 'Orders and revenue by final order status.', sk: 'Objednavky a trzba podla finalneho statusu.' }} }});
             if (hasRows(DATA.lifecycle_rows)) productItems.push({{ id: 'opsLifecycleProxyChart', title: {{ en: 'Lifecycle proxy', sk: 'Lifecycle proxy' }}, desc: {{ en: 'Proxy bucket mix including tracked excluded payment failures.', sk: 'Proxy mix bucketov vratane tracknutych vylucenych payment failure objednavok.' }} }});
             if (hasRows(DATA.segment_rows)) productItems.push({{ id: 'opsSegmentPriorityChart', title: {{ en: 'Email segment volume', sk: 'Objem email segmentov' }}, desc: {{ en: 'Size and priority of lifecycle email segments.', sk: 'Velkost a priorita lifecycle email segmentov.' }} }});
-            if (DATA.consistency && (DATA.consistency.roas_delta !== null || DATA.consistency.margin_delta !== null || DATA.consistency.cac_delta !== null)) productItems.push({{ id: 'opsConsistencyChart', title: {{ en: 'Consistency checks', sk: 'Konzistencne kontroly' }}, desc: {{ en: 'Sanity check deltas across ROAS, margin and CAC.', sk: 'Sanity check odchylky pre ROAS, margin a CAC.' }} }});
+            if (DATA.consistency && (DATA.consistency.roas_delta !== null || DATA.consistency.margin_delta !== null || DATA.consistency.cac_delta !== null)) productItems.push({{ id: 'opsConsistencyChart', title: {{ en: 'Consistency checks', sk: 'Konzistencne kontroly' }}, desc: {{ en: 'Sanity check deltas across MER, margin and CAC.', sk: 'Sanity check odchylky pre MER, marzu a CAC.' }} }});
             renderGalleryCards('libraryProductsOps', productItems);
             if (document.getElementById('prodCombinationCountChart')) {{
                 const comboOpts = dualAxisOptions();
@@ -8268,7 +8301,7 @@ def generate_modern_dashboard(
             }}
             if (document.getElementById('opsConsistencyChart')) {{
                 const consistencyRows = [
-                    {{ label: 'ROAS Delta', value: nullableNumber(DATA.consistency.roas_delta) }},
+                    {{ label: 'MER Delta', value: nullableNumber(DATA.consistency.roas_delta) }},
                     {{ label: 'Margin Delta', value: nullableNumber(DATA.consistency.margin_delta) }},
                     {{ label: 'CAC Delta', value: nullableNumber(DATA.consistency.cac_delta) }},
                 ].filter(row => row.value !== null);
@@ -8631,7 +8664,7 @@ def generate_modern_dashboard(
             if (hasRows(DATA.campaign_cpo)) {{
                 marketingStandaloneItems.push(
                     {{ id: 'mktCampaignCpoStandaloneChart', title: {{ en: 'Modeled campaign CPO', sk: 'Modelove CPO kampani' }}, desc: {{ en: '60/40 click/spend allocation; not measured acquisition performance.', sk: 'Alokacia kliky/vydavky 60/40; nie merany akvizicny vykon.' }} }},
-                    {{ id: 'mktCampaignRoasStandaloneChart', title: {{ en: 'Campaign ROAS', sk: 'ROAS kampani' }}, desc: {{ en: 'Estimated ROAS by campaign.', sk: 'Odhadovane ROAS podla kampani.' }} }},
+                    {{ id: 'mktCampaignRoasStandaloneChart', title: {{ en: 'Modeled campaign revenue / spend', sk: 'Modelovane trzby kampani / spend' }}, desc: {{ en: 'Modeled revenue / spend by campaign; no measured sales attribution.', sk: 'Modelovane trzby / spend podla kampani; bez meranej atribucie predaja.' }} }},
                 );
             }}
             if (hasRows(DATA.spend_effectiveness_rows)) {{
@@ -8744,7 +8777,7 @@ def generate_modern_dashboard(
                     type: 'bar',
                     data: {{
                         labels: DATA.campaign_cpo.map(x => (x.campaign_name || 'Unknown').slice(0, 24)),
-                        datasets: [{{ label: 'Estimated ROAS', data: DATA.campaign_cpo.map(x => Number(x.estimated_roas || 0)), backgroundColor: 'rgba(31,157,102,.68)', borderRadius: 8 }}],
+                        datasets: [{{ label: 'Modeled revenue / spend', data: DATA.campaign_cpo.map(x => Number(x.estimated_roas || 0)), backgroundColor: 'rgba(31,157,102,.68)', borderRadius: 8 }}],
                     }},
                     options: horizontalBarOptions(),
                 }});
@@ -8772,7 +8805,7 @@ def generate_modern_dashboard(
 
             const customerStandaloneItems = [];
             if (hasSeries(DATA.refunds.dates)) {{
-                customerStandaloneItems.push({{ id: 'custRefundAmountStandaloneChart', title: {{ en: 'Order-status refund proxy amount', sk: 'Suma refund proxy podla stavu' }}, desc: {{ en: 'Standalone status-based proxy timeline; not the creditnote registry.', sk: 'Samostatna casova os proxy podla stavu; nie register dobropisov.' }} }});
+                customerStandaloneItems.push({{ id: 'custRefundAmountStandaloneChart', title: {{ en: 'Returned-status order net value', sk: 'Suma refund proxy podla stavu' }}, desc: {{ en: 'Standalone status-based proxy timeline; not the creditnote registry.', sk: 'Samostatna casova os proxy podla stavu; nie register dobropisov.' }} }});
             }}
             if (hasSeries(DATA.clv.labels)) {{
                 customerStandaloneItems.push(
@@ -8793,7 +8826,7 @@ def generate_modern_dashboard(
                     type: 'bar',
                     data: {{
                         labels: DATA.refunds.dates,
-                        datasets: [{{ label: 'Order-status refund proxy amount', data: DATA.refunds.amount, backgroundColor: 'rgba(138,44,61,.52)', borderRadius: 8 }}],
+                        datasets: [{{ label: 'Returned-status order net value', data: DATA.refunds.amount, backgroundColor: 'rgba(138,44,61,.52)', borderRadius: 8 }}],
                     }},
                     options: baseOptions(),
                 }});

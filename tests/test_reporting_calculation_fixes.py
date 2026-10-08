@@ -168,6 +168,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
         creditnote_rows = [
             {
                 "number": "CN-PERIOD-1",
+                "open": False, "storno": False,
                 "creditnote_id": "1",
                 "created": "2026-06-30 08:00:00",
                 "order_num": "RETURN-OLD",
@@ -213,7 +214,10 @@ class ReportingCalculationFixTests(unittest.TestCase):
             row for row in empty_period_metrics["carrier_rows"] if row["carrier"] == "Packeta"
         )
         self.assertEqual(0, empty_period_packeta["realized_orders"])
-        self.assertIsNone(empty_period_packeta["creditnote_rate_pct"])
+        # The retained purchase cohort includes this carrier, while the credit
+        # belongs to an order purchased before the selected period.
+        self.assertEqual(1, empty_period_packeta["cohort_orders"])
+        self.assertEqual(0.0, empty_period_packeta["creditnote_rate_pct"])
 
         child_30d = children["30d"]
         child_30d.project_settings["creditnote_fulfillment_costs"] = {
@@ -2744,7 +2748,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(0, int(month_agg.iloc[0]["creditnote_fulfillment_orders"]))
 
     @patch("creditnote_export.fetch_project_creditnotes")
-    def test_creditnote_reporting_metrics_use_sent_orders_as_carrier_denominator(self, fetch_mock) -> None:
+    def test_creditnote_reporting_metrics_use_same_purchase_cohort_as_denominator(self, fetch_mock) -> None:
         exporter = make_exporter()
         exporter.project_settings["currency_rates_to_eur"] = {"EUR": 1.0, "CZK": 0.04}
         exporter._creditnote_status_change_audit_cache = {
@@ -2778,7 +2782,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
         fetch_mock.return_value = (
             [
                 {
-                    "number": "D-1",
+                    "number": "D-1", "open": False, "storno": False,
                     "creditnote_id": "1",
                     "created": "2026-06-02 08:00:00",
                     "order_num": "OK-1",
@@ -2786,7 +2790,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
                     "taxed_price": "123 €",
                 },
                 {
-                    "number": "D-2",
+                    "number": "D-2", "open": False, "storno": False,
                     "creditnote_id": "2",
                     "created": "2026-06-02 09:00:00",
                     "order_num": "RET-1",
@@ -2831,7 +2835,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(100.0, packeta_row["creditnote_rate_pct"])
 
     @patch("creditnote_export.fetch_project_creditnotes")
-    def test_creditnote_reporting_metrics_use_creditnote_count_for_rate(self, fetch_mock) -> None:
+    def test_creditnote_reporting_metrics_do_not_divide_documents_by_realized_orders(self, fetch_mock) -> None:
         exporter = make_exporter()
         exporter.project_settings["currency_rates_to_eur"] = {"EUR": 1.0}
         exporter._creditnote_status_change_audit_cache = {"project": "vevo", "orders": []}
@@ -2855,7 +2859,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
         fetch_mock.return_value = (
             [
                 {
-                    "number": "D-1",
+                    "number": "D-1", "open": False, "storno": False,
                     "creditnote_id": "1",
                     "created": "2026-06-02 08:00:00",
                     "order_num": "OK-1",
@@ -2863,7 +2867,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
                     "taxed_price": "123 €",
                 },
                 {
-                    "number": "D-2",
+                    "number": "D-2", "open": False, "storno": False,
                     "creditnote_id": "2",
                     "created": "2026-06-02 09:00:00",
                     "order_num": "RET-1",
@@ -2898,12 +2902,14 @@ class ReportingCalculationFixTests(unittest.TestCase):
         self.assertEqual(2, summary["all_creditnoted_orders"])
         self.assertEqual(1, summary["creditnoted_orders"])
         self.assertEqual(1, summary["sent_creditnoted_orders"])
-        self.assertEqual(200.0, summary["creditnote_rate_pct"])
+        self.assertEqual(2, summary["cohort_orders"])
+        self.assertEqual(2, summary["cohort_creditnoted_orders"])
+        self.assertEqual(100.0, summary["creditnote_rate_pct"])
         packeta_row = next(row for row in metrics["carrier_rows"] if row["carrier"] == "Packeta")
         self.assertEqual(1, packeta_row["realized_orders"])
         self.assertEqual(1, packeta_row["creditnoted_orders"])
         self.assertEqual(2, packeta_row["creditnotes"])
-        self.assertEqual(200.0, packeta_row["creditnote_rate_pct"])
+        self.assertEqual(100.0, packeta_row["creditnote_rate_pct"])
 
     def test_period_customer_history_marks_prior_customer_returning(self) -> None:
         exporter = make_exporter()
@@ -3890,8 +3896,11 @@ class ReportingCalculationFixTests(unittest.TestCase):
         )
 
         sample_rows = result["sample_product_rows"].set_index("item_sku")
-        self.assertEqual("CUT_PAID", sample_rows.loc["SAMPLE-3", "paid_action"])
-        self.assertNotEqual("CUT_PAID", sample_rows.loc["SAMPLE-6", "paid_action"])
+        self.assertEqual("REVIEW_EVIDENCE", sample_rows.loc["SAMPLE-3", "paid_action"])
+        self.assertEqual("REVIEW_EVIDENCE", sample_rows.loc["SAMPLE-6", "paid_action"])
+        self.assertEqual("OBSERVATIONAL_ONLY", result["summary"]["account_action"])
+        self.assertFalse(result["summary"]["budget_recommendation_available"])
+        self.assertEqual("OBSERVATION", recent_7d["verdict"])
         self.assertEqual("KEEP_ORGANIC", sample_rows.loc["SAMPLE-3", "shop_action"])
         self.assertEqual("KEEP_ORGANIC", sample_rows.loc["SAMPLE-6", "shop_action"])
 
@@ -3946,7 +3955,7 @@ class ReportingCalculationFixTests(unittest.TestCase):
         )
 
         self.assertTrue(result["recent_window_rows"].empty)
-        self.assertEqual("EXPERIMENT", result["summary"]["account_action"])
+        self.assertEqual("OBSERVATIONAL_ONLY", result["summary"]["account_action"])
 
     def test_best_spend_range_ignores_one_day_profit_outlier(self) -> None:
         exporter = make_exporter("vevo")
@@ -3991,6 +4000,11 @@ class ReportingCalculationFixTests(unittest.TestCase):
         ].iloc[0]
         self.assertFalse(bool(outlier_row["decision_eligible"]))
         self.assertEqual("50-60EUR", result["best_cm3_range"])
+        self.assertFalse(result["decision_summary"]["decision_ready"])
+        self.assertFalse(result["decision_summary"]["budget_recommendation_available"])
+        self.assertFalse(result["spend_effectiveness"]["decision_eligible"].any())
+        self.assertTrue(result["spend_effectiveness"]["sample_filter_passed"].any())
+        self.assertTrue(any("not a recommended budget" in note for note in result["recommendations"]))
 
 
 if __name__ == "__main__":
