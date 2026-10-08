@@ -1,3 +1,13 @@
+## 2026-10-08 — Reviewed ROY recovery dispatched; production gates pending
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-recovery-runtime-handoff-20261008` (draft PR #618; documentation only)
+What changed: Root invoked the committed recovery controller exactly once for new release `5bb65fb722534b098123ec0dbd005548`, recovering old uncertain owner `6fc75864c4f44ca3902fff21719887a9`. Source `5e48410ecd94637a0c3e5af936c4d721c8ec0f1e` built as immutable image `sha256:dccb37137e7857348d776314bbfa615dfb045840da7d37fd6011a4266c89d42d`; build/readiness proof `1cc91f10397dfcc69b899b32f2ade9f65dc30089f586baec74d9e54701b52f8d` confirms `/app`, unchanged peer/resources and no monthly workflow trigger. Controller PID 73352 is finite and owned by the durable new-root invocation ledger. The first preflight receipt is present; later production success is not yet claimed.
+What is verified: Fresh financial contract `63f657990f1fb9d2ed30a7089ddf7932c48d95952401eceb244c0c3dcecccd0f` and fresh ROY advertising source pass complete independent checks. Root review `5589b10e6881b0640a4a5695475043cef7ef5a8b7d6730ea9f7e80b650aa577e` and independent contract/publisher review `ab9e38a7d7621fc87d2da3b7c3f7ae8f0e0390ce9ae08f91e1034d41360daeff` preserve the actual source and all financial/display/source/lease gates. All 221 selected evidence files plus manifest were conditionally archived with AES256, expected-owner and full readback under `data/roy/analyses/2026-10-08-paused-release-recovery/pre-deploy-20261008T161755Z-aa4241bcbfb4/`; manifest SHA `360719c1fcda1cdecc69d5c6a4e4cf112087b98df270ed3f2febbdb2711575ae`. Independent review/helper/cleanup files are included. Archive processes exited with no listeners. Draft #616 is closed because its complete memory is preserved in merged #617.
+Known issues: Recovery is running, not completed. No new live generation, enabled final schedule, actual post-deploy financial comparison or UI promotion is claimed. Never repeat dispatch while this owner/ledger is active or uncertain.
+Next exact step: Observe the exact candidate task/IP/service/path and localhost marker, then independently verify all sixteen financial and eight actual JSON/HTML display checks. Only root may publish the exact source-bound approval after immutable evidence readback. Then verify the live host and actual publication, enabled dynamic-date schedule and released lease before ROY report-only App Runner promotion and HTTP/browser checks. Archive completion/cleanup and actual financial results; keep this documentation unmerged during source freeze.
+
 ## 2026-10-08 — ROY recovery merged; immutable release preparation
 
 Date: 2026-10-08

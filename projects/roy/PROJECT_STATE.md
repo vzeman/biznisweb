@@ -1,3 +1,13 @@
+## 2026-10-08 — Reviewed ROY recovery dispatched; production gates pending
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-recovery-runtime-handoff-20261008` (draft PR #618; source frozen)
+What changed: The reviewed committed controller was invoked once for release `5bb65fb722534b098123ec0dbd005548`, recovering old owner `6fc75864c4f44ca3902fff21719887a9`. Exact source `5e48410ecd94637a0c3e5af936c4d721c8ec0f1e` built as `sha256:dccb37137e7857348d776314bbfa615dfb045840da7d37fd6011a4266c89d42d`, path `/app`. First preflight receipt is present. Finite controller PID 73352 is tracked by the durable invocation ledger; never blindly repeat it.
+What is verified: Source contract `63f657990f1fb9d2ed30a7089ddf7932c48d95952401eceb244c0c3dcecccd0f`, fresh ROY advertising checks and independent contract/publisher review `ab9e38a7d7621fc87d2da3b7c3f7ae8f0e0390ce9ae08f91e1034d41360daeff` pass. All 222 predeploy objects passed private AES256/owner/conditional-write/full-readback checks; manifest `360719c1fcda1cdecc69d5c6a4e4cf112087b98df270ed3f2febbdb2711575ae` under `data/roy/analyses/2026-10-08-paused-release-recovery/pre-deploy-20261008T161755Z-aa4241bcbfb4/`. Build/readiness `1cc91f10397dfcc69b899b32f2ade9f65dc30089f586baec74d9e54701b52f8d` confirms unchanged protected resources and no monthly deployment trigger. Archive processes exited with no listeners. Earlier draft #616 is closed; its memory is retained in #617.
+Known issues: Deployment is in progress. No new publication, final scheduling activation, actual financial comparison or UI success is claimed yet.
+Next exact step: Require candidate host/localhost identity, all sixteen actual financial and eight actual display checks, immutable independent approval, then live host/publication/dynamic-date schedule/lease checks. Only afterward promote the ROY report-only UI, verify HTTP/browser and compute actual identical-period financial impact. Preserve all evidence and clean up owned finite processes.
+
 ## 2026-10-08 — ROY recovery merged; immutable release preparation
 
 Date: 2026-10-08
