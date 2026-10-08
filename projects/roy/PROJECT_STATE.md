@@ -1,3 +1,14 @@
+## 2026-10-08 — ROY corrected release dispatched; publication gates pending
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-currency-release-handoff-20261008` (documentation only; do not merge during frozen release)
+What changed: The exact merged source `962486c23146e877d4a7ef64518d6e1fcb51f6ae` built successfully in run `37789337939` as immutable image `sha256:c89f6ddffa113d52cbf06c7768cc84220d3d852b10f8cbb3f741196f291ef784`. Root dispatched the ordinary ROY release `6fc75864c4f44ca3902fff21719887a9` once through the committed controller after the archived source and infrastructure gates. No peer release was dispatched.
+What is verified: Full native order and credit evidence passes the corrected query-shape guard and independent monetary review. The new contract SHA-256 is `6235a77fa82ebece634b2f956590d5ef9eff80f3bb1e57f13b6016f493ffc43c`; independent final review is `366d1ed148d9105882d2d4eea53135cd238724886d51aba9802167c9b68c89e7`. Private predeploy evidence is archived with AES256, expected-owner checks, conditional creation and complete readback under `data/roy/analyses/2026-10-08-credit-currency-fix/pre-deploy-20261008T141418Z-339426fd6bb9/`; manifest SHA-256 `5d8c3732fbfdb2b8656b57ff126d037e3f5b6059ba9a29174103b6acd0f6e02f`. The exact monthly workflow filters do not select this source diff, so no additional monthly deployment or email was triggered; existing monthly runtime is unchanged. The source checkout remains clean and frozen. Archive processes exited with independently absent PIDs/listeners.
+Current runtime: Release is in progress; new publication and new UI are not yet claimed. Only the controller owns the temporary reporting pause and lifecycle. Candidate approval requires independent actual financial and country-display checks before live generation. All prior failed-release evidence remains immutable.
+Next exact step: Verify candidate task/IP/service/path and localhost marker, all actual financial/advertising checks and all eight display artifacts. Archive and publish the exact independent review only after both pass. Then verify the live publication, enabled dynamic-date schedule and released lease, followed by the ROY report-only UI probe/promotion. Finish process cleanup, actual financial comparison and final private archive before merging this documentation PR.
+
+
 ## 2026-10-08 — ROY currency repair merged; immutable release preparation
 
 Date: 2026-10-08
