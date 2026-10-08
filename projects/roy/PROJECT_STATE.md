@@ -1,5 +1,17 @@
 # ROY reporting project state
 
+## STOPPED: verified source retained, ROY release not dispatched
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-release-handoff-20261008` (documentation only, separate worktree)
+What changed: PR #610 is merged at `fb0395a2a4a596bf9955bcee15972725c104281f`; build `37737686264` passed with immutable image `sha256:d835126b05460310ebdc1e84dfaacb5eeb28af40ab67f89c594a6bf8d65319ca`. Sequential deployment stopped before ROY dispatch after the preceding probe's seven-day publication quality rejection. No ROY probe, review approval, live task or corrected report publication occurred; source remains frozen.
+What is verified: The complete-history source and monetary/country contract through 2026-10-07 passed at capture time, with independent fixed-cost, fulfillment and advertising checks. This is offline source evidence, not a ROY production result. Private pre-deploy archive `data/reporting/analyses/2026-10-08-country-source-fix/pre-deploy-20261008T072116Z-5615185c46a7/` contains 155 evidence files plus manifest, AES256/full GET SHA verified; manifest SHA-256 `5d29c709cd285d82d2cf625a8a9ee7d2ba2b05bf24cd4d27fe9a0002b6c5bbb0`.
+Current runtime: Independent terminal readback confirms service `roy-daily-report-email` remains on original ENABLED definition `roy-reporting-daily:77`, generation `20261008T000535Z`. No ROY task is active; protected schedule and published outputs remain unchanged. Terminal readback SHA-256 `0741421237d6d7b1a8229270e52c491cdac4773bb8655e57817057d7b3d875af`. No corrected production adoption is claimed.
+Known issues: Work is stopped under the owner's stop-on-error instruction. The earlier probe rejected `dashboard_payload_7d.json`, but the exact failed period-specific QA field was not preserved; no ROY-specific runtime defect is established. Do not substitute passing full-period/offline evidence for an actual release-bound probe and publication check.
+Final private archive: `data/reporting/analyses/2026-10-08-country-source-fix/blocked-20261008T083828Z-6361552ef45b/`, manifest SHA-256 `7b257049294219622d9736394a92c86a4a654dfd355a7388a6c74a57831090fd`, binds the pre-deploy archive. All 88 new/changed evidence files plus manifest passed AES256, expected-owner enforcement, conditional creation and full GET SHA readback. Final private status handoff SHA-256 `9f290be4e74d76eb3f369b248dc96348af8327ed6a0ac3c5df96dac9e4ef5f5a`. No local ROY release process was started.
+Next exact step: On authorized continuation, first preserve/reproduce the exact per-period rejection and finish the preceding recovery. Revalidate immutable ROY source inputs as needed, then dispatch from the exact reviewed image with independent four-period source/advertising and actual ratio/HTML review before promotion/live. Verify new financial CSV rows, all periods, host/HTTP markers and the enabled dynamic-date schedule. Preserve project-specific cost policies; no new financial result or corrected production publication is claimed.
+
 ## Current work: known country-source defect repair authorized
 
 Date: 2026-10-08
