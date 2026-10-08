@@ -1,3 +1,14 @@
+## 2026-10-08 — Verified reporting retained during separate ROY repair
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-currency-release-handoff-20261008` (documentation only)
+What changed: This handoff carries forward the independently verified VEVO runtime from draft PR #614 so the current state is recoverable from this project's memory. The present continuation deploys only ROY; no new VEVO execution or App Runner promotion is claimed.
+What is verified: Release `c3e23947aff44621886a41678e1564e7` on source `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2` produced generation `20261008T122907Z`. Reporting is ENABLED on definition :48 with dynamic dates and a released lease. Full actual publication proof `c2948807d6d27e27bd670d531e3076c5ad62c8f2156e8164d0e9f4db52d99810` passes all sixteen checks against the explicit native-status amendment `4d79bb35cf0f195c517edf0a7ac61b4e11104ee02cdd65e1ce6f9e3d47498e7a`; the original source comparison is preserved separately. Runtime/HTTP proof `827863ff4a531ba22365422fd98f0357d2c4b98a11afa7e2ff57a79706bc05ff` verifies all eight artifacts after localhost gates. Current ROY release readbacks confirm this project's lease, schedule and published artifacts remain unchanged.
+Private evidence: Verified archive manifest `4188b8e8fa292d4ff3a367fb0b21398c1e683a1fb221000e51574da05bb73830` under `data/reporting/analyses/2026-10-08-methodology-fixes/vevo-verified-20261008T124341Z-9c4a897f5ed5/`. The actual before/after comparison `e64ad97ff6cd3f35c0a022256c781fa36e1a709b9030f57bb6f44cbdcdaf6a25` and stopped peer history are preserved in manifest `c001d78bd175a08c9db67f087e7000502756e4e2474457a341d31783e518408c`; cleanup closure `5bac49bcb1994d8a6e2ce109dcf13f098f246c2cb93da92f5b0c801ab1ffe033`. Financial values and native records stay private.
+Known issues: The running reporting image still predates the shared credit currency-shape repair merged in PR #615. Its existing generation is verified, but the old guard can reject a future qualifying creditnote. VEVO's separate App Runner reporting UI image promotion also remains pending. Do not claim those pending deployments completed by the ROY-only continuation.
+Next exact step: Continue the outstanding broader VEVO rollout using the reviewed shared fix, fresh source-bound gates and a new exact release; then perform its report-only App Runner host/HTTP/browser verification. Retain all current proofs, actual source restatements and approved financial policies.
+
 ## 2026-10-08 — Final code validation and reporting UI release path
 
 Date: 2026-10-08
