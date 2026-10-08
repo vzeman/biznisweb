@@ -230,10 +230,12 @@ an active peer, including stale active, always blocks. Partial or irrelevant
 proof arguments also block. Legacy deployment callers must have read access to
 the ROY lease key: AccessDenied is uncertainty, never an absent lease.
 
-For a separately reviewed, stopped VEVO release whose live outputs are unchanged,
+For a separately reviewed, stopped ROY or VEVO release whose live outputs are unchanged,
 the same `run` accepts `--recover-paused-release <old-id>` and
 `--recovery-receipt-sha256 <reviewed-latest-failure-sha>`. This is an explicit
 recovery contract, not a generic disabled-schedule override. It checks the
+selected project's receipt prefix, explicit project identity (required for ROY),
+task family, service, marker, temporary role and scoped lease. It then checks the
 immutable receipt chain, exact paused schedule/definition, stopped owned task
 identities, successful probe host proof, unchanged outputs, absent temporary
 role and the previous uncertain lease. If ECS has expired a stopped task, supply
@@ -250,6 +252,14 @@ old disabled target and conditionally returns its uncertain lease. A live or
 uncertain failure still requires inspection. Other schedules are captured anew
 after concurrent CI finishes, with changes since the stopped release recorded
 in recovery evidence, then strictly protected for the whole new release.
+
+GitHub inspection uses explicit GET requests with at most three 45-second
+attempts and 2/5-second backoff for recognized transport timeouts, connection
+resets, temporary DNS failures and HTTP 502/503/504. Authorization errors,
+invalid data and real competing workflows still fail closed. Only the read is
+retried; task dispatch, lease writes, schedule changes and the deployment itself
+are never automatically replayed. Exhausted reads retain the existing owned
+cleanup and paused/uncertain recovery behavior.
 
 ## Private VEVO order-audit workbook
 

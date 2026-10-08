@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,14 +27,16 @@ from scripts import reporting_runtime_binding as binding  # noqa: E402
 from scripts.deploy_order_automations import TASK_FIELDS  # noqa: E402
 from scripts.deploy_vevo_report import Deployment  # noqa: E402
 from scripts.reporting_migration_host_gate import (  # noqa: E402
-    ACCOUNT, BUCKET, REGION, SERVICE, DIAGNOSTIC_LIMIT, DIAGNOSTIC_STATUSES, FAILURE_TYPES,
+    ACCOUNT, BUCKET, REGION, DIAGNOSTIC_LIMIT, DIAGNOSTIC_STATUSES, FAILURE_TYPES,
     canonical, read_private, require, sha, verify_quality,
 )
 from scripts.reporting_image_release_policy import PROJECTS, VEVO, project_policy
 from scripts.reporting_image_release_lease import ScopedImageLease, read_lease, require_roy_idle
 
 CLUSTER = binding.POLICY["cluster"]
-RELEASE_PREFIX = "data/vevo/reporting/image-releases/"
+# Historical callers retain these names; recovery itself always uses its policy.
+SERVICE = VEVO.service
+RELEASE_PREFIX = VEVO.release_prefix
 EXPECTED_ARTIFACTS = {"report_latest.html", "dashboard_payload_latest.json"} | {
     f"{kind}_{period}.{extension}" for period in ("7d", "30d", "90d")
     for kind, extension in (("report", "html"), ("dashboard_payload", "json"))}
@@ -44,8 +47,45 @@ def unique_review_object(pairs):
     return dict(pairs)
 
 
+def github_transient_read_error(exc):
+    """Classify only transport/service failures; never retry authorization or data."""
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return "process-timeout"
+    stderr = exc.stderr or b""
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", errors="replace")
+    if re.search(r"\bHTTP 4[0-9]{2}\b", stderr, re.IGNORECASE):
+        return None
+    message = stderr.lower()
+    for marker, reason in (
+        ("tls handshake timeout", "tls-handshake-timeout"),
+        ("i/o timeout", "io-timeout"),
+        ("connection reset by peer", "connection-reset"),
+        ("temporary failure in name resolution", "temporary-dns-failure"),
+    ):
+        if marker in message:
+            return reason
+    status = re.search(r"\bHTTP (502|503|504)\b", stderr, re.IGNORECASE)
+    return "http-" + status.group(1) if status else None
+
+
 def gh(path):
-    return json.loads(subprocess.check_output(["gh", "api", path], cwd=ROOT, timeout=45))
+    """Bounded retries apply to this GET only, never the surrounding deployment."""
+    for attempt in range(3):
+        try:
+            raw = subprocess.check_output(["gh", "api", "--method", "GET", path], cwd=ROOT,
+                                          stderr=subprocess.PIPE, timeout=45)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+            reason = github_transient_read_error(exc)
+            print(json.dumps({"phase": "github-read-failed", "attempt": attempt + 1,
+                              "reason": reason or "non-retryable-error", "retry": bool(reason) and attempt < 2}),
+                  file=sys.stderr, flush=True)
+            if reason is None or attempt == 2:
+                raise
+            time.sleep((2, 5)[attempt])
+        else:
+            # Invalid JSON is not a transport failure and must not become stale success.
+            return json.loads(raw)
 
 
 def exact_source(commit):
@@ -143,12 +183,14 @@ def verify_artifacts(manifest, fetch, *, prefix, to_date, probe, policy=VEVO, fr
                     "image-release-payload-end-date")
 
 
-def validate_recovery_receipts(records, release_id, current_schedule, current_definition):
+def validate_recovery_receipts(records, release_id, current_schedule, current_definition, *, policy=VEVO):
     """Bind an explicitly reviewed stopped release to this exact paused target."""
     by_phase = {}
     for record in records:
         require(record.get("release_id") == release_id and record.get("schema_version") == 1,
                 "image-release-recovery-receipt-identity")
+        require(record.get("project", "vevo" if policy == VEVO else None) == policy.project,
+                "image-release-recovery-project-identity")
         phase = record.get("phase")
         require(isinstance(phase, str) and phase not in by_phase, "image-release-recovery-receipt-duplicate")
         by_phase[phase] = record
@@ -163,10 +205,10 @@ def validate_recovery_receipts(records, release_id, current_schedule, current_de
     require(re.fullmatch(r"[a-f0-9]{40}", before.get("source_commit", "")), "image-release-recovery-source-invalid")
     date.fromisoformat(before["report_to_date"])
     candidate_arn = by_phase["candidate-registered"]["task_definition"]
-    require(re.fullmatch(rf"arn:aws:ecs:{REGION}:{ACCOUNT}:task-definition/vevo-reporting-daily:[1-9][0-9]*", candidate_arn),
+    require(re.fullmatch(rf"arn:aws:ecs:{REGION}:{ACCOUNT}:task-definition/{re.escape(policy.family)}:[1-9][0-9]*", candidate_arn),
             "image-release-recovery-definition-identity")
     expected = binding.schedule_snapshot(before["schedule"])
-    require(expected.get("Name") == SERVICE and expected.get("State") in {"ENABLED", "DISABLED"}
+    require(expected.get("Name") == policy.service and expected.get("State") in {"ENABLED", "DISABLED"}
             and before.get("final_schedule_state", expected["State"]) == "ENABLED"
             and (expected["State"] == "ENABLED" or (isinstance(before.get("recovered_from"), dict)
                  and re.fullmatch(r"[a-f0-9]{32}", before["recovered_from"].get("release_id", ""))
@@ -176,7 +218,7 @@ def validate_recovery_receipts(records, release_id, current_schedule, current_de
     expected["Target"]["EcsParameters"]["TaskDefinitionArn"] = candidate_arn
     require(binding.schedule_snapshot(failed["known_schedule"]) == expected
             and binding.schedule_snapshot(current_schedule) == expected, "image-release-recovery-schedule-drift")
-    candidate = image_only_definition(before["source_definition"], before["image"])
+    candidate = image_only_definition(before["source_definition"], before["image"], policy=policy)
     candidate["taskDefinitionArn"] = candidate_arn
     require(current_definition.get("status") == "ACTIVE"
             and binding.definition_snapshot(current_definition) == binding.definition_snapshot(candidate),
@@ -189,11 +231,12 @@ def validate_recovery_receipts(records, release_id, current_schedule, current_de
             and by_phase["live-dispatch-requested"]["task_definition"] == candidate_arn,
             "image-release-recovery-task-chain")
     identity, complete = probe["identity"], probe["complete"]
-    require(identity.get("marker") == "VEVO_REPORT_PROBE_HOST_OK"
+    require(identity.get("marker") == policy.probe_marker
+            and identity.get("project", "vevo" if policy == VEVO else None) == policy.project
             and identity.get("task_arn") == tasks["probe"] and identity.get("task_definition") == candidate_arn
             and identity.get("release_id") == release_id and identity.get("source_commit") == before["source_commit"]
             and identity.get("image_digest") == before["image"].rsplit("@", 1)[1]
-            and identity.get("instance_id") == "N/A:Fargate" and identity.get("service") == SERVICE
+            and identity.get("instance_id") == "N/A:Fargate" and identity.get("service") == policy.service
             and identity.get("path") == "/app" and re.fullmatch(r"[a-f0-9]{64}", identity.get("gate_sha256", ""))
             and complete.get("phase") == "report-verified"
             and all(complete.get(key) == value for key, value in identity.items())
@@ -202,17 +245,19 @@ def validate_recovery_receipts(records, release_id, current_schedule, current_de
             and all(complete.get(key) is True for key in ("skip_invoices", "skip_inline_guard")),
             "image-release-recovery-probe-proof")
     expected_live = task_overrides(release_id, before["source_commit"], before["image"],
-                                  identity["gate_sha256"], before["report_to_date"], probe=False)
+                                  identity["gate_sha256"], before["report_to_date"], probe=False, policy=policy)
     require(by_phase["live-dispatch-requested"]["overrides"] == expected_live,
             "image-release-recovery-live-command")
     require(failed["live_outputs"] == before["original_live_outputs"], "image-release-recovery-already-published")
-    return {"before": before, "failed": failed, "probe": probe, "tasks": tasks,
+    return {"project": policy.project, "before": before, "failed": failed, "probe": probe, "tasks": tasks,
             "candidate_arn": candidate_arn, "identity": identity}
 
 
-def validate_stopped_recovery_tasks(recovery, tasks, *, archived_arns=frozenset()):
+def validate_stopped_recovery_tasks(recovery, tasks, *, archived_arns=frozenset(), policy=VEVO):
     """Fresh ECS identities; a stopped live task is never a publication proof."""
     before, identity = recovery["before"], recovery["identity"]
+    require(recovery.get("project", "vevo" if policy == VEVO else None) == policy.project,
+            "image-release-recovery-project-identity")
     by_arn = {task["taskArn"]: task for task in tasks}
     require(set(archived_arns).issubset(by_arn), "image-release-recovery-archive-scope")
     require(len(tasks) == 2 and set(by_arn) == set(recovery["tasks"].values()),
@@ -237,7 +282,7 @@ def validate_stopped_recovery_tasks(recovery, tasks, *, archived_arns=frozenset(
             require(containers[0]["exitCode"] == 0 and ips == [identity["private_ip"]],
                     "image-release-recovery-probe-terminal-drift")
         expected = task_overrides(before["release_id"], before["source_commit"], before["image"],
-                                  identity["gate_sha256"], before["report_to_date"], probe=mode == "probe")
+                                  identity["gate_sha256"], before["report_to_date"], probe=mode == "probe", policy=policy)
         actual = copy.deepcopy(task.get("overrides", {}))
         for row in actual.get("containerOverrides", []):
             env = binding.unique_environment(row.get("environment", []))
@@ -249,9 +294,12 @@ def validate_stopped_recovery_tasks(recovery, tasks, *, archived_arns=frozenset(
     return binding.normalized(tasks)
 
 
-def transfer_recovery_lease(lease, previous_owner, expected_etag):
+def transfer_recovery_lease(lease, previous_owner, expected_etag, *, policy=VEVO):
     """Conditional ownership transfer: no released interval or blind deletion."""
-    value, etag = binding.read_object(lease.s3, binding.LOCK_KEY)
+    require((policy == VEVO and not isinstance(lease, ScopedImageLease))
+            or (isinstance(lease, ScopedImageLease) and lease.policy == policy),
+            "image-release-recovery-lease-project")
+    value, etag = read_lease(lease.s3, policy.project)
     binding.validate_lock(value)
     require(value["owner"] == previous_owner and value["state"] == "uncertain"
             and etag == expected_etag and lease.owner != previous_owner,
@@ -272,7 +320,6 @@ class ImageRelease(Deployment):
                 and re.fullmatch(r"[a-f0-9]{64}", independent_contract_sha256)), "image-release-independent-contract-invalid")
         self.independent_contract_sha256 = independent_contract_sha256
         self.policy = project_policy(project)
-        require(not recover_paused_release or self.policy == VEVO, "image-release-recovery-project-unsupported")
         super().__init__(session, commit, "", "")
         if release_id is not None:
             self.release_id = release_id
@@ -679,7 +726,7 @@ class ImageRelease(Deployment):
         require(re.fullmatch(r"[a-f0-9]{32}", previous_id or "") and previous_id != self.release_id
                 and re.fullmatch(r"[a-f0-9]{64}", self.recovery_receipt_sha256 or ""),
                 "image-release-recovery-arguments")
-        prefix = RELEASE_PREFIX + previous_id + "/"
+        prefix = self.policy.release_prefix + previous_id + "/"
         page = self.s3.list_objects_v2(Bucket=BUCKET, Prefix=prefix, MaxKeys=65, ExpectedBucketOwner=ACCOUNT)
         keys = sorted(row["Key"] for row in page.get("Contents", []))
         require(not page.get("IsTruncated") and 1 <= len(keys) <= 64
@@ -691,7 +738,7 @@ class ImageRelease(Deployment):
         require(all(key == prefix + f"{index:04d}-{record.get('phase')}.json"
                     for index, (key, record) in enumerate(zip(keys, records), 1)),
                 "image-release-recovery-receipt-sequence")
-        recovery = validate_recovery_receipts(records, previous_id, self.original, self.original_source)
+        recovery = validate_recovery_receipts(records, previous_id, self.original, self.original_source, policy=self.policy)
         recovery.update(receipt_key=keys[-1], receipt_sha256=sha(raw_records[-1]),
                         preflight_sha256=sha(raw_records[0]), previous_owner=previous_id)
         require(recovery["identity"]["gate_sha256"] == committed_gate_sha(recovery["before"]["source_commit"]),
@@ -701,13 +748,15 @@ class ImageRelease(Deployment):
                 "image-release-recovery-readback-arguments")
         if self.recovery_readback_key:
             key = self.recovery_readback_key
-            require(key.startswith("data/vevo/") and ".." not in key and key.endswith(".json")
+            require(isinstance(key, str) and key.startswith(f"data/{self.policy.project}/")
+                    and not {"", ".", ".."}.intersection(key.split("/")) and "\\" not in key and key.endswith(".json")
                     and re.fullmatch(r"[a-f0-9]{64}", self.recovery_readback_sha256 or ""),
                     "image-release-recovery-readback-scope")
             raw = read_private(self.s3, key, 256 * 1024)
             require(sha(raw) == self.recovery_readback_sha256, "image-release-recovery-readback-hash")
             archived = json.loads(raw)
-            require(archived.get("release_id") == previous_id and archived.get("source_commit") == recovery["before"]["source_commit"]
+            require(archived.get("project", "vevo" if self.policy == VEVO else None) == self.policy.project
+                    and archived.get("release_id") == previous_id and archived.get("source_commit") == recovery["before"]["source_commit"]
                     and archived.get("read_only") is True and archived.get("preflight_sha256") == recovery["preflight_sha256"]
                     and archived.get("failed_receipt_sha256") == recovery["receipt_sha256"]
                     and archived.get("schedule") == binding.schedule_snapshot(self.original)
@@ -725,7 +774,7 @@ class ImageRelease(Deployment):
                             for mode, task in archived["owned_tasks"].items()),
                     "image-release-recovery-readback-tasks")
             validate_stopped_recovery_tasks(recovery, list(archived["owned_tasks"].values()),
-                                            archived_arns=frozenset(recovery["tasks"].values()))
+                                            archived_arns=frozenset(recovery["tasks"].values()), policy=self.policy)
         recovery["archived_readback"] = archived
         self.recovery = recovery
         self.verify_paused_boundary()
@@ -764,15 +813,15 @@ class ImageRelease(Deployment):
                         and [{key: row.get(key) for key in previous["containers"][0]} for row in task.get("containers", [])]
                             == previous.get("containers"), "image-release-recovery-archived-task-drift")
             tasks += [archived_by_arn[arn] for arn in sorted(missing)]
-        recovery["terminal_tasks"] = validate_stopped_recovery_tasks(recovery, tasks, archived_arns=missing)
+        recovery["terminal_tasks"] = validate_stopped_recovery_tasks(recovery, tasks, archived_arns=missing, policy=self.policy)
         recovery["archived_task_arns"] = sorted(missing)
         try:
-            self.iam.get_role(RoleName="VevoReportProbe-" + recovery["previous_owner"])
+            self.iam.get_role(RoleName=self.policy.role_prefix + recovery["previous_owner"])
         except Exception as exc:
             require(binding.error_code(exc) == "NoSuchEntity", "image-release-recovery-role-read-failed")
         else:
             raise RuntimeError("image-release-recovery-probe-role-present")
-        value, etag = binding.read_object(self.s3, binding.LOCK_KEY)
+        value, etag = read_lease(self.s3, self.policy.project)
         binding.validate_lock(value)
         require(value["state"] == "uncertain" and value["owner"] == recovery["previous_owner"]
                 and etag == recovery.get("lease_etag", etag), "image-release-recovery-lease-drift")
@@ -794,7 +843,7 @@ class ImageRelease(Deployment):
             self.event("paused-recovery-handoff-requested", previous_owner=self.recovery["previous_owner"],
                        previous_lease_etag=self.recovery["lease_etag"], recovery_receipt_sha256=self.recovery_receipt_sha256)
             try:
-                transfer_recovery_lease(self.lease, self.recovery["previous_owner"], self.recovery["lease_etag"])
+                transfer_recovery_lease(self.lease, self.recovery["previous_owner"], self.recovery["lease_etag"], policy=self.policy)
             except BaseException:
                 self.inspect_failed_lease_handoff()
                 raise
@@ -833,8 +882,10 @@ class ImageRelease(Deployment):
                               "lease_outcome": outcome, "receipt_write_failed": True}), flush=True)
 
     def restore_paused_recovery_lease(self):
-        binding.check_migration(self.s3, lease=self.lease)
-        previous = binding.MigrationLease(self.s3, owner=self.recovery["previous_owner"])
+        self.verify_peer_boundary()
+        self.lease._check(owned=True)
+        previous = (binding.MigrationLease(self.s3, owner=self.recovery["previous_owner"]) if self.policy == VEVO else
+                    ScopedImageLease(self.s3, owner=self.recovery["previous_owner"], project=self.policy.project))
         self.event("paused-recovery-lease-return-requested", previous_owner=previous.owner)
         previous._write("uncertain", self.lease.etag)
         self.lease_owned = False
