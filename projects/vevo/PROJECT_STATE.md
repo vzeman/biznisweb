@@ -1,3 +1,13 @@
+## 2026-10-08 — VEVO recovery dispatched from archived verified source
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (documentation only; do not merge during source-frozen release)
+What changed: The related monthly workflow completed successfully with image-only revision change, host marker and email dry-run verified; all other schedules, both report leases and eighteen report outputs stayed unchanged. Fresh pre-dispatch identity proof SHA-256 `1db99106213b552a2d33689833d5fb192d39c35c9a3b08268267d4e93149c812` passed. VEVO release `c3e23947aff44621886a41678e1564e7` has now passed preflight, conditional recovery handoff and verified schedule pause. The old retained owner must no longer be assumed current; inspect this release's immutable receipts before any recovery action.
+What is verified: Pre-deploy archive `data/reporting/analyses/2026-10-08-methodology-fixes/pre-deploy-20261008T111657Z-13dc1d2a29ca/` contains 248 evidence files plus manifest, all AES256/expected-owner/conditional-create/full-GET SHA verified. Manifest SHA-256 `de1891431307e014730de605d34e59ec257ac678e82007baf7ce179ca8333efd`. It binds both complete primary contracts, independent monetary/country/cost/advertising reviews, exact source `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2` and immutable image `sha256:ab3a7131e354fc684f9d8278158ec0f832c6e82c4d9bb0dd4bb5ad731c89f5b6`. The finite archive process and its launcher are absent with no listeners.
+Current runtime: VEVO release is in progress; no new financial publication or successful production adoption is claimed. Its controller must pause after the isolated probe for independent source/display review. The peer release remains undispatched. App Runner images remain unchanged. Private process ledger and immutable release receipts identify the exact owned resources; no local persistent service was started.
+Next exact step: Verify the candidate's task/IP/path/localhost marker, then all four probe periods against the frozen financial and advertising contracts plus actual HTML semantics. Publish only a fully passing hash-bound review, complete live regeneration through 2026-10-07 and independently verify rows/runtime/HTTP. Then release ROY sequentially, finish both report-only UI image promotions and future-schedule checks, archive terminal evidence and complete this documentation PR. Any source-status drift requires explicit primary evidence, not silent contract edits or a relaxed numerical check.
+
 ## 2026-10-08 — Complete source contract and production image verified
 
 Date: 2026-10-08
