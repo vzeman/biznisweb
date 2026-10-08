@@ -1,3 +1,53 @@
+## 2026-10-08 — Stopped release archived; original ROY runtime restored
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; overall deployment incomplete)
+What is verified: Fresh native source comparison and an unchanged-production-method offline replay prove the currency projection defect, not an economic or identity change. Root-cause proof SHA-256 `e0096c160f2dc003e9db8bf728e0e30628a972b5b1eac369abe46b9cd7327114`; independent review `2147e28d38e146fbc6c5bbe68da63610e9fd58997792ce840e886ecae74ba33e`. ROY release `9a666b8a81ee4ce1ac6c0e25d78db677` never reached approval/live publication. Terminal receipt `29609ea42937d18ca426ebce02d47e9fa0a7aaf93bdb19042678ed085b36dc31` and independent readback `6642030020404b9d2a0e21bcd157306dee232cdf4183d5a95dd67f247ec4dd78` confirm exact original ENABLED definition :77 restored, candidate :80 INACTIVE, task STOPPED/exit 1, lease released, temporary role absent, no active reporting tasks, all twelve protected schedules and eighteen pre-release report artifacts unchanged. Original ROY generation remains `20261008T000535Z`.
+Private archive: 51 new/changed evidence files plus manifest at `data/reporting/analyses/2026-10-08-methodology-fixes/blocked-20261008T130915Z-098655eb8ba0/`, SHA-256 `c001d78bd175a08c9db67f087e7000502756e4e2474457a341d31783e518408c`. Parent pre-deploy and VEVO-verified manifests remain intact. Terminal archive-process records are additionally stored under `closure/manifest.json`, SHA-256 `5bac49bcb1994d8a6e2ce109dcf13f098f246c2cb93da92f5b0c801ab1ffe033`. Every archived object passed AES256, expected-owner, conditional-create and complete GET/hash verification. All known finite controller/diagnostic/archive processes exited; no persistent local service or UI candidate was started.
+Known issues: Shared credit-order guard repair and both UI promotions remain outstanding. The private UI invocation ledger was prepared but never run; its post-spawn ledger/inspection exception path needs an owned-child wait/finally before any future use. Do not interpret the saved VEVO-only comparison as a completed two-project financial comparison.
+Next exact step: Resume with a new reviewed branch/PR correcting canonical currency comparison and actual-query-shape regression coverage, without weakening real ID/date/status/money mismatch checks. Rebuild and rebind exact source/image contracts, rerun required financial and release gates, then finish both report-only UI promotions and the two-project actual financial comparison. Preserve this stopped release and all failed evidence; no retry or correction was performed after the owner's stop-on-error gate.
+
+
+## 2026-10-08 — ROY release stopped on currency-shape defect; UI releases held
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; not a completed deployment)
+What happened: ROY release `9a666b8a81ee4ce1ac6c0e25d78db677` failed in its isolated probe, before independent review or live dispatch. Diagnostic SHA-256 `785dd3b233f74fcc10d5da94096b31c76368d6015edaba7041719bb505c670d7` reports the creditnote source error `credit_order_source_changed`; all four dashboard payloads are absent. This is not a passing financial comparison. The controller reports `failed-before-live-restored`; independent terminal restoration verification is being recorded.
+Known issue: `export_orders.py` compares complete `sum.currency` dictionaries between its list query and `ORDER_SAFETY_QUERY`. The list query requests `{symbol, code}` while the detail query requests only `{code}`. Equal currency codes therefore fail this guard. The offline primary collector used the same narrower currency shape for both inputs and did not reproduce the production query-shape difference. Existing tests passed but missed this integration case. No guard, contract, tolerance or production code was changed after identifying it.
+Current runtime: VEVO's previously verified generation and corrected reporting schedule remain in place; ROY has no new publication. Both App Runner images remain unpromoted. Do not promote the known-defective shared source to either UI or report runtime again. Per the owner's stop-on-discovered-error instruction, deployment is held; local controller/wrapper PIDs are absent with no listeners, cleanup SHA-256 `1159d98353e89353cbdcaad6986e1b78abeb51c70ce5bd42c2d266060d07e83f`.
+Next exact step: Correct shared credit-order validation on a new branch/PR using validated currency codes while preserving identity, native money and status checks. Add a regression with the actual list/detail query shapes and rejection cases for changed/missing currency or monetary values. Preserve all failed evidence; build and review a new exact source/image, refresh its source-bound contracts and repeat the financial/probe/live/runtime gates before both report-only UI promotions. Do not resume or reapprove this failed release ID, silently rewrite contracts, or bypass the source check.
+
+
+## 2026-10-08 — ROY candidate host independently verified
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; keep unmerged during deployment)
+What is verified: Release `9a666b8a81ee4ce1ac6c0e25d78db677` owns candidate task `f2cd5212b2f74982b0afc1201d2ab6df`, definition :80, IP `172.31.47.30`, service `roy-daily-report-email`, path `/app`. Exact source `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2`, image `sha256:ab3a7131e354fc684f9d8278158ec0f832c6e82c4d9bb0dd4bb5ad731c89f5b6` and localhost marker/authorization chain pass independent readback. Host proof SHA-256 `463175ae7dee18fe7ef043dc9a94c8973535a924baad0f0f907a5cb61ad0d2ef`; phase 0010 receipt `09386efa479ed2e8cfe03f7713ec37797f96b7920cf1fb7151eb8db929aec09f`. All twelve protected schedules, peer state and existing own publication remain unchanged.
+Current runtime: Isolated full-history calculation is running. No financial approval or live publication is claimed; both App Runner UI promotions remain pending.
+Next exact step: Verify all four actual probe periods against frozen primary and refreshed raw advertising sources, plus actual JSON/HTML. Publish the passing independent review, finish live financial/runtime/HTTP verification, then perform both report-only UI promotions from the frozen source.
+
+
+## 2026-10-08 — ROY corrective release started
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; do not merge during source-frozen deployment)
+What changed: Release `9a666b8a81ee4ce1ac6c0e25d78db677` passed preflight, lease acquisition and verified reporting-schedule pause. Exact source `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2`, image `sha256:ab3a7131e354fc684f9d8278158ec0f832c6e82c4d9bb0dd4bb5ad731c89f5b6`, cutoff 2026-10-07 and required contract SHA-256 `531740c7b1a367e049a4831fd5b46d459e8a801c5f03d68bc5dbff5398c00758` remain fixed. Approved physical-gift and modeled-profit policies are unchanged.
+Current runtime: Finite controller is active. Candidate host, source/display approval and live publication still require their own gates; original generation `20261008T000535Z` and App Runner image are retained at this checkpoint.
+Next exact step: Verify candidate task/IP/service/path/localhost marker, all four financial/advertising periods and actual JSON/HTML, then publish its passing review. Finish live generation, strict actual rows and runtime/HTTP/future dynamic-date checks before either UI promotion. Use the refreshed raw advertising source, never its verification receipt, as the verifier data input.
+
+## 2026-10-08 — Complete source contract and production image verified
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (documentation only)
+What changed: Reporting corrections are merged in PR #613 at `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2`; exact immutable image is `sha256:ab3a7131e354fc684f9d8278158ec0f832c6e82c4d9bb0dd4bb5ad731c89f5b6`. All 1,476 tests and final PR checks pass. Fresh complete primary-source contract SHA-256 `531740c7b1a367e049a4831fd5b46d459e8a801c5f03d68bc5dbff5398c00758` and monetary audit `2307d27b2b2d803d48a1f0b7f8d00c5f107848f55360d9a5c36d3cfddfc76cbe` pass all four periods and bind the exact merged calculator/dependencies. Independent primary review confirms the existing project policies and no unexplained monetary mismatch.
+Current runtime: Publication and UI image promotion remain pending. ROY remains enabled on its original definition :77 and generation `20261008T000535Z`. No new production result is asserted from offline evidence. Source status refreshes are separately explained in the private comparison, not counted as calculation defects.
+Next exact step: Finish private archival and the dependent monthly workflow; release after independently verified VEVO recovery. Regenerate through 2026-10-07, verify enabled future dynamic dates, and only then finish the report-only UI image stage after both projects pass runtime/HTTP. Keep financial/customer evidence private and finish this documentation handoff after terminal validation.
+
 ## 2026-10-08 — Final code validation and reporting UI release path
 
 Date: 2026-10-08
