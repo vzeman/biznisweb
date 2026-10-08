@@ -1,3 +1,14 @@
+## 2026-10-08 — ROY candidate independently approved; live run dispatched
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-currency-release-handoff-20261008` (documentation only; source remains frozen)
+What is verified: Candidate release `6fc75864c4f44ca3902fff21719887a9`, definition :81, task `026e58b8698f4e8da1f8f162c10f3dfe`, IP `172.31.10.42`, service `roy-daily-report-email`, path `/app`, exact source `962486c23146e877d4a7ef64518d6e1fcb51f6ae` and image `sha256:c89f6ddffa113d52cbf06c7768cc84220d3d852b10f8cbb3f741196f291ef784` passed independent host/localhost verification before provider reads. Probe stopped with exit 0, temporary role was removed, all sixteen financial/country/fixed/advertising checks pass, and all eight actual JSON/HTML artifacts pass display verification. Financial proof SHA-256 `0234888a97e631cb5a3c7849cd79fe027e578d8c8d57867301b481d0af7fa25f`; display proof `c5d0ca983f5332dd26d9099d6568f75bbda58e59d3e807035e158db90185958e`; manifest `556f568892961c3557ed91c00ce88b531b7df5b220a9b6fa072c78c4646a0697`.
+What changed: After full immutable encrypted evidence readback, root published exact independent review `e48d8a9cdc95364be16edd21cc95c1069567056913591837f4f218fcfd222fe6`. The controller verified it, promoted the scheduled image while retaining its temporary pause, and dispatched the one-off live run. Review provenance manifest `870e4d68da5241dfb2ee72829e8f6a82a9df4516b09a43e6873a8f9e580d5270` is under the new release's private `review-v2-provenance/` archive; publisher receipt `e4a3ea8c82d315298d293dce17674c7f9fcf3cbb3cb5e77e5e107f4e5cae16b6`. Approval processes independently exited with no listeners, cleanup `3a4f4c67c5c8144aa70582816ef988f8aaba880c0cf0e1f25e80e500306aeb4b`.
+Current runtime: Live generation is in progress. No new published generation, completed permanent schedule activation or App Runner UI promotion is claimed yet. Approved business policies and all protected peer resources remain unchanged.
+Next exact step: Independently verify live task/IP/source/image and localhost marker, actual complete publication rows and all sixteen checks, enabled dynamic-date scheduling, terminal tasks and released lease. Only then finish ROY's report-only UI candidate/promotion and public HTTP/browser checks, financial comparison and final archive. Keep this documentation unmerged until both ROY deployments finish.
+
+
 ## 2026-10-08 — ROY corrected release dispatched; publication gates pending
 
 Date: 2026-10-08
