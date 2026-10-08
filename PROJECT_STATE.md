@@ -1,3 +1,13 @@
+## 2026-10-08 — ROY actual publication verified; report UI promotion running
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-recovery-runtime-handoff-20261008` (draft PR #618)
+What is verified: Actual generation `20261008T171216Z` passes all sixteen financial/country/fixed/advertising checks and complete financial-line membership with no differences; publication proof `3b8ee3930cf76356ccc16647827d38540e0f75b2b3c36cdfe6ad4972d6e0e0db`. Independent runtime/public HTTP proof `2e064f63f315081921f1dc3cfae03ccaa7be45adc6b594910e56e76a0389a04b` verifies all eight artifacts, dynamic future dates, enabled schedule, released lease, stopped tasks and unchanged peer. Actual financial comparison remains private (SHA `839829879859b43f01513bf0dc0fa21f0150d44ea8c73984013702f806a527f9`); independent Decimal replay `36f84de7057fd905bad27359c7554bb60da1a743940e3961315b0bd3eff31f2b` confirms identical-period component bridges. Differences include source/status refreshes and are not a pure code causal estimate.
+What changed: The report-only UI candidate task `e6d260c90ad24933b6688a61d049d39e`, IP `172.31.14.203`, service `biznisweb-roy-operations-dashboard`, path `/app`, source `5e48410ecd94637a0c3e5af936c4d721c8ec0f1e`, image `sha256:dccb37137e7857348d776314bbfa615dfb045840da7d37fd6011a4266c89d42d` passed localhost/authentication/redirect/read-only/four-period checks, ended exit 0 and has an INACTIVE disposable definition. Independent candidate proof `4ac5cd74f8b58c7e179fafb0c7cd0c299053f33d147f29169636bf9091b636f5` confirms encrypted archived pointer `cc85353026a33deff599847fa6bdce3d5343d6940dca69a0c67404a09c6d7910`. Root invoked promotion once; App Runner operation `933093bd940f46f5a23f17ae05b13f89` is in progress. Do not repeat it blindly.
+Known issues: Report generation and future scheduling are complete; UI image promotion and its post-promotion HTTP/browser checks remain pending. Candidate local processes exited and were independently verified absent with no listeners (cleanup `f00f673a078ee69de7e4578e4db82c6dd0ea200cdf97a703a402c3a6968cc064`). Private UI pointer `data/roy-paused-release-recovery-20261008/roy_report_ui_release.json` and exact promotion process ledger preserve resumable operation ownership.
+Next exact step: Observe the existing App Runner operation, verify immutable image-only configuration and public HTML/payload/shell equality, then browser verification and exact process cleanup. Complete private final/closure archives and merge the documentation only after the frozen-source UI release finishes.
+
 ## 2026-10-08 — ROY production generation complete; final publication/UI checks pending
 
 Date: 2026-10-08
