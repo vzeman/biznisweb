@@ -1,3 +1,13 @@
+## 2026-10-08 — VEVO financial probe passes; advertising comparison holds publication
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; do not merge during source-frozen release)
+What is verified: The isolated candidate completed all four periods with exit 0; its temporary IAM role is absent and the source/image/task/localhost/manifest chain passes. Probe manifest SHA-256 `b3328cc0b2daae8defbccf9dfe5a81e1d282ee5f1f905ea366ca52bbf4f7a3cd`. All twelve independent financial, country-attribution and shared-fixed-cost checks pass. Actual JSON/HTML ratio and credit-disclosure checks pass in every period; display proof SHA-256 `34979def2c6a49a94193c826fae1bddea40eb7fcdc359806c9cf87175c5bb220`. Terminal host/readback proof SHA-256 `c629c4a5012cb22a2e0c6324d71a8884f680978c085654f5f50e3c039029d385`.
+Current hold: All four advertising comparisons report that named-country Meta spend differs from the earlier independent source snapshot. Financial probe evidence SHA-256 `075de2892216848c283de6eb3963fe0f79d976fd0f11940795c0622880d363bd` is explicitly not approved. The release controller remains at `independent-review-requested`; no review was published and no live task was dispatched. Existing publication and protected resources remain unchanged.
+Diagnostic note: The first private verifier invocation incorrectly supplied the advertising verification receipt instead of its hash-bound raw source, and failed before any AWS reads. That attempt is preserved. The unchanged verifier then ran against the correct raw source. The private evidence publisher has the same raw-versus-receipt binding mistake and must be corrected in a separately preserved/reviewed invocation helper before use; no runtime or calculation source change follows from this invocation issue.
+Next exact step: Diagnose exact stored Meta deltas and, if necessary, obtain a separate fresh read-only source capture. Preserve original contracts, helper bytes and failed evidence. Do not loosen monetary checks or approve a mismatch. Resolve the advertising evidence and independently review the corrected publication invocation before continuing the existing release.
+
 ## 2026-10-08 — VEVO candidate host gate independently verified
 
 Date: 2026-10-08
