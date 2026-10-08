@@ -1,3 +1,13 @@
+## 2026-10-08 — Refreshed provider evidence resolves VEVO advertising hold
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; keep unmerged until both UI releases complete)
+What changed: Fresh read-only Meta account/daily/country captures prove a late provider source adjustment, with the candidate correctly reproducing the updated values. Original Google evidence is byte-preserved. The separately saved composite source SHA-256 is `aa5dff3b41caf5ab5a74c4bf1df185991632d646d3f0017be46775a42d0e0e29`; all eight source checks pass, review SHA-256 `0547e33ea83b3a3d2449ce85d9f79054b829e5ce3d6135575db9261d0934cbdf`.
+What is verified: Additive attempt 2 imports the unchanged frozen financial/advertising verifier and writes to a new directory. All sixteen actual probe checks pass, evidence SHA-256 `2a637e235ba2e1569eafdbedc7bae7d6c2daca9b7f2157535842169d8897c9bd`. Independent replay also confirms all four actual HTML periods and unchanged source/calculator/tolerance/contract/manifest bindings; review SHA-256 `9e658404134c261ecf6853d676cee865016cad417ead0b3e9dd70f183251b620`. The original failed proof is preserved. Finite refresh/retry processes exited and have no listeners, cleanup SHA-256 `d32e781f2ce70f891bc9fe4900bf303886ca578a4f2e7920a99ed26b5a34a7ca`.
+Current runtime: Controller remains at `independent-review-requested`, original publication unchanged. No review PUT or live dispatch has happened yet. A separately preserved private publisher invocation is being validated to bind the correct raw advertising source and its verification receipt, explicit passing evidence and actual HTML proof; deployment remains in the unchanged committed controller.
+Next exact step: Finish independent invocation review, archive its supporting evidence, publish the exact passing review and let the active VEVO controller finish its live generation. Verify actual financial rows and runtime/HTTP before the sequential ROY release. Use the refreshed raw advertising source, not the verification receipt, for subsequent probe/publication comparisons.
+
 ## 2026-10-08 — VEVO financial probe passes; advertising comparison holds publication
 
 Date: 2026-10-08
