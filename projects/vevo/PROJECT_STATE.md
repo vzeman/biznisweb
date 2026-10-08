@@ -1,5 +1,15 @@
 # VEVO reporting project state
 
+## 2026-10-08 — Read-only economic-methodology audit
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-audit-20261008`
+What changed: Audited current reporting rules against preserved primary-source/advertising evidence and published output; refreshed one bounded non-merchandise source example. No calculator, configuration, provider or runtime mutation occurred.
+What is verified: Shared fixed expenses are not multiplied by country. Corrected discounts/native VAT and explicit zero-cost tip/insurance rules reconcile on captured inputs, but their production rollout remains unfinished. Revenue uses purchase date and current eligibility, including unshipped COD; later cancellations restate earlier cohorts. Country is delivery geography with invoice fallback, not an independently proven storefront/domain dimension.
+Known issues: Published scaling recommendations derive apparent budget corridors and marginal acquisition effects from observational Meta spend and all-shop new-customer changes; they cannot establish incremental advertising causality. Published blended ROAS labeling should distinguish shop MER from platform attribution. The refund proxy starts after financial filtering and can omit refunded states. Configured acquisition costs, fixed FX, uniform logistics and missing payment fees make CM3 a modeled result. A confirmed historical compensation receipt also receives generic merchandise cost estimation; it is outside the recent comparison period and must not be blamed for that period's campaign performance.
+Next exact step: Separate economic-model corrections from the still-unresolved seven-day publication gate. Define explicit order-cohort versus accounting/cash views, isolate non-merchandise revenue, preserve actual cost coverage and label estimated allocations/observational recommendations honestly. Keep runtime in the verified stopped state until a separately verified release succeeds. Private evidence/archive references are recorded in the root project state.
+
 ## STOPPED: seven-day publication quality rejected the recovery probe
 
 Date: 2026-10-08
