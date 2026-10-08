@@ -1,3 +1,13 @@
+## 2026-10-08 — ROY recovery merged; immutable release preparation
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-recovery-runtime-handoff-20261008` (documentation only; do not merge during frozen release)
+What changed: PR #617 merged as `5e48410ecd94637a0c3e5af936c4d721c8ec0f1e` after all six exact-head CI checks passed, including Windows/Linux regression and security checks. Production source is clean and detached at that exact merged commit. Build run `37805486386` is in progress. The private invocation now supplies all four reviewed recovery arguments for owner `6fc75864c4f44ca3902fff21719887a9`, retains source/CI/archive gates and checks duplicate CLI ownership and finite PID/listener cleanup. No deployment command has been executed yet.
+What is verified: Local ninety-module regression (1,504 tests), smoke and critical lint pass with unchanged source hashes; receipt `42930b311fbfcaa34daaa79942cf3217efd35883f9fb7fcced2cdc85052e37a1`. Fresh complete native ROY source and fresh ROY advertising reads are captured privately; financial contract binding to the merged source is pending. ROY App Runner/OCI baseline `7f9248a7f3d18847389ac9bd18089e1906a632070af4af60e18c29acfcd6fa2c` confirms the original image/configuration and generation. Baseline reader and wrapper exited, no listeners; cleanup `144b2a161cf74bedf727bd1311e2156def43267a35f666993d3d1a4dc7d581a6`. Prior draft #616 memory is preserved in merged #617.
+Known issues: ROY remains paused with its old uncertain lease and published generation; no new production result or UI success is claimed. A repeated GitHub TLS failure occurred during a read before merge; no mutation was attempted until a fresh successful exact-head check. The merged controller handles the recognized read failure with bounded retries and still fails closed. All failed evidence remains preserved.
+Next exact step: Verify immutable exact-source build and monthly workflow readiness, independently review and archive the fresh source/advertising contracts and invocation. Execute the single ROY recovery, verify its actual candidate financial/display outputs before independent approval, then verify live publication and enabled dynamic-date scheduling. Complete the separate ROY report-only UI host/HTTP/browser gates and actual financial comparison, archive final evidence and commit/push the handoff. Keep this documentation branch unmerged during source freeze.
+
 ## 2026-10-08 — Authorized ROY paused-release recovery in progress
 
 Date: 2026-10-08

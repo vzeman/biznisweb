@@ -1,3 +1,13 @@
+## 2026-10-08 — ROY recovery merged; immutable release preparation
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-recovery-runtime-handoff-20261008` (documentation only; source frozen)
+What changed: PR #617 merged as `5e48410ecd94637a0c3e5af936c4d721c8ec0f1e` after all six exact-head CI checks passed. Build `37805486386` is running. The clean production checkout is detached at that source. The new private invoker binds old owner `6fc75864c4f44ca3902fff21719887a9`, terminal failure `2952601f850e81c7979113032c81986a5245ce3a7d2b798d367adc6c9957b266` and readback `e77659768ed0e1d30f5674d6d38b71dfcd29db1f4318d8446f0b41254c2dc5c9` to the committed recovery CLI; its fifty-two offline checks pass. No deployment invocation has occurred.
+What is verified: All 1,504 local tests, smoke/lint and exact-head Windows/Linux CI pass. Fresh native source and complete ROY advertising reads are captured privately; contracts are being bound to the merged source. App Runner/OCI baseline `7f9248a7f3d18847389ac9bd18089e1906a632070af4af60e18c29acfcd6fa2c` confirms unchanged image/configuration and original generation. Finite baseline processes exited with no listeners. Financial policy exceptions remain unchanged.
+Known issues: Production remains disabled with the previous uncertain owner until reviewed conditional recovery. No new financial publication, automatic scheduling completion or UI release is claimed. The intermittent GitHub TLS error recurred only on a pre-merge read; fresh exact-head verification succeeded before merge, and no unknown mutation was replayed.
+Next exact step: Complete immutable build/source/advertising archive gates, execute one explicit recovery, require actual candidate sixteen financial plus eight display checks before approval, then verify actual live publication, dynamic-date ENABLED schedule and released lease. Finally promote the ROY report-only UI through its host/HTTP/browser checks, compare actual identical-period financial results and archive the complete evidence. Keep this documentation unmerged until frozen-source deployment finishes.
+
 ## 2026-10-08 — Authorized ROY paused-release recovery in progress
 
 Date: 2026-10-08
