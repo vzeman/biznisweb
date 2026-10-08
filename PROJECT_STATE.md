@@ -1,3 +1,12 @@
+## 2026-10-08 — Country-source correction and both releases explicitly resumed
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-country-source-fix-20261008`
+What changed: The owner explicitly authorized repair of the known country-query and private-verifier defects, completion of both production releases, and a financial before/after comparison. Clean fetch/prune/pull from `14cb0c83815d01e85e214344b2f89e5ed5b32c8f` completed before work. Both production order queries now request delivery address fields, and cache schema 5 forces refresh of records fetched without them. Synthetic query-projection tests exercise the actual selected fields through flattening and country fallback for both projects; all 39 focused monetary/country/policy tests pass.
+What is verified: Fresh read-only account/service/task/image/path gates pass; no active reporting task existed. Product-specific current baselines and next steps are in their project state files. Private initial identity proof SHA-256 `61c46f59e91111d91f9d219183edcf87abb43729aefca170ce64c5a2d8e0cfb2`; all eighteen original report objects were captured with stable metadata and complete hash checks. No reporting runtime has changed in this resumed session.
+Next exact step: Complete an independently hash-bound probe review gate before live dispatch, fresh full-history source contracts through 2026-10-07 and exact-versus-displayed advertising checks. Review/test/merge/build, then recover VEVO and release ROY sequentially. Verify new publications and enabled dynamic-date schedules; compare identical periods and distinguish calculation changes from fresh source/status changes. Keep all source and commercial data in private archives.
+
 ## 2026-10-07 — Publication stopped by independent country-source verification
 
 Date: 2026-10-07

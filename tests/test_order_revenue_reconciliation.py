@@ -252,6 +252,51 @@ class OrderRevenueReconciliationTests(unittest.TestCase):
             self.assertIn("sum_with_tax {\n          value\n          raw_value", text)
             self.assertIn("price {\n          value\n          raw_value", text)
 
+    def test_production_query_projection_preserves_delivery_country_and_invoice_fallback(self):
+        def project_fields(value, selection):
+            # Simulate the provider returning only fields selected by the actual
+            # production query, so a missing address cannot hide in a fixture.
+            if isinstance(value, list):
+                return [project_fields(item, selection) for item in value]
+            if value is None:
+                return None
+            return {
+                field.name.value: project_fields(value.get(field.name.value), field.selection_set)
+                if field.selection_set else value.get(field.name.value)
+                for field in selection.selections if field.kind == "field"
+            }
+
+        for project in ("vevo", "roy"):
+            exporter = BizniWebExporter(api_url="https://example.com", api_token="synthetic",
+                                       project_name=project, enable_period_bundle=False, order_facts_only=True)
+            exporter.project_settings["order_revenue_reconciliation_enabled"] = False
+            for query in (ORDER_QUERY, ORDER_QUERY_WITHOUT_PRICE_ELEMENTS):
+                document = getattr(query, "document", query)
+                root = document.definitions[0].selection_set.selections[0]
+                data = next(field for field in root.selection_set.selections if field.name.value == "data")
+                for delivery, invoice, expected in (("cz", None, "cz"), ("sk", "cz", "sk"),
+                                                     (None, "hu", "hu"), ("", "cz", "cz"),
+                                                     (None, None, "Unknown")):
+                    with self.subTest(project=project, query=document.definitions[0].name.value,
+                                      delivery=delivery, invoice=invoice):
+                        raw = self.order(total=120, elements=[])
+                        raw.update(invoice_address={"country": invoice, "city": "Invoice city"},
+                                   delivery_address={"country": delivery, "city": "Delivery city"} if delivery is not None else None)
+                        selected = project_fields(raw, data.selection_set)
+                        frame = pd.DataFrame(exporter.flatten_order(selected))
+                        orders = frame[["order_num"]].drop_duplicates()
+                        actual = exporter._build_order_geo_frame(frame, orders)
+                        self.assertEqual(expected, actual.iloc[0]["geo_country"])
+                        self.assertEqual("Delivery city" if delivery is not None else "Invoice city", actual.iloc[0]["geo_city"])
+                        self.assertEqual(100, frame["item_total_without_tax"].sum())
+
+    def test_cache_without_delivery_query_fields_requires_a_fresh_source_read(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache_file = Path(directory) / "synthetic.json"
+            cache_file.write_text(json.dumps({"schema_version": 4, "orders": [self.order()]}, default=float), encoding="utf-8")
+            with patch.object(self.exporter, "get_cache_filename", return_value=cache_file):
+                self.assertIsNone(self.exporter.load_from_cache(datetime(2026, 9, 1)))
+
     def test_legacy_value_only_eligible_cache_is_refreshed_under_strict_policy(self):
         order = self.order()
         for item in order["items"]:

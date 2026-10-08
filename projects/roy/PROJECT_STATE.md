@@ -1,5 +1,14 @@
 # ROY reporting project state
 
+## Current work: known country-source defect repair authorized
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-country-source-fix-20261008`
+What changed: The owner explicitly instructed repair, completed deployment and a financial before/after comparison. This resumes the stopped work below. Both production queries now select delivery address fields and schema 5 invalidates older incomplete order caches. Synthetic tests verify delivery-country priority, missing-delivery invoice fallback and unchanged monetary totals for ROY.
+What is verified: Fresh account `919341186960`, region `eu-central-1`, service `roy-daily-report-email`, definition :77 remains ENABLED on image `sha256:638e628781783c2b4897f93c97eaec8a2c1db31f96fc18b03a30155e77b7283f`; exact OCI working path `/app`, no active Fargate reporting task. The original nightly code has generated `20261008T000535Z`; all baseline objects were captured before changes for comparison. No ROY runtime, lease or schedule mutation has occurred in this resumed session.
+Next exact step: Finish fresh primary source contracts through 2026-10-07 and independent exact advertising/display verification. Require the independent financial/country probe receipt before live dispatch, then deploy from reviewed immutable source after the peer recovery succeeds. Reconcile all published periods and rows, prove the enabled future dynamic-date schedule, and compare corrected versus baseline financial results over identical dates. Preserve ROY-specific fixed/packaging/shipping/cost assumptions and keep all financial source evidence private.
+
 ## Current handoff: release not dispatched after shared source-query defect
 
 Date: 2026-10-07
