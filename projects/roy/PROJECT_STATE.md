@@ -1,3 +1,13 @@
+## 2026-10-08 — ROY recovery probe approved; live generation running
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-recovery-runtime-handoff-20261008` (draft PR #618; documentation only)
+What is verified: Recovery release `5bb65fb722534b098123ec0dbd005548` probe task `3923112adf194e31a67fe66b92f1f718`, IP `172.31.2.155`, service `roy-daily-report-email`, path `/app`, source `5e48410ecd94637a0c3e5af936c4d721c8ec0f1e`, image `sha256:dccb37137e7857348d776314bbfa615dfb045840da7d37fd6011a4266c89d42d` passed its localhost marker before source reads and ended STOPPED exit 0. All sixteen actual financial/advertising checks pass (proof `5accff2b268cbc7a4340fae98b518410e61501fd0a07d370899362c3dd695bcc`); all eight actual JSON/HTML checks pass (proof `09b1735cd4c59e91a5a07c3cd01e5ffd03a09b4bfaf4d569647d07b67f17a328`). Both bind manifest `ed4e5ee57c687c35f408c3eca6220483cdd75589b128ef9cadd0a43b669b5c0b` and cutoff 2026-10-07. Full terminal proof `ccb2b1c981d8908c6abb171221e32d5cebade194394ce573f1b6d08043c847e6` confirms temporary role removal, unchanged peer/protected schedules and old publication.
+What changed: Root archived the complete review provenance with encrypted, conditional, owner-bound full readback (manifest `2523dc73e150f41db3f5ae4fef89ad071490c72e14faa731645bea1637a85eb1`), rechecked the exact active lease/request/source, and published one approval `cef4dbc017bcc3f661ce7a85f5b7bbe61c91bcf0206c180265e7e9285deb17f0`. Publisher receipt `d3df558a07ffceb4ef3b358fcad9006818b94da73c5dca3c79fb2443c8ebdd8f`. Controller promoted the temporarily paused schedule to candidate definition :82 and dispatched the live generation. Publisher/helper processes exited normally; publisher cleanup `0cabf8448fa08e027f81e65360cfc8fe1d5ebe13c41efb359c4e2a0990f55041` independently confirms its exact PIDs and listeners absent.
+Known issues: Live generation, permanent schedule activation and ROY App Runner promotion are still pending; no production completion is claimed. VEVO runtime and approved business-policy exceptions remain unchanged. Keep the production checkout frozen and this documentation unmerged.
+Next exact step: Verify the exact live task/IP and localhost identity, then actual published generation and all sixteen financial checks, ENABLED dynamic dates, released lease, protected peer and public HTTP. Complete the ROY report-only UI candidate/promotion, browser check, actual financial comparison and immutable final evidence archive with exact process cleanup.
+
 ## 2026-10-08 — Reviewed ROY recovery dispatched; production gates pending
 
 Date: 2026-10-08
