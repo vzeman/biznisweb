@@ -1,5 +1,15 @@
 # ROY reporting project state
 
+## 2026-10-08 — Read-only economic-methodology audit
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-audit-20261008`
+What changed: Audited current rules, preserved source/published artifacts and one narrowly refreshed partial-credit case. No calculator, settings, shop/advertising data or production runtime was changed.
+What is verified: A numbered, closed, non-cancelled partial credit binds to the same order, invoice, currency and VAT, while the included order retains its original monetary values. The main financial calculation does not deduct that partial credit. This establishes a financial-model gap; cash settlement, credited item identity and returned inventory costs remain unverified, so no final profit adjustment is asserted. The refund proxy also uses an already financially filtered population; separate document-date creditnote ratios are not cohort return probabilities.
+Known modeling assumptions: Physical gifts explicitly receive zero acquisition cost even when the reference cost map is nonzero; whether that understates expense depends on supplier terms and any cost already included elsewhere. Do not automatically apply the reference cost twice. Tip/insurance zero cost remains the owner's explicit rule. Payment fees are not separately modeled, logistics/FX are configured estimates, and a fixed-cost constant currently defaults to actuals_configured despite no accounting-feed proof. Shared fixed expenses remain one project pool, not one full pool per country.
+Next exact step: Confirm gift procurement treatment, define partial-credit/item/return-cost reconciliation, repair refund denominators, and distinguish configured/estimated costs from actuals before calling the result accounting net profit. Keep the existing original production version and previously recorded release blocker unchanged during this audit. Private evidence/archive references are recorded in the root project state.
+
 ## STOPPED: verified source retained, ROY release not dispatched
 
 Date: 2026-10-08
