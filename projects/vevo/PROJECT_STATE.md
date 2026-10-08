@@ -1,3 +1,12 @@
+## 2026-10-08 — VEVO candidate host gate independently verified
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; keep unmerged during source-frozen deployment)
+What is verified: Release `c3e23947aff44621886a41678e1564e7` dispatched isolated Fargate task `f953ace79a6e4f51b930cf9788fd6635`, definition :48, private IP `172.31.4.133`, service `vevo-daily-report-email`, path `/app`. The exact source/image and localhost ready marker authorization chain passed independent readback before provider processing. Receipt 0010 SHA-256 `3f3df145d09a77d735299b87d7585f1b15deb97c75cc9b58ca4331cc3fd7edea`; independent proof SHA-256 `87c062695277e54720fea9748d97a6fa7d43c356cb1ff92add1b7a401204fbca`. Protected schedules, peer lease/output and the existing VEVO publication remain unchanged.
+Current runtime: Full-history candidate calculation is running. No publication or final financial comparison is claimed. The one-shot independent observer finished normally; the finite release controller remains active and owns the exact recorded task.
+Next exact step: At `independent-review-requested`, compare all four actual probe periods against the frozen financial/advertising contract and actual JSON/HTML semantics. Publish the hash-bound review only after both independent checks pass, then finish live publication and runtime/HTTP verification. Keep the deployment checkout frozen at `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2` through both report and UI releases.
+
 ## 2026-10-08 — VEVO recovery dispatched from archived verified source
 
 Date: 2026-10-08
