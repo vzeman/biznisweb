@@ -1,5 +1,15 @@
 # VEVO reporting project state
 
+## Current work: known country-source defect repair authorized
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-country-source-fix-20261008`
+What changed: The owner explicitly instructed repair, completed deployment and a financial before/after comparison. This resumes the stopped work below. Both full/fallback order queries now select delivery address fields; cache schema 5 refreshes the old incomplete source records. Focused query-to-country, invoice fallback and unchanged-money tests pass for VEVO and the reusable path.
+What is verified: Fresh AWS account `919341186960`, region `eu-central-1`, service `vevo-daily-report-email`, definition :46, immutable image `sha256:4af12a4dc81033a2709f4a678fdcd7851d401df30800e3511f4f7b4e04ef644a`, OCI working path `/app`; no active Fargate task, so instance/IP are not applicable until the candidate starts. Schedule remains DISABLED, generation `20261006T231826Z`, uncertain lease owner `0e7b025d8532474a8df8bcc4fed03a9f`. The archived stopped-task proof was copied byte-for-byte with AES256, conditional creation and full SHA readback to the existing allowed project prefix: `data/vevo/analyses/2026-10-08-country-source-fix/recovery-readback-0e7b025d8532474a8df8bcc4fed03a9f.json`, SHA-256 `177ecb6e79d182d235e48a61696512c26a352983aff8ced45256e70c6b923e41`. Fresh read-only paused recovery passes; no lease or schedule was changed.
+Implementation verified: Full and fallback queries pass real read-only API checks. All 1,400 regression tests, smoke and critical lint pass. The independent review gate is implemented and documented in `README_DEV.md`; supply the reviewed contract SHA for this release, so an actual four-period aggregate proof must pass after probe cleanup and before promotion/live. The first private descending collector detected overlapping offset pages; a live pagination shift is suspected, and its failed checkpoint is preserved. A new ascending snapshot with explicit uniqueness and date-boundary checks is being collected instead of silently dropping duplicates. This collection issue does not establish missing published orders. No reporting runtime mutation has occurred.
+Next exact step: Complete and archive independent source/country/advertising contracts through 2026-10-07. Finish review/CI, merge/build, then recover the current paused owner using final receipt SHA-256 `a87b3cbf33f5e99269bfd263960ce2aba1da23c9a0f6284990356bbd679eb681` and the allowed readback above. Require the independent probe review before live dispatch, then verify all output periods and financial rows before enabling future runs. Compare the original report and corrected calculation on common dates, separately from newly added days/source drift. No production publication has occurred yet.
+
 ## Current handoff: independent country check stopped publication
 
 Date: 2026-10-07

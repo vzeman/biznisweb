@@ -155,7 +155,7 @@ MARGIN_15_BRANDS: List[str] = []  # Optional brands forced to 15% product margin
 MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15% product margin
 EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
 EXCLUDED_ORDER_STATUSES: List[str] = []  # Legacy status-only exclude list retained for compatibility
-ORDER_CACHE_SCHEMA_VERSION = 4
+ORDER_CACHE_SCHEMA_VERSION = 5
 PAYMENT_METADATA_MAX_RETRIES = 3
 PAYMENT_METADATA_RETRY_DELAY_SEC = 1
 MANUAL_FB_ADS_TOTAL: Optional[float] = None  # Optional fixed total FB spend for selected report range
@@ -519,6 +519,14 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
         zip
         country
       }
+      delivery_address {
+        street
+        descriptive_number
+        orientation_number
+        city
+        zip
+        country
+      }
       items {
         item_label
         ean
@@ -632,6 +640,14 @@ query GetOrdersWithoutPriceElements($filter: OrderFilter, $params: OrderParams) 
         }
       }
       invoice_address {
+        street
+        descriptive_number
+        orientation_number
+        city
+        zip
+        country
+      }
+      delivery_address {
         street
         descriptive_number
         orientation_number

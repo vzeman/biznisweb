@@ -116,7 +116,7 @@ current Fargate task/IP (or confirmed absence), the selected report service, and
 not the obsolete original revision pins in the first managed migration runbook.
 
 ```text
-python scripts/vevo_report_image_release.py run --project roy --profile codex --commit <full-main-SHA> --to-date YYYY-MM-DD
+python scripts/vevo_report_image_release.py run --project roy --profile codex --commit <full-main-SHA> --to-date YYYY-MM-DD --independent-contract-sha256 <reviewed-source-contract-SHA256>
 python scripts/vevo_report_image_release.py status --project roy --profile codex --release-id <32-character-release-id>
 ```
 
@@ -126,7 +126,8 @@ policy binds ROY to `roy-daily-report-email`, `roy-reporting-daily`, and
 `daily-reports/roy-sk`; VEVO uses its existing service, family and sink. Wait for
 every settings-triggered monthly accounting deployment to finish before starting
 this controller, because all other schedules become protected baseline state.
-`--timeout-seconds` bounds each report task (default 7200; allowed 300–14400).
+`--timeout-seconds` bounds each report task and the independent-review wait
+(default 7200; allowed 300–14400).
 An optional fresh `--release-id` binds dispatch idempotency and private evidence;
 never reuse an ID to retry an uncertain run. `status` is read-only. It shows the
 last retained phase and exact owned task ARNs, without financial data or secrets.
@@ -153,6 +154,39 @@ under `data/<project>/reporting/runtime/probes/<release-id>/`. Record safe refer
 hashes and the outcome in the product's `PROJECT_STATE.md`. The helper does not update or claim
 validity of historical `runtime/current.json`; its current-target proof is
 separate, and the shared lease only provides deployment exclusion.
+
+For releases checked against an independent primary-source audit, pass
+`--independent-contract-sha256` for the exact private expected contract. Both
+2026-10-08 corrective releases require it. After the isolated probe has stopped
+and its temporary role has been removed, the controller keeps the schedule
+disabled and renews its lease while awaiting
+`data/<project>/reporting/runtime/probes/<release-id>/review/independent-source.json`.
+The probe role cannot write this review. Missing evidence times out; rejected
+evidence fails before image promotion or live dispatch. The existing pre-live
+recovery logic then preserves the original schedule and recovery ownership.
+
+Generate the review only after the independent verifier has checked all four
+actual probe periods against the reviewed contract and provider evidence.
+Archive its detailed evidence JSON first, using AES256 encryption, the expected
+bucket owner, conditional creation and complete SHA-256 readback. The review
+must contain exactly: `schema_version` (integer 1), `project`, `release_id`,
+`source_commit`, `image_digest`, `report_from_date`, `report_to_date`,
+`probe_manifest_sha256`, `source_contract_sha256`,
+`verification_script_sha256`, `approved` (literal true), `period_checks`, and
+`evidence` with `key` and `sha256`. Each of `latest`, `7d`, `30d` and `90d` must
+have exactly four literal true checks: `financial_aggregates`,
+`country_attribution`, `shared_fixed_costs`, and `advertising_reconciliation`.
+The detailed evidence must repeat the same bindings and checks and contain no
+errors. It is restricted to the selected project's private `analyses/` prefix
+or `data/reporting/analyses/`; a report output or another project's prefix is
+not valid evidence. Write the review conditionally and verify its full hash.
+
+This gate proves the independent aggregate comparison, not individual order
+membership from a probe without a financial CSV. The final live CSV comparison
+is still required. Compare raw advertising sources at their documented precision;
+daily values rounded for display are not an exact account aggregate. Preserve
+the existing production reconciliation limits and explicitly record any source
+delta; do not enlarge tolerances to approve a release.
 
 Failed authorized probes retain only the exact project/release-tagged quality JSON
 under their private diagnostic prefix, plus a separate hash-bound failure marker.
