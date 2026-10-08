@@ -97,3 +97,5 @@ jobs:
           tests.test_operations_refresh
           tests.test_vevo_reporting_country_policy tests.test_vevo_localized_product_costs tests.test_vevo_zero_cost_services tests.test_roy_reporting_policies tests.test_roy_revenue_reconciliation tests.test_order_revenue_reconciliation tests.test_compensation_revenue_reconciliation
           tests.test_ads_measurement tests.test_live_report_quality_gate tests.test_vevo_report_image_release tests.test_reporting_image_release_policy tests.test_roy_report_image_release
+          tests.test_partial_credit_adjustments tests.test_cfo_credit_adjustments tests.test_refund_status_population tests.test_reporting_financial_adjustments tests.test_report_period_failure_diagnostics tests.test_report_summary_advertising_language tests.test_reporting_marketing_semantics tests.test_live_dashboard_marketing_semantics tests.test_customer_lifetime_credit_aggregation
+          tests.test_cost_estimate_publication_policy

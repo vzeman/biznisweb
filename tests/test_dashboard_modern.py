@@ -815,14 +815,16 @@ class DashboardModernTests(unittest.TestCase):
             source_health={"project": "vevo"},
         )
 
-        self.assertIn("Meta profit scaling system", html)
-        self.assertIn("Did high-spend days acquire better future customers?", html)
+        self.assertTrue("Meta spend and profit observations" in html)
+        self.assertTrue("Customer cohorts by first-order-day spend" in html)
         self.assertIn("Sada vzoriek Vevo 3 x 10ml", html)
-        self.assertIn("CUT_PAID", html)
+        self.assertFalse("CUT_PAID" in html)
         payload = extract_embedded_dashboard_payload(html)["meta_profit_scaling"]
-        self.assertEqual("HOLD", payload["summary"]["account_action"])
+        self.assertEqual("OBSERVATIONAL_ONLY", payload["summary"]["account_action"])
+        self.assertFalse(payload["summary"]["budget_recommendation_available"])
         self.assertEqual(9.61, payload["summary"]["safe_cac_90d"])
-        self.assertEqual("CUT_PAID", payload["sample_rows"][0]["paid_action"])
+        self.assertEqual("REVIEW_EVIDENCE", payload["sample_rows"][0]["paid_action"])
+        self.assertEqual("CUT_PAID", scaling["sample_product_rows"].iloc[0]["paid_action"])
 
 
 if __name__ == "__main__":

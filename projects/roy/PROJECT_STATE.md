@@ -1,3 +1,13 @@
+## 2026-10-08 — Corrected financial rules verified; release pending
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-fixes-20261008`
+What changed: Shared financial corrections now apply issued partial credits once, bind all credit-derived costs/metrics to one complete source snapshot, use consistent refund/credit cohort populations and retain missing-email orders in country finances. MER and modeled advertising allocations are labeled consistently across generated reports, built-in dashboards and email; observational comparisons no longer issue causal budget advice. The accepted configured-margin cost policy retains every monetary amount while keeping unknown/invalid rows blocking. ROY physical gifts deliberately remain zero cost. Tips and insurance remain zero cost, original eligibility/restatement stays, and fixed overhead is allocated once across countries.
+What is verified: All 1,460 tests in 87 modules pass with unchanged source, plus smoke, critical lint and independent review. Fresh advertising reconciliation passes. Full fresh order-source collection and independent monetary contracts are still pending; tests are not a production publication claim.
+Current runtime: ROY remains enabled on definition :77, generation `20261008T000535Z`. No runtime change has occurred.
+Next exact step: Finish reviewed code/CI and immutable source contracts, then release sequentially after VEVO is independently verified, regenerate through 2026-10-07 and verify enabled future dynamic-date execution. Verify reporting HTTP before the separate read-only reporting UI image promotion. Archive private evidence and separate financial correction effects from source/status changes.
+
 ## 2026-10-08 — Authorized methodology corrections and release continuation
 
 Date: 2026-10-08

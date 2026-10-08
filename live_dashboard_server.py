@@ -565,9 +565,7 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
     .fact { background:#fff; border:1px solid rgba(200,104,45,.12); border-radius:16px; padding:14px 16px; min-width:180px; }
     .fact strong { display:block; margin-bottom:6px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
     .badge { display:inline-flex; align-items:center; min-height:28px; padding:0 12px; border-radius:999px; font-size:12px; font-weight:700; }
-    .badge.scale { background:rgba(20,122,87,.12); color:var(--green); }
-    .badge.cut { background:rgba(181,72,63,.12); color:var(--red); }
-    .badge.hold,.badge.neutral { background:rgba(200,104,45,.12); color:#a64f1c; }
+    .badge.neutral { background:rgba(200,104,45,.12); color:#a64f1c; }
     .table-wrap { overflow:auto; border:1px solid rgba(200,104,45,.12); border-radius:18px; background:#fff; }
     table { width:100%; min-width:980px; border-collapse:collapse; }
     th,td { padding:14px 16px; text-align:left; border-bottom:1px solid rgba(200,104,45,.10); vertical-align:top; }
@@ -587,7 +585,7 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
       <div>
         <div class="eyebrow">BizniWeb live reporting</div>
         <h1 id="heroTitle">Loading live dashboard...</h1>
-        <p id="heroLead">This read-only dashboard uses the same generated snapshots as the nightly email report, now with period-aware incrementality analysis.</p>
+        <p id="heroLead">This read-only dashboard uses the same generated snapshots as the nightly email report, with observational advertising comparisons for each period.</p>
       </div>
       <div class="actions">
         <a id="reportLink" class="btn primary" href="#" target="_blank" rel="noopener">Open full HTML report</a>
@@ -622,8 +620,8 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
         <div id="contextGrid" class="cards"></div>
       </section>
       <section class="panel">
-        <h2 style="margin:0 0 6px;font-size:22px;">Ad impact / incrementality</h2>
-        <p id="incrementalityLead">Loading incrementality view...</p>
+        <h2 style="margin:0 0 6px;font-size:22px;">Observed advertising comparisons</h2>
+        <p id="incrementalityLead">Loading descriptive comparison...</p>
         <div style="height:14px;"></div>
         <div id="incrementalityPrimary" class="cards"></div>
         <div style="height:14px;"></div>
@@ -634,9 +632,9 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
           <table>
             <thead>
               <tr>
-                <th>View</th><th>Method</th><th>Confidence</th><th>Active days</th><th>Baseline days</th>
-                <th>Inc spend / day</th><th>Inc revenue / day</th><th>Inc profit / day</th><th>Inc company / day</th>
-                <th>Inc ROAS</th><th>Inc CAC</th><th>Verdict</th>
+                <th>View</th><th>Method</th><th>Descriptive quality</th><th>Active days</th><th>Baseline days</th>
+                <th>Spend delta / day</th><th>Revenue delta / day</th><th>Profit delta / day</th><th>Company delta / day</th>
+                <th>Revenue delta / spend delta</th><th>Spend delta / new customers delta</th><th>Interpretation</th>
               </tr>
             </thead>
             <tbody id="incrementalityRows"></tbody>
@@ -662,13 +660,11 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
       const formatNumber = (value, digits = 2) => new Intl.NumberFormat('sk-SK', { minimumFractionDigits:digits, maximumFractionDigits:digits }).format(num(value));
       const formatPercent = (value, digits = 1) => value === null || value === undefined || value === '' ? 'N/A' : `${formatNumber(value, digits)}%`;
       const formatRatio = (value, digits = 2) => value === null || value === undefined || value === '' ? 'N/A' : `${formatNumber(value, digits)}x`;
-      const toneClass = (value) => {
-        const t = String(value || '').toLowerCase();
-        if (t.includes('scale')) return 'scale';
-        if (t.includes('cut')) return 'cut';
-        if (t.includes('hold')) return 'hold';
-        return 'neutral';
-      };
+      const SHOP_MER_NOTE = 'All shop net sales / (Meta + Google spend), including organic and repeat sales; not platform-attributed ROAS.';
+      function observationalComparison(row) {
+        return { ...row, verdict:'Observation only', verdict_tone:'neutral', decision_ready:false,
+          verdict_reason_en:'Observed differences between historical days do not identify a causal advertising effect or justify a budget change.' };
+      }
       const valueClass = (value) => value > 0 ? 'value pos' : value < 0 ? 'value neg' : 'value';
       function renderProjectNav() {
         el('projectNav').innerHTML = PROJECTS.map((project) => `<button class="chip ${project === state.project ? 'active' : ''}" data-project="${project}">${project.toUpperCase()}</button>`).join('');
@@ -716,11 +712,11 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
         const totals = buildTotals(snapshot);
         renderCards('summaryGrid', [
           { label:'Revenue net', value:formatMoney(totals.revenue), note:`${formatInt(totals.orders)} orders in ${formatInt(totals.days)} days`, raw:totals.revenue },
-          { label:'Profit (post-ad, pre-fixed)', value:formatMoney(totals.profitWithoutFixed), note:'Primary ad-scaling profit view', raw:totals.profitWithoutFixed },
+          { label:'Profit (post-ad, pre-fixed)', value:formatMoney(totals.profitWithoutFixed), note:'All shop contribution under configured costs; not causal ad profit', raw:totals.profitWithoutFixed },
           { label:'Company profit (incl. fixed)', value:formatMoney(totals.profitWithFixed), note:'Post-ad and post-fixed', raw:totals.profitWithFixed },
           { label:'Average order value', value:formatMoney(totals.aov), note:'Net AOV in selected period', raw:totals.aov },
           { label:'Total ad spend', value:formatMoney(totals.totalAds), note:`FB ${formatMoney(totals.fbAds)} / Google ${formatMoney(totals.googleAds)}`, raw:totals.totalAds },
-          { label:'Blended ROAS', value:formatRatio(totals.blendedRoas), note:`Product cost ${formatMoney(totals.productCost)} / Fixed ${formatMoney(totals.fixed)}`, raw:totals.blendedRoas || 0 },
+          { label:'Net MER', value:formatRatio(totals.blendedRoas), note:SHOP_MER_NOTE, raw:totals.blendedRoas || 0, className:'value' },
           { label:'Packaging + shipping', value:formatMoney(totals.packaging + totals.shipping), note:`Packaging ${formatMoney(totals.packaging)} / Shipping subsidy ${formatMoney(totals.shipping)}`, raw:totals.packaging + totals.shipping },
           { label:'Orders', value:formatInt(totals.orders), note:'Selected period order count', raw:totals.orders },
         ]);
@@ -737,17 +733,17 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
           { label:'Post-ad profit (€)', value:formatMoney(metrics.profit), note:'Excludes fixed overhead', raw:metrics.profit },
           { label:'Orders', value:formatInt(metrics.orders), note:'Window metric', raw:metrics.orders },
           { label:'AOV', value:formatMoney(metrics.aov), note:'Window metric', raw:metrics.aov },
-          { label:'CAC', value:formatMoney(metrics.cac), note:'Window metric', raw:metrics.cac ? -metrics.cac : 0 },
-          { label:'ROAS', value:formatRatio(metrics.roas), note:'Window metric', raw:metrics.roas },
+          { label:'New-customer CAC', value:metrics.cac === null || metrics.cac === undefined ? 'N/A' : formatMoney(metrics.cac), note:'Total ads / identified new customers; not platform attribution', raw:metrics.cac ? -metrics.cac : 0 },
+          { label:'Net MER', value:formatRatio(metrics.mer ?? metrics.roas), note:SHOP_MER_NOTE, raw:metrics.mer ?? metrics.roas, className:'value' },
           { label:'Company margin (incl. fixed)', value:formatPercent(metrics.company_margin_with_fixed), note:`Absolute ${formatMoney(secondary.company_margin_with_fixed)}`, raw:metrics.company_margin_with_fixed },
         ]);
       }
       function renderIncrementality(snapshot) {
         const dashboard = snapshot.dashboard || {};
-        const primary = dashboard.incrementality_primary || {};
-        const rows = Array.isArray(dashboard.incrementality_rows) ? dashboard.incrementality_rows : [];
+        const primary = observationalComparison(dashboard.incrementality_primary || {});
+        const rows = Array.isArray(dashboard.incrementality_rows) ? dashboard.incrementality_rows.map(observationalComparison) : [];
         const empty = !rows.length || !primary.key;
-        el('incrementalityLead').textContent = empty ? 'This selected period does not yet have enough comparable ad-active vs baseline days.' : text(primary.verdict_reason_en, 'Incrementality comparison ready.');
+        el('incrementalityLead').textContent = empty ? 'This selected period does not yet have enough comparable ad-active vs baseline days.' : primary.verdict_reason_en;
         if (empty) {
           el('incrementalityPrimary').innerHTML = '';
           el('incrementalityFacts').innerHTML = '';
@@ -757,14 +753,14 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
           return;
         }
         renderCards('incrementalityPrimary', [
-          { label:'Verdict', value:text(primary.verdict, 'N/A'), note:text(primary.label_en, 'Selected comparison'), raw:0, className:'value', badge:text(primary.verdict_tone, 'neutral'), badgeClass:toneClass(primary.verdict_tone || primary.verdict) },
-          { label:'Confidence', value:text(primary.confidence, 'N/A').toUpperCase(), note:text(primary.confidence_note_en, ''), raw:0, className:'value' },
-          { label:'Incremental spend / day', value:formatMoney(primary.incremental_total_ad_spend_per_day), note:'Compared against baseline days', raw:primary.incremental_total_ad_spend_per_day },
-          { label:'Incremental revenue / day', value:formatMoney(primary.incremental_revenue_per_day), note:'Net revenue lift per day', raw:primary.incremental_revenue_per_day },
-          { label:'Incremental profit / day', value:formatMoney(primary.incremental_profit_without_fixed_per_day), note:'Post-ad, pre-fixed', raw:primary.incremental_profit_without_fixed_per_day },
-          { label:'Incremental company / day', value:formatMoney(primary.incremental_profit_with_fixed_per_day), note:'Post-ad and post-fixed', raw:primary.incremental_profit_with_fixed_per_day },
-          { label:'Incremental ROAS', value:formatRatio(primary.incremental_roas), note:text(primary.method, 'Method unavailable'), raw:primary.incremental_roas },
-          { label:'Incremental CAC', value:primary.incremental_cac ? formatMoney(primary.incremental_cac) : 'N/A', note:`Break-even CAC ${primary.break_even_cac ? formatMoney(primary.break_even_cac) : 'N/A'}`, raw:primary.incremental_cac ? -primary.incremental_cac : 0 },
+          { label:'Interpretation', value:primary.verdict, note:text(primary.label_en, 'Selected comparison'), raw:0, className:'value', badge:'Descriptive', badgeClass:'neutral' },
+          { label:'Descriptive quality', value:text(primary.confidence, 'N/A').toUpperCase(), note:'Sample comparability only; no causal confidence', raw:0, className:'value' },
+          { label:'Observed spend delta / day', value:formatMoney(primary.incremental_total_ad_spend_per_day), note:'Compared against baseline days', raw:primary.incremental_total_ad_spend_per_day },
+          { label:'Observed revenue delta / day', value:formatMoney(primary.incremental_revenue_per_day), note:'Difference in all shop net sales per day', raw:primary.incremental_revenue_per_day },
+          { label:'Observed profit delta / day', value:formatMoney(primary.incremental_profit_without_fixed_per_day), note:'Post-ad, pre-fixed', raw:primary.incremental_profit_without_fixed_per_day },
+          { label:'Observed company delta / day', value:formatMoney(primary.incremental_profit_with_fixed_per_day), note:'Post-ad and post-fixed', raw:primary.incremental_profit_with_fixed_per_day },
+          { label:'Revenue delta / spend delta', value:formatRatio(primary.incremental_roas), note:'Observed ratio; not causal or platform-attributed ROAS', raw:primary.incremental_roas, className:'value' },
+          { label:'Spend delta / new customers delta', value:primary.incremental_cac ? formatMoney(primary.incremental_cac) : 'N/A', note:`Contribution reference ${primary.break_even_cac ? formatMoney(primary.break_even_cac) : 'N/A'}; not a budget limit`, raw:primary.incremental_cac ? -primary.incremental_cac : 0, className:'value' },
         ]);
         el('incrementalityFacts').innerHTML = [
           { label:'Active days', value:formatInt(primary.active_days) },
@@ -772,7 +768,7 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
           { label:'Matched days', value:formatInt(primary.effective_pair_days) },
           { label:'Overlap rate', value:formatPercent(num(primary.channel_overlap_rate) * 100, 1) },
         ].map((fact) => `<div class="fact"><strong>${fact.label}</strong><div>${fact.value}</div></div>`).join('');
-        el('incrementalityRows').innerHTML = rows.map((row) => `<tr><td><strong>${text(row.label_en, row.key)}</strong><div class="note">${text(row.label_sk, '')}</div></td><td>${text(row.method, 'N/A')}</td><td>${text(row.confidence, 'N/A').toUpperCase()}</td><td>${formatInt(row.active_days)}</td><td>${formatInt(row.control_days)}</td><td>${formatMoney(row.incremental_total_ad_spend_per_day)}</td><td>${formatMoney(row.incremental_revenue_per_day)}</td><td>${formatMoney(row.incremental_profit_without_fixed_per_day)}</td><td>${formatMoney(row.incremental_profit_with_fixed_per_day)}</td><td>${formatRatio(row.incremental_roas)}</td><td>${row.incremental_cac ? formatMoney(row.incremental_cac) : 'N/A'}</td><td><span class="badge ${toneClass(row.verdict_tone || row.verdict)}">${text(row.verdict, 'N/A')}</span></td></tr>`).join('');
+        el('incrementalityRows').innerHTML = rows.map((row) => `<tr><td><strong>${text(row.label_en, row.key)}</strong><div class="note">${text(row.label_sk, '')}</div></td><td>${text(row.method, 'N/A')}</td><td>${text(row.confidence, 'N/A').toUpperCase()}</td><td>${formatInt(row.active_days)}</td><td>${formatInt(row.control_days)}</td><td>${formatMoney(row.incremental_total_ad_spend_per_day)}</td><td>${formatMoney(row.incremental_revenue_per_day)}</td><td>${formatMoney(row.incremental_profit_without_fixed_per_day)}</td><td>${formatMoney(row.incremental_profit_with_fixed_per_day)}</td><td>${formatRatio(row.incremental_roas)}</td><td>${row.incremental_cac ? formatMoney(row.incremental_cac) : 'N/A'}</td><td><span class="badge neutral">${row.verdict}</span></td></tr>`).join('');
         el('incrementalityEmpty').hidden = true;
         el('incrementalityTableWrap').hidden = false;
       }
@@ -798,7 +794,7 @@ def build_live_dashboard_html(projects: List[str], initial_project: str, initial
         state.period = text((snapshot.period_switcher || {}).current_key, state.period).toLowerCase();
         document.title = `${state.project.toUpperCase()} Live Dashboard`;
         el('heroTitle').textContent = `${state.project.toUpperCase()} live dashboard`;
-        el('heroLead').textContent = `Read-only live view for ${text((snapshot.period_switcher || {}).current_range_sk, `${snapshot.date_from} - ${snapshot.date_to}`)}. Incrementality uses the same generated payload as the nightly report and respects the selected report period.`;
+        el('heroLead').textContent = `Read-only live view for ${text((snapshot.period_switcher || {}).current_range_sk, `${snapshot.date_from} - ${snapshot.date_to}`)}. Observational comparisons use the same generated payload as the nightly report; they do not establish causality.`;
         renderProjectNav();
         renderPeriodNav(snapshot);
         renderScopeMeta(snapshot);
@@ -1740,7 +1736,7 @@ def build_roy_operations_dashboard_html(
       { key:'orders', label_en:'Orders' },
       { key:'aov', label_en:'AOV (net)' },
       { key:'cac', label_en:'CAC' },
-      { key:'roas', label_en:'ROAS' },
+      { key:'roas', label_en:'Net MER' },
       { key:'pre_ad_contribution_margin', label_en:'Pre-ad contribution' },
       { key:'post_ad_margin', label_en:'Post-ad margin' },
       { key:'company_margin_with_fixed', label_en:'Company margin (incl. fixed)' },
@@ -1903,7 +1899,7 @@ def build_roy_operations_dashboard_html(
     function formatKpiValue(key, value) {
       if (['revenue','profit','aov','cac'].includes(key)) return value === null || value === undefined ? 'N/A' : fmtMoney(value);
       if (key === 'orders') return fmtInt(value);
-      if (key === 'roas') return fmtRatio(value);
+      if (key === 'roas' || key === 'mer') return fmtRatio(value);
       if (key.includes('margin') || key.includes('contribution')) return fmtPct(value);
       return text(value, 'N/A');
     }
@@ -1966,7 +1962,10 @@ def build_roy_operations_dashboard_html(
         const tone = compare.startsWith('-') && key !== 'cac' ? 'negative' : compare.startsWith('+') ? 'positive' : 'neutral';
         const secondary = key === 'company_margin_with_fixed' && (windowPayload.secondary_metrics || {}).company_margin_with_fixed !== undefined
           ? ` · ${fmtMoney((windowPayload.secondary_metrics || {}).company_margin_with_fixed)}` : '';
-        return `<article class="kpi-card"><div class="label">${safe(def.label_en || key)}</div><div class="value">${safe(formatKpiValue(key, value))}</div><div class="note ${tone}">${safe(compare)}${safe(secondary)}</div>${sparkline(trendMetrics[key], key)}</article>`;
+        const label = key === 'roas' || key === 'mer' ? 'Net MER' : def.label_en || key;
+        const basis = key === 'roas' || key === 'mer'
+          ? 'All shop net sales / (Meta + Google spend), including organic and repeat sales; not platform-attributed ROAS.' : '';
+        return `<article class="kpi-card"><div class="label">${safe(label)}</div><div class="value">${safe(formatKpiValue(key, value))}</div><div class="note ${tone}">${safe(compare)}${safe(secondary)}</div>${basis ? `<div class="note">${safe(basis)}</div>` : ''}${sparkline(trendMetrics[key], key)}</article>`;
       }).join('');
     }
     function renderAlerts(data) {
