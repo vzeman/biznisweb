@@ -1,7 +1,7 @@
 """Synthetic integration contracts for order credits and country completeness."""
 import copy
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,7 +9,9 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from export_orders import BizniWebExporter
+from export_orders import BizniWebExporter, ORDER_QUERY, ORDER_QUERY_WITHOUT_PRICE_ELEMENTS
+from order_status_safety import ORDER_SAFETY_QUERY
+from reporting_core.credit_adjustments import CreditAdjustmentError
 
 
 class ReportingFinancialAdjustmentTests(unittest.TestCase):
@@ -79,6 +81,89 @@ class ReportingFinancialAdjustmentTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "failed earlier"):
                 self.exporter._creditnote_snapshot()
             self.assertEqual(1, fetch.call_count)
+
+    def prepare_credit(self, order, document, detail):
+        self.exporter._creditnote_source_snapshot = None
+        self.exporter._credit_adjustments_by_order = {}
+        with patch("creditnote_export.fetch_project_creditnotes", return_value=([document], 1)):
+            with patch("order_status_safety.fetch_order_safety_context", return_value=detail):
+                self.exporter._prepare_order_credit_adjustments([order], datetime(2026, 10, 7))
+        return self.exporter._credit_adjustments_by_order[order["order_num"]]
+
+    @staticmethod
+    def query_currency(query, path, code):
+        """Project synthetic currency using the actual production query selection."""
+        node = getattr(query, "document", query).definitions[0]
+        for name in path:
+            node = next(field for field in node.selection_set.selections if field.name.value == name)
+        native = {"code": code, "symbol": {"EUR": "€", "CZK": "Kč", "HUF": "Ft"}[code]}
+        return {field.name.value: native[field.name.value] for field in node.selection_set.selections}
+
+    def test_credit_uses_actual_list_and_detail_currency_query_shapes(self):
+        rates = {"EUR": 1, "CZK": ".04", "HUF": ".0025"}
+        self.exporter.project_settings["currency_rates_to_eur"] = rates
+        for index, query in enumerate((ORDER_QUERY, ORDER_QUERY_WITHOUT_PRICE_ELEMENTS)):
+            for code, rate in rates.items():
+                with self.subTest(query=index, currency=code):
+                    order, document = self.source()
+                    detail = copy.deepcopy(order)
+                    order["sum"]["currency"] = self.query_currency(query, ("getOrderList", "data", "sum", "currency"), code)
+                    detail["sum"]["currency"] = self.query_currency(ORDER_SAFETY_QUERY, ("getOrder", "sum", "currency"), code)
+                    self.assertNotEqual(order["sum"]["currency"], detail["sum"]["currency"])
+                    document.update(price=f"10 {code}", taxed_price=f"12.30 {code}")
+                    original = copy.deepcopy((order, document, detail))
+                    adjustment = self.prepare_credit(order, document, detail)
+                    self.assertEqual((-Decimal("10") * Decimal(str(rate))).quantize(Decimal(".01"), rounding=ROUND_HALF_UP),
+                                     adjustment["revenue_credit_adjustment"])
+                    self.assertEqual(0, adjustment["cogs_adjustment"])
+                    self.assertEqual(original, (order, document, detail))
+
+    def test_credit_currency_must_be_explicit_and_valid_on_both_sources(self):
+        invalid = (None, {}, True, "EUR", {"symbol": "€"}, {"code": None}, {"code": True},
+                   {"code": 978}, {"code": ""}, {"code": "eur"}, {"code": "EU"},
+                   {"code": "EUR "}, {"code": []})
+        for side in ("list", "detail"):
+            for currency in invalid:
+                with self.subTest(side=side, currency=currency):
+                    order, document = self.source()
+                    detail = copy.deepcopy(order)
+                    (order if side == "list" else detail)["sum"]["currency"] = currency
+                    with self.assertRaises(CreditAdjustmentError) as caught:
+                        self.prepare_credit(order, document, detail)
+                    self.assertEqual("credit_order_currency_unknown", caught.exception.reason)
+                    self.assertEqual({}, self.exporter._credit_adjustments_by_order)
+
+    def test_real_currency_change_is_rejected_in_either_source(self):
+        for side in ("list", "detail"):
+            with self.subTest(side=side):
+                order, document = self.source()
+                detail = copy.deepcopy(order)
+                (order if side == "list" else detail)["sum"]["currency"] = {"code": "CZK"}
+                with self.assertRaisesRegex(CreditAdjustmentError, "credit_order_source_changed"):
+                    self.prepare_credit(order, document, detail)
+
+    def test_equal_unknown_currency_does_not_default_to_eur(self):
+        order, document = self.source()
+        order["sum"]["currency"] = {"code": "ZZZ"}
+        detail = copy.deepcopy(order)
+        order["sum"]["currency"]["symbol"] = "unknown"
+        document.update(price="10 ZZZ", taxed_price="12.30 ZZZ")
+        with self.assertRaisesRegex(CreditAdjustmentError, "credit_currency_rate_missing"):
+            self.prepare_credit(order, document, detail)
+
+    def test_query_shape_fix_preserves_order_identity_money_and_status_guards(self):
+        changes = (("id", "202"), ("order_num", "SYNTHETIC-OTHER"), ("pur_date", "2026-09-03 10:00:00"),
+                   ("sum", {"value": 122.0, "currency": {"code": "EUR"}}), ("status", {"id": "74"}))
+        for field, value in changes:
+            with self.subTest(field=field):
+                order, document = self.source()
+                detail = copy.deepcopy(order)
+                order["sum"]["currency"]["symbol"] = "€"
+                detail[field] = value
+                reason = "credit_order_status_changed" if field == "status" else "credit_order_source_changed"
+                with self.assertRaisesRegex(CreditAdjustmentError, reason):
+                    self.prepare_credit(order, document, detail)
+                self.assertEqual({}, self.exporter._credit_adjustments_by_order)
 
     def test_stale_order_total_and_unknown_issued_date_fail_closed(self):
         order, document = self.source()

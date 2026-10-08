@@ -1,3 +1,14 @@
+## 2026-10-08 — Authorized ROY currency guard repair verified
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-credit-currency-20261008`
+What changed: The owner explicitly authorized correction of the confirmed currency-projection defect and production deployment of ROY, superseding the previous stop. The credit-order bridge now compares explicit valid native currency codes instead of complete objects with different query-selected presentation fields. It retains original order identity, purchase date, native sum and status checks, configured FX validation and all financial/business policies. Regression fixtures project synthetic currencies from the actual full/fallback list and safety-detail GraphQL queries, covering EUR/CZK/HUF, invalid or different currencies and genuine source changes. The test projector supports both installed GraphQLRequest and DocumentNode representations.
+What is verified: Clean isolated checkout, fetch and pull/rebase from main `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2`, then the dedicated branch. Fresh infrastructure identity proof `848b6269e5b2190f3f6155a19c60a2b36efac7ec79955d8e9693a8f173e7957b` verifies account, service, image working path `/app`, absent active tasks/IP and unchanged reporting baseline before code edits. Independent code review `b9024cfee60307dda4fd221aa8b1f0840b3bd9425aa2a955d0911afb51868c94` passes. All 1,481 tests in 88 modules, reporting smoke, critical lint and diff checks pass on unchanged code; validation receipt `ea622c251613c60314f8ed272624e2f09720651b27675fde938fbfded2819478`. Test processes exited and exact owned PIDs/listeners are absent.
+Current runtime: ROY remains on its original enabled definition :77 and generation `20261008T000535Z`. No deployment or publication is claimed yet. Prior failed release `9a666b8a81ee4ce1ac6c0e25d78db677` and evidence remain immutable; detailed stopped-release handoff is preserved in draft PR #614. New private evidence belongs in ignored `data/roy-credit-currency-fix-20261008/`, to be encrypted/archived before dispatch. Fresh complete ROY primary/credit and advertising reads are in progress; they now cover the real list/detail query shapes.
+Next exact step: Push and review the narrow PR, require exact-head CI and merged image build. Freeze a fresh source-bound monetary contract and private archive, then use a new ordinary ROY release ID with independent candidate source/display review, live publication and runtime/HTTP checks through 2026-10-07. Finish ROY's report-only App Runner promotion afterward and verify future dynamic-date scheduling. Keep peer reporting/leases/artifacts and all unrelated schedules unchanged; no business/provider mutations or report emails are part of the regeneration.
+
+
 ## 2026-10-08 — Final code validation and reporting UI release path
 
 Date: 2026-10-08

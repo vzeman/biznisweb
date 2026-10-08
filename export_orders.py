@@ -6015,6 +6015,8 @@ class BizniWebExporter:
 
     def _prepare_order_credit_adjustments(self, orders, date_to):
         """Bind issued partial credits to included orders without allocating products."""
+        from collections.abc import Mapping
+
         from creditnote_export import normalize_creditnote_automation_context, parse_creditnote_datetime
         from order_status_safety import fetch_order_safety_context
         from reporting_core.credit_adjustments import CreditAdjustmentError, build_order_credit_adjustment
@@ -6045,9 +6047,21 @@ class BizniWebExporter:
             for key in ("id", "order_num", "pur_date"):
                 if str(detail.get(key)) != str(order.get(key)):
                     raise CreditAdjustmentError("credit_order_source_changed")
-            for key in ("value", "currency"):
-                if (detail.get("sum") or {}).get(key) != (order.get("sum") or {}).get(key):
-                    raise CreditAdjustmentError("credit_order_source_changed")
+            source_total, detail_total = order.get("sum"), detail.get("sum")
+            if not isinstance(source_total, Mapping) or not isinstance(detail_total, Mapping):
+                raise CreditAdjustmentError("credit_order_source_changed")
+            if detail_total.get("value") != source_total.get("value"):
+                raise CreditAdjustmentError("credit_order_source_changed")
+            # List and detail queries select different presentation fields (symbol).
+            # Only an explicit native currency code identifies the money's currency.
+            currencies = [total.get("currency") for total in (source_total, detail_total)]
+            if any(not isinstance(currency, Mapping)
+                   or not isinstance(currency.get("code"), str)
+                   or re.fullmatch(r"[A-Z]{3}", currency["code"]) is None
+                   for currency in currencies):
+                raise CreditAdjustmentError("credit_order_currency_unknown")
+            if currencies[0]["code"] != currencies[1]["code"]:
+                raise CreditAdjustmentError("credit_order_source_changed")
             source_status = (self._reporting_order_context(order).get("status") or {}).get("id")
             if source_status is None or str((detail.get("status") or {}).get("id")) != str(source_status):
                 raise CreditAdjustmentError("credit_order_status_changed")
