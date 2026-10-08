@@ -587,5 +587,260 @@ class ImageReleaseTests(unittest.TestCase):
         obj.lease.retain_uncertain.assert_called_once()
 
 
+class IndependentReviewTests(unittest.TestCase):
+    def fixture(self, project="vevo"):
+        obj = object.__new__(release.ImageRelease)
+        obj.policy = release.PROJECTS[project]
+        obj.release_id, obj.commit, obj.image = "a" * 32, "b" * 40, IMAGE
+        obj.prefix = obj.policy.probe_prefix + obj.release_id + "/"
+        obj.independent_contract_sha256 = "c" * 64
+        obj.report_from_date, obj.to_date = "2025-05-03", DATE
+        obj.owned_task, obj.known_schedule = None, {"State": "DISABLED"}
+        obj.s3, obj.event, obj.checkpoint, obj.no_report_tasks = Mock(), Mock(), Mock(), Mock()
+        obj.original_outputs = {"old": {"ETag": "unchanged"}}
+        obj.live_outputs = Mock(return_value=obj.original_outputs)
+        elapsed = [0]
+        obj.clock = lambda: elapsed[0]
+        obj.sleep = lambda seconds: elapsed.__setitem__(0, elapsed[0] + seconds)
+        obj.timeout = 20
+        manifest = release.canonical({"project": project, "artifacts": "already-verified-by-wait-probe"})
+        obj.probe_manifest_sha256 = release.sha(manifest)
+        checks = {name: True for name in ("financial_aggregates", "country_attribution", "shared_fixed_costs", "advertising_reconciliation")}
+        review = {"schema_version": 1, "project": project, "release_id": obj.release_id, "source_commit": obj.commit,
+                  "image_digest": IMAGE.rsplit("@", 1)[1], "report_from_date": obj.report_from_date, "report_to_date": DATE,
+                  "probe_manifest_sha256": obj.probe_manifest_sha256, "source_contract_sha256": obj.independent_contract_sha256,
+                  "verification_script_sha256": "d" * 64, "approved": True,
+                  "period_checks": {period: checks.copy() for period in ("latest", "7d", "30d", "90d")},
+                  "evidence": {"key": f"data/{project}/analyses/test/source-proof.json", "sha256": "pending"}}
+        return obj, review, manifest
+
+    def blobs(self, obj, review, manifest, proof=None):
+        proof = proof if proof is not None else {key: copy.deepcopy(value) for key, value in review.items() if key != "evidence"}
+        evidence_raw = release.canonical(proof)
+        review["evidence"]["sha256"] = release.sha(evidence_raw)
+        return {obj.prefix + "artifacts/output-manifest.json": manifest,
+                obj.prefix + "review/independent-source.json": release.canonical(review), review["evidence"]["key"]: evidence_raw}
+
+    def verify(self, obj, blobs):
+        with patch.object(release, "read_private", side_effect=lambda _s3, key, *args: blobs[key]):
+            obj.wait_independent_review()
+
+    def test_matching_source_proof_passes_both_projects_and_is_outside_probe_write_scope(self):
+        for project in ("vevo", "roy"):
+            obj, review, manifest = self.fixture(project)
+            blobs = self.blobs(obj, review, manifest)
+            with self.subTest(project=project):
+                self.verify(obj, blobs)
+            self.assertEqual(["independent-review-requested", "independent-review-verified"], [call.args[0] for call in obj.event.call_args_list])
+            self.assertEqual(release.sha(blobs[obj.prefix + "review/independent-source.json"]), obj.event.call_args.kwargs["review_sha256"])
+            self.assertEqual(review["evidence"], obj.event.call_args.kwargs["evidence"])
+            self.assertEqual(2, obj.no_report_tasks.call_count)
+            writes = [statement for statement in obj.policy.probe_policy(obj.release_id)["Statement"] if "s3:PutObject" in statement["Action"]]
+            self.assertTrue(all("/review/" not in resource for statement in writes for resource in statement["Resource"]))
+            self.assertTrue(all(resource.startswith(f"arn:aws:s3:::{release.BUCKET}/" + obj.prefix + "artifacts/")
+                                or resource.startswith(f"arn:aws:s3:::{release.BUCKET}/" + obj.prefix + "markers/")
+                                for statement in writes for resource in statement["Resource"]))
+
+    def test_stale_foreign_unapproved_and_wrong_manifest_binding_fail_before_approval(self):
+        changes = {"schema_version": True, "project": "roy", "release_id": "f" * 32, "source_commit": "f" * 40,
+                   "image_digest": "sha256:" + "f" * 64, "report_from_date": DATE, "report_to_date": "2026-10-05",
+                   "probe_manifest_sha256": "f" * 64, "source_contract_sha256": "f" * 64,
+                   "verification_script_sha256": "unhashed", "approved": False, "unknown": True}
+        for field, value in changes.items():
+            obj, review, manifest = self.fixture()
+            review[field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(RuntimeError, "review-binding"):
+                self.verify(obj, self.blobs(obj, review, manifest))
+            self.assertEqual(1, obj.event.call_count)
+
+    def test_every_period_and_check_must_be_present_and_literal_true(self):
+        for change in ("missing-period", "extra-period", "missing-check", "extra-check", "false", "number", "text"):
+            obj, review, manifest = self.fixture()
+            checks = review["period_checks"]
+            if change == "missing-period":
+                del checks["90d"]
+            elif change == "extra-period":
+                checks["full"] = checks["latest"]
+            elif change == "missing-check":
+                del checks["latest"]["country_attribution"]
+            elif change == "extra-check":
+                checks["latest"]["individual_membership"] = True
+            else:
+                checks["latest"]["country_attribution"] = {"false": False, "number": 1, "text": "true"}[change]
+            with self.subTest(change=change), self.assertRaisesRegex(RuntimeError, "review-checks"):
+                self.verify(obj, self.blobs(obj, review, manifest))
+
+    def test_evidence_cannot_point_to_other_project_public_sink_probe_or_traversal(self):
+        for key in ("data/roy/analyses/other.json", "daily-reports/vevo/latest/generation.json",
+                    "data/vevo/reporting/runtime/probes/forged.json", "data/vevo/analyses/../other.json",
+                    "data/vevo/analyses/a\\other.json", "data/vevo/analyses//other.json"):
+            obj, review, manifest = self.fixture()
+            review["evidence"]["key"] = key
+            with self.subTest(key=key), self.assertRaisesRegex(RuntimeError, "evidence-scope"):
+                self.verify(obj, self.blobs(obj, review, manifest))
+
+    def test_shared_private_archive_is_allowed_but_hash_and_content_must_both_match(self):
+        for change in ("none", "hash", "country", "integer", "errors"):
+            obj, review, manifest = self.fixture()
+            review["evidence"]["key"] = "data/reporting/analyses/a/source-proof.json"
+            proof = {key: copy.deepcopy(value) for key, value in review.items() if key != "evidence"}
+            if change in ("country", "integer"):
+                proof["period_checks"]["latest"]["country_attribution"] = False if change == "country" else 1
+            elif change == "errors":
+                proof["errors"] = ["synthetic source mismatch"]
+            blobs = self.blobs(obj, review, manifest, proof)
+            if change == "hash":
+                blobs[review["evidence"]["key"]] += b" "
+            with self.subTest(change=change):
+                if change == "none":
+                    self.verify(obj, blobs)
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "evidence-(hash|binding)"):
+                        self.verify(obj, blobs)
+
+    def test_missing_review_waits_with_checks_but_access_denied_fails_immediately(self):
+        for code in ("NoSuchKey", "AccessDenied"):
+            obj, review, manifest = self.fixture()
+            blobs = self.blobs(obj, review, manifest)
+            count = [0]
+            def fetch(_s3, key, *args):
+                if key.endswith("review/independent-source.json"):
+                    count[0] += 1
+                    if count[0] == 1:
+                        raise ClientError({"Error": {"Code": code}}, "GetObject")
+                return blobs[key]
+            with self.subTest(code=code), patch.object(release, "read_private", side_effect=fetch):
+                if code == "NoSuchKey":
+                    obj.wait_independent_review()
+                    self.assertEqual(10, obj.clock())
+                    self.assertEqual(3, obj.no_report_tasks.call_count)
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "review-read-failed"):
+                        obj.wait_independent_review()
+                    self.assertEqual(0, obj.clock())
+
+    def test_missing_review_times_out_without_any_approval(self):
+        obj, _review, manifest = self.fixture()
+        def fetch(_s3, key, *args):
+            if key.endswith("output-manifest.json"):
+                return manifest
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+        with patch.object(release, "read_private", side_effect=fetch), self.assertRaisesRegex(RuntimeError, "review-timeout"):
+            obj.wait_independent_review()
+        self.assertEqual(20, obj.clock())
+        self.assertEqual(["independent-review-requested"], [call.args[0] for call in obj.event.call_args_list])
+
+    def test_changed_manifest_outputs_or_protected_schedule_cannot_authorize_live(self):
+        for change in ("manifest", "outputs", "protected"):
+            obj, review, manifest = self.fixture()
+            blobs = self.blobs(obj, review, manifest)
+            if change == "manifest":
+                blobs[obj.prefix + "artifacts/output-manifest.json"] += b" "
+            elif change == "outputs":
+                obj.live_outputs.return_value = {"new": "foreign publication"}
+            else:
+                obj.checkpoint.side_effect = RuntimeError("image-release-other-schedule-drift")
+            with self.subTest(change=change), self.assertRaisesRegex(RuntimeError, "drift"):
+                self.verify(obj, blobs)
+            self.assertFalse(any(call.args[0] == "independent-review-verified" for call in obj.event.call_args_list))
+
+    def test_duplicate_review_fields_and_review_changed_during_validation_fail(self):
+        for change in ("duplicate", "changed"):
+            obj, review, manifest = self.fixture()
+            blobs = self.blobs(obj, review, manifest)
+            key = obj.prefix + "review/independent-source.json"
+            if change == "duplicate":
+                blobs[key] = b'{"approved":false,' + blobs[key][1:]
+            count = [0]
+            def fetch(_s3, requested, *args):
+                if requested == key:
+                    count[0] += 1
+                    if change == "changed" and count[0] == 2:
+                        return blobs[requested] + b" "
+                return blobs[requested]
+            with self.subTest(change=change), patch.object(release, "read_private", side_effect=fetch), self.assertRaises(RuntimeError):
+                obj.wait_independent_review()
+
+    def test_optional_legacy_path_does_not_read_or_wait_and_bad_contract_rejects_before_clients(self):
+        obj = object.__new__(release.ImageRelease)
+        with patch.object(release, "read_private") as fetch:
+            obj.wait_independent_review()
+        fetch.assert_not_called()
+        for value in ("", "bad", "A" * 64, True, "a" * 63):
+            session = Mock()
+            with self.subTest(value=value), self.assertRaisesRegex(RuntimeError, "independent-contract-invalid"):
+                release.ImageRelease(session, "b" * 40, DATE, 300, independent_contract_sha256=value)
+            session.client.assert_not_called()
+
+    def test_run_places_source_review_after_probe_cleanup_and_timeout_restores_original_state(self):
+        for paused in (False, True):
+            for approved in (False, True):
+                obj, review, manifest = self.fixture()
+                obj.recover_paused_release = "e" * 32 if paused else None
+                obj.recovery = {"previous_owner": "e" * 32} if paused else None
+                obj.promoted = obj.rerun_attempted = obj.lease_owned = obj.start_uncertain = False
+                obj.task_records, obj.peer_snapshot = {}, {}
+                obj.session, obj.ecs, obj.lease = Mock(), Mock(), Mock()
+                obj.session.client.return_value.get_caller_identity.return_value = {"Account": release.ACCOUNT}
+                source = definition()
+                source.update(status="ACTIVE", taskDefinitionArn="arn:synthetic:vevo-reporting-daily:42")
+                source["containerDefinitions"][0]["environment"] += [
+                    {"name": "REPORT_FROM_DATE", "value": obj.report_from_date},
+                    {"name": "REPORT_SKIP_CREDITNOTE_STORNO_GUARD", "value": "true"}]
+                original = {"Name": release.SERVICE, "State": "DISABLED" if paused else "ENABLED",
+                            "Target": {"Arn": release.CLUSTER, "EcsParameters": {"TaskDefinitionArn": source["taskDefinitionArn"], "LaunchType": "FARGATE"}}}
+                current = [copy.deepcopy(original)]
+                obj.schedule = lambda: copy.deepcopy(current[0])
+                obj.all_schedules = lambda: {release.SERVICE: copy.deepcopy(current[0])}
+                transitions = []
+                def update(desired):
+                    current[0], obj.known_schedule = copy.deepcopy(desired), copy.deepcopy(desired)
+                obj.update = update
+                obj.event = Mock(side_effect=lambda phase, **details: transitions.append(phase))
+                obj.exact_image = Mock(return_value=(IMAGE, "123"))
+                obj.definition = Mock(side_effect=lambda arn: source if arn == source["taskDefinitionArn"] else {"status": "INACTIVE"})
+                obj.ecs.register_task_definition.side_effect = lambda **value: {"taskDefinition": {**value, "taskDefinitionArn": "arn:synthetic:vevo-reporting-daily:43"}}
+                obj.inspect_peer_boundary, obj.exclusion, obj.inspect_paused_recovery = Mock(), Mock(), Mock()
+                obj.acquire_release_lease = Mock(side_effect=lambda: setattr(obj, "lease_owned", True))
+                obj.create_role, obj.cleanup_task = Mock(), Mock()
+                obj.cleanup_role = Mock(side_effect=lambda: transitions.append("probe-role-cleaned"))
+                obj.restore_paused_recovery_lease = Mock(side_effect=lambda: setattr(obj, "lease_owned", False))
+                def start(mode):
+                    transitions.append("start-" + mode)
+                    obj.owned_task = mode
+                    self.assertEqual("DISABLED", current[0]["State"])
+                    if mode == "live":
+                        self.assertIn("independent-review-verified", transitions)
+                        obj.rerun_attempted = True
+                obj.start_task = Mock(side_effect=start)
+                obj.wait_probe = Mock(side_effect=lambda: transitions.append("probe-verified"))
+                obj.wait_live = Mock()
+                blobs = self.blobs(obj, review, manifest)
+                def fetch(_s3, key, *args):
+                    if key == obj.policy.sink + "/latest/generation.json":
+                        return b'{"generation_id":"old"}'
+                    if not approved and key.endswith("review/independent-source.json"):
+                        raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+                    return blobs[key]
+                with self.subTest(paused=paused, approved=approved), patch.object(release, "exact_source"), \
+                     patch.object(release, "committed_gate_sha", return_value="d" * 64), \
+                     patch.object(release.binding, "require_private_bucket"), patch.object(release, "read_private", side_effect=fetch):
+                    if approved:
+                        obj.run()
+                        self.assertLess(transitions.index("probe-verified"), transitions.index("probe-role-cleaned"))
+                        self.assertLess(transitions.index("probe-role-cleaned"), transitions.index("independent-review-requested"))
+                        self.assertLess(transitions.index("independent-review-verified"), transitions.index("image-promotion-requested"))
+                        self.assertLess(transitions.index("image-promotion-verified"), transitions.index("start-live"))
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "independent-review-timeout"):
+                            obj.run()
+                        self.assertNotIn("image-promotion-requested", transitions)
+                        self.assertNotIn("start-live", transitions)
+                        self.assertEqual(original, current[0])
+                        obj.ecs.deregister_task_definition.assert_called_once()
+                        self.assertEqual(paused, obj.restore_paused_recovery_lease.called)
+                        self.assertEqual(not paused, obj.lease.release.called)
+
+
 if __name__ == "__main__":
     unittest.main()

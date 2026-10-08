@@ -39,6 +39,11 @@ EXPECTED_ARTIFACTS = {"report_latest.html", "dashboard_payload_latest.json"} | {
     for kind, extension in (("report", "html"), ("dashboard_payload", "json"))}
 
 
+def unique_review_object(pairs):
+    require(len(pairs) == len(dict(pairs)), "image-release-independent-duplicate-field")
+    return dict(pairs)
+
+
 def gh(path):
     return json.loads(subprocess.check_output(["gh", "api", path], cwd=ROOT, timeout=45))
 
@@ -261,7 +266,11 @@ class ImageRelease(Deployment):
 
     def __init__(self, session, commit, to_date, timeout, *, release_id=None, recover_paused_release=None,
                  recovery_receipt_sha256=None, recovery_readback_key=None, recovery_readback_sha256=None,
-                 project="vevo", retained_peer_release=None, retained_peer_lease_sha256=None, retained_peer_lease_etag=None):
+                 project="vevo", retained_peer_release=None, retained_peer_lease_sha256=None, retained_peer_lease_etag=None,
+                 independent_contract_sha256=None):
+        require(independent_contract_sha256 is None or (isinstance(independent_contract_sha256, str)
+                and re.fullmatch(r"[a-f0-9]{64}", independent_contract_sha256)), "image-release-independent-contract-invalid")
+        self.independent_contract_sha256 = independent_contract_sha256
         self.policy = project_policy(project)
         require(not recover_paused_release or self.policy == VEVO, "image-release-recovery-project-unsupported")
         super().__init__(session, commit, "", "")
@@ -500,7 +509,75 @@ class ImageRelease(Deployment):
         verify_artifacts(json.loads(raw), self.fetch, prefix=self.prefix + "artifacts/", to_date=self.to_date,
                          probe=True, policy=self.policy, from_date=self.report_from_date)
         require(self.live_outputs() == self.original_outputs, "image-release-probe-changed-live-output")
+        self.probe_manifest_sha256 = sha(raw)
         self.event("probe-complete", identity=ready, complete=complete, terminal_task=task)
+
+    def wait_independent_review(self):
+        """Require source aggregate proof outside the probe's IAM write scope before live dispatch."""
+        if getattr(self, "independent_contract_sha256", None) is None:
+            return
+        require(self.owned_task is None and self.known_schedule["State"] == "DISABLED",
+                "image-release-independent-review-not-paused")
+        manifest_key = self.prefix + "artifacts/output-manifest.json"
+        manifest_raw = read_private(self.s3, manifest_key)
+        require(sha(manifest_raw) == self.probe_manifest_sha256, "image-release-independent-manifest-drift")
+        expected = {"schema_version": 1, "project": self.policy.project, "release_id": self.release_id,
+                    "source_commit": self.commit, "image_digest": self.image.rsplit("@", 1)[1],
+                    "report_from_date": self.report_from_date, "report_to_date": self.to_date,
+                    "probe_manifest_sha256": self.probe_manifest_sha256,
+                    "source_contract_sha256": self.independent_contract_sha256, "approved": True}
+        key = self.prefix + "review/independent-source.json"
+        self.checkpoint()
+        self.event("independent-review-requested", review_key=key, bindings=expected)
+        deadline = self.clock() + self.timeout
+        while self.clock() < deadline:
+            self.checkpoint(poll=True)
+            self.no_report_tasks()
+            require(self.live_outputs() == self.original_outputs, "image-release-independent-live-output-drift")
+            try:
+                raw = read_private(self.s3, key, 64 * 1024)
+            except Exception as exc:
+                require(binding.error_code(exc) in {"NoSuchKey", "404"}, "image-release-independent-review-read-failed")
+                self.sleep(10)
+                continue
+            review = json.loads(raw, object_pairs_hook=unique_review_object)
+            require(isinstance(review, dict) and set(review) == set(expected) | {"verification_script_sha256", "period_checks", "evidence"}
+                    and type(review.get("schema_version")) is int and review.get("approved") is True
+                    and all(review.get(name) == value for name, value in expected.items())
+                    and isinstance(review.get("verification_script_sha256"), str)
+                    and re.fullmatch(r"[a-f0-9]{64}", review["verification_script_sha256"]),
+                    "image-release-independent-review-binding")
+            periods = review["period_checks"]
+            checks = {"financial_aggregates", "country_attribution", "shared_fixed_costs", "advertising_reconciliation"}
+            require(isinstance(periods, dict) and set(periods) == {"latest", "7d", "30d", "90d"}
+                    and all(isinstance(value, dict) and set(value) == checks and all(result is True for result in value.values())
+                            for value in periods.values()), "image-release-independent-review-checks")
+            evidence = review["evidence"]
+            require(isinstance(evidence, dict) and set(evidence) == {"key", "sha256"}
+                    and isinstance(evidence.get("key"), str) and len(evidence["key"]) <= 1024
+                    and evidence["key"].startswith((f"data/{self.policy.project}/analyses/", "data/reporting/analyses/"))
+                    and evidence["key"].endswith(".json") and "\\" not in evidence["key"]
+                    and not {"", ".", ".."}.intersection(evidence["key"].split("/"))
+                    and isinstance(evidence.get("sha256"), str) and re.fullmatch(r"[a-f0-9]{64}", evidence["sha256"]),
+                    "image-release-independent-evidence-scope")
+            evidence_raw = read_private(self.s3, evidence["key"], 8 * 1024 * 1024)
+            require(sha(evidence_raw) == evidence["sha256"], "image-release-independent-evidence-hash")
+            proof = json.loads(evidence_raw, object_pairs_hook=unique_review_object)
+            require(isinstance(proof, dict) and all(proof.get(name) == value for name, value in review.items() if name != "evidence")
+                    and type(proof.get("schema_version")) is int and proof.get("approved") is True
+                    and all(result is True for value in proof["period_checks"].values() for result in value.values())
+                    and proof.get("errors") in (None, []), "image-release-independent-evidence-binding")
+            self.checkpoint()
+            self.no_report_tasks()
+            require(self.live_outputs() == self.original_outputs, "image-release-independent-live-output-drift")
+            require(read_private(self.s3, key, 64 * 1024) == raw and read_private(self.s3, manifest_key) == manifest_raw,
+                    "image-release-independent-review-changed")
+            self.event("independent-review-verified", review_key=key, review_sha256=sha(raw), evidence=evidence,
+                       source_contract_sha256=self.independent_contract_sha256,
+                       probe_manifest_sha256=self.probe_manifest_sha256,
+                       verification_script_sha256=review["verification_script_sha256"], period_checks=periods)
+            return
+        raise RuntimeError("image-release-independent-review-timeout")
 
     def record_probe_failure(self, ready):
         """A bounded diagnostic read may explain rejection; it can never authorize promotion."""
@@ -805,7 +882,7 @@ class ImageRelease(Deployment):
         self.event("preflight-complete", schedule=self.original, source_definition=self.original_source,
                    protected_schedules=self.protected, build_run_id=self.build_id, image=self.image,
                    original_live_outputs=self.original_outputs, final_schedule_state="ENABLED", recovered_from=recovery_proof,
-                   protected_peer=self.peer_snapshot)
+                   protected_peer=self.peer_snapshot, independent_contract_sha256=getattr(self, "independent_contract_sha256", None))
         self.acquire_release_lease()
         try:
             paused = copy.deepcopy(self.original)
@@ -830,6 +907,7 @@ class ImageRelease(Deployment):
             self.wait_probe()
             self.cleanup_role()
             self.owned_task = None
+            self.wait_independent_review()
             exact_source(self.commit)
             require(self.exact_image() == (self.image, self.build_id), "image-release-final-source-drift")
             self.checkpoint()
@@ -910,8 +988,11 @@ def main():
     parser.add_argument("--recovery-receipt-sha256")
     parser.add_argument("--recovery-readback-key")
     parser.add_argument("--recovery-readback-sha256")
+    parser.add_argument("--independent-contract-sha256", help="Require independent source review of this contract before promotion/live")
     parser.add_argument("--timeout-seconds", type=int, default=7200)
     args = parser.parse_args()
+    require(args.independent_contract_sha256 is None or re.fullmatch(r"[a-f0-9]{64}", args.independent_contract_sha256),
+            "image-release-independent-contract-invalid")
     import boto3
     from botocore.config import Config
     session = boto3.Session(profile_name=args.profile, region_name=REGION)
@@ -944,7 +1025,8 @@ def main():
                      recovery_readback_key=args.recovery_readback_key, recovery_readback_sha256=args.recovery_readback_sha256,
                      project=args.project, retained_peer_release=args.retained_peer_release,
                      retained_peer_lease_sha256=args.retained_peer_lease_sha256,
-                     retained_peer_lease_etag=args.retained_peer_lease_etag).run()
+                     retained_peer_lease_etag=args.retained_peer_lease_etag,
+                     independent_contract_sha256=args.independent_contract_sha256).run()
     except Exception as exc:
         reason = str(exc)
         if not re.fullmatch(r"(?:image-release|report|runtime)-[a-z0-9-]+", reason):
