@@ -1,3 +1,14 @@
+## 2026-10-08 — ROY release stopped on currency-shape defect; UI releases held
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; not a completed deployment)
+What happened: ROY release `9a666b8a81ee4ce1ac6c0e25d78db677` failed in its isolated probe, before independent review or live dispatch. Diagnostic SHA-256 `785dd3b233f74fcc10d5da94096b31c76368d6015edaba7041719bb505c670d7` reports the creditnote source error `credit_order_source_changed`; all four dashboard payloads are absent. This is not a passing financial comparison. The controller reports `failed-before-live-restored`; independent terminal restoration verification is being recorded.
+Known issue: `export_orders.py` compares complete `sum.currency` dictionaries between its list query and `ORDER_SAFETY_QUERY`. The list query requests `{symbol, code}` while the detail query requests only `{code}`. Equal currency codes therefore fail this guard. The offline primary collector used the same narrower currency shape for both inputs and did not reproduce the production query-shape difference. Existing tests passed but missed this integration case. No guard, contract, tolerance or production code was changed after identifying it.
+Current runtime: VEVO's previously verified generation and corrected reporting schedule remain in place; ROY has no new publication. Both App Runner images remain unpromoted. Do not promote the known-defective shared source to either UI or report runtime again. Per the owner's stop-on-discovered-error instruction, deployment is held; local controller/wrapper PIDs are absent with no listeners, cleanup SHA-256 `1159d98353e89353cbdcaad6986e1b78abeb51c70ce5bd42c2d266060d07e83f`.
+Next exact step: Correct shared credit-order validation on a new branch/PR using validated currency codes while preserving identity, native money and status checks. Add a regression with the actual list/detail query shapes and rejection cases for changed/missing currency or monetary values. Preserve all failed evidence; build and review a new exact source/image, refresh its source-bound contracts and repeat the financial/probe/live/runtime gates before both report-only UI promotions. Do not resume or reapprove this failed release ID, silently rewrite contracts, or bypass the source check.
+
+
 ## 2026-10-08 — ROY candidate host independently verified
 
 Date: 2026-10-08
