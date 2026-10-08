@@ -1,5 +1,16 @@
 # VEVO reporting project state
 
+## CURRENT IN-PROGRESS: source verified, recovery release active
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-release-handoff-20261008` (documentation only, separate worktree)
+What changed: PR #610 is merged at `fb0395a2a4a596bf9955bcee15972725c104281f`; build `37737686264` passed with immutable image `sha256:d835126b05460310ebdc1e84dfaacb5eeb28af40ab67f89c594a6bf8d65319ca`. The production source worktree remains frozen at that commit.
+What is verified: Fresh complete-history source and the financial/country contract through 2026-10-07 pass, including explicit source-bound fulfillment and precise advertising checks. The shared pre-deploy private archive contains 155 evidence files plus its manifest (156 objects), verified with AES256 and full GET SHA-256 readback: `data/reporting/analyses/2026-10-08-country-source-fix/pre-deploy-20261008T072116Z-5615185c46a7/`; manifest SHA-256 `5d29c709cd285d82d2cf625a8a9ee7d2ba2b05bf24cd4d27fe9a0002b6c5bbb0`.
+Current runtime: Owned release `9a5edd56818241d2824ec5f9a7e7399d` is ACTIVE and recovering retained owner `0e7b025d8532474a8df8bcc4fed03a9f`. The schedule for service `vevo-daily-report-email` remains disabled during drain; the existing published generation remains `20261006T231826Z`. No new generation or completed rollout is claimed.
+Known issues: The independent review of the actual isolated probe is still required before promotion/live dispatch. Offline source success is not publication proof.
+Next exact step: Complete the probe, reconcile all four periods against the archived source and advertising contracts, and publish the release-bound review only after every check passes. Then verify actual live output rows, country totals, host/HTTP markers and the enabled schedule with a dynamic end date. Keep this docs-only PR unmerged and the production source worktree unchanged until both sequential releases and their HTTP checks finish; record the verified terminal outcome here.
+
 ## Current work: known country-source defect repair authorized
 
 Date: 2026-10-08

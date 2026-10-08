@@ -1,3 +1,14 @@
+## 2026-10-08 — CURRENT IN-PROGRESS: verified source, VEVO recovery running
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-release-handoff-20261008` (documentation only, separate worktree)
+What changed: PR #610 merged as `fb0395a2a4a596bf9955bcee15972725c104281f`. Build `37737686264` passed and produced immutable image `sha256:d835126b05460310ebdc1e84dfaacb5eeb28af40ab67f89c594a6bf8d65319ca`. The release source worktree remains frozen at that exact commit; this documentation branch must not be merged while either release controller or its HTTP verification is pending.
+What is verified: Both fresh complete-history source snapshots and their monetary/country contracts through 2026-10-07 pass. Independent advertising, shared fixed-cost and source-bound fulfillment checks pass. The private pre-deploy archive contains 155 evidence files plus its manifest (156 objects), all AES256 encrypted and verified by complete GET SHA-256 readback: `data/reporting/analyses/2026-10-08-country-source-fix/pre-deploy-20261008T072116Z-5615185c46a7/`; manifest SHA-256 `5d29c709cd285d82d2cf625a8a9ee7d2ba2b05bf24cd4d27fe9a0002b6c5bbb0`. Source records and financial values remain private.
+Current runtime: VEVO release `9a5edd56818241d2824ec5f9a7e7399d` is ACTIVE, recovering the retained owner `0e7b025d8532474a8df8bcc4fed03a9f`; its schedule is disabled during drain. No new generation has been verified or published at this checkpoint. ROY has not been dispatched and remains on its original ENABLED definition :77 and generation `20261008T000535Z`.
+Known issues: This is an in-progress handoff, not a completed deployment. Passing offline contracts does not approve a probe or establish published output correctness.
+Next exact step: Let the owned VEVO controller finish its isolated probe, then require the contract-bound independent review of all four periods before promotion/live dispatch. Verify its actual publication and runtime/HTTP markers, then release ROY sequentially with the same gates and confirm both future dynamic-date schedules. Update this same documentation PR with verified terminal outcomes; keep the production source worktree frozen and do not merge this PR until both controllers and HTTP checks settle.
+
 ## 2026-10-08 — Country-source correction and both releases explicitly resumed
 
 Date: 2026-10-08

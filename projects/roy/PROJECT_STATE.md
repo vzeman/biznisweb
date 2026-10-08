@@ -1,5 +1,16 @@
 # ROY reporting project state
 
+## CURRENT IN-PROGRESS: source verified, release not dispatched
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-release-handoff-20261008` (documentation only, separate worktree)
+What changed: PR #610 is merged at `fb0395a2a4a596bf9955bcee15972725c104281f`; build `37737686264` passed with immutable image `sha256:d835126b05460310ebdc1e84dfaacb5eeb28af40ab67f89c594a6bf8d65319ca`. The production source worktree remains frozen at that commit.
+What is verified: Fresh complete-history source and the financial/country contract through 2026-10-07 pass. Independent checks bind the actual source, per-country totals, shared fixed costs, fulfillment adjustments and measured advertising. The shared private pre-deploy archive contains 155 evidence files plus its manifest (156 objects), all verified by AES256 and complete GET SHA-256 readback: `data/reporting/analyses/2026-10-08-country-source-fix/pre-deploy-20261008T072116Z-5615185c46a7/`; manifest SHA-256 `5d29c709cd285d82d2cf625a8a9ee7d2ba2b05bf24cd4d27fe9a0002b6c5bbb0`.
+Current runtime: ROY has not been dispatched. Service `roy-daily-report-email` remains on original ENABLED definition `roy-reporting-daily:77`, generation `20261008T000535Z`; no new ROY publication or corrected production adoption is claimed.
+Known issues: Release is pending the preceding recovery and its independent verification. Offline contracts do not substitute for a release-bound probe review or live publication checks.
+Next exact step: After the preceding release completes, dispatch ROY from the same reviewed immutable image. Require the independent four-period financial/country/advertising review before promotion/live; verify the actual new financial CSV, output periods, host/HTTP markers and enabled dynamic-date schedule. Preserve project-specific cost policies. Keep this docs-only PR unmerged and the production source worktree unchanged until both controllers and HTTP checks settle, then record the verified terminal outcome here.
+
 ## Current work: known country-source defect repair authorized
 
 Date: 2026-10-08
