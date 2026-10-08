@@ -1,3 +1,13 @@
+## 2026-10-08 — VEVO approved review archived; live regeneration running
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; keep main frozen at the reviewed release source)
+What changed: The separately preserved evidence publisher v2 passed 31 targeted checks, compilation, critical lint and root review. It corrected only invocation/provenance bindings; financial helpers, source contract, production image and tolerances remain unchanged. Publisher SHA-256 `76a456b80aa3227358eb2e26f7c770ac4fc5cdd58b32b973b4748b96d206ad4e`. Before authorizing, it archived 41 static supporting files and a manifest with AES256, expected-owner, conditional-create and full GET/hash checks. Private manifest key `data/vevo/analyses/2026-10-08-methodology-fixes/c3e23947aff44621886a41678e1564e7/review-v2-provenance/manifest.json`, SHA-256 `85d82694f4a5c5023cc103091ab8c16aeeab92e60e48bced76167973dceba3db`.
+What is verified: Exact approved review SHA-256 `b2a9b21a4837adf89a0758b4f7728eadc3a53160e385fd60b9681983e1ba6d16` binds the passing financial evidence, source/image/date/contract and probe manifest. The committed controller verified it before image promotion and live dispatch. Live task `a38b9439798f41a9ace6a01e37bbd27d`, definition :48, IP `172.31.23.96`, service `vevo-daily-report-email`, `/app` passed independent localhost marker and skip-email/invoice/inline-guard checks. Live-host proof SHA-256 `56131929711321c8ac5868ae331e40512c4c50d6e507bff35ccac35d1e684d1c`.
+Current runtime: Live generation through 2026-10-07 is running. The own schedule is intentionally still DISABLED on the approved image; the controller may enable it only after successful live completion. Old own publication, protected schedules and peer lease/publication remain unchanged at this checkpoint. Publisher exited normally; no local persistent service was started. App Runner images remain unchanged.
+Next exact step: Let the active controller finish, then independently verify actual published financial rows, four-period financial/advertising outputs, host/HTTP proofs and enabled future dynamic-date scheduling. Only afterward start ROY sequentially. Finish both report checks before report-only App Runner promotions; archive terminal evidence and finish the documentation PR last.
+
 ## 2026-10-08 — Refreshed provider evidence resolves VEVO advertising hold
 
 Date: 2026-10-08
