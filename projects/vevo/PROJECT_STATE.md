@@ -1,3 +1,13 @@
+## 2026-10-08 — VEVO financial publication fully verified
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; keep main frozen)
+What is verified: Generation `20261008T122907Z` passes exact full published-row comparison and all sixteen period checks. Final financial proof SHA-256 `c2948807d6d27e27bd670d531e3076c5ad62c8f2156e8164d0e9f4db52d99810`; independent review `2566b96ac052a8c40f1ef865575f567296a76049ef03ed2b00e2ef542f3cfdce`; transparent status-amended contract `4d79bb35cf0f195c517edf0a7ac61b4e11104ee02cdd65e1ce6f9e3d47498e7a`. Original probe contract, failed live comparison, policies and validators remain preserved. Runtime/HTTP also passes; reporting is ENABLED on :48 with future dynamic dates, lease released and owned processes/tasks terminal.
+Private archive: 117 new/changed files plus manifest, owner-bound/AES256/conditional-create/full-GET verified, at `data/reporting/analyses/2026-10-08-methodology-fixes/vevo-verified-20261008T124341Z-9c4a897f5ed5/`. Manifest SHA-256 `4188b8e8fa292d4ff3a367fb0b21398c1e683a1fb221000e51574da05bb73830`. Archive PIDs are independently absent with no listeners, cleanup `407a47c4352a1853201c9b558117ab8e387c35d8921aac0f607855df06aab686`.
+Current runtime: Corrected reporting rules are active. Separate App Runner UI image promotion is pending until both reporting releases are verified. Existing actual HTML explicitly discloses global zero-order-day overhead and separate creditnote fulfillment; the fixed-cost pool is not duplicated.
+Next exact step: Finish the peer reporting release, then this project's report-only UI promotion, host/public HTTP/browser checks, actual before/after comparison and final archive/handoff. Keep source `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2` frozen through both UI promotions.
+
 ## 2026-10-08 — VEVO live runtime and HTTP verified; source restatement documented
 
 Date: 2026-10-08

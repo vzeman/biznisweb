@@ -1,3 +1,12 @@
+## 2026-10-08 — ROY corrective release started
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-methodology-release-handoff-20261008` (draft PR #614; do not merge during source-frozen deployment)
+What changed: Release `9a666b8a81ee4ce1ac6c0e25d78db677` passed preflight, lease acquisition and verified reporting-schedule pause. Exact source `94ad0b3ecd205c8562689fe3bfb55760f7a9c5f2`, image `sha256:ab3a7131e354fc684f9d8278158ec0f832c6e82c4d9bb0dd4bb5ad731c89f5b6`, cutoff 2026-10-07 and required contract SHA-256 `531740c7b1a367e049a4831fd5b46d459e8a801c5f03d68bc5dbff5398c00758` remain fixed. Approved physical-gift and modeled-profit policies are unchanged.
+Current runtime: Finite controller is active. Candidate host, source/display approval and live publication still require their own gates; original generation `20261008T000535Z` and App Runner image are retained at this checkpoint.
+Next exact step: Verify candidate task/IP/service/path/localhost marker, all four financial/advertising periods and actual JSON/HTML, then publish its passing review. Finish live generation, strict actual rows and runtime/HTTP/future dynamic-date checks before either UI promotion. Use the refreshed raw advertising source, never its verification receipt, as the verifier data input.
+
 ## 2026-10-08 — Complete source contract and production image verified
 
 Date: 2026-10-08
