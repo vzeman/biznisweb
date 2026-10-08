@@ -1,3 +1,13 @@
+## 2026-10-08 — ROY production generation complete; final publication/UI checks pending
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-recovery-runtime-handoff-20261008` (draft PR #618)
+What changed: Recovery release `5bb65fb722534b098123ec0dbd005548` reached `0021-release-complete`, receipt SHA `3ee1e643272c0a9171a34cfc6d3b2cc1f99e72fab58eb5a7168cbf5ad5283f02`. Actual generation `20261008T171216Z` was published through 2026-10-07; manifest SHA `6248ef650381acf042e86f76e2bc8ae8cbab2e8bab8f5f38b6aa1688db5a97dc`. The recurring ROY schedule is ENABLED on immutable definition :82; the owned lease is released.
+What is verified: Live task `49692f71eb444414b71262d78aff14fd`, IP `172.31.20.135`, service `roy-daily-report-email`, path `/app`, source `5e48410ecd94637a0c3e5af936c4d721c8ec0f1e` and image `sha256:dccb37137e7857348d776314bbfa615dfb045840da7d37fd6011a4266c89d42d` passed its localhost identity before provider reads. Both owned tasks ended STOPPED exit 0, probe role is absent, all twelve protected schedules and VEVO lease/outputs are unchanged. Full terminal proof `b9aef52b09c8c60b7a1044494d5e7473083efd818a46881f06a36eb9cd9b263c` retains all twenty-one receipts. No report email, invoice or inline credit guard was executed by this one-off. Controller/wrapper/shell exited 0 and are independently absent without listeners; cleanup `c082438ad01330ba7e93248778bb4bc422314df9909ec75dbe7dc140114d0c5d`.
+Known issues: Actual publication row/financial verification, independent runtime/public HTTP verification and report-only App Runner promotion are in progress. Do not treat the successful probe as the actual post-publication audit. No final UI or financial-impact conclusion is claimed here.
+Next exact step: Complete the sixteen actual publication checks and same-period financial comparison, verify enabled dynamic dates and all eight public report/API artifacts, then perform ROY report-only UI probe/promotion and browser verification. Preserve the source freeze through UI completion; archive final evidence and process cleanup before merging this documentation.
+
 ## 2026-10-08 — ROY recovery probe approved; live generation running
 
 Date: 2026-10-08
