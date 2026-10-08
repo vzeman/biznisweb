@@ -1,3 +1,14 @@
+## 2026-10-08 — ROY currency repair merged; immutable release preparation
+
+Date: 2026-10-08
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-currency-release-handoff-20261008` (documentation only; keep unmerged while deployment source is frozen)
+What changed: PR #615 merged as `962486c23146e877d4a7ef64518d6e1fcb51f6ae`; its tree matches reviewed head `cb4e2ccddafd8bbb42f91c2da24ed5d6d237d143`. All six exact-head CI checks pass, including Windows/Linux regressions. The production build is run `37789337939`. The renewed owner authorization covers the known currency guard repair and ROY deployment; the previous stopped-release history and private archive remain preserved in draft PR #614 and archive manifest `c001d78bd175a08c9db67f087e7000502756e4e2474457a341d31783e518408c`.
+What is verified: Fresh current ROY Google/Meta daily, account and country reads reconcile in all four periods and exactly match the retained raw advertising evidence. Fresh-ROY equality proof SHA-256 `88ff738d81328cc02551402b48e55d2b250e0db1b72a1ec417e743c9c2aa65ac`; eight-period consistency receipt `42626a72e55d67d65a26bacf28e8c66ed1668ca53c3bcf5b66b6fac8458351c4`. Peer advertising evidence is explicitly retained historical provenance, not described as newly collected. A failed optional metadata-only read is preserved and does not invalidate the completed account/currency/spend checks.
+Current runtime: No new release dispatched. ROY remains enabled on :77 and its prior publication; peer reporting remains unchanged. Fresh all-status order collection and complete credit source replay are being bound to the new merged source. No local persistent dev server is required or started; finite source processes use exact PID ledgers.
+Next exact step: Verify the exact ECR image and settled dependent monthly deployment, complete/freeze the new primary contract and independent source/display inputs, and archive all evidence before dispatch. Use a new ordinary ROY release with candidate localhost/source review, live financial/runtime/HTTP verification and report-only UI promotion. Do not merge documentation during the frozen-source release or silently reuse the failed release ID.
+
+
 ## 2026-10-08 — Authorized ROY currency guard repair verified
 
 Date: 2026-10-08
