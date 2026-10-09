@@ -1,3 +1,13 @@
+## 2026-10-09 — ROY foreign-payment correction merged; production preparation
+
+Date: 2026-10-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-foreign-release-handoff-20261009` (documentation only; do not merge during frozen-source release)
+What changed: PR #621 merged as `c45593068eee0b7911489fa68adae35a0c5d62cf` after all six exact-head CI checks passed. The production checkout is clean and detached at that source. ROY recognizes source-verified historical reporting payment identities and blocks present unsupported payment identities on shipped nonzero merchandise. Valid no-payment exchanges retain their prior eligibility; financial formulas, approved gifts/zero-service rules and invoice/operations settings are unchanged. The owner explicitly retained 2025-09-24 as the reporting start; the requested cutoff is 2026-10-08.
+What is verified: Final 1,529 tests across ninety-one workflow modules, reporting smoke and critical lint pass. Complete native source, fresh credit evidence and independent membership audits agree. Fresh ROY advertising passes all eight source checks with the prior VEVO section retained exactly and no peer provider refresh. Finite collection/test processes exited and were checked for PID/listener absence. Private evidence remains under the current task's data directory on D: pending immutable archive; source and reusable runtime CLIs are in Git.
+Known issues: Production regeneration is not yet dispatched. The exact merged image build and settings-triggered monthly accounting deployment must finish before a fresh protected baseline and normal ROY release. Final source-bound financial contract, independent actual probe approval, live CSV/publication and HTTP verification remain pending. No ROY UI code changed, so this task does not require a separate App Runner image promotion. C: free space is critically low; all new evidence, helper logs, test temporary files and this documentation checkout are on D:. Do not clean unrelated files or processes.
+Next exact step: Finish merged-source contract and build/monthly host verification, archive reviewed preparation, dispatch one ordinary ROY release, require actual host/localhost and independent financial/display gates, then verify the actual publication, enabled dynamic-date schedule and released lease. Keep this handoff unmerged until the frozen-source release is terminal; preserve VEVO runtime and its 2025 policy.
+
 ## 2026-10-09 — Authorized full ROY foreign-history correction in progress
 
 Date: 2026-10-09

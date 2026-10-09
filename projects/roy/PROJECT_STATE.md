@@ -1,3 +1,13 @@
+## 2026-10-09 — Foreign-payment correction merged; production gates pending
+
+Date: 2026-10-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-foreign-release-handoff-20261009` (documentation only; source frozen)
+What changed: PR #621 merged as `c45593068eee0b7911489fa68adae35a0c5d62cf` after all six exact-head CI checks passed. The clean production checkout is frozen at this source. Reporting recognizes verified historical PL/RO payment identities and rejects present unsupported shipped payment identities before silent exclusion. Approved financial policies and invoice/operations settings are preserved. The owner confirmed the financial interval begins 2025-09-24; regeneration will end 2026-10-08.
+What is verified: All 1,529 regression tests, smoke and critical lint pass. Fresh complete source and credit evidence, two independent membership audits and all eight advertising-source checks pass their preparation gates. The no-payment zero-total exchange remains excluded under existing policy, without a production order whitelist or broad netting exception. Country attribution in the final report is delivery-first; an intermediate audit's invoice-first country summary is not publication geography evidence.
+Known issues: Image build, settings-triggered monthly deployment, final monetary contract and production regeneration are pending. No new publication is claimed. This reporting-only change needs no separate UI image promotion. Keep private data on D: and archive it with encrypted owner-bound full readback before release.
+Next exact step: Verify exact-source build and monthly host result, take fresh protected baseline, archive the complete reviewed preparation and run the ordinary ROY release once. Independently verify actual probe, actual live CSV and all four periods, then enabled future scheduling, released lease and HTTP output. Preserve all failed attempts and process ledgers; do not rerun the prior paused recovery.
+
 ## 2026-10-09 — Full available foreign history repair authorized
 
 Date: 2026-10-09
