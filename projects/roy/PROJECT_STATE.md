@@ -1,3 +1,14 @@
+## 2026-10-09 — Foreign coverage verified; historical Polish payment gap remains
+
+Date: 2026-10-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-foreign-coverage-20261009` (documentation only)
+What is verified: Native source and actual generation `20261008T171216Z` reconcile recent Czech merchandise coverage over September and October 1-7. Captured Slovenian orders are included; the Croatian exclusion is explicitly cancelled. Other countries remain in global finances and the measured profitability Other group. Absence of a separate country row is not evidence of missing sales.
+Confirmed issue: A historic Polish shipped merchandise order with payment ID 21 / Kartą online is absent because the prepaid identity is not recognized. It lies outside the recent comparison periods. Successful aggregate checks did not independently detect this eligibility omission. Unknown present payment metadata can be excluded with a log, whereas missing metadata has a separate guard; these cases must not be conflated.
+Evidence: Complete native source SHA `43e7ac86dcb491639ca86d740b33beb6d40ff960cfa0314383efe7f2f15ab4b8`; actual publication proof `3b8ee3930cf76356ccc16647827d38540e0f75b2b3c36cdfe6ad4972d6e0e0db`; archive manifest `ecb2d18e9e4877c0ff4ff6a8c143e65a1704a608d7a201f278b068afe73fb59a`. Source/order membership and payment label are sufficient to reproduce the private finding; do not publish financial/order/customer data.
+Current state: Audit only. No settings or runtime fix was attempted after finding the defect, in accordance with the owner's stop-on-error rule. The previously completed release remains deployed; this entry does not invalidate its runtime proof but limits its business-eligibility assurance. No persistent local process was started.
+Next exact step: In the correction task, add verified payment coverage and an independent visible guard for unsupported shipped merchandise payments, then test source membership and regenerate through the normal reviewed production workflow. Preserve gift, zero-service, status/restatement and shared-fixed policies.
+
 ## 2026-10-09 — Published old/new financial comparison verified
 
 Date: 2026-10-09

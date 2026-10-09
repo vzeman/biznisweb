@@ -1,3 +1,13 @@
+## 2026-10-09 — Czech coverage and historical exclusions checked
+
+Date: 2026-10-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-foreign-coverage-20261009` (documentation only)
+What is verified: Independent native-source membership review finds no missing Czech shipped/paid merchandise orders in September or October 1-7 of the verified publication. Recent exclusions correspond to expired, cancelled, refunded or unpaid-new states. Historical zero-value shipments without payment metadata do not establish missing sales. The legacy state madfrog stara odoslana is explicitly excluded by commit `0565002065a50c8ef65e115230e85ef25c631b34`; the same orders were excluded before and after the reporting fixes. Do not call this a new payment bug or change that policy without establishing its purpose.
+Scope/evidence: Native source SHA `41ca58185f8aebba4ba157afe0ac97aa38dcd0a491653bc6a203b79a811feb03`, actual generation `20261008T122907Z` with the retained final status amendment. The captured source has SK/CZ/HU/blank addresses, so it cannot directly prove SI/HR transaction coverage in this project. Code does not exclude other countries; the measured profitability view would group them into Other. Existing immutable archive references below preserve inputs; market values and order/customer identifiers remain private.
+Known issues: Unsupported new payment identities on shipped orders can still be excluded by shared eligibility logic; do not generalize current Czech membership success to every future foreign payment. No new VEVO monetary defect was established in the recent period, and no provider/runtime/settings change occurred. Outstanding credit-shape/UI rollout remains unchanged. No persistent local process was started.
+Next exact step: Preserve the verified recent Czech result and explicit historical-policy distinction. Any future payment-coverage correction must retain intentional legacy/zero-value exclusions and independently reconcile native merchandise membership before production release.
+
 ## 2026-10-09 — Published old/new financial comparison verified
 
 Date: 2026-10-09
