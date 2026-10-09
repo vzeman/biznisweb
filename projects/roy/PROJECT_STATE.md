@@ -1,3 +1,15 @@
+## 2026-10-09 — Published old/new financial comparison verified
+
+Date: 2026-10-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/reporting-before-after-20261009` (documentation only)
+What changed: Reviewed actual generations `20261008T000535Z` and `20261008T171216Z`, both through October 7. Same-calendar September, October 1-6 and October 1-7 comparisons reconcile exactly. This is an offline interpretation of existing immutable evidence, not another deployment or provider refresh.
+What is verified: The principal positive membership difference is previously omitted Czech prepaid orders with payment ID 30. Old/new policy replay on captured shipped orders proves the missing classification, corrected by `28ea9fa7`. Common-order revenue corrections are explicit header discounts and one documented source unit-rounding difference; October also includes an issued, noncancelled partial credit applied exactly once without an invented inventory return. Native status changes remove previously included orders, and the latest advertising refresh is a separate cost effect. Shared fixed costs remain unchanged. Use the old actual dashboard for profit: the former CSV bundle representation differs from its dashboard and is not an additional financial effect. The currency-shape guard and paused recovery do not change the corrected monetary contract.
+Country interpretation: Identical rolling 30-day dates are September 8-October 7. Country allocations change with complete delivery geography, email-independent financial membership, actual platform country spend and one shared fixed pool. A low-volume market can show a changed raw contribution with identical sales solely because assigned ads/fixes change; retain its low-confidence guard and never interpret all-shop MER as attributed campaign ROAS.
+Evidence: Actual impact SHA `839829879859b43f01513bf0dc0fa21f0150d44ea8c73984013702f806a527f9`; independent Decimal replay `36f84de7057fd905bad27359c7554bb60da1a743940e3961315b0bd3eff31f2b`; final archive manifest `ecb2d18e9e4877c0ff4ff6a8c143e65a1704a608d7a201f278b068afe73fb59a`. Root state gives the immutable archive prefix and reproduction method. Keep financial amounts, native records and order references private.
+Known issues: Complete original raw order snapshots at old-publication time are unavailable; source changes and code effects must not be conflated. ROY physical gifts intentionally retain zero cost, and accepted restatement/model policies remain unchanged. Existing browser access limitation below remains; no fresh visual check is claimed.
+Next exact step: No further ROY mutation is needed for this comparison or completed release. Use actual common-period totals and the documented membership/discount/credit/status bridges when explaining historical differences. No persistent local process was started.
+
 ## 2026-10-08 — ROY paused recovery and production/UI release completed
 
 Date: 2026-10-08
