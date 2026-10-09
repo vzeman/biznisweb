@@ -1,3 +1,15 @@
+## 2026-10-09 — Foreign coverage deployed and actual publication verified
+
+Date: 2026-10-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-foreign-release-handoff-20261009` (PR #622; final archive/handoff pending)
+What changed: Release `9f88288db27942b5af618b6a3cc0a724` published generation `20261009T035533Z`, covering 2025-09-24 through 2026-10-08. Source is `c45593068eee0b7911489fa68adae35a0c5d62cf`, immutable image `sha256:d6797213e2babf66fd31b0254dc41c3b99894b5b1bb8387ebcc3f6bb48933bb7`. The recurring schedule is ENABLED on definition :83; original cron/timezone/input and dynamic future dates are preserved, with the lease released. Verified historical foreign payment coverage and the new opt-in guard apply automatically.
+What is verified: Terminal receipt `35e12911b4d89cdee7610dfdad5ed2647139b80b517dcaa1ad318fd01e334ea4` and full runtime proof `6707c2c0d300bc1288732ae6b07fcb2bc1e6a39bd4268e2a7429a48b5bf51b2c` confirm stopped exit-0 tasks, removed temporary role and protected resources unchanged. Actual publication `15d8b3ed842eeb78f8ae275ac4f75c74707c3fe7a317d8da35cc52a262bcd768` passes all sixteen financial checks and exact complete CSV membership. Public HTTP proof `59057a51293bdc3b584f0cf89be87d49f76f5e905a2f273676f543f71d7fd863` verifies eight actual JSON/HTML artifacts after exact host/localhost gates. The existing read-only UI image/configuration is unchanged; no rendered browser verification is claimed.
+Financial comparison: Private actual same-cutoff impact `386a06ede47cdfc7807dcf968acf37e1043b80543fc7be41a5bc4d24d7353308` separates the Polish historical payment correction from the current Slovak source addition, without asserting its unknown earlier status. Ads and the shared fixed pool are unchanged; the component bridge reconciles. Accepted gift/service and current-status/model policies remain. Keep financial values and customer data out of Git.
+Process cleanup: Exact controller, observer, publication/impact and HTTP process groups exited with no remaining listeners; proofs `bb3e2b3e67be813469a1d0b5500c74fc8e587805ec86706fca7dd25378a9bfbf`, `73ec66aa00ccc2098c35eb551a466a0a660126d9ebc431987b00c5396dec4fe5`, `44e54578ad5d97196c1a2867c451bb2756f8b78b2fd192f47c01eccfa0a44f23`, `aba023c21b962769dc19f5059eb607f4cdc630c7b6519abdd84ee63171a35a03`. Production services and schedule intentionally remain active.
+Known issues: No production blocker remains. Final evidence archive and Git handoff are pending. The pre-execution inventory filename correction is recorded in root state; it did not affect production. Do not rerun release/approval or change VEVO runtime.
+Next exact step: Archive final evidence and closure, independently confirm the finite archiver processes ended, record immutable references, and merge the documentation after exact-head checks.
+
 ## 2026-10-09 — Independent probe approved; live host verified
 
 Date: 2026-10-09
