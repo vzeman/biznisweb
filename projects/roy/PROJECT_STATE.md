@@ -1,3 +1,13 @@
+## 2026-10-09 — Full available foreign history repair authorized
+
+Date: 2026-10-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-foreign-payment-coverage-20261009`
+What changed: The owner authorized retrospective coverage of legitimate foreign orders across RO/HU/PL and all roy.eu destinations, followed by production regeneration. English payment/shipping names must be checked against native source; country alone is not an eligibility rule. A source-verified prepaid identity and ROY-only unsupported shipped merchandise guard are being implemented. No production mutation has occurred.
+What is verified: Fresh hard gate `e72736fa05dae5cc39760681867389c1a2808025afe68016f05e000bc23aa9cd` confirms account/region, service `roy-daily-report-email`, ENABLED :82, current immutable `dccb3713` image, `/app`, released lease and no active task/IP. The App Runner image is consistent. The fresh baseline is generation `20261008T235414Z`; previous comparison snapshots remain immutable.
+Known issues: Existing audit and runtime both start 2025-09-24, but earlier raw orders exist. Complete provider history must be collected without lower-bound discard and without discarding shipping labels. Any needed earlier reporting start must be explicit in config, release receipts and independent financial review, with safe failure/recovery behavior and no peer changes.
+Next exact step: Finish exhaustive native/country/payment classification, scoped code/tests/review and immutable source contracts through 2026-10-08, then a normal reviewed release and actual publication verification. Retain all existing cancelled/credit/current-status/gift/zero-service policies; do not rerun the completed October 8 paused recovery.
+
 ## 2026-10-09 — Foreign coverage verified; historical Polish payment gap remains
 
 Date: 2026-10-09
