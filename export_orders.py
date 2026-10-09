@@ -3648,8 +3648,9 @@ class BizniWebExporter:
     def _shipped_payment_coverage_issue(self, order: Dict[str, Any]) -> Optional[str]:
         """Check an in-period raw order before the financial filter can omit it.
 
-        This opt-in preflight does not change eligibility. All-zero native item
-        amounts can retain their old exclusion; zero acquisition cost is irrelevant.
+        This opt-in preflight covers present payment identities without changing
+        eligibility. All-zero native item amounts can retain their old exclusion;
+        zero acquisition cost is irrelevant.
         Missing price_elements still follows the existing metadata enrichment guard.
         """
         settings = self.realized_revenue_settings
@@ -3673,17 +3674,20 @@ class BizniWebExporter:
                 payments.append(element)
         if len(payments) > 1:
             return "ambiguous_shipped_payment_metadata"
-        if payments:
-            payment = payments[0]
-            reference = payment.get("reference_id")
-            title = payment.get("title")
-            if (
-                (reference is not None and (isinstance(reference, bool) or not isinstance(reference, (str, int))))
-                or (title is not None and not isinstance(title, str))
-            ):
-                return "malformed_shipped_payment_metadata"
-            if self._is_cod_payment(current) or self._is_prepaid_payment(current):
-                return None
+        if not payments:
+            # This guard covers present unsupported payment identities. A valid
+            # non-payment list retains the existing eligibility decision.
+            return None
+        payment = payments[0]
+        reference = payment.get("reference_id")
+        title = payment.get("title")
+        if (
+            (reference is not None and (isinstance(reference, bool) or not isinstance(reference, (str, int))))
+            or (title is not None and not isinstance(title, str))
+        ):
+            return "malformed_shipped_payment_metadata"
+        if self._is_cod_payment(current) or self._is_prepaid_payment(current):
+            return None
 
         items = current.get("items")
         if not isinstance(items, list) or not items:

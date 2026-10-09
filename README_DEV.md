@@ -215,8 +215,12 @@ nonzero native item amounts blocks reporting instead of silently omitting the
 order. Ambiguous payment elements and invalid item amounts also block. This
 does not make an unknown method eligible: verified payment IDs belong in the
 project configuration. A zero product acquisition cost is not a zero-revenue
-exception. Only finite zero native item values retain their existing exclusion;
-the existing exact missing-metadata overrides remain separate. The default is
+exception. For a present unsupported payment, only finite zero native item
+values retain their existing exclusion. A valid price-element list without a
+payment element keeps its existing eligibility decision; this preserves zero-total
+exchanges with offsetting product lines. It is not a netting exception for a
+present unknown payment. The existing exact missing-metadata overrides remain
+separate. The default is
 `"off"`, so VEVO's existing eligibility and historical legacy policy are unchanged.
 The guard propagates through fresh, cached and fallback reads. Current caches
 retain raw orders, and each read reapplies the active payment/status rules.

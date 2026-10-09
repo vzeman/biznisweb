@@ -118,6 +118,31 @@ class RoyForeignPaymentCoverageTests(unittest.TestCase):
         source["items"].append(item("-10"))
         self.assert_coverage_error(source)
 
+    def test_valid_list_without_payment_retains_existing_exchange_exclusion(self):
+        for elements in ([], [{"type": "shipping", "value": "0"}]):
+            source = order()
+            source["sum"] = {"value": "0"}
+            source["items"].append(item("-10"))
+            source["price_elements"] = elements
+            before = copy.deepcopy(source)
+            with self.subTest(elements=elements):
+                self.assertIsNone(self.exporter._shipped_payment_coverage_issue(source))
+                self.assertEqual(
+                    (False, "cod_status_without_cod_payment"),
+                    self.exporter._realized_revenue_decision(source),
+                )
+                self.assertEqual([], self.exporter._filter_by_status([source], track_excluded=False))
+                self.assertEqual(before, source)
+
+    def test_present_empty_identity_still_blocks_offsetting_merchandise(self):
+        for payment in ({"type": "payment"}, {"type": "payment", "reference_id": "", "title": ""}):
+            source = order()
+            source["sum"] = {"value": "0"}
+            source["items"].append(item("-10"))
+            source["price_elements"] = [{"type": "shipping", "value": "0"}, payment]
+            with self.subTest(payment=payment):
+                self.assert_coverage_error(source)
+
     def test_zero_cost_service_label_does_not_exempt_positive_revenue(self):
         source = order()
         source["items"][0]["item_label"] = "Tringelt"
