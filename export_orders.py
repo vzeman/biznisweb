@@ -178,6 +178,18 @@ class OrderRevenueReconciliationError(RuntimeError):
         super().__init__(f"critical_order_revenue_reconciliation: {self.order_num}: {reason}")
 
 
+class UnsupportedShippedPaymentError(RuntimeError):
+    """A shipped financial candidate must not disappear through an unknown payment."""
+
+    def __init__(self, issues: List[Dict[str, str]]) -> None:
+        self.issues = tuple(dict(issue) for issue in issues)
+        self.order_nums = tuple(sorted({issue["order_num"] for issue in self.issues}))
+        details = ", ".join(
+            f"{issue['order_num']}: {issue['reason']}" for issue in self.issues
+        )
+        super().__init__(f"critical_shipped_payment_coverage: {details}")
+
+
 class PaymentMetadataEnrichmentError(RuntimeError):
     """Raised when realized-revenue payment metadata cannot be loaded safely."""
 
@@ -3470,6 +3482,11 @@ class BizniWebExporter:
 
     def _resolve_realized_revenue_settings(self) -> Dict[str, Any]:
         raw = self.project_settings.get("realized_revenue") or {}
+        shipped_payment_policy = raw.get("unsupported_shipped_merchandise_policy", "off")
+        if not isinstance(shipped_payment_policy, str) or shipped_payment_policy not in {"off", "error"}:
+            raise ValueError(
+                "realized_revenue.unsupported_shipped_merchandise_policy must be 'off' or 'error'"
+            )
         non_realized_overrides = self._resolve_exact_order_override_reasons(
             raw.get("missing_payment_metadata_non_realized_order_overrides", {}),
             "missing_payment_metadata_non_realized_order_overrides",
@@ -3529,6 +3546,7 @@ class BizniWebExporter:
             DEFAULT_REALIZED_REVENUE_PREPAID_PAYMENT_IDS,
         )
         return {
+            "unsupported_shipped_merchandise_policy": shipped_payment_policy,
             "paid_statuses": paid_statuses,
             "paid_statuses_normalized": {self._normalize_match_text(status) for status in paid_statuses},
             "cod_statuses": cod_statuses,
@@ -3626,6 +3644,72 @@ class BizniWebExporter:
         if not status_norm:
             return False, "missing_status"
         return False, "non_realized_status"
+
+    def _shipped_payment_coverage_issue(self, order: Dict[str, Any]) -> Optional[str]:
+        """Check an in-period raw order before the financial filter can omit it.
+
+        This opt-in preflight does not change eligibility. All-zero native item
+        amounts can retain their old exclusion; zero acquisition cost is irrelevant.
+        Missing price_elements still follows the existing metadata enrichment guard.
+        """
+        settings = self.realized_revenue_settings
+        if settings.get("unsupported_shipped_merchandise_policy", "off") != "error":
+            return None
+        current = self._reporting_order_context(order)
+        status = self._normalize_match_text(self._status_name(current))
+        if current.get("status_identity_unbound") or status not in settings["prepaid_fulfilled_statuses_normalized"]:
+            return None
+        elements = current.get("price_elements")
+        if elements is None:
+            return None
+        if not isinstance(elements, list):
+            return "malformed_shipped_payment_metadata"
+
+        payments = []
+        for element in elements:
+            if not isinstance(element, dict) or not isinstance(element.get("type"), str) or not element["type"].strip():
+                return "malformed_shipped_payment_metadata"
+            if self._normalize_match_text(element["type"]) == "payment":
+                payments.append(element)
+        if len(payments) > 1:
+            return "ambiguous_shipped_payment_metadata"
+        if payments:
+            payment = payments[0]
+            reference = payment.get("reference_id")
+            title = payment.get("title")
+            if (
+                (reference is not None and (isinstance(reference, bool) or not isinstance(reference, (str, int))))
+                or (title is not None and not isinstance(title, str))
+            ):
+                return "malformed_shipped_payment_metadata"
+            if self._is_cod_payment(current) or self._is_prepaid_payment(current):
+                return None
+
+        items = current.get("items")
+        if not isinstance(items, list) or not items:
+            return "unsupported_shipped_payment_invalid_item_amount"
+        all_zero = True
+        for item in items:
+            if not isinstance(item, dict):
+                return "unsupported_shipped_payment_invalid_item_amount"
+            for field in ("price", "sum", "sum_with_tax"):
+                money = item.get(field)
+                if not isinstance(money, dict) or "value" not in money:
+                    return "unsupported_shipped_payment_invalid_item_amount"
+                values = [money["value"]]
+                if "raw_value" in money:
+                    values.append(money["raw_value"])
+                for value in values:
+                    if value is None or isinstance(value, bool):
+                        return "unsupported_shipped_payment_invalid_item_amount"
+                    try:
+                        amount = Decimal(str(value))
+                    except (InvalidOperation, ValueError, TypeError):
+                        return "unsupported_shipped_payment_invalid_item_amount"
+                    if not amount.is_finite():
+                        return "unsupported_shipped_payment_invalid_item_amount"
+                    all_zero = all_zero and amount == 0
+        return None if all_zero else "unsupported_shipped_payment"
 
     def _needs_payment_metadata_for_realized_revenue(self, order: Dict[str, Any]) -> bool:
         if self._has_loaded_price_elements(order):
@@ -5358,7 +5442,7 @@ class BizniWebExporter:
                     if has_next_page:
                         time.sleep(page_delay)
 
-                except PaymentMetadataEnrichmentError:
+                except (PaymentMetadataEnrichmentError, UnsupportedShippedPaymentError):
                     raise
                 except Exception as e:
                     retry_count += 1
@@ -5536,8 +5620,8 @@ class BizniWebExporter:
                     return None
                 print(f"  Loaded {len(orders)} orders from cache for {date.strftime('%Y-%m-%d')}")
                 return orders
-        except OrderRevenueReconciliationError:
-            # A changed reviewed compensation is evidence drift, not a cache miss.
+        except (OrderRevenueReconciliationError, UnsupportedShippedPaymentError):
+            # Critical financial evidence failures must not become cache misses.
             raise
         except Exception as e:
             print(f"  Error loading cache for {date.strftime('%Y-%m-%d')}: {e}")
@@ -5660,7 +5744,7 @@ class BizniWebExporter:
                     if has_next_page:
                         time.sleep(page_delay)
 
-                except PaymentMetadataEnrichmentError:
+                except (PaymentMetadataEnrichmentError, UnsupportedShippedPaymentError):
                     raise
                 except Exception as e:
                     retry_count += 1
@@ -5937,7 +6021,15 @@ class BizniWebExporter:
 
         decisions = []
         missing_payment_metadata_order_nums = []
+        payment_coverage_issues = []
         for order in orders:
+            coverage_issue = self._shipped_payment_coverage_issue(order)
+            if coverage_issue:
+                payment_coverage_issues.append({
+                    "order_num": self._payment_metadata_order_num(order),
+                    "reason": coverage_issue,
+                })
+                continue
             include_order, reason = self._realized_revenue_decision(order)
             decisions.append((order, include_order, reason))
             if reason in {
@@ -5948,6 +6040,8 @@ class BizniWebExporter:
                     self._payment_metadata_order_num(order)
                 )
 
+        if payment_coverage_issues:
+            raise UnsupportedShippedPaymentError(payment_coverage_issues)
         if missing_payment_metadata_order_nums:
             raise PaymentMetadataEnrichmentError(
                 missing_payment_metadata_order_nums,
@@ -6567,7 +6661,7 @@ class BizniWebExporter:
                     print(f"  Successfully fetched {len(week_orders)} orders for week {week_number}")
                 else:
                     print(f"  No orders fetched for week {week_number}")
-            except PaymentMetadataEnrichmentError:
+            except (PaymentMetadataEnrichmentError, UnsupportedShippedPaymentError):
                 raise
             except Exception as e:
                 print(f"  Failed to fetch week {week_number}: {e}")
@@ -6582,7 +6676,7 @@ class BizniWebExporter:
                         if chunk_orders:
                             all_orders.extend(chunk_orders)
                             print(f"    Got {len(chunk_orders)} orders")
-                    except PaymentMetadataEnrichmentError:
+                    except (PaymentMetadataEnrichmentError, UnsupportedShippedPaymentError):
                         raise
                     except Exception as e:
                         print(f"    Failed to fetch chunk: {e}")
@@ -6650,7 +6744,7 @@ class BizniWebExporter:
                     if has_next_page:
                         time.sleep(page_delay)
 
-                except PaymentMetadataEnrichmentError:
+                except (PaymentMetadataEnrichmentError, UnsupportedShippedPaymentError):
                     raise
                 except Exception as e:
                     retry_count += 1

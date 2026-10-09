@@ -90,7 +90,7 @@ class RoyReportingPolicyTests(unittest.TestCase):
                     self.assertEqual((True, "cod_status_and_payment"), self.exporter._realized_revenue_decision(order))
 
     def test_current_and_verified_historical_prepaid_methods_require_paid_or_fulfilled_status(self):
-        expected = {"6", "11", "17", "18", "20", "22", "27", "29", "30", "32", "34", "35"}
+        expected = {"6", "11", "17", "18", "20", "21", "22", "27", "29", "30", "32", "34", "35"}
         self.assertEqual(expected, self.exporter.realized_revenue_settings["prepaid_payment_ids"])
         for payment_id in expected:
             order = self.order()

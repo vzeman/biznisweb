@@ -209,6 +209,26 @@ fabricate missing provider price elements or expand order eligibility; changed
 source fields fail closed. Client settings hold this evidence separately from
 the reusable validator and source currency rounding rules.
 
+ROY enables `realized_revenue.unsupported_shipped_merchandise_policy: "error"`.
+Before status filtering, an unsupported payment on a fulfilled order with
+nonzero native item amounts blocks reporting instead of silently omitting the
+order. Ambiguous payment elements and invalid item amounts also block. This
+does not make an unknown method eligible: verified payment IDs belong in the
+project configuration. A zero product acquisition cost is not a zero-revenue
+exception. Only finite zero native item values retain their existing exclusion;
+the existing exact missing-metadata overrides remain separate. The default is
+`"off"`, so VEVO's existing eligibility and historical legacy policy are unchanged.
+The guard propagates through fresh, cached and fallback reads. Current caches
+retain raw orders, and each read reapplies the active payment/status rules.
+
+For a foreign-payment correction, audit native excluded merchandise independently
+of the exporter decision. A report and an expected contract using the same
+eligibility function can agree while both omit a valid order. Retain complete
+provider-visible history and native payment/shipping identities, but distinguish
+that source coverage from the configured financial report interval. Country is
+delivery geography with invoice fallback; other destinations remain in company
+totals and the measured `Other` profitability group.
+
 Before live dispatch, a known failure stops only the owned task, removes its
 verified temporary role, restores the owned original schedule and deactivates
 the unused candidate. An uncertain launch retains the exclusion lease and paused
