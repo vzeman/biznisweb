@@ -178,6 +178,7 @@
     "shipping_cost_per_order": 0.2
   },
   "realized_revenue": {
+    "unsupported_shipped_merchandise_policy": "error",
     "missing_payment_metadata_non_realized_order_overrides": {
       "2677001207": "Verified 2026-07-16: EUR 1 internal trademark-license order; invoice 2677001128 is unpaid, pay_date is null, payments are empty, and its payment form is blank."
     },
@@ -230,7 +231,9 @@
       "7",
       "10",
       "16",
+      "19",
       "23",
+      "25",
       "26",
       "28",
       "31",
@@ -258,7 +261,9 @@
       "17",
       "18",
       "20",
+      "21",
       "22",
+      "24",
       "27",
       "29",
       "30",
