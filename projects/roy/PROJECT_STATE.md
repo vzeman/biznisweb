@@ -1,3 +1,14 @@
+## 2026-10-09 — Independent probe approved; live host verified
+
+Date: 2026-10-09
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-foreign-release-handoff-20261009` (draft PR #622; keep unmerged until release is terminal)
+What is verified: Normal release `9f88288db27942b5af618b6a3cc0a724` candidate ended STOPPED exit 0 with its temporary role removed. Terminal proof `1016737f97ad26efa0f3ccf27a2860e8c6d2701b5528a82556d9473e289f333b` confirms protected schedules, peer and old outputs unchanged. All sixteen actual financial checks (SHA `555232d69c48e6923cb23cbc938113fc7a9ae61d7da1a124819de77d0ac2e48a`) and eight actual JSON/HTML checks (SHA `094609348e75eb21813facbd1344ea39dacb6fdbafdb876d685f495f86dcf5da`) pass against manifest `bf327cf90354db6658ec52d071be2bd9e7260d4c0c3561fdf3086bbcf3720c29`, source `c45593068eee0b7911489fa68adae35a0c5d62cf`, image `sha256:d6797213e2babf66fd31b0254dc41c3b99894b5b1bb8387ebcc3f6bb48933bb7` and interval 2025-09-24 through 2026-10-08.
+What changed: After complete file-only validation and immutable encrypted provenance archive `59b6f60ef4a3ab13c057770c5de7376d0771f65ec8b1d63ec74435f1acb609aa`, root published one exact independent approval `6bb8d704c316048d558bdbb8d9d44892d03a67d52cc8e7c8a68a81912deed882`. Receipt `bcd6d1272a2de3f58093df4b81de29c7a420552c34cad558a37720e9334a8534` binds the archive and approval. The controller verified image promotion and dispatched live generation. Review/publisher processes exited; cleanup `2c6a2d1737fd695c3923fdb2aab84bcc2fe3269ffc7bad797ee4dd531ed6ef3a` proves exact publisher/precheck PIDs and listeners absent.
+Live host: Task `7a3e4dc286af4c27a49a045a4bf81849`, definition :83, private IP `172.31.6.153` (Fargate), service `roy-daily-report-email`, `/app`, source/image and localhost marker passed before provider reads. Proof `b366f07dc1c4f6a1b37092ee9ae30650506ce3aa2efef61bcd45974c886c4e72` confirms protected resources unchanged; full-history processing is active.
+Known issues: Probe success is not actual publication proof. Live financial rows, final totals, public HTTP and future schedule activation remain pending. Preserve the frozen source and existing controller ownership. Approved financial-policy exceptions and VEVO runtime remain unchanged.
+Next exact step: Verify terminal generation, actual row membership and all sixteen financial checks, public HTTP, ENABLED dynamic dates and released lease. Finish same-cutoff financial comparison, final evidence archives and exact cleanup before merging this handoff; do not repeat the release or approval.
+
 ## 2026-10-09 — Normal foreign-coverage release dispatched; candidate pending
 
 Date: 2026-10-09
