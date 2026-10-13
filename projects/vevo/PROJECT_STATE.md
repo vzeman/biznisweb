@@ -1,3 +1,15 @@
+## 2026-10-13 — Last completed week country profitability reviewed
+
+Date: 2026-10-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-week-country-review-20261013`
+What changed: Read-only country review of actual VEVO generation `20261012T232300Z`, exactly 2026-10-06 through 2026-10-12. Country results include products, logistics, measured Meta/Google country spend and each country's share of one fixed-cost pool. Financial values and source payloads remain private.
+What is verified: Live manifest `532a45d3ff9443b7967d0cc4e690c1eb61c3f4eabb4f52342e2b933065a769a7` and payload `968fe5d0ed3e5a58ee928ea14df2a3cf8596da059d9c911a58ee048720af6321` are byte/hash bound, with stable live pointer. Exact seven-day dates, country order/revenue/spend sums, provider geographical-spend reconciliation and the single shared fixed pool pass. Report source QA has zero failures. Independent file arithmetic reproduces country pre-fixed contributions; the one-cent country-versus-daily display residual is explained by their separate rounding and recorded explicitly. Result SHA `fee0f3136842ce03f0fbff60223e60ad011385b9a1797aa66437ece3ecf54e63`.
+Current runtime: Fresh read-only identity shows service `vevo-daily-report-email` ENABLED on :48, image `sha256:ab3a7131e354fc684f9d8278158ec0f832c6e82c4d9bb0dd4bb5ad731c89f5b6`, `/app`, no active reporting tasks. No configuration, provider, calculator, publication, schedule or UI mutation was performed.
+Private evidence/cleanup: Seventeen files plus manifest are encrypted, conditional-create and full-readback verified under `data/vevo/analyses/2026-10-13-week-country-review/20261013T111352Z-835adc46c5c8/`, manifest SHA `beac37f5b7a800916e65878252198cf2dd3baaa1633aea6f69b7c2b9ebcf3c26`. Reader/arithmetic cleanup `f8aceb867a5f6e91ad89552285ebc22daa5c82b6597c54829a6dcd980f45c7dc` and archiver cleanup `0d9af0182cee7090ff2f9fb5a2b526118a7585abea6a4b3def176a045f87e935` confirm scoped child/wrapper/parent PIDs absent with no listeners. All task-owned processes exited and were checked; the first collector's nonzero exit is retained separately. No persistent local service was started.
+Limits: This is a published-report arithmetic review, not another native order audit. Approved cost estimates remain present, HU is a small sample, and country is delivery geography with invoice fallback. Earlier VEVO credit-shape/UI rollout issues remain as documented below; this analysis does not resolve them. A safely rejected private collector-prefix assumption and its corrected capture are archived, with no production failure established.
+Next exact step: Use the verified current weekly result for the owner's country profit answer. Preserve approved financial policies and the existing runtime; deployment and campaign changes are outside this analysis.
+
 ## 2026-10-09 — Czech coverage and historical exclusions checked
 
 Date: 2026-10-09
