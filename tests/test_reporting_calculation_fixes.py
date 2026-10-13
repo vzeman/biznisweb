@@ -18,13 +18,16 @@ from reporting_core.runtime import apply_project_runtime, load_project_runtime
 
 
 def make_exporter(project_name: str = "vevo") -> BizniWebExporter:
-    return BizniWebExporter(
-        api_url="https://example.com/api/graphql",
-        api_token="token",
-        project_name=project_name,
-        output_tag="unit",
-        enable_period_bundle=False,
-    )
+    # Isolate legacy calculations from the optional dated catalogue bindings.
+    # Their actual project loading and cost sources have a separate integration suite.
+    with patch.object(BizniWebExporter, "_load_product_cost_identity_bindings", return_value=(None, {})):
+        return BizniWebExporter(
+            api_url="https://example.com/api/graphql",
+            api_token="token",
+            project_name=project_name,
+            output_tag="unit",
+            enable_period_bundle=False,
+        )
 
 
 def write_order_cache(exporter: BizniWebExporter, order_date: datetime, cached_at: datetime, orders=None) -> Path:

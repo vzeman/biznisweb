@@ -1,3 +1,13 @@
+## 2026-10-13 — Native monetary preflight passed; exact image rebuild pending
+
+Date: 2026-10-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cost-binding-build-checks-20261013`
+What changed: PR #626 merged as ce97. Its exact-main build `38417036326` failed one legacy homogeneous-multipack expense-source assertion, while all asserted costs/profits passed. The follow-up isolates that legacy fixture from the optional dated catalogue, runs calculation-fix tests in PR CI and dated-binding tests in ECR CI. Calculator/configuration/purchase prices remain unchanged. Both the 160-test focused check and the exact final 803-test ECR module group pass locally.
+What is verified: Complete native-source financial preflight on feature commit `3c228d269335f4dcd44a47fc595e44c5b6d993dc` passes: 9,649 in-scope orders, 8,214 financial orders and 15,185 financial item rows. Contract `b09479a054af81cf816770d3ba510ccf0472392dc47820383d422f6cff4cb988`; same-source summary `c5978a26d49ce330cf8e9f1e5a263e7b7cbaccc33c855912a77d4e96d47021b2` proves 2025 cost/source neutrality and unchanged noncost fields. Fresh credits/ads and exact rational shared-fixed conservation pass. These financial values are offline predictions, not published production results. Native/catalogue/test evidence is encrypted and full-decoded-readback verified under `data/vevo/analyses/2026-10-13-localized-cost-mapping/20261013T144905Z-checkpoint-fbc2ee423e78/`, manifest `16e4faab5c3b0e1a274e03a8fbf251413d2478d5b2f32776a47dd853c74c91d8`.
+Runtime/known issues: Fresh pre-merge baseline `c1f0e33bbd316323dd89768981706f98f587c096d955ade030bbe9af3de64255` confirms correct account, service/path, released leases, idle tasks and unchanged report/UI boundaries. Automatic monthly run `38417036371` on ce97 still requires terminal actual-host/localhost/dry-run/image-only proof before the final baseline. No new VEVO report or UI release has been dispatched. Preserve original source exceptions, true estimates and failed helper/build evidence. All financial analysis processes are independently absent; production schedules remain active.
+Next exact step: Finish follow-up tests/PR and freeze its new exact merged source. Require successful exact ECR build plus verified ce97 monthly completion, regenerate the final source-bound contract, archive final plan/evidence and execute one guarded VEVO report-only release through 2026-10-12. Independently verify candidate/live monetary data, eight actual HTTP artifacts, future dynamic dates and protected ROY state. Complete authorized VEVO UI host/localhost/public checks afterward; record actual financial effect and final cleanup only once verified.
+
 ## 2026-10-13 — Localized cost repair prepared; production still pending
 
 Date: 2026-10-13
