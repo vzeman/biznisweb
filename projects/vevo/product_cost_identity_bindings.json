@@ -1,0 +1,1991 @@
+{
+  "schema_version": 1,
+  "effective_from": "2026-01-01",
+  "bindings": [
+    {
+      "id": "native-1525-326a74f56b",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.06 Royal Cotton (200ml)",
+        "Vevo Natural No.06 Royal Cotton mosóparfüm (200ml)"
+      ],
+      "evidence_product_ids": [
+        "1525"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.06 Royal Cotton (200ml)",
+      "warehouse_numbers": [
+        "06200"
+      ],
+      "eans": [
+        "8586024430426"
+      ]
+    },
+    {
+      "id": "native-1525-440a0e11ba",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.06 Royal Cotton (500ml)",
+        "Vevo Natural No.06 Royal Cotton mosóparfüm (500ml)"
+      ],
+      "evidence_product_ids": [
+        "1525"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.06 Royal Cotton (500ml)",
+      "warehouse_numbers": [
+        "06500"
+      ],
+      "eans": [
+        "8586024430433"
+      ]
+    },
+    {
+      "id": "native-1525-eeeeccf380",
+      "source_labels": [
+        "Parfum do prania Vevo Natural No.06 Royal Cotton (Vzorka 10ml)",
+        "Parfém na praní Vevo Natural No.06 Royal Cotton (Vzorek 10ml)",
+        "Vevo Natural No.06 Royal Cotton mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "1525"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.06 Royal Cotton (Vzorka 10ml)",
+      "warehouse_numbers": [
+        "06001"
+      ]
+    },
+    {
+      "id": "native-1531-68695954f3",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.07 Ylang Absolute (200ml)",
+        "Vevo Natural No.07 Ylang Absolute mosóparfüm (200ml)"
+      ],
+      "evidence_product_ids": [
+        "1531"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.07 Ylang Absolute (200ml)",
+      "warehouse_numbers": [
+        "07200"
+      ],
+      "eans": [
+        "8586024430440"
+      ]
+    },
+    {
+      "id": "native-1531-d643e772ba",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.07 Ylang Absolute (500ml)",
+        "Vevo Natural No.07 Ylang Absolute mosóparfüm (500ml)"
+      ],
+      "evidence_product_ids": [
+        "1531"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)",
+      "warehouse_numbers": [
+        "07500"
+      ],
+      "eans": [
+        "8586024430457"
+      ]
+    },
+    {
+      "id": "native-1531-12779f6cf1",
+      "source_labels": [
+        "Parfum do prania Vevo Natural No.07 Ylang Absolute (Vzorka 10ml)",
+        "Parfém na praní Vevo Natural No.07 Ylang Absolute (Vzorek 10ml)",
+        "Vevo Natural No.07 Ylang Absolute mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "1531"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.07 Ylang Absolute (Vzorka 10ml)",
+      "warehouse_numbers": [
+        "07001"
+      ]
+    },
+    {
+      "id": "native-1532-05d97ccc7a",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.08 Cotton Dream (200ml)",
+        "Vevo Natural No.08 Cotton Dream mosóparfüm (200ml)"
+      ],
+      "evidence_product_ids": [
+        "1532"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.08 Cotton Dream (200ml)",
+      "warehouse_numbers": [
+        "08200"
+      ],
+      "eans": [
+        "8586024430464"
+      ]
+    },
+    {
+      "id": "native-1532-aa1ae90141",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.08 Cotton Dream (500ml)",
+        "Vevo Natural No.08 Cotton Dream mosóparfüm (500ml)"
+      ],
+      "evidence_product_ids": [
+        "1532"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.08 Cotton Dream (500ml)",
+      "warehouse_numbers": [
+        "08500"
+      ],
+      "eans": [
+        "8586024430471"
+      ]
+    },
+    {
+      "id": "native-1532-375c67afe3",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.08 Cotton Dream (Vzorek 10ml)",
+        "Vevo Natural No.08 Cotton Dream mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "1532"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.08 Cotton Dream (Vzorka 10ml)",
+      "warehouse_numbers": [
+        "08001"
+      ]
+    },
+    {
+      "id": "native-1533-db474c77d3",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.09 Pure Garden (200ml)",
+        "Vevo Natural No.09 Pure Garden mosóparfüm (200ml)"
+      ],
+      "evidence_product_ids": [
+        "1533"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.09 Pure Garden (200ml)",
+      "warehouse_numbers": [
+        "09200"
+      ],
+      "eans": [
+        "8586024430488"
+      ]
+    },
+    {
+      "id": "native-1533-1944084f72",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.09 Pure Garden (500ml)",
+        "Vevo Natural No.09 Pure Garden mosóparfüm (500ml)"
+      ],
+      "evidence_product_ids": [
+        "1533"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.09 Pure Garden (500ml)",
+      "warehouse_numbers": [
+        "09500"
+      ],
+      "eans": [
+        "8586024430495"
+      ]
+    },
+    {
+      "id": "native-1533-c51bdb4c16",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.09 Pure Garden (Vzorek 10ml)",
+        "Vevo Natural No.09 Pure Garden mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "1533"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.09 Pure Garden (Vzorka 10ml)",
+      "warehouse_numbers": [
+        "09001"
+      ]
+    },
+    {
+      "id": "native-1537-a45f60efa8",
+      "source_labels": [
+        "Vevo 7ml fa mérőkanál mosóparfümhöz"
+      ],
+      "evidence_product_ids": [
+        "1537"
+      ],
+      "allow_label_only": false,
+      "canonical_expense_label": "Odmerka Vevo 7ml drevená na parfum do prania",
+      "canonical_policy_sku": "H-8F8BF46E",
+      "warehouse_numbers": [
+        "ODV01"
+      ]
+    },
+    {
+      "id": "native-1537-32270d49b0",
+      "source_labels": [
+        "Dřevěná odměrka Vevo 7ml na parfém do praní",
+        "Odmerka Vevo 7ml drevená na parfum do prania",
+        "Vevo 7 ml-es fa mérőkanál mosóparfümhöz"
+      ],
+      "evidence_product_ids": [
+        "1537"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Odmerka Vevo 7ml drevená na parfum do prania",
+      "canonical_policy_sku": "H-8F8BF46E",
+      "warehouse_numbers": [
+        "ODV01"
+      ]
+    },
+    {
+      "id": "native-1544-2cc0c49866",
+      "source_labels": [
+        "Vevo Natural legnépszerűbb mosóparfüm-minták 3 × 10 ml",
+        "Vzorky nejprodávanějších vůní Vevo Natural 3 x 10ml"
+      ],
+      "evidence_product_ids": [
+        "1544"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vzorky najpredávanejších vôní Vevo Natural 3 x 10ml"
+    },
+    {
+      "id": "native-1549-49a5226764",
+      "source_labels": [
+        "Vevo Shot - koncentrát na čistenie práčky 100ml",
+        "Vevo Shot - koncentrát na čištění pračky 100ml",
+        "Vevo Shot – mosógép-tisztító koncentrátum 100 ml"
+      ],
+      "evidence_product_ids": [
+        "1549"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vevo Shot - koncentrát na čistenie práčky 100ml",
+      "warehouse_numbers": [
+        "VSHT01"
+      ],
+      "eans": [
+        "8586024430501"
+      ]
+    },
+    {
+      "id": "native-1551-30d127cfea",
+      "source_labels": [
+        "Hipoallergén mosógél marseille-i szappanból, 1 l",
+        "Hypoalergenní prací gel z marseillského mýdla, 1 l"
+      ],
+      "evidence_product_ids": [
+        "1551"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Prací gél hypoalergénny z Marseillského mydla 1L",
+      "warehouse_numbers": [
+        "55009"
+      ],
+      "eans": [
+        "8594201618000"
+      ]
+    },
+    {
+      "id": "native-1553-e412cb0cde",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.01 Cotton Paradise (10ml)",
+        "Vevo Premium No.01 Cotton Paradise padlóparfüm (10ml)"
+      ],
+      "evidence_product_ids": [
+        "1553"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum na podlahy Vevo Premium No.01 Cotton Paradise (10ml)",
+      "canonical_policy_sku": "H-B20975B2"
+    },
+    {
+      "id": "native-1553-b3f939096c",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.01 Cotton Paradise (30ml)",
+        "Vevo Premium No.01 Cotton Paradise padlóparfüm (30ml)"
+      ],
+      "evidence_product_ids": [
+        "1553"
+      ],
+      "allow_label_only": true,
+      "canonical_policy_sku": "H-30B3F588"
+    },
+    {
+      "id": "native-1554-6c46e8d325",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.08 Cotton Dream (10ml)",
+        "Vevo Premium No.08 Cotton Dream padlóparfüm (10ml)"
+      ],
+      "evidence_product_ids": [
+        "1554"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum na podlahy Vevo Premium No.08 Cotton Dream (10ml)",
+      "canonical_policy_sku": "H-F864DA7A"
+    },
+    {
+      "id": "native-1554-a3ace7bfb1",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.08 Cotton Dream (30ml)",
+        "Vevo Premium No.08 Cotton Dream padlóparfüm (30ml)"
+      ],
+      "evidence_product_ids": [
+        "1554"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum na podlahy Vevo Premium No.08 Cotton Dream (30ml)",
+      "canonical_policy_sku": "H-E037DF80"
+    },
+    {
+      "id": "native-1555-b8f88e150b",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.06 Royal Cotton (30ml)",
+        "Vevo Premium No.06 Royal Cotton padlóparfüm (30ml)"
+      ],
+      "evidence_product_ids": [
+        "1555"
+      ],
+      "allow_label_only": true,
+      "canonical_policy_sku": "H-6AC576C9"
+    },
+    {
+      "id": "native-1555-45526a86c1",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.06 Royal Cotton (10ml)",
+        "Vevo Premium No.06 Royal Cotton padlóparfüm (10ml)"
+      ],
+      "evidence_product_ids": [
+        "1555"
+      ],
+      "allow_label_only": true,
+      "canonical_policy_sku": "H-BBBB3F83"
+    },
+    {
+      "id": "native-1556-6b375a3b46",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.09 Pure Garden (10ml)",
+        "Vevo Premium No.09 Pure Garden padlóparfüm (10ml)"
+      ],
+      "evidence_product_ids": [
+        "1556"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum na podlahy Vevo Premium No.09 Pure Garden (10ml)",
+      "canonical_policy_sku": "H-5E073449"
+    },
+    {
+      "id": "native-1556-d903deb923",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.09 Pure Garden (30ml)",
+        "Vevo Premium No.09 Pure Garden padlóparfüm (30ml)"
+      ],
+      "evidence_product_ids": [
+        "1556"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum na podlahy Vevo Premium No.09 Pure Garden (30ml)",
+      "canonical_policy_sku": "H-601A5754"
+    },
+    {
+      "id": "native-1557-c5f46f9b00",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.02 Sweet Paradise (30ml)",
+        "Vevo Premium No.02 Sweet Paradise padlóparfüm (30ml)"
+      ],
+      "evidence_product_ids": [
+        "1557"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum na podlahy Vevo Premium No.02 Sweet Paradise (30ml)",
+      "canonical_policy_sku": "H-DE000F46"
+    },
+    {
+      "id": "native-1557-f7284e256b",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.02 Sweet Paradise (10ml)",
+        "Vevo Premium No.02 Sweet Paradise padlóparfüm (10ml)"
+      ],
+      "evidence_product_ids": [
+        "1557"
+      ],
+      "allow_label_only": true,
+      "canonical_policy_sku": "H-C058B14F"
+    },
+    {
+      "id": "native-1558-ee2f7eeead",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.07 Ylang Absolute (10ml)",
+        "Vevo Premium No.07 Ylang Absolute padlóparfüm (10ml)"
+      ],
+      "evidence_product_ids": [
+        "1558"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum na podlahy Vevo Premium No.07 Ylang Absolute (10ml)",
+      "canonical_policy_sku": "H-8F3366EC"
+    },
+    {
+      "id": "native-1558-0dc40df418",
+      "source_labels": [
+        "Parfém na podlahy Vevo Premium No.07 Ylang Absolute (30ml)",
+        "Vevo Premium No.07 Ylang Absolute padlóparfüm (30ml)"
+      ],
+      "evidence_product_ids": [
+        "1558"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum na podlahy Vevo Premium No.07 Ylang Absolute (30ml)",
+      "canonical_policy_sku": "H-2BDCFEE5"
+    },
+    {
+      "id": "native-1559-84b804d3eb",
+      "source_labels": [
+        "Nátrium-perkarbonát PLUS 1 kg",
+        "Perkarbonát sodný PLUS 1 kg"
+      ],
+      "evidence_product_ids": [
+        "1559"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Perkarbonát sodný PLUS 1kg",
+      "warehouse_numbers": [
+        "55016"
+      ],
+      "eans": [
+        "8595727700347"
+      ]
+    },
+    {
+      "id": "native-1560-4499b0a959",
+      "source_labels": [
+        "Bílý ocet 1 litr",
+        "Fehér ecet 1 liter"
+      ],
+      "evidence_product_ids": [
+        "1560"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Biely ocot 1 liter",
+      "warehouse_numbers": [
+        "55017"
+      ],
+      "eans": [
+        "8594201616242"
+      ]
+    },
+    {
+      "id": "native-1561-275c632d74",
+      "source_labels": [
+        "Bílý ocet ve spreji 500 ml",
+        "Fehér ecet spray 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1561"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Biely ocot v spreji 500 ml",
+      "warehouse_numbers": [
+        "55018"
+      ],
+      "eans": [
+        "8594201616310"
+      ]
+    },
+    {
+      "id": "native-1562-092696db35",
+      "source_labels": [
+        "Strong PINK tisztítópaszta 500 g",
+        "Strong PINK čisticí pasta 500 g"
+      ],
+      "evidence_product_ids": [
+        "1562"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Strong PINK čistiaca pasta 500g",
+      "warehouse_numbers": [
+        "55019"
+      ],
+      "eans": [
+        "8594201614828"
+      ]
+    },
+    {
+      "id": "native-1572-71d47df204",
+      "source_labels": [
+        "Vevo No.02 Sweet Paradise mosóparfüm (200ml)"
+      ],
+      "evidence_product_ids": [
+        "1572"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo No.02 Sweet Paradise (200ml)"
+    },
+    {
+      "id": "native-1572-d2ad5bc50a",
+      "source_labels": [
+        "Vevo No.02 Sweet Paradise mosóparfüm (500ml)"
+      ],
+      "evidence_product_ids": [
+        "1572"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo No.02 Sweet Paradise (500ml)"
+    },
+    {
+      "id": "native-1572-b541c4e393",
+      "source_labels": [
+        "Vevo No.02 Sweet Paradise mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "1572"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo No.02 Sweet Paradise (Vzorka 10ml)"
+    },
+    {
+      "id": "native-1574-b698628b0f",
+      "source_labels": [
+        "A Vevo legkelendőbb illatainak mintakészlete (3 × 10 ml)"
+      ],
+      "evidence_product_ids": [
+        "1574"
+      ],
+      "allow_label_only": false,
+      "canonical_expense_label": "Vzorky parfumov do prania Vevo Premium 3 x 10ml",
+      "warehouse_numbers": [
+        "01053c"
+      ]
+    },
+    {
+      "id": "native-1574-0e80acb919",
+      "source_labels": [
+        "Vevo Premium mosóparfüm-minták 3 × 10 ml",
+        "Vzorky parfumov do prania Vevo Premium 3 x 10ml",
+        "Vzorky parfémů do praní Vevo Premium 3 x 10ml"
+      ],
+      "evidence_product_ids": [
+        "1574"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vzorky parfumov do prania Vevo Premium 3 x 10ml",
+      "warehouse_numbers": [
+        "01053c"
+      ]
+    },
+    {
+      "id": "native-1575-f7681e3786",
+      "source_labels": [
+        "Parfém na praní Vevo No.06 Royal Cotton (200ml)",
+        "Vevo No.06 Royal Cotton mosóparfüm (200ml)"
+      ],
+      "evidence_product_ids": [
+        "1575"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo No.06 Royal Cotton (200ml)"
+    },
+    {
+      "id": "native-1575-bd4091a0c1",
+      "source_labels": [
+        "Parfém na praní Vevo No.06 Royal Cotton (500ml)",
+        "Vevo No.06 Royal Cotton mosóparfüm (500ml)"
+      ],
+      "evidence_product_ids": [
+        "1575"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo No.06 Royal Cotton (500ml)"
+    },
+    {
+      "id": "native-1575-454ee244ea",
+      "source_labels": [
+        "Parfém na praní Vevo No.06 Royal Cotton (Vzorek 10ml)",
+        "Vevo No.06 Royal Cotton mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "1575"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo No.06 Royal Cotton (Vzorka 10ml)"
+    },
+    {
+      "id": "native-1576-99198726ea",
+      "source_labels": [
+        "Parfum do prania Vevo Premium No.07 Ylang Absolute (200ml)",
+        "Parfém na praní Vevo Premium No.07 Ylang Absolute (200ml)",
+        "Vevo Premium No.07 Ylang Absolute mosóparfüm (200ml)"
+      ],
+      "evidence_product_ids": [
+        "1576"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Premium No.07 Ylang Absolute (200ml)",
+      "warehouse_numbers": [
+        "07200p"
+      ],
+      "eans": [
+        "8586024430440"
+      ]
+    },
+    {
+      "id": "native-1576-a13acb33e6",
+      "source_labels": [
+        "Parfém na praní Vevo Premium No.07 Ylang Absolute (500ml)",
+        "Vevo Premium No.07 Ylang Absolute mosóparfüm (500ml)"
+      ],
+      "evidence_product_ids": [
+        "1576"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Premium No.07 Ylang Absolute (500ml)",
+      "warehouse_numbers": [
+        "07500p"
+      ],
+      "eans": [
+        "8586024430457"
+      ]
+    },
+    {
+      "id": "native-1576-9ca850c252",
+      "source_labels": [
+        "Parfum do prania Vevo Premium No.07 Ylang Absolute (Vzorka 10ml)",
+        "Parfém na praní Vevo Premium No.07 Ylang Absolute (Vzorek 10ml)",
+        "Vevo Premium No.07 Ylang Absolute mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "1576"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Premium No.07 Ylang Absolute (Vzorka 10ml)",
+      "warehouse_numbers": [
+        "07001p"
+      ]
+    },
+    {
+      "id": "native-1577-488a52eaf5",
+      "source_labels": [
+        "Parfum do prania Vevo Premium No.08 Cotton Dream (200ml)",
+        "Parfém na praní Vevo Premium No.08 Cotton Dream (200ml)",
+        "Vevo Premium No.08 Cotton Dream mosóparfüm (200ml)"
+      ],
+      "evidence_product_ids": [
+        "1577"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Premium No.08 Cotton Dream (200ml)",
+      "warehouse_numbers": [
+        "08200p"
+      ],
+      "eans": [
+        "8586024430464"
+      ]
+    },
+    {
+      "id": "native-1577-676a496dda",
+      "source_labels": [
+        "Parfum do prania Vevo Premium No.08 Cotton Dream (500ml)",
+        "Parfém na praní Vevo Premium No.08 Cotton Dream (500ml)",
+        "Vevo Premium No.08 Cotton Dream mosóparfüm (500ml)"
+      ],
+      "evidence_product_ids": [
+        "1577"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Premium No.08 Cotton Dream (500ml)",
+      "warehouse_numbers": [
+        "08500p"
+      ],
+      "eans": [
+        "8586024430471"
+      ]
+    },
+    {
+      "id": "native-1577-38d232ab5e",
+      "source_labels": [
+        "Parfum do prania Vevo Premium No.08 Cotton Dream (Vzorka 10ml)",
+        "Parfém na praní Vevo Premium No.08 Cotton Dream (Vzorek 10ml)",
+        "Vevo Premium No.08 Cotton Dream mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "1577"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Premium No.08 Cotton Dream (Vzorka 10ml)",
+      "warehouse_numbers": [
+        "08001p"
+      ]
+    },
+    {
+      "id": "native-1578-9221610f99",
+      "source_labels": [
+        "Parfém na praní Vevo Premium No.09 Pure Garden (200ml)",
+        "Vevo Premium No.09 Pure Garden mosóparfüm (200ml)"
+      ],
+      "evidence_product_ids": [
+        "1578"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Premium No.09 Pure Garden (200ml)",
+      "warehouse_numbers": [
+        "09200p"
+      ],
+      "eans": [
+        "8586024430488"
+      ]
+    },
+    {
+      "id": "native-1578-98d79e8f45",
+      "source_labels": [
+        "Parfum do prania Vevo Premium No.09 Pure Garden (500ml)",
+        "Parfém na praní Vevo Premium No.09 Pure Garden (500ml)",
+        "Vevo Premium No.09 Pure Garden mosóparfüm (500ml)"
+      ],
+      "evidence_product_ids": [
+        "1578"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Premium No.09 Pure Garden (500ml)",
+      "warehouse_numbers": [
+        "09500p"
+      ],
+      "eans": [
+        "8586024430495"
+      ]
+    },
+    {
+      "id": "native-1578-066d37ff98",
+      "source_labels": [
+        "Parfum do prania Vevo Premium No.09 Pure Garden (Vzorka 10ml)",
+        "Parfém na praní Vevo Premium No.09 Pure Garden (Vzorek 10ml)",
+        "Vevo Premium No.09 Pure Garden mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "1578"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Premium No.09 Pure Garden (Vzorka 10ml)",
+      "warehouse_numbers": [
+        "09001p"
+      ]
+    },
+    {
+      "id": "native-1579-bb78086eff",
+      "source_labels": [
+        "Hipoallergén mosógél marseille-i szappanból – Tropical, 1 l",
+        "Prací gel hypoalergenní z marseillského mýdla Tropical 1 l"
+      ],
+      "evidence_product_ids": [
+        "1579"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Prací gél hypoalergénny z Marseillského mydla Tropical 1L",
+      "warehouse_numbers": [
+        "55010"
+      ],
+      "eans": [
+        "8595727700491"
+      ]
+    },
+    {
+      "id": "native-1580-91c88667c3",
+      "source_labels": [
+        "Hipoallergén mosógél marseille-i szappanból – Erdei gyümölcs, 1 l",
+        "Prací gel hypoalergenní z marseillského mýdla Lesní směs 1 l"
+      ],
+      "evidence_product_ids": [
+        "1580"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Prací gél hypoalergénny z Marseillského mydla Lesná zmes 1L",
+      "warehouse_numbers": [
+        "55011"
+      ],
+      "eans": [
+        "8595727700507"
+      ]
+    },
+    {
+      "id": "native-1581-251616297b",
+      "source_labels": [
+        "Hipoallergén mosógél marseille-i szappanból – Levendula, 1 l",
+        "Prací gel hypoalergenní z marseillského mýdla Levandule 1 l"
+      ],
+      "evidence_product_ids": [
+        "1581"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Prací gél hypoalergénny z Marseillského mydla Levanduľa 1L",
+      "warehouse_numbers": [
+        "55013"
+      ],
+      "eans": [
+        "8594201618468"
+      ]
+    },
+    {
+      "id": "native-1582-6569d1594c",
+      "source_labels": [
+        "Hipoallergén mosógél marseille-i szappanból – Rózsa, 1 l",
+        "Prací gel hypoalergenní z marseillského mýdla Růže 1 l"
+      ],
+      "evidence_product_ids": [
+        "1582"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Prací gél hypoalergénny z Marseillského mydla Ruža 1L",
+      "warehouse_numbers": [
+        "55012"
+      ],
+      "eans": [
+        "8594201618499"
+      ]
+    },
+    {
+      "id": "native-1583-7564c89bef",
+      "source_labels": [
+        "Padlótisztító robotfelmosóhoz, 500 ml",
+        "Čistič podlah do robotického mopu 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1583"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Čistič podláh do robotického mopu 500ml",
+      "warehouse_numbers": [
+        "55020"
+      ],
+      "eans": [
+        "8595727701504"
+      ]
+    },
+    {
+      "id": "native-1585-572c72b16e",
+      "source_labels": [
+        "Interiérový parfum Vevo Premium Škorica & Ihličie 150ml"
+      ],
+      "evidence_product_ids": [
+        "1585"
+      ],
+      "allow_label_only": false,
+      "canonical_expense_label": "Interiérový parfum Vevo Premium Škorica & Ihličie 150ml",
+      "warehouse_numbers": [
+        "VINTP01"
+      ]
+    },
+    {
+      "id": "native-1585-b40659ef36",
+      "source_labels": [
+        "Interiérový parfém Vevo Premium Skořice & Jehličí 150ml",
+        "Interiérový sprej Vevo Škorica & Ihličie 150ml",
+        "Vevo Fahéj & Fenyő lakásillatosító spray 150ml"
+      ],
+      "evidence_product_ids": [
+        "1585"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Interiérový parfum Vevo Premium Škorica & Ihličie 150ml",
+      "warehouse_numbers": [
+        "VINTP01"
+      ]
+    },
+    {
+      "id": "native-1586-ffc1873e2b",
+      "source_labels": [
+        "Extra erős lefolyótisztító, 1 l",
+        "Extra silný čistič odpadu 1 l"
+      ],
+      "evidence_product_ids": [
+        "1586"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Extra silný Čistič odpadu 1L",
+      "warehouse_numbers": [
+        "55021"
+      ],
+      "eans": [
+        "8594201611162"
+      ]
+    },
+    {
+      "id": "native-1587-c2d65c5234",
+      "source_labels": [
+        "KAO KAI No. 1 mágikus vasalóspray – egyszerű vasalás vasaló nélkül, 500 ml",
+        "Magická žehlička KAO KAI. No. 1 Jednoduché žehlenie bez žehličky 500ml",
+        "Magická žehlička KAO KAI. No. 1 Snadné žehlení bez žehličky 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1587"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Magická žehlička KAO KAI. No. 1 Jednoduché žehlenie bez žehličky 500ml",
+      "warehouse_numbers": [
+        "55022"
+      ],
+      "eans": [
+        "8595727701078"
+      ]
+    },
+    {
+      "id": "native-1588-d15737d732",
+      "source_labels": [
+        "Parfémovaná voda na žehlení Turquoise 1 l",
+        "Turquoise illatú vasalóvíz, 1 l"
+      ],
+      "evidence_product_ids": [
+        "1588"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfumovaná voda na žehlenie Turquoise 1L",
+      "warehouse_numbers": [
+        "55023"
+      ],
+      "eans": [
+        "8594201619656"
+      ]
+    },
+    {
+      "id": "native-1589-65cc5fa0f4",
+      "source_labels": [
+        "Folyékony súrolószer szódabikarbónával, 500 ml",
+        "TEKUTÝ PÍSEK se sodou 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1589"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "TEKUTÝ PIESOK so sódou 500 ml",
+      "warehouse_numbers": [
+        "55024"
+      ],
+      "eans": [
+        "8595727701184"
+      ]
+    },
+    {
+      "id": "native-1590-70ffa86f20",
+      "source_labels": [
+        "Folyékony súrolószer aktív szénnel, 500 ml",
+        "Tekutý písek s aktivním uhlím 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1590"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Tekutý piesok s aktívnym uhlím 500ml",
+      "warehouse_numbers": [
+        "55025"
+      ],
+      "eans": [
+        "8595727701535"
+      ]
+    },
+    {
+      "id": "native-1591-2cd65e4207",
+      "source_labels": [
+        "Aktív szenes WC-tisztító gél, 750 ml",
+        "WC čistič s aktivním uhlím 750 ml"
+      ],
+      "evidence_product_ids": [
+        "1591"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "WC čistič s aktívnym uhlím 750ml",
+      "warehouse_numbers": [
+        "55026"
+      ],
+      "eans": [
+        "8595727701528"
+      ]
+    },
+    {
+      "id": "native-1592-af05dbe3f0",
+      "source_labels": [
+        "Aktív szenes tisztítópaszta, 500 ml",
+        "Čisticí pasta s aktivním uhlím 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1592"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Čistiaca pasta s aktívnym uhlím 500ml",
+      "warehouse_numbers": [
+        "55027"
+      ],
+      "eans": [
+        "8595727701511"
+      ]
+    },
+    {
+      "id": "native-1593-73ec179a08",
+      "source_labels": [
+        "Kímélő mosógél menstruációs bugyikhoz Aloe verával, 500 ml",
+        "Šetrný prací gel na menstruační kalhotky s Aloe vera 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1593"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Šetrný prací gél na menštruačné nohavičky s Aloe vera 500ml",
+      "warehouse_numbers": [
+        "55028"
+      ],
+      "eans": [
+        "8595727701450"
+      ]
+    },
+    {
+      "id": "native-1594-fc8bf5950b",
+      "source_labels": [
+        "Vevo Natural dřevěná vůně do auta Santal Inspiration Palma",
+        "Vevo Natural fa autóillatosító Santal Inspiration – Pálma"
+      ],
+      "evidence_product_ids": [
+        "1594"
+      ],
+      "allow_label_only": true,
+      "canonical_policy_sku": "H-94491FEF",
+      "warehouse_numbers": [
+        "55001"
+      ]
+    },
+    {
+      "id": "native-1595-64bd39cd2c",
+      "source_labels": [
+        "Vevo Natural dřevěná vůně do auta Santal Inspiration Jelen",
+        "Vevo Natural fa autóillatosító Santal Inspiration – Szarvas"
+      ],
+      "evidence_product_ids": [
+        "1595"
+      ],
+      "allow_label_only": true,
+      "canonical_policy_sku": "H-ACACB998",
+      "warehouse_numbers": [
+        "55004"
+      ]
+    },
+    {
+      "id": "native-1596-7974bcf2f0",
+      "source_labels": [
+        "Vevo Natural dřevěná vůně do auta Santal Inspiration Medvěd",
+        "Vevo Natural fa autóillatosító Santal Inspiration – Medve"
+      ],
+      "evidence_product_ids": [
+        "1596"
+      ],
+      "allow_label_only": true,
+      "canonical_policy_sku": "H-0AA9298E",
+      "warehouse_numbers": [
+        "55005"
+      ]
+    },
+    {
+      "id": "native-1597-cafa0bca36",
+      "source_labels": [
+        "Vevo Natural Santal Inspiration autóillatosító utántöltő, 10 ml",
+        "Vevo Natural – Refill sprej Santal Inspiration 10 ml"
+      ],
+      "evidence_product_ids": [
+        "1597"
+      ],
+      "allow_label_only": true,
+      "canonical_policy_sku": "H-1F5ACE52",
+      "warehouse_numbers": [
+        "55006"
+      ]
+    },
+    {
+      "id": "native-1598-0233b30d32",
+      "source_labels": [
+        "Vevo kézzel készített karácsonyi gyertyakészlet, 3 db",
+        "Vevo ručně vyráběná sada vánočních svíček 3 ks"
+      ],
+      "evidence_product_ids": [
+        "1598"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vevo ručne vyrábaná sada vianočných sviečok 3ks"
+    },
+    {
+      "id": "native-1599-5be8efe513",
+      "source_labels": [
+        "Vevo Natural dřevěná vůně do auta Santal Inspiration Ornament",
+        "Vevo Natural fa autóillatosító Santal Inspiration – Ornament"
+      ],
+      "evidence_product_ids": [
+        "1599"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vevo Natural drevená vôňa do auta Santal Inspiration ornament",
+      "canonical_policy_sku": "H-8D019D16",
+      "warehouse_numbers": [
+        "55002"
+      ]
+    },
+    {
+      "id": "native-1600-e4a8e4f666",
+      "source_labels": [
+        "Vevo Natural dřevěná vůně do auta Santal Inspiration List",
+        "Vevo Natural fa autóillatosító Santal Inspiration – Levél"
+      ],
+      "evidence_product_ids": [
+        "1600"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vevo Natural drevená vôňa do auta Santal Inspiration list",
+      "canonical_policy_sku": "H-52688CE6",
+      "warehouse_numbers": [
+        "55003"
+      ]
+    },
+    {
+      "id": "native-1603-0bf44d8ef8",
+      "source_labels": [
+        "Vevo Natural Discovery Set"
+      ],
+      "evidence_product_ids": [
+        "1603"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vevo Natural Discovery Set"
+    },
+    {
+      "id": "native-1604-903e1c83c2",
+      "source_labels": [
+        "Kompletní sada vůní Vevo Natural 6×200 ml",
+        "Vevo Natural Complete 6×200 ml + 2× Vevo Shot a 2 odmerky ZADARMO",
+        "Vevo Natural teljes mosóparfüm-készlet 6×200 ml"
+      ],
+      "evidence_product_ids": [
+        "1604"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vevo Natural Complete 6×200 ml + 2× Vevo Shot a 2 odmerky ZADARMO"
+    },
+    {
+      "id": "native-1605-987110b566",
+      "source_labels": [
+        "Sada nejprodávanějších vůní Vevo Natural 3×200 ml",
+        "Vevo Natural Bestsellers 3×200 ml + Shot a odmerka ZADARMO",
+        "Vevo Natural legnépszerűbb mosóparfüm-készlet 3×200 ml"
+      ],
+      "evidence_product_ids": [
+        "1605"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vevo Natural Bestsellers 3×200 ml + Shot a odmerka ZADARMO"
+    },
+    {
+      "id": "native-1606-70dd271c69",
+      "source_labels": [
+        "Parfém do sušičky Vevo Premium No.01 Cotton Paradise 10ml",
+        "Vevo Premium No.01 Cotton Paradise szárítógép parfüm 10ml"
+      ],
+      "evidence_product_ids": [
+        "1606"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do sušičky Vevo Premium No.01 Cotton Paradise 10ml",
+      "canonical_policy_sku": "H-2F04A5AC"
+    },
+    {
+      "id": "native-1607-e8cb8fa5f6",
+      "source_labels": [
+        "Parfum do sušičky Vevo Premium No.02 Sweet Paradise 10ml",
+        "Parfém do sušičky Vevo Premium No.02 Sweet Paradise 10ml",
+        "Vevo Premium No.02 Sweet Paradise szárítógép parfüm 10ml"
+      ],
+      "evidence_product_ids": [
+        "1607"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do sušičky Vevo Premium No.02 Sweet Paradise 10ml",
+      "canonical_policy_sku": "H-E7BCF383"
+    },
+    {
+      "id": "native-1608-1e047ac6b0",
+      "source_labels": [
+        "Parfém do sušičky Vevo Premium No.06 Royal Cotton 10ml",
+        "Vevo Premium No.06 Royal Cotton szárítógép parfüm 10ml"
+      ],
+      "evidence_product_ids": [
+        "1608"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do sušičky Vevo Premium No.06 Royal Cotton 10ml",
+      "canonical_policy_sku": "H-915CBF83"
+    },
+    {
+      "id": "native-1609-69343e73b1",
+      "source_labels": [
+        "Parfém do sušičky Vevo Premium No.07 Ylang Absolute 10ml",
+        "Vevo Premium No.07 Ylang Absolute szárítógép parfüm 10ml"
+      ],
+      "evidence_product_ids": [
+        "1609"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do sušičky Vevo Premium No.07 Ylang Absolute 10ml",
+      "canonical_policy_sku": "H-EE1A4022"
+    },
+    {
+      "id": "native-1610-b39b4d008e",
+      "source_labels": [
+        "Parfém do sušičky Vevo Premium No.08 Cotton Dream 10ml",
+        "Vevo Premium No.08 Cotton Dream szárítógép parfüm 10ml"
+      ],
+      "evidence_product_ids": [
+        "1610"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do sušičky Vevo Premium No.08 Cotton Dream 10ml",
+      "canonical_policy_sku": "H-16C1991F"
+    },
+    {
+      "id": "native-1611-8bc26d5def",
+      "source_labels": [
+        "Parfém do sušičky Vevo Premium No.09 Pure Garden 10ml",
+        "Vevo Premium No.09 Pure Garden szárítógép parfüm 10ml"
+      ],
+      "evidence_product_ids": [
+        "1611"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do sušičky Vevo Premium No.09 Pure Garden 10ml",
+      "canonical_policy_sku": "H-BA52B2C6"
+    },
+    {
+      "id": "native-1612-bbce49a771",
+      "source_labels": [
+        "Přírodní vlněné koule do sušičky 3 ks",
+        "Természetes gyapjú szárítógolyók, 3 db"
+      ],
+      "evidence_product_ids": [
+        "1612"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Prírodné vlnené gule do sušičky 3 ks"
+    },
+    {
+      "id": "native-1615-664cf3bf2b",
+      "source_labels": [
+        "Gyapjú szárítógolyók + Vevo Premium No.01 Cotton Paradise szárítógép parfüm 10ml",
+        "Vlněné koule + Vevo Premium No.01 Cotton Paradise 10ml"
+      ],
+      "evidence_product_ids": [
+        "1615"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vlnené gule + Vevo Premium No.01 Cotton Paradise 10ml"
+    },
+    {
+      "id": "native-1616-c6a3e0090f",
+      "source_labels": [
+        "Gyapjú szárítógolyók + Vevo Premium No.02 Sweet Paradise szárítógép parfüm 10ml",
+        "Vlněné koule + Vevo Premium No.02 Sweet Paradise 10ml"
+      ],
+      "evidence_product_ids": [
+        "1616"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vlnené gule + Vevo Premium No.02 Sweet Paradise 10ml"
+    },
+    {
+      "id": "native-1617-9346b2d005",
+      "source_labels": [
+        "Gyapjú szárítógolyók + Vevo Premium No.06 Royal Cotton szárítógép parfüm 10ml",
+        "Vlnené gule + Vevo Premium No.06 Royal Cotton 10ml",
+        "Vlněné koule + Vevo Premium No.06 Royal Cotton 10ml"
+      ],
+      "evidence_product_ids": [
+        "1617"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vlnené gule + Vevo Premium No.06 Royal Cotton 10ml"
+    },
+    {
+      "id": "native-1618-65d5d48844",
+      "source_labels": [
+        "Gyapjú szárítógolyók + Vevo Premium No.07 Ylang Absolute szárítógép parfüm 10ml",
+        "Vlněné koule + Vevo Premium No.07 Ylang Absolute 10ml"
+      ],
+      "evidence_product_ids": [
+        "1618"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vlnené gule + Vevo Premium No.07 Ylang Absolute 10ml"
+    },
+    {
+      "id": "native-1619-3be7e995fb",
+      "source_labels": [
+        "Gyapjú szárítógolyók + Vevo Premium No.08 Cotton Dream szárítógép parfüm 10ml",
+        "Vlněné koule + Vevo Premium No.08 Cotton Dream 10ml"
+      ],
+      "evidence_product_ids": [
+        "1619"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vlnené gule + Vevo Premium No.08 Cotton Dream 10ml"
+    },
+    {
+      "id": "native-1620-78140cd1f1",
+      "source_labels": [
+        "Gyapjú szárítógolyók + Vevo Premium No.09 Pure Garden szárítógép parfüm 10ml",
+        "Vlněné koule + Vevo Premium No.09 Pure Garden 10ml"
+      ],
+      "evidence_product_ids": [
+        "1620"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vlnené gule + Vevo Premium No.09 Pure Garden 10ml"
+    },
+    {
+      "id": "native-1621-1654ca4378",
+      "source_labels": [
+        "Vevo Essence Sample Set 9x10ml"
+      ],
+      "evidence_product_ids": [
+        "1621"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vevo Essence Sample Set 9x10ml"
+    },
+    {
+      "id": "native-1624-fcfd3dbb61",
+      "source_labels": [
+        "Vevo Premium Discovery Set"
+      ],
+      "evidence_product_ids": [
+        "1624"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vevo Premium Discovery Set"
+    },
+    {
+      "id": "native-1625-6a68019188",
+      "source_labels": [
+        "Vevo Complete Discovery Set"
+      ],
+      "evidence_product_ids": [
+        "1625"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vevo Complete Discovery Set"
+    },
+    {
+      "id": "native-1627-3afe68fcd0",
+      "source_labels": [
+        "Hipoallergén mosógél Vevo Ylang Absolute, 1 l",
+        "Prací gel hypoalergenní Vevo Ylang Absolute 1 l"
+      ],
+      "evidence_product_ids": [
+        "1627"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "8594201618000",
+      "eans": [
+        "8594201618000"
+      ]
+    },
+    {
+      "id": "native-1628-8a1227fa7c",
+      "source_labels": [
+        "Combo Parfum do prania Ylang Absolute 500ml + Prací gél Ylang Absolute 1L",
+        "Combo Parfém do praní Ylang Absolute 500 ml + Prací gel Ylang Absolute 1 l",
+        "Csomag: Vevo Ylang Absolute mosóparfüm 500 ml + mosógél 1 l"
+      ],
+      "evidence_product_ids": [
+        "1628"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Combo Parfum do prania Ylang Absolute 500ml + Prací gél Ylang Absolute 1L",
+      "eans": [
+        "8594201618000"
+      ]
+    },
+    {
+      "id": "native-1629-7b4082c2d0",
+      "source_labels": [
+        "Combo 1× Parfém do praní Ylang Absolute 500 ml + 3× Prací gel Ylang Absolute 1 l",
+        "Csomag: 1× Vevo Ylang Absolute mosóparfüm 500 ml + 3× mosógél 1 l",
+        "Ylang Absolute 500 ml + 3× prací gél 1 l + Shot a odmerka ZADARMO"
+      ],
+      "evidence_product_ids": [
+        "1629"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Ylang Absolute 500 ml + 3× prací gél 1 l + Shot a odmerka ZADARMO",
+      "eans": [
+        "8594201618000"
+      ]
+    },
+    {
+      "id": "native-1630-1eccba9006",
+      "source_labels": [
+        "Univerzálny voňavý čistič Vevo Pure Harmony 500ml",
+        "Univerzální voňavý čistič Vevo Pure Harmony 500 ml",
+        "Vevo Pure Harmony univerzális illatos tisztítószer, 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1630"
+      ],
+      "allow_label_only": true,
+      "canonical_policy_sku": "H-3FECDEE3"
+    },
+    {
+      "id": "native-1631-6f5143c423",
+      "source_labels": [
+        "3× Univerzální voňavý čistič Vevo Pure Harmony 500 ml",
+        "3× Vevo Pure Harmony univerzális illatos tisztítószer, 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1631"
+      ],
+      "allow_label_only": true,
+      "canonical_policy_sku": "H-5C41EC11"
+    },
+    {
+      "id": "native-1632-ee052889dc",
+      "source_labels": [
+        "2x Univerzálny voňavý čistič Vevo Pure Harmony 500ml",
+        "2× Univerzální voňavý čistič Vevo Pure Harmony 500 ml",
+        "2× Vevo Pure Harmony univerzális illatos tisztítószer, 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1632"
+      ],
+      "allow_label_only": true,
+      "canonical_policy_sku": "H-EB753EE3"
+    },
+    {
+      "id": "native-1633-741bd5b5cd",
+      "source_labels": [
+        "3x Parfém na praní Vevo Natural No.07 Ylang Absolute 500 ml",
+        "3x Vevo Natural No.07 Ylang Absolute mosóparfüm 500ml",
+        "3× Ylang Absolute 500 ml + Vevo Shot a 2 odmerky ZADARMO"
+      ],
+      "evidence_product_ids": [
+        "1633"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "3× Ylang Absolute 500 ml + Vevo Shot a 2 odmerky ZADARMO"
+    },
+    {
+      "id": "native-1634-4473634187",
+      "source_labels": [
+        "2x Parfum do prania Vevo Natural No.07 Ylang Absolute 500ml",
+        "2x Parfém na praní Vevo Natural No.07 Ylang Absolute 500 ml",
+        "2x Vevo Natural No.07 Ylang Absolute mosóparfüm 500ml"
+      ],
+      "evidence_product_ids": [
+        "1634"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "2x Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)"
+    },
+    {
+      "id": "native-1635-81dd1400d9",
+      "source_labels": [
+        "Vevo Ylang Absolute illatos padlótisztító minden felmosó porszívóhoz, 500 ml",
+        "Vevo Ylang Absolute parfumovaný čistič podláh - 500ml",
+        "Vevo Ylang Absolute parfémovaný čistič podlah pro všechny vysavače s mytím - 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1635"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vevo Ylang Absolute parfumovaný čistič podláh pre všetky vysávače s umývaním - 500ml"
+    },
+    {
+      "id": "native-1636-0dcd8da977",
+      "source_labels": [
+        "3x Vevo Ylang Absolute čistič podláh pre všetky vysávače s umývaním - 500ml",
+        "3× Vevo Ylang Absolute padlótisztító minden felmosó porszívóhoz, 500 ml",
+        "3× Vevo Ylang Absolute čistič podlah pro všechny vysavače s mytím – 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1636"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "3x Vevo Ylang Absolute parfumovaný čistič podláh pre všetky vysávače s umývaním - 500ml"
+    },
+    {
+      "id": "native-1637-f0a6cd5aea",
+      "source_labels": [
+        "2x Vevo Ylang Absolute čistič podláh pre všetky vysávače s umývaním - 500ml",
+        "2× Vevo Ylang Absolute padlótisztító minden felmosó porszívóhoz, 500 ml",
+        "2× Vevo Ylang Absolute čistič podlah pro všechny vysavače s mytím – 500 ml"
+      ],
+      "evidence_product_ids": [
+        "1637"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "2x Vevo Ylang Absolute parfumovaný čistič podláh pre všetky vysávače s umývaním - 500ml"
+    },
+    {
+      "id": "native-1649-26d35061cb",
+      "source_labels": [
+        "Sada parfumov do prania Vevo Natural Pure Garden + Ylang Absolute 2×500 ml",
+        "Sada parfémů na praní Vevo Natural Pure Garden + Ylang Absolute 2×500 ml",
+        "Vevo Natural Pure Garden + Ylang Absolute mosóparfüm-szett 2×500 ml"
+      ],
+      "evidence_product_ids": [
+        "1649"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Sada parfumov do prania Vevo Natural Pure Garden + Ylang Absolute 2×500 ml"
+    },
+    {
+      "id": "native-1650-8b7bf36307",
+      "source_labels": [
+        "Kompletní prací rituál – Ylang Absolute",
+        "Kompletný prací rituál – Ylang Absolute",
+        "Teljes mosási rituálé – Ylang Absolute"
+      ],
+      "evidence_product_ids": [
+        "1650"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Kompletný prací rituál – Ylang Absolute",
+      "warehouse_numbers": [
+        "VEVO-RITUAL-YLANG-2026"
+      ]
+    },
+    {
+      "id": "native-1651-f6330386cd",
+      "source_labels": [
+        "A két legnépszerűbb illat + tiszta mosógép",
+        "Dve najobľúbenejšie vône + čistá práčka",
+        "Dvě nejoblíbenější vůně + čistá pračka"
+      ],
+      "evidence_product_ids": [
+        "1651"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Dve najobľúbenejšie vône + čistá práčka",
+      "warehouse_numbers": [
+        "VEVO-DUO-CISTA-PRACKA-2026"
+      ]
+    },
+    {
+      "id": "native-244-565e7b6ea5",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.02 Sweet Paradise (200ml)",
+        "Vevo Natural No.02 Sweet Paradise mosóparfüm (200ml)"
+      ],
+      "evidence_product_ids": [
+        "244"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.02 Sweet Paradise (200ml)",
+      "warehouse_numbers": [
+        "02200c"
+      ],
+      "eans": [
+        "8586024430341"
+      ]
+    },
+    {
+      "id": "native-244-3c3f34ee43",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.02 Sweet Paradise (500ml)",
+        "Vevo Natural No.02 Sweet Paradise mosóparfüm (500ml)"
+      ],
+      "evidence_product_ids": [
+        "244"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.02 Sweet Paradise (500ml)",
+      "warehouse_numbers": [
+        "02500c"
+      ],
+      "eans": [
+        "8586024430358"
+      ]
+    },
+    {
+      "id": "native-244-2321176d56",
+      "source_labels": [
+        "Parfum do prania Vevo Natural No.02 Sweet Paradise (Vzorka 10ml)",
+        "Parfém na praní Vevo Natural No.02 Sweet Paradise (Vzorek 10ml)",
+        "Vevo Natural No.02 Sweet Paradise mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "244"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.02 Sweet Paradise (Vzorka 10ml)",
+      "warehouse_numbers": [
+        "02001c"
+      ]
+    },
+    {
+      "id": "native-245-697acf06bc",
+      "source_labels": [
+        "Vevo No.03 Lavender Kiss mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "245"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo No.03 Lavender Kiss (Vzorka 10ml)"
+    },
+    {
+      "id": "native-246-120bce910f",
+      "source_labels": [
+        "Vevo No.04 Wild Africana mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "246"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo No.04 Wild Africana (Vzorka 10ml)"
+    },
+    {
+      "id": "native-247-e6900c60b5",
+      "source_labels": [
+        "Vevo No.05 Majestic Ocean mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "247"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo No.05 Majestic Ocean (Vzorka 10ml)"
+    },
+    {
+      "id": "native-248-9e47bdeffc",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.01 Cotton Paradise (200ml)",
+        "Vevo Natural No.01 Cotton Paradise mosóparfüm (200ml)"
+      ],
+      "evidence_product_ids": [
+        "248"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.01 Cotton Paradise (200ml)",
+      "warehouse_numbers": [
+        "01200c"
+      ],
+      "eans": [
+        "8586024430310"
+      ]
+    },
+    {
+      "id": "native-248-6dc9a6cb2f",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.01 Cotton Paradise (500ml)",
+        "Vevo Natural No.01 Cotton Paradise mosóparfüm (500ml)"
+      ],
+      "evidence_product_ids": [
+        "248"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.01 Cotton Paradise (500ml)",
+      "warehouse_numbers": [
+        "01500c"
+      ],
+      "eans": [
+        "8586024430327"
+      ]
+    },
+    {
+      "id": "native-248-3f75bbb5aa",
+      "source_labels": [
+        "Parfém na praní Vevo Natural No.01 Cotton Paradise (Vzorek 10ml)",
+        "Vevo Natural No.01 Cotton Paradise mosóparfüm (10 ml-es minta)"
+      ],
+      "evidence_product_ids": [
+        "248"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Parfum do prania Vevo Natural No.01 Cotton Paradise (Vzorka 10ml)",
+      "warehouse_numbers": [
+        "01001c"
+      ],
+      "eans": [
+        "8586024430334"
+      ]
+    },
+    {
+      "id": "native-249-99801fdfcb",
+      "source_labels": [
+        "Minden Vevo-illat mintakészlete (6 × 10 ml)",
+        "Sada vzoriek všetkých vôní Vevo Natural 6 x 10ml"
+      ],
+      "evidence_product_ids": [
+        "249"
+      ],
+      "allow_label_only": false,
+      "canonical_expense_label": "Vzorky Vevo Natural 6 x 10ml",
+      "warehouse_numbers": [
+        "0105c"
+      ]
+    },
+    {
+      "id": "native-249-89b5800f8b",
+      "source_labels": [
+        "Sada vzorků všech vůní Vevo (6 × 10 ml)",
+        "Vevo Natural mosóparfüm-minták 6 × 10 ml",
+        "Vzorky Vevo Natural 6 x 10ml"
+      ],
+      "evidence_product_ids": [
+        "249"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Vzorky Vevo Natural 6 x 10ml",
+      "warehouse_numbers": [
+        "0105c"
+      ]
+    },
+    {
+      "id": "native-250-59583ce46f",
+      "source_labels": [
+        "THE PINK STUFF univerzális csodatisztító paszta, 850 g",
+        "THE PINK STUFF zázračná univerzální čisticí pasta, 850 g"
+      ],
+      "evidence_product_ids": [
+        "250"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "5060033821114",
+      "warehouse_numbers": [
+        "25047"
+      ],
+      "eans": [
+        "5060033821114"
+      ]
+    },
+    {
+      "id": "native-250-0f36c76cf9",
+      "source_labels": [
+        "THE PINK STUFF zázračná univerzálna čistiaca pasta, 850 g"
+      ],
+      "evidence_product_ids": [
+        "250"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "THE PINK STUFF zázračná univerzální čistící pasta, 850 g",
+      "warehouse_numbers": [
+        "25047"
+      ],
+      "eans": [
+        "5060033821114"
+      ]
+    },
+    {
+      "id": "native-268-19cd309e2f",
+      "source_labels": [
+        "THE PINK STUFF ablak- és üvegtisztító spray, 850 ml",
+        "THE PINK STUFF čisticí sprej na okna a sklo, 850 ml"
+      ],
+      "evidence_product_ids": [
+        "268"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "5060033822166",
+      "warehouse_numbers": [
+        "25034"
+      ],
+      "eans": [
+        "5060033822166"
+      ]
+    },
+    {
+      "id": "native-518-f7bcf8588d",
+      "source_labels": [
+        "THE PINK STUFF WC-tisztítószer, 750 ml",
+        "THE PINK STUFF čisticí prostředek na toalety, 750 ml"
+      ],
+      "evidence_product_ids": [
+        "518"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "5060033820681",
+      "warehouse_numbers": [
+        "25048"
+      ],
+      "eans": [
+        "5060033820681"
+      ]
+    },
+    {
+      "id": "native-519-fb36bd824b",
+      "source_labels": [
+        "<span class='translation'>THE PINK STUFF zázračný univerzálny čistiaci prostriedok na podlahy, 1 l</span>",
+        "THE PINK STUFF zázračný univerzální čisticí prostředek na podlahy, 1 l"
+      ],
+      "evidence_product_ids": [
+        "519"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "5060033821527",
+      "eans": [
+        "5060033821527"
+      ]
+    },
+    {
+      "id": "native-649-688ea7e1e3",
+      "source_labels": [
+        "THE PINK STUFF Odstraňovač skvrn na koberce, 500 ml",
+        "THE PINK STUFF folteltávolító szőnyegekhez, 500 ml"
+      ],
+      "evidence_product_ids": [
+        "649"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "THE PINK STUFF Odstraňovač skvrn na koberce, 500 ml",
+      "warehouse_numbers": [
+        "25042"
+      ],
+      "eans": [
+        "5060033822784"
+      ]
+    },
+    {
+      "id": "native-673-782058d1a4",
+      "source_labels": [
+        "THE PINK STUFF OXI Stain Remover folteltávolító textíliákhoz, szőnyegekhez és kárpitokhoz, 500 ml",
+        "THE PINK STUFF OXI Stain Remover – zázračný odstraňovač skvrn z textilu, koberců a čalounění, 500 ml",
+        "THE PINK STUFF OXI stain remover zázračný odstraňovač skvrn z textilu, koberců a čalounění, 500ml"
+      ],
+      "evidence_product_ids": [
+        "673"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "THE PINK STUFF OXI stain remover zázračný odstraňovač skvrn z textilu, koberců a čalounění, 500ml",
+      "warehouse_numbers": [
+        "25041"
+      ],
+      "eans": [
+        "5060033820186"
+      ]
+    },
+    {
+      "id": "native-734-aa910eccb2",
+      "source_labels": [
+        "S.O.S. Repair Balm"
+      ],
+      "evidence_product_ids": [
+        "734"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "S.O.S. Repair Balm",
+      "warehouse_numbers": [
+        "25063"
+      ],
+      "eans": [
+        "8720892407122"
+      ]
+    },
+    {
+      "id": "native-735-41af57d709",
+      "source_labels": [
+        "Cream SeaKelp + Vitamin E, 60 ml",
+        "Sea Kelp + E-vitamin faggyúkrém, 60 ml"
+      ],
+      "evidence_product_ids": [
+        "735"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Cream SeaKelp + Vitamin E 60ml",
+      "warehouse_numbers": [
+        "25033"
+      ],
+      "eans": [
+        "8720892407115"
+      ]
+    },
+    {
+      "id": "native-738-b6fc342d32",
+      "source_labels": [
+        "Natural Tallow Deodorant",
+        "Természetes faggyúdezodor"
+      ],
+      "evidence_product_ids": [
+        "738"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Natural Tallow Deodorant",
+      "warehouse_numbers": [
+        "25064"
+      ],
+      "eans": [
+        "8720892407139"
+      ]
+    },
+    {
+      "id": "native-752-fc29367665",
+      "source_labels": [
+        "Cosrx Advanced Snail 96 Mucin Power Essence 100 ml"
+      ],
+      "evidence_product_ids": [
+        "752"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "Cosrx Advanced Snail 96 Mucin Power Essence 100 ml",
+      "warehouse_numbers": [
+        "25030"
+      ],
+      "eans": [
+        "8809416470009"
+      ]
+    },
+    {
+      "id": "native-754-8e44bae64d",
+      "source_labels": [
+        "SKIN1004 Madagascar Centella Ampoule, 30 ml",
+        "SKIN1004 Madagascar Centella ampule s pupečníkem asijským 30 ml"
+      ],
+      "evidence_product_ids": [
+        "754"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "SKIN1004 Madagascar Centella ampule s pupečníkem asijským 30 ml",
+      "warehouse_numbers": [
+        "25057"
+      ],
+      "eans": [
+        "8809576260618"
+      ]
+    },
+    {
+      "id": "native-755-e3e4c87217",
+      "source_labels": [
+        "Beauty Of Joseon Glow serum Propolis & Niacinamide Bez Parfemace 30 ml",
+        "Beauty of Joseon Glow arcszérum – Propolisz + Niacinamid, illatanyagmentes, 30 ml"
+      ],
+      "evidence_product_ids": [
+        "755"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "8809657114960",
+      "warehouse_numbers": [
+        "25056"
+      ],
+      "eans": [
+        "8809657114960"
+      ]
+    },
+    {
+      "id": "native-757-83ed5dee0e",
+      "source_labels": [
+        "BEAUTY OF JOSEON Revive eye Serum Ginseng + Retinal 30 ml",
+        "BEAUTY OF JOSEON Revive szemkörnyékápoló szérum ginzenggel és retinállal, 30 ml"
+      ],
+      "evidence_product_ids": [
+        "757"
+      ],
+      "allow_label_only": true,
+      "canonical_expense_label": "8809738316146",
+      "warehouse_numbers": [
+        "25054"
+      ],
+      "eans": [
+        "8809738316146"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# Reviewed product cost identities
+
+`projects/<project>/product_cost_identity_bindings.json` is optional. Projects without it retain their existing cost resolution. Purchase prices remain in `product_expenses.json`; the binding file contains product identities, existing cost references and existing policy references, rather than new prices.
+
+Schema version 1 requires `effective_from` and `bindings`. Each binding has a unique `id`, `source_labels` and `evidence_product_ids`, plus at least one of `canonical_expense_label` or `canonical_policy_sku`. Optional `warehouse_numbers`, `eans` and `allow_label_only` constrain matching. Validate native parent, line, fragrance, volume and bundle composition before adding a label. Evidence product IDs document that review; they are not identifier-only runtime joins.
+
+A native order purchase date must be valid and on or after the effective date. A normalized exact label must match, and supplied configured warehouse/EAN identities must agree. `allow_label_only` applies only when the source has no warehouse, import or EAN identifier. A conflicting supplied identity does not fall back to a label match. Reporting display labels and reporting SKUs remain unchanged.
+
+An explicit original label-plus-identifier compound expense wins. A reviewed unit otherwise resolves its own existing compound, label or title-hash cost, retaining identifier-specific prices. It never inherits an unrelated original standalone SKU or EAN cost. Approved mixed bundles retain explicit whole-bundle expenses before their existing configured component sum. Homogeneous multipacks require a parsed count and an exact registered base label or its own hash; their native component identifiers cannot replace the whole pack with one unit. Order quantity multiplies the complete pack cost.
+
+`canonical_policy_sku` must already exist in the project's authoritative-margin settings. It carries the same approved policy to a verified translation; it does not manufacture a supplier purchase price. Zero services, gifts and other existing financial precedence remain intact. Unknown products remain explicit estimates under the existing publication policy.
+
+VEVO's initial configuration is effective from 2026-01-01. On identical source inputs, 2025 must retain its previous costing. Verify native-source membership, discounts, currency, credits, product costs, country attribution, advertising and the single shared fixed pool before a guarded production release. Distinguish the cost-assignment bridge on identical inputs from provider/status refreshes in a newly published report. Run `tests.test_product_cost_identity_bindings` and the existing localized-cost tests; CI checks both Windows and Linux and triggers for binding-only edits.
