@@ -1,3 +1,14 @@
+## 2026-10-13 — Recorded purchase-cost list exported
+
+Date: 2026-10-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-purchase-price-list-20261013`
+What changed: Read-only source-derived Excel list of all current expense-registry records. Exact localized names, EAN/synthetic identifiers, compound exceptions and original numeric precision are retained, with notes distinguishing recorded prices from reporting policies. No data, calculation, alias, provider, schedule or runtime was modified.
+What is verified: Registry SHA `ce484c167c9300f5102c301e5ab3f101b6fd8e9cb8a6e09f4fd2980c5eb32ef9` remains identical to the previously verified production source. There are 334 keys (178 names, 58 numeric/EAN, 93 H identifiers and 5 compound entries), not 334 distinct products. Independent saved-file XML/Decimal replay verifies every exact key/value, text identifiers, numeric precision, filter and frozen header (proof `8641d9115efa6ea2696b57d8a41399aaa040260de81de252ae5a88fd9221412a`); workbook SHA `f1f3fa2845014d0950aecfd7c9789b5bec557d256bd3df0e1ff717349e0a5f31`. Artifact Tool error scan has no matches, and opening/ending visual reviews pass.
+Limits: Unit costs are interpreted as EUR excluding VAT; the register does not retain supplier invoices or price-validity dates. Explicit unit values equal to one are configured entries, separate from the missing-cost fallback. Preserve identifier-specific exceptions instead of collapsing them into one product price. Tips and insurance still use zero expense; approved margin/bundle policies are distinct from purchase prices.
+Recovery/cleanup: Twenty-one private files plus manifest are encrypted, conditional-create and fully readback verified under `data/vevo/analyses/2026-10-13-purchase-price-list/20261013T130016Z-fb22fe1a5dd6/`, manifest `ae213d56aea8bdf96871ec5cd658b1110a3ab48f21b62670ddf212e635e6256e`. The source snapshot, workbook and builder are recoverable there. All finite marker/build/verification processes exited zero and their exact PIDs are absent without listeners (proof `3f5564083d226a59693be15ae9600103c12fb21f5e32bbc73eddb63ce74d28ce`). Archive child 76356, wrapper 13392 and shell 79760 also exited zero and are independently absent, proof `f3d80f453dfa7890b1b0a8b3469baaaee1b48e4bdcbcb8b1e218cc7089572e4d`. No persistent service was started; production remains active.
+Next exact step: Deliver the owner's full list with a compact overview and the recorded-versus-verified distinction. Any future supplier-price or localized identity correction needs its own evidence; no new reporting deployment is established by this export.
+
 ## 2026-10-13 — Weekly missing-cost product inventory identified
 
 Date: 2026-10-13

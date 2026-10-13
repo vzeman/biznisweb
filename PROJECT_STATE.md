@@ -1,3 +1,15 @@
+## 2026-10-13 — VEVO recorded purchase-cost list exported
+
+Date: 2026-10-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-purchase-price-list-20261013`
+What changed: Read-only inventory of the current VEVO expense registry. One filterable Excel preserves all exact keys and numeric values, including localized names, EAN/synthetic identifiers and compound name/identifier exceptions. No purchase costs, aliases, financial rules, supplier records or production state changed.
+What is verified: Clean repository/branch checks, fetch/prune and pull/rebase completed. Registry SHA `ce484c167c9300f5102c301e5ab3f101b6fd8e9cb8a6e09f4fd2980c5eb32ef9` is unchanged from the previously verified production source. All 334 keys are preserved: 178 plain names, 58 numeric/EAN, 93 H identifiers and 5 compound entries. These are registry records, not distinct physical products. Artifact Tool error inspection and opening/ending visual reviews pass. Independent saved-XLSX XML/Decimal comparison proves exact full key/value membership, text identifiers, original precision, header freeze and filtering (proof `8641d9115efa6ea2696b57d8a41399aaa040260de81de252ae5a88fd9221412a`); workbook SHA `f1f3fa2845014d0950aecfd7c9789b5bec557d256bd3df0e1ff717349e0a5f31`.
+Semantics/limits: Costs are interpreted as EUR per unit excluding VAT. Explicit unit values equal to one are recorded inputs, separate from the missing-cost margin fallback. Supplier invoices and price validity are absent from this register and were not verified. Preserve identifier-specific Premium Cotton Dream and percarbonate differences instead of flattening them. Tips/insurance retain their overriding zero-cost policy; approved margin and bundle rules remain separate from supplier purchase prices.
+Private recovery: Exact source snapshot, generated workbook, builder, process records and verification are private, AES256, conditional-create and complete-readback verified in 21 files plus manifest under `data/vevo/analyses/2026-10-13-purchase-price-list/20261013T130016Z-fb22fe1a5dd6/`; manifest SHA `ae213d56aea8bdf96871ec5cd658b1110a3ab48f21b62670ddf212e635e6256e`. No new financial values or customer records are added to Git.
+Process cleanup: Marker, workbook builder and independent verifier exited zero; exact child/wrapper/parent PIDs are independently absent without listeners, cleanup `3f5564083d226a59693be15ae9600103c12fb21f5e32bbc73eddb63ce74d28ce`. Archive child 76356, wrapper 13392 and shell 79760 also exited zero and are independently absent, cleanup `f3d80f453dfa7890b1b0a8b3469baaaee1b48e4bdcbcb8b1e218cc7089572e4d`. No persistent local server or global termination was used. Production reporting remains active.
+Next exact step: Deliver the complete workbook and a compact product-name overview. Later cost/alias changes require verified native identities and supplier provenance; this inventory does not establish a new production rollout.
+
 ## 2026-10-13 — VEVO weekly missing-cost inventory identified
 
 Date: 2026-10-13
