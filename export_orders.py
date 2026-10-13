@@ -975,6 +975,10 @@ class BizniWebExporter:
                 normalized_sku = self._normalize_product_identifier(canonical_sku)
                 if normalized_name and normalized_sku:
                     self.canonical_product_skus_by_name[normalized_name] = normalized_sku
+        (
+            self.product_cost_identity_effective_from,
+            self.product_cost_identity_bindings_by_label,
+        ) = self._load_product_cost_identity_bindings()
 
     def output_path(self, filename: str) -> Path:
         """Build a path inside project-specific output directory."""
@@ -3136,6 +3140,7 @@ class BizniWebExporter:
         component: Dict[str, Any],
         component_sku: str,
         component_label: str,
+        purchase_date: Any = None,
     ) -> Tuple[Optional[float], Optional[str]]:
         configured_cost = component.get("expense_per_item")
         if configured_cost not in (None, ""):
@@ -3146,6 +3151,7 @@ class BizniWebExporter:
             import_code=component.get("item_import_code"),
             warehouse_number=component.get("item_warehouse_number"),
             ean=component.get("item_ean"),
+            purchase_date=purchase_date,
         )
 
     def expand_reporting_product_component_rows(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -3200,6 +3206,7 @@ class BizniWebExporter:
                     component,
                     component_sku,
                     component_label,
+                    purchase_date=row.get("purchase_date"),
                 )
                 component_units = parent_quantity * component_qty
                 weight = self._to_float(component.get("revenue_weight"), 0.0)
@@ -3847,6 +3854,206 @@ class BizniWebExporter:
             self.product_expenses_normalized[normalized_key] = value
             self.product_expenses_normalized_costs.setdefault(normalized_key, set()).add(value)
 
+    def _load_product_cost_identity_bindings(self) -> Tuple[Optional[date], Dict[str, Dict[str, Any]]]:
+        """Load optional reviewed cost identities without changing reporting product identity."""
+        project_path = project_dir(self.project_name)
+        path = project_path / "product_cost_identity_bindings.json"
+        if not path.exists():
+            return None, {}
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        validation_expenses = self.product_expenses_exact
+        expense_path = project_path / str(self.project_settings.get("product_expenses_file") or "product_expenses.json")
+        if expense_path.exists():
+            validation_expenses = json.loads(expense_path.read_text(encoding="utf-8"))
+        return self._validate_product_cost_identity_bindings(
+            payload, validation_expenses,
+            approved_policy_margins=self.project_settings.get("authoritative_margin_override_skus") or {},
+            approved_bundle_labels=self.product_cost_bundle_rules_by_label,
+        )
+
+    @classmethod
+    def _validate_product_cost_identity_bindings(
+        cls, payload: Any, expenses: Any, approved_policy_margins: Optional[Dict[Any, Any]] = None,
+        approved_bundle_labels: Any = None,
+    ) -> Tuple[date, Dict[str, Dict[str, Any]]]:
+        """Require reviewed unit costs or existing authoritative policy identities."""
+        if not isinstance(payload, dict) or set(payload) != {"schema_version", "effective_from", "bindings"}:
+            raise ValueError("product_cost_identity_bindings requires schema_version, effective_from and bindings")
+        if type(payload["schema_version"]) is not int or payload["schema_version"] != 1:
+            raise ValueError("product_cost_identity_bindings schema_version must be 1")
+        effective_from = payload["effective_from"]
+        if not isinstance(effective_from, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", effective_from):
+            raise ValueError("product_cost_identity_bindings effective_from must be an ISO date")
+        effective_day = date.fromisoformat(effective_from)
+        bindings = payload["bindings"]
+        if not isinstance(bindings, list) or not isinstance(expenses, dict):
+            raise ValueError("product_cost_identity_bindings requires a bindings list and an expense registry")
+        by_label: Dict[str, Dict[str, Any]] = {}
+        seen_ids = set()
+        required = {"id", "source_labels", "evidence_product_ids"}
+        allowed = required | {"canonical_expense_label", "canonical_policy_sku", "warehouse_numbers", "eans", "allow_label_only"}
+        if approved_policy_margins is not None and not isinstance(approved_policy_margins, dict):
+            raise ValueError("product_cost_identity_bindings requires an approved policy mapping")
+        policy_margins = {}
+        for policy_sku, margin in (approved_policy_margins or {}).items():
+            normalized_sku = cls._normalize_product_identifier(policy_sku)
+            if not normalized_sku or normalized_sku in policy_margins:
+                raise ValueError("product_cost_identity_bindings has ambiguous approved policy identities")
+            policy_margins[normalized_sku] = margin
+        if approved_bundle_labels is None:
+            bundle_labels = set()
+        elif isinstance(approved_bundle_labels, (dict, list, tuple, set, frozenset)):
+            if any(not isinstance(label, str) or not label.strip() or label != label.strip()
+                   for label in approved_bundle_labels):
+                raise ValueError("product_cost_identity_bindings requires exact approved bundle labels")
+            bundle_labels = set(approved_bundle_labels)
+        else:
+            raise ValueError("product_cost_identity_bindings requires an approved bundle label collection")
+
+        def string_list(rule: Dict[str, Any], key: str, required_values: bool = False) -> List[str]:
+            values = rule.get(key, [])
+            if not isinstance(values, list) or (required_values and not values):
+                raise ValueError(f"product_cost_identity_bindings {key} must be a non-empty list" if required_values
+                                 else f"product_cost_identity_bindings {key} must be a list")
+            if any(not isinstance(value, str) or not value.strip() for value in values):
+                raise ValueError(f"product_cost_identity_bindings {key} contains an invalid value")
+            return [value.strip() for value in values]
+
+        for rule in bindings:
+            if not isinstance(rule, dict) or not required.issubset(rule) or set(rule) - allowed:
+                raise ValueError("product_cost_identity_bindings contains an invalid binding schema")
+            rule_id = rule["id"]
+            if not isinstance(rule_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", rule_id) or rule_id in seen_ids:
+                raise ValueError("product_cost_identity_bindings requires unique non-empty binding ids")
+            seen_ids.add(rule_id)
+            labels = string_list(rule, "source_labels", True)
+            evidence_ids = string_list(rule, "evidence_product_ids", True)
+            if len(evidence_ids) != len(set(evidence_ids)):
+                raise ValueError("product_cost_identity_bindings contains duplicate evidence_product_ids")
+            identities = {}
+            guarded_identifiers = []
+            for key in ("warehouse_numbers", "eans"):
+                values = string_list(rule, key)
+                normalized = [cls._normalize_product_identifier(value) for value in values]
+                if any(not value for value in normalized) or len(normalized) != len(set(normalized)):
+                    raise ValueError(f"product_cost_identity_bindings[{rule_id}] has ambiguous {key}")
+                identities[key] = frozenset(normalized)
+                guarded_identifiers.extend([*values, *normalized])
+            if not {"canonical_expense_label", "canonical_policy_sku"}.intersection(rule):
+                raise ValueError(f"product_cost_identity_bindings[{rule_id}] requires a cost or approved policy target")
+            target = rule.get("canonical_expense_label")
+            if "canonical_expense_label" in rule:
+                if not isinstance(target, str) or not target.strip() or target != target.strip() or "||" in target:
+                    raise ValueError("product_cost_identity_bindings canonical_expense_label must be a direct unit label")
+                canonical_hash = cls.get_product_sku("", target)
+                target_keys = {target, canonical_hash, cls._compose_expense_key(target, canonical_hash)}
+                target_keys.update(cls._compose_expense_key(target, identifier) for identifier in guarded_identifiers)
+                existing_target_keys = target_keys.intersection(expenses)
+                homogeneous = cls._parse_homogeneous_bundle_label(target)
+                existing_base_keys = set()
+                if homogeneous is not None:
+                    base_label = homogeneous[1]
+                    existing_base_keys = {base_label, cls.get_product_sku("", base_label)}.intersection(expenses)
+                if not existing_target_keys and target not in bundle_labels and not existing_base_keys:
+                    raise ValueError(f"product_cost_identity_bindings[{rule_id}] references a missing unit cost")
+                for target_key in existing_target_keys | existing_base_keys:
+                    try:
+                        if isinstance(expenses[target_key], bool):
+                            raise ValueError("boolean expense")
+                        target_cost = float(expenses[target_key])
+                    except (TypeError, ValueError) as exc:
+                        raise ValueError(f"product_cost_identity_bindings[{rule_id}] has an invalid unit cost") from exc
+                    if not math.isfinite(target_cost) or target_cost < 0:
+                        raise ValueError(f"product_cost_identity_bindings[{rule_id}] has an invalid unit cost")
+            policy_sku = None
+            policy_margin = None
+            if "canonical_policy_sku" in rule:
+                raw_policy_sku = rule["canonical_policy_sku"]
+                if not isinstance(raw_policy_sku, str) or not raw_policy_sku.strip() or raw_policy_sku != raw_policy_sku.strip():
+                    raise ValueError(f"product_cost_identity_bindings[{rule_id}] has an invalid policy identity")
+                policy_sku = cls._normalize_product_identifier(raw_policy_sku)
+                if policy_sku not in policy_margins or isinstance(policy_margins[policy_sku], bool):
+                    raise ValueError(f"product_cost_identity_bindings[{rule_id}] references an unapproved policy")
+                try:
+                    policy_margin = float(policy_margins[policy_sku])
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"product_cost_identity_bindings[{rule_id}] has an invalid approved margin") from exc
+                if not math.isfinite(policy_margin) or not 0 <= policy_margin <= 100:
+                    raise ValueError(f"product_cost_identity_bindings[{rule_id}] has an invalid approved margin")
+            allow_label_only = rule.get("allow_label_only", False)
+            if type(allow_label_only) is not bool or (not any(identities.values()) and not allow_label_only):
+                raise ValueError(f"product_cost_identity_bindings[{rule_id}] requires reviewed identity or explicit allow_label_only")
+            indexed = {"id": rule_id, "canonical_expense_label": target,
+                       "canonical_policy_sku": policy_sku, "canonical_policy_margin_pct": policy_margin,
+                       "allow_label_only": allow_label_only, **identities}
+            for label in labels:
+                normalized_label = cls._normalize_match_text(label)
+                if not normalized_label or normalized_label in by_label:
+                    raise ValueError("product_cost_identity_bindings contains ambiguous normalized source labels")
+                by_label[normalized_label] = indexed
+        return effective_day, by_label
+
+    @staticmethod
+    def _cost_binding_purchase_day(value: Any) -> Optional[date]:
+        if value is None or value is pd.NaT:
+            return None
+        try:
+            if isinstance(value, datetime):
+                return value.date()
+            if isinstance(value, date):
+                return value
+            return datetime.fromisoformat(str(value).strip().replace("Z", "+00:00")).date()
+        except (TypeError, ValueError, OverflowError):
+            return None
+
+    def _reviewed_product_cost_binding(
+        self, item_label: str, purchase_date: Any, import_code: Any, warehouse_number: Any, ean: Any,
+    ) -> Optional[Dict[str, Any]]:
+        effective_from = self.product_cost_identity_effective_from
+        purchase_day = self._cost_binding_purchase_day(purchase_date)
+        if effective_from is None or purchase_day is None or purchase_day < effective_from:
+            return None
+        binding = self.product_cost_identity_bindings_by_label.get(self._normalize_match_text(item_label))
+        if binding is None:
+            return None
+        warehouse_id = self._normalize_product_identifier(warehouse_number)
+        import_id = self._normalize_product_identifier(import_code)
+        ean_id = self._normalize_product_identifier(ean)
+        if not any((warehouse_id, import_id, ean_id)):
+            return binding if binding["allow_label_only"] else None
+        matched = False
+        for configured, supplied in (
+            (binding["warehouse_numbers"], {warehouse_id or import_id} - {""}),
+            (binding["eans"], {ean_id} - {""}),
+        ):
+            if configured and supplied:
+                if not supplied.issubset(configured):
+                    return None
+                matched = True
+        return binding if matched else None
+
+    def _resolve_raw_compound_expense(
+        self, product_sku: str, item_label: str, import_code: Any, warehouse_number: Any, ean: Any,
+    ) -> Tuple[Optional[float], Optional[str]]:
+        """Keep explicit raw label+identity exceptions ahead of reviewed translation bindings."""
+        title = str(item_label or "").strip()
+        identifiers = [warehouse_number, import_code, ean, product_sku, self.get_product_sku("", title)]
+        candidates = [self._compose_expense_key(title, self._normalize_product_identifier(value))
+                      for value in identifiers]
+        # Warehouse case is preserved by the legacy exact resolver before normalization.
+        candidates.insert(0, self._compose_expense_key(title, str(warehouse_number or "").strip()))
+        for candidate in candidates:
+            if candidate and candidate in self.product_expenses_exact:
+                return float(self.product_expenses_exact[candidate]), "mapped_compound_key"
+        for candidate in candidates:
+            normalized = self._normalize_match_text(candidate)
+            costs = self.product_expenses_normalized_costs.get(normalized) or set()
+            if len(costs) > 1:
+                raise ValueError("Reviewed cost binding conflicts with an ambiguous raw compound expense")
+            if len(costs) == 1:
+                return float(next(iter(costs))), "mapped_compound_key_normalized"
+        return None, None
+
     def _build_product_cost_bundle_rule_index(self) -> Dict[str, Dict[str, Any]]:
         """Validate exact-label mixed-bundle rules and index them by their raw shop label."""
         raw_rules = self.project_settings.get("product_cost_bundle_rules") or []
@@ -4131,8 +4338,9 @@ class BizniWebExporter:
         import_code: Any = None,
         warehouse_number: Any = None,
         ean: Any = None,
+        purchase_date: Any = None,
     ) -> Tuple[Optional[float], Optional[str]]:
-        """Keep raw cost precedence, then optionally try one reviewed project alias."""
+        """Apply dated reviewed cost identities, retaining raw compound exceptions."""
         resolved = self._resolve_product_expense_for_label(
             product_sku,
             item_label,
@@ -4140,6 +4348,21 @@ class BizniWebExporter:
             warehouse_number=warehouse_number,
             ean=ean,
         )
+        binding = self._reviewed_product_cost_binding(
+            item_label, purchase_date, import_code, warehouse_number, ean,
+        )
+        if binding is not None and binding["canonical_expense_label"] is not None:
+            compound = self._resolve_raw_compound_expense(
+                product_sku, item_label, import_code, warehouse_number, ean,
+            )
+            if compound[0] is not None:
+                return compound
+            bound_cost, bound_source = self._resolve_reviewed_target_expense(
+                binding["canonical_expense_label"], import_code, warehouse_number, ean,
+            )
+            if bound_cost is None:
+                raise ValueError(f"Reviewed cost binding {binding['id']} no longer has a mapped unit cost")
+            return bound_cost, f"cost_identity_binding:{binding['id']}:{bound_source}"
         if resolved[0] is not None or self.project_settings.get("expense_alias_fallback") is not True:
             return resolved
 
@@ -4158,6 +4381,50 @@ class BizniWebExporter:
         if alias_resolved[0] is None:
             return resolved
         return alias_resolved[0], f"canonical_alias:{alias_resolved[1]}"
+
+    def _resolve_reviewed_target_expense(
+        self, target: str, import_code: Any, warehouse_number: Any, ean: Any,
+    ) -> Tuple[Optional[float], Optional[str]]:
+        """Use only a reviewed unit's own cost or its existing approved bundle composition."""
+        canonical_hash = self.get_product_sku("", target)
+        bundle_rule = self.product_cost_bundle_rules_by_label.get(target)
+        if bundle_rule is not None:
+            shared_identifiers = set(bundle_rule.get("shared_component_identifiers") or set())
+            shared_identifiers.update(
+                self._normalize_product_identifier(component.get("expense_key"))
+                for component in bundle_rule.get("components") or []
+            )
+            explicit = self._resolve_explicit_bundle_expense(
+                canonical_hash, target, import_code=import_code,
+                warehouse_number=warehouse_number, ean=ean,
+                shared_component_identifiers=shared_identifiers,
+            )
+            if explicit[0] is not None:
+                return explicit
+            return self._resolve_configured_bundle_expense(bundle_rule)
+        homogeneous = self._parse_homogeneous_bundle_label(target)
+        if homogeneous is not None:
+            # A reviewed multipack's native identifiers can be shared with its base unit.
+            # Only an explicit whole-label/compound/hash mapping may override composition.
+            shared_identifiers = {
+                self._normalize_product_identifier(value)
+                for value in (import_code, warehouse_number, ean)
+                if self._normalize_product_identifier(value)
+            }
+            explicit = self._resolve_explicit_bundle_expense(
+                canonical_hash, target, import_code=import_code,
+                warehouse_number=warehouse_number, ean=ean,
+                shared_component_identifiers=shared_identifiers,
+            )
+            if explicit[0] is not None:
+                return explicit
+            return self._resolve_inferred_homogeneous_bundle_expense(homogeneous)
+        compound = self._resolve_raw_compound_expense(
+            canonical_hash, target, import_code, warehouse_number, ean,
+        )
+        if compound[0] is not None:
+            return compound
+        return self._resolve_label_only_expense(target)
 
     def _resolve_product_expense_for_label(
         self,
@@ -7350,6 +7617,11 @@ class BizniWebExporter:
                 force_zero_margin = False
                 force_margin_15 = False
                 authoritative_margin_override_pct = self._authoritative_margin_override_pct_for_sku(product_sku)
+                reviewed_cost_binding = self._reviewed_product_cost_binding(
+                    item_label, order.get("pur_date"), item_import_code, item_warehouse_number, item_ean,
+                )
+                if reviewed_cost_binding is not None and reviewed_cost_binding["canonical_policy_sku"] is not None:
+                    authoritative_margin_override_pct = reviewed_cost_binding["canonical_policy_margin_pct"]
                 margin_override_pct = self._margin_override_pct_for_item(product_sku, item_label)
                 if (ZERO_COST_BRANDS or ZERO_MARGIN_BRANDS or MARGIN_15_BRANDS) and item_label:
                     label_lc = str(item_label).lower()
@@ -7366,6 +7638,7 @@ class BizniWebExporter:
                     import_code=item_import_code,
                     warehouse_number=item_warehouse_number,
                     ean=item_ean,
+                    purchase_date=order.get("pur_date"),
                 )
                 purchase_cost_reference_per_item = resolved_expense_per_item
                 purchase_cost_reference_source = resolved_expense_source

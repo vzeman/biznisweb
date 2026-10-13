@@ -19,13 +19,15 @@ class VevoLocalizedProductCostTests(unittest.TestCase):
 
     @staticmethod
     def make_exporter(project):
-        return BizniWebExporter(
-            api_url="https://example.com/api/graphql",
-            api_token="synthetic-token",
-            project_name=project,
-            enable_period_bundle=False,
-            order_facts_only=True,
-        )
+        # These cases isolate the legacy alias contract; dated bindings have their own suite.
+        with patch.object(BizniWebExporter, "_load_product_cost_identity_bindings", return_value=(None, {})):
+            return BizniWebExporter(
+                api_url="https://example.com/api/graphql",
+                api_token="synthetic-token",
+                project_name=project,
+                enable_period_bundle=False,
+                order_facts_only=True,
+            )
 
     def test_verified_localized_variants_use_the_matching_canonical_unit(self):
         cases = [

@@ -19,6 +19,15 @@ def _known_nonfallback_source(source: Any) -> bool:
         return True
     if re.fullmatch(r"(?:bundle_components_configured|reporting_bundle_components):[a-zA-Z0-9_-]+", source):
         return True
+    binding = re.fullmatch(r"cost_identity_binding:[a-zA-Z0-9_-]+:(.+)", source)
+    if binding:
+        tail = binding[1]
+        return (
+            "cost_identity_binding:" not in tail
+            and tail.startswith(("mapped_", "canonical_alias:", "bundle_component:",
+                                 "bundle_components_", "reporting_bundle_components:"))
+            and _known_nonfallback_source(tail)
+        )
     for wrapper in ("canonical_alias:", "bundle_component:"):
         if source.startswith(wrapper):
             # Only one instance of each wrapper is emitted by the producer.
