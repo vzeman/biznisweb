@@ -1,3 +1,18 @@
+## 2026-10-14 — Actual localized-cost rollout blocked; original production restored
+
+Date: 2026-10-14
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-probe-pagination-blocker-20261014`
+What changed: PR #629 source `ccbb1bf3faec96c940c606a3f5a36677d7c67409` built successfully in `38510223226`; the old interrupted owner was finalized once. New guarded release `d726f230f7ee40ab9993e518ea59b6d1` attempted reporting through 2026-10-13 using candidate :50/image `sha256:dc9bd5b64bb0c1e2c1afe7524c43493834ed0a8a14ded81f7702cf231d04ad55`. It failed before approval/promotion/live publication. Existing purchase-price registry and dated CZ/HU identity mappings are merged in Git; the corrected calculation is not deployed. Preserve the effective date 2026-01-01, unchanged 2025 rules, approved margin models, zero-cost tips/insurance and one shared fixed pool.
+
+What is verified: Actual task `67d2dea81903402bb9f8984443485bb4`, private `172.31.20.74`, `N/A:Fargate`, `vevo-daily-report-email`, `/app` and localhost marker passed before providers. It STOPPED exit1. Independent terminal readback `92cd285d4dd352d7180c835078b30987690f57a4762c08c2ad2d932138552e7d` and raw57-request review `8b25b5f594a65d0f0ee65a6fcc5c389cdb80a9ecfbbb740cb045fdf6a7903d13` confirm original :48 ENABLED, test candidate :50 INACTIVE, role absent, new lease released, no active reporting/monthly tasks, all protected schedules/ROY outputs and both AppRunner boundaries unchanged. Four candidate QA periods report zero failures and 8,241 found orders match the offline native contract; no actual independent16+8 approval or published-line verification exists for this release. The report UI and future scheduled image remain unchanged.
+
+Known issues: Three `probe-inventory-page-invalid` events marked raw reads incomplete; final upload rejected `probe-provider-reads-incomplete`. The exporter continued with prior rows after its retry limit. The exact invalid-page predicate is unknown without the offending raw page/cursor evidence. Financial QA and matching counts cannot bypass this boundary. No blind retry, row omission, weakened validation or production-success claim is allowed. The owner was informed and deploy work stopped under the STOP-on-error instruction. Example order breakdowns remain explicitly candidate-only; current stock valuation is outside this cost-binding repair.
+
+Evidence/cleanup: Root `PROJECT_STATE.md` binds the full restored-state journal, failed diagnostic, source contracts, independent reviews and exact private checkpoint archive. Manifest `91c5f14a44e4af264815f7a809d1dddc25717355a4106535f7dfaef23968acf4` covers 5,387 files with full encrypted readback; same-prefix post-exit closure `1af0465579f675771c0f2f41546d7fabe002498da8d51a4830e61565a6425112` preserves final archive metadata. Own finite processes exited without listeners; no local dev service was started. Reused foreign browser PID78680 and uncertain author PID85928 were preserved and never terminated. Production stays running.
+
+Next exact step: On authorized continuation, verify current Git/runtime, capture and reproduce the precise provider/inventory page failure with private evidence and regressions, then correct only the proved cause. Freeze a new source/image/plan and repeat all actual host, financial16, geo8, live CSV/country/shared-fixed/ads, future dynamic schedule and HTTP/UI gates. The failed `d726` plan and command templates cannot be replayed as authorization. Do not report candidate financial improvements as deployed results.
+
 ## 2026-10-14 — Finalization JSON roundtrip fixed; live cost rollout pending
 
 Date: 2026-10-14
