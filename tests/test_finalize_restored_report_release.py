@@ -219,6 +219,18 @@ class CaptureTests(unittest.TestCase):
         self.obj.s3.put_object.assert_not_called()
         self.reader.no_report_tasks.assert_called_once()
 
+    def test_real_capture_survives_inspection_json_roundtrip(self):
+        captured = self.obj.capture()
+        proof = {"schema_version": 1, "phase": "restored-release-inspected", "passed": True,
+                 "snapshot": captured, "captured_at": NOW.isoformat()}
+        decoded = final.binding.decode_json(final.binding.canonical_bytes(proof))
+        self.assertEqual(final.digest(captured), final.digest(decoded["snapshot"]))
+        final.validate_inspection(decoded, self.obj.capture(), NOW)
+        for field, project in (("own_lease", "vevo"), ("peer_lease", "roy")):
+            self.assertIsInstance(captured[field], list)
+            self.assertEqual(captured[field], list(self.leases[project]))
+        self.obj.s3.put_object.assert_not_called()
+
     def test_foreign_owner_etag_active_peer_fail_closed(self):
         for key, value in (("owner", "foreign"), ("state", "active")):
             with self.subTest(key=key):

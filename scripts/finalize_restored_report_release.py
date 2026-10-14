@@ -338,7 +338,7 @@ class Inspector:
             "failure_sha256": args.failure_sha256, "receipt_sha256": dict(zip(expected_keys, [sha(x[1]) for x in fetched])),
             "schedules": schedules, "original_definition": binding.definition_snapshot(original),
             "candidate_definition": binding.definition_snapshot(candidate), "candidate_status": "INACTIVE",
-            "own_lease": own, "peer_lease": peer_lease, "own_outputs": outputs,
+            "own_lease": list(own), "peer_lease": list(peer_lease), "own_outputs": outputs,
             "peer_outputs": reader.output_snapshot(peer), "probe": probe, "identity": history["identity"],
             "scheduled_definitions": definitions, "apprunner": apps,
             "localhost_ready_sha256": sha(ready[1]), "authorization_sha256": sha(authorization[1]),
