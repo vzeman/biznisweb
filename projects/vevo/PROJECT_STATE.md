@@ -1,3 +1,14 @@
+## 2026-10-14 — Public API route and inventory repair verified locally
+
+Date: 2026-10-14
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-pagination-transport-fix-20261014`
+What changed: Authorized continuation identified HTTP308's exact target as `https://www.vevo.sk/api/graphql`, already allowed by the committed VEVO native-host policy. Two explicit direct QUERY reads pass HTTP200, 30 rows each, zero GraphQL errors/overlap; proof `2d87680ee220ff2045efa6ee5fccc7b88d4144cfcb3904c66a6b249ea9e6f79c`. No automatic redirect, retry, provider mutation or secret update occurred. This fixes the diagnostic transport problem; it does not prove the historical d726 predicate or deploy the cost repair.
+What is verified: Fresh actual 57-read gate `fe96816aa5c7dcff44cc64102f64581ad19e8ca84e852b18d4a5ce5ce715b926` confirms unchanged original :48, released lease, idle Fargate `/app` identity and all protected outputs/configurations. Runtime/direct interface offline regressions pass. Production remains on the original calculation.
+Current decision: VEVO will opt in to complete anchored-ID inventory scans before date filtering/cache writes. Only caches with completed-scan/day-row provenance may be reused. Existing payment enrichment, 2025 cost rules, approved models, zero-cost tips/insurance and one shared fixed pool stay intact. The isolated probe must independently bind scanner continuity and reject incomplete sessions or ordinary duplicate reads. Core/test work is underway; root project state records the detailed contract.
+Implementation verified: The policy is a separate `order_inventory_policy.json`; ordinary settings and prices are unchanged. All enabled reporting entry points use complete scans and bound cache provenance; legacy ROY and bulk behavior remain unchanged. Root's 528-test regression pack, critical Ruff and diff checks pass; proof `cd0999267ceea505101c3e711de47296f0d591d7d13705460a8f408a1d8c260d`. The new cases are wired into PR/build/deploy CI. Production still uses :48 until the separate release completes.
+Next exact step: Independently review/commit/push/merge the repair, build its exact image, refresh native/credit/ads evidence and complete a new isolated and production release through yesterday with all financial, geographic, publication, future-schedule and UI gates. Preserve the historical failed plans and keep all candidate values private until actual publication is verified.
+
 ## 2026-10-14 — Pagination diagnosis stopped before core changes
 
 Date: 2026-10-14

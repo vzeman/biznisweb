@@ -3004,6 +3004,8 @@ class ReportingCalculationFixTests(unittest.TestCase):
 
     def test_cache_save_preserves_raw_excluded_status_orders(self) -> None:
         exporter = make_exporter()
+        # This legacy cache fixture tests raw status preservation, not scan provenance.
+        exporter.complete_order_inventory_enabled = False
         order_date = datetime(2026, 6, 1)
         orders = [
             reporting_order("OK-1", "Odoslana", "Dobierkou", "7"),

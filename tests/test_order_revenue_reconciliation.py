@@ -298,6 +298,7 @@ class OrderRevenueReconciliationTests(unittest.TestCase):
                 self.assertIsNone(self.exporter.load_from_cache(datetime(2026, 9, 1)))
 
     def test_legacy_value_only_eligible_cache_is_refreshed_under_strict_policy(self):
+        self.exporter.complete_order_inventory_enabled = False  # Isolate source-precision cache validation.
         order = self.order()
         for item in order["items"]:
             for key in ("price", "sum", "sum_with_tax"):

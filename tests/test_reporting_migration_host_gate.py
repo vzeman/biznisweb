@@ -184,6 +184,168 @@ class HostGateTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, 'incomplete'):
                         host.report_probe(S3(), host.PREFIX + 'a' * 32 + '/', 'a' * 32)
 
+    def test_real_scanner_scoped_anchor_overlap_churn_terminal_hint_and_fallback(self):
+        for scenario in ('overlap', 'append', 'deletion', 'full-terminal-hint', 'same-page-fallback'):
+            with self.subTest(scenario=scenario):
+                result, published, s3 = self.scoped_probe(scenario)
+                self.assertEqual([str(i) for i in range(1, 60)], [row['id'] for row in result])
+                published.assert_called_once()
+                self.assertEqual([], s3.puts)
+
+    def scoped_probe(self, scenario, *, scanner_override=None, expect_rejection=False):
+        import daily_report_runner as runner
+        import export_orders
+        from gql import Client, gql
+        from order_inventory import InventoryScanBudget
+        env = {'REPORT_PROJECT': 'vevo', 'REPORT_SKIP_INVOICES': 'true', 'REPORT_SKIP_CREDITNOTE_STORNO_GUARD': 'true',
+               'REPORT_SKIP_EMAIL': 'true', 'REPORT_S3_BUCKET': host.BUCKET, 'REPORT_S3_PREFIX': 'daily-reports/vevo'}
+        query = gql('query Orders { getOrderList { data { id order_num } pageInfo { hasNextPage nextCursor totalRecords } } }')
+        reduced = gql('query ReducedOrders { getOrderList { data { id order_num } pageInfo { hasNextPage nextCursor totalRecords } } }')
+        rows = [{'id': str(i), 'order_num': f'private-synthetic-{i}'} for i in range(1, 60)]
+        client, other_client, calls, result, s3 = object(), object(), [], [], S3()
+
+        def execute(_client, _query, *args, **kwargs):
+            variables = kwargs.get('variable_values', args[0] if args else None)
+            calls.append(copy.deepcopy(variables))
+            if scenario == 'same-page-fallback' and len(calls) == 1:
+                raise RuntimeError('supported optional field failure')
+            if len(calls) == 3:
+                if scenario == 'append':
+                    rows.append({'id': '60', 'order_num': 'private-synthetic-60'})
+                elif scenario == 'deletion':
+                    rows.pop(4)
+            params = variables['params']
+            ordered = sorted(copy.deepcopy(rows), key=lambda row: int(row['id']), reverse=params['sort'] == 'DESC')
+            offset, limit = params['cursor'], params['limit']
+            page = ordered[offset:offset + limit]
+            more = offset + len(page) < len(ordered)
+            if scenario == 'full-terminal-hint' and len(page) == limit:
+                more = True
+            value = {'getOrderList': {'data': page, 'pageInfo': {'hasNextPage': more,
+                     'nextCursor': offset + len(page) if more else None, 'totalRecords': len(ordered)}}}
+            if params['sort'] == 'ASC':
+                if scenario == 'missing-id':
+                    page[0].pop('id')
+                elif scenario == 'within-page-duplicate':
+                    page[1]['id'] = page[0]['id']
+                elif scenario == 'malformed-counter':
+                    value['getOrderList']['pageInfo']['totalRecords'] = True
+                elif scenario == 'bad-cursor':
+                    value['getOrderList']['pageInfo']['nextCursor'] = '30'
+                elif scenario == 'malformed-page':
+                    value['getOrderList'] = None
+            return value
+
+        def read(variables, _deadline):
+            selected = other_client if scenario == 'different-client' and calls else client
+            sent = copy.deepcopy(variables)
+            if scenario == 'different-variables':
+                sent['params']['cursor'] += 1
+            try:
+                # Positional variables must have the same scope as keyword variables.
+                return Client.execute(selected, query, sent)
+            except RuntimeError:
+                if scenario == 'same-page-fallback':
+                    return Client.execute(selected, reduced, variable_values=sent)
+                raise
+
+        def ordinary_path():
+            try:
+                result.extend(export_orders.scan_reporting_order_inventory(read, lambda _row: None,
+                    budget=InventoryScanBudget(), label='Synthetic inventory', logger=None))
+            except (RuntimeError, ValueError, TypeError, AttributeError):
+                # The ordinary exporter may catch fetch errors. Publication must
+                # still see the sticky failure recorded by the host wrapper.
+                if not expect_rejection:
+                    raise
+            runner.s3_upload_outputs('vevo', {})
+
+        original = scanner_override or export_orders.scan_reporting_order_inventory
+        with patch.dict(host.os.environ, env), patch.object(Client, 'execute', execute), \
+             patch.object(export_orders, 'scan_reporting_order_inventory', original), \
+             patch.object(runner, 'main', ordinary_path), \
+             patch.object(host, 'isolate_outputs', return_value={'key': 'private', 'sha256': 'hash'}) as published:
+            if expect_rejection:
+                with self.assertRaisesRegex(RuntimeError, 'incomplete'):
+                    host.report_probe(s3, host.PREFIX + 'a' * 32 + '/', 'a' * 32)
+                published.assert_not_called()
+            else:
+                host.report_probe(s3, host.PREFIX + 'a' * 32 + '/', 'a' * 32)
+        return result, published, s3
+
+    def test_scanner_errors_stay_fatal_when_exporter_catches_them(self):
+        for scenario in ('missing-id', 'within-page-duplicate', 'malformed-counter', 'bad-cursor',
+                         'malformed-page', 'different-client', 'different-variables'):
+            with self.subTest(scenario=scenario):
+                self.scoped_probe(scenario, expect_rejection=True)
+
+    def test_unproven_or_nested_scanner_cannot_publish(self):
+        import export_orders
+        from order_inventory import scan_order_inventory
+
+        def unobserved(_read, _validate, **_kwargs):
+            return []
+
+        def invented(read, validate, **kwargs):
+            actual = scan_order_inventory(read, validate, **kwargs)
+            return actual + [{'id': '9999', 'order_num': 'not-seen'}]
+
+        def duplicate(read, validate, **kwargs):
+            actual = scan_order_inventory(read, validate, **kwargs)
+            return actual + [actual[-1]]
+
+        def nested(read, validate, **kwargs):
+            return export_orders.scan_reporting_order_inventory(read, validate, **kwargs)
+
+        for scanner in (unobserved, invented, duplicate, nested):
+            with self.subTest(scanner=scanner.__name__):
+                self.scoped_probe('overlap', scanner_override=scanner, expect_rejection=True)
+
+    def test_ordinary_overlap_still_rejects_and_diagnostic_is_private_and_exact(self):
+        import daily_report_runner as runner
+        from gql import Client, gql
+        env = {'REPORT_PROJECT': 'vevo', 'REPORT_SKIP_INVOICES': 'true', 'REPORT_SKIP_CREDITNOTE_STORNO_GUARD': 'true',
+               'REPORT_SKIP_EMAIL': 'true', 'REPORT_S3_BUCKET': host.BUCKET, 'REPORT_S3_PREFIX': 'daily-reports/vevo'}
+        query = gql('query Orders { getOrderList { data { id } pageInfo { hasNextPage nextCursor } } }')
+        page = {'getOrderList': {'data': [{'id': 'private-id'}], 'pageInfo': {'hasNextPage': True, 'nextCursor': 1}}}
+        client, s3 = object(), S3()
+
+        def ordinary():
+            for cursor in (0, 1):
+                try:
+                    Client.execute(client, query, variable_values={'params': {'cursor': cursor, 'order_by': 'order_id', 'sort': 'ASC'}})
+                except RuntimeError:
+                    pass
+            runner.s3_upload_outputs('vevo', {})
+
+        with patch.dict(host.os.environ, env), patch.object(Client, 'execute', return_value=page), \
+             patch.object(runner, 'main', ordinary), patch.object(host, 'isolate_outputs') as published, \
+             patch('builtins.print') as printed:
+            with self.assertRaisesRegex(RuntimeError, 'incomplete'):
+                host.report_probe(s3, host.PREFIX + 'a' * 32 + '/', 'a' * 32)
+        published.assert_not_called()
+        printed.assert_not_called()
+        self.assertEqual(1, len(s3.puts))
+        self.assertTrue(s3.puts[0].startswith(host.PREFIX + 'a' * 32 + '/artifacts/diagnostics/'))
+        diagnostic = json.loads(s3.objects[s3.puts[0]])
+        self.assertEqual(page, diagnostic['response'])
+        self.assertEqual(['private-id'], diagnostic['cross_page_intersection'])
+        self.assertFalse(diagnostic['predicate_flags']['cross_page_disjoint'])
+        self.assertFalse(diagnostic['predicate_flags']['scoped_overlap'])
+        self.assertEqual(1, diagnostic['variables']['params']['cursor'])
+        self.assertRegex(diagnostic['query_sha256'], '^[a-f0-9]{64}$')
+        self.assertNotIn('query', diagnostic)
+
+    def test_scanner_counter_diagnostic_and_failed_diagnostic_cannot_authorize(self):
+        _, _, s3 = self.scoped_probe('malformed-counter', expect_rejection=True)
+        rows = [json.loads(s3.objects[key]) for key in s3.puts]
+        self.assertTrue(any(row['predicate_flags']['total_records_nonnegative_integer'] is False for row in rows))
+        self.assertTrue(any(row.get('scanner_exception_type') == 'RuntimeError' for row in rows))
+        with patch.object(host, 'put_private', side_effect=RuntimeError('storage unavailable')), patch('builtins.print') as printed:
+            self.scoped_probe('missing-id', expect_rejection=True)
+        self.assertTrue(printed.called)
+        self.assertTrue(all(call.args == ('REPORT_PROBE_INVENTORY_DIAGNOSTICS_UNAVAILABLE',) for call in printed.call_args_list))
+
     def test_real_runner_boundaries_block_financial_email_and_graphql_mutation(self):
         import daily_report_runner as runner
         from gql import Client, gql

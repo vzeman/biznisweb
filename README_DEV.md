@@ -233,6 +233,35 @@ that source coverage from the configured financial report interval. Country is
 delivery geography with invoice fallback; other destinations remain in company
 totals and the measured `Other` profitability group.
 
+Complete reporting inventories are an optional client policy in
+`projects/<project>/order_inventory_policy.json`, with schema version 1 and a
+strict boolean `complete_order_inventory_enabled`. VEVO enables this policy;
+an absent file defaults to the existing path, including ROY. The reusable loader
+anchors the highest internal order ID, scans ascending IDs with validated
+overlap and bounded repair, and filters the requested calendar dates only after
+the full inventory completes. It uses the same payment enrichment and existing
+financial/status rules. The scanner has a shared one-hour deadline and 5,000-page
+budget; transport retries are disabled only in its scope and restored afterward.
+
+VEVO caches require completed-scan provenance plus a hash of the exact day rows.
+Unmarked old caches refresh; an incomplete scan never writes new day caches.
+The report probe wraps only `scan_reporting_order_inventory`: deliberate overlap
+is allowed only inside the exact callback/client session whose original scanner
+returns successfully. Failed or pending sessions and ordinary duplicate pages
+continue to block publication. Invalid-page variables, predicate flags and native
+responses are retained privately under the owned probe prefix, never in logs or Git.
+The same complete path applies to the enabled month/period entry points. Tests
+cover source insertion/deletion, a 940-order boundary day, payment fallback,
+cache tampering, deadlines, legacy ROY paths and unchanged monetary rules.
+
+BiznisWeb's [API guidance](https://www.biznisweb.sk/a/1382/best-practices)
+recommends the public domain to avoid redirects. The VEVO installation redirects
+its FLOX API URL to `https://www.vevo.sk/api/graphql`, which is already in the
+committed native-host policy and has passed direct native reads. Private source
+collectors use that verified endpoint explicitly, retaining routing evidence
+without automatically forwarding a token to an unverified host. This does not
+change the runtime secret or create a new financial policy.
+
 Before live dispatch, a known failure stops only the owned task, removes its
 verified temporary role, restores the owned original schedule and deactivates
 the unused candidate. An uncertain launch retains the exclusion lease and paused
