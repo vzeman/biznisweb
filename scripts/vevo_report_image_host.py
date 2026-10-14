@@ -27,6 +27,77 @@ def report_arguments(to_date, *, policy=VEVO):
             "--skip-creditnote-storno-guard", "--output-tag", ""]
 
 
+def put_live_source(s3, prefix, key, raw):
+    """Use the production role's existing private report sink without IAM changes."""
+    probe.require(re.fullmatch(r"daily-reports/vevo/source-inputs/[a-f0-9]{32}/", prefix)
+                  and ".." not in key and (key.startswith(prefix + "meta/") or key == prefix + "source-complete.json"),
+                  "image-live-source-scope")
+    s3.put_object(Bucket=probe.BUCKET, Key=key, Body=raw, ExpectedBucketOwner=probe.ACCOUNT,
+                  ServerSideEncryption="AES256", IfNoneMatch="*", ContentType="application/json")
+    probe.require(probe.read_private(s3, key, len(raw) + 1) == raw, "image-live-source-readback")
+
+
+def run_live_report(runner, identity, argv, *, policy=VEVO):
+    """Retain actual live Meta inputs before publication; keep other projects' CLI."""
+    if policy != VEVO:
+        with patch.object(sys, "argv", argv):
+            return runner.main()
+    from scripts.reporting_meta_source_snapshot import MetaSourceSnapshot
+    import boto3
+    import export_orders
+    import requests
+    flags = runner.parse_args(argv[1:])
+    first = runner.normalize_date(flags.from_date)
+    last = runner.normalize_date(runner.resolve_to_date(flags.to_date, flags.timezone))
+    probe.require(flags.project == "vevo" and flags.no_cache and flags.clear_cache and flags.skip_email
+                  and flags.skip_invoices and flags.skip_creditnote_storno_guard and not flags.skip_export
+                  and not flags.output_tag and last == identity["report_to_date"], "image-live-source-flags")
+    prefix = policy.sink + "/source-inputs/" + identity["release_id"] + "/"
+    s3 = boto3.client("s3", region_name=probe.REGION)
+    snapshot = MetaSourceSnapshot(identity, probe.sha(probe.canonical(identity)), first, last, prefix,
+        lambda key, raw: put_live_source(s3, prefix, key, raw), capture_mode="live",
+        credentials=tuple(os.environ.get(key, "") for key in ("FACEBOOK_ACCESS_TOKEN", "FACEBOOK_APP_SECRET")))
+    send, upload = requests.Session.send, runner.s3_upload_outputs
+    published = False
+
+    def observe(session, request, **kwargs):
+        try:
+            response = send(session, request, **kwargs)
+        except BaseException:
+            snapshot.observe_failure(request)
+            raise
+        snapshot.observe(request, response)
+        return response
+
+    def export_in_process(**kwargs):
+        probe.require(kwargs == {"project": "vevo", "from_date": first, "to_date": last,
+                                 "clear_cache": True, "no_cache": True, "output_tag": ""},
+                      "image-live-export-context")
+        # The same exporter CLI used by the probe and ordinary subprocess entry.
+        command = ["export_orders.py", "--project", "vevo", "--from-date", first, "--to-date", last,
+                   "--clear-cache", "--no-cache"]
+        with patch.object(sys, "argv", command):
+            export_orders.main()
+
+    def publish(project, paths):
+        nonlocal published
+        probe.require(project == "vevo" and not published, "image-live-source-publication")
+        manifest = snapshot.finalize()
+        marker = {"schema_version": 1, "phase": "live-native-inputs-complete", "capture_mode": "live",
+                  "host_identity": identity, "host_identity_sha256": probe.sha(probe.canonical(identity)),
+                  "meta_source_manifest": manifest, "publication_verified": False}
+        put_live_source(s3, prefix, prefix + "source-complete.json", probe.canonical(marker))
+        result = upload(project, paths)
+        published = True
+        return result
+
+    with patch.object(requests.Session, "send", observe), patch.object(runner, "run_export", export_in_process), \
+         patch.object(runner, "s3_upload_outputs", publish), patch.object(sys, "argv", argv):
+        result = runner.main()
+    probe.require(published, "image-live-source-not-published")
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in ("release-id", "source-commit", "image-digest", "gate-sha256", "to-date"):
@@ -52,8 +123,7 @@ def main():
     flags = runner.parse_args(argv[1:])
     probe.require(flags.skip_email and flags.skip_invoices and flags.skip_creditnote_storno_guard
                   and not flags.skip_export and not flags.output_tag, "image-host-report-flags")
-    with patch.object(sys, "argv", argv):
-        runner.main()
+    run_live_report(runner, identity, argv, policy=policy)
 
 
 if __name__ == "__main__":

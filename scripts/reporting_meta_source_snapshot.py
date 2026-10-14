@@ -84,10 +84,18 @@ def public_query(parsed):
 class MetaSourceSnapshot:
     """Record an exact authorized host's native input pages, then bind a manifest."""
 
-    def __init__(self, identity, ready_sha, from_date, to_date, prefix, put, *, credentials=(), source_paths=None):
-        require(set(identity) == {'marker', 'release_id', 'source_commit', 'task_arn', 'private_ip', 'image_digest',
-                                 'task_definition', 'instance_id', 'service', 'path', 'project', 'gate_sha256'}
-                and identity.get('marker') == 'VEVO_REPORT_PROBE_HOST_OK'
+    def __init__(self, identity, ready_sha, from_date, to_date, prefix, put, *, credentials=(), source_paths=None,
+                 capture_mode='probe'):
+        require(capture_mode in ('probe', 'live'), 'capture-mode')
+        identity_fields = {'marker', 'release_id', 'source_commit', 'task_arn', 'private_ip', 'image_digest',
+                           'task_definition', 'instance_id', 'service', 'path', 'project', 'gate_sha256'}
+        if capture_mode == 'live':
+            identity_fields |= {'report_to_date', 'skip_email', 'skip_invoices', 'skip_inline_guard'}
+            require(identity.get('report_to_date') == to_date and all(identity.get(key) is True for key in
+                    ('skip_email', 'skip_invoices', 'skip_inline_guard')), 'live-report-boundary')
+        require(set(identity) == identity_fields
+                and identity.get('marker') == ('VEVO_REPORT_PROBE_HOST_OK' if capture_mode == 'probe'
+                                               else 'VEVO_REPORT_IMAGE_LIVE_HOST_OK')
                 and identity.get('project') == 'vevo' and identity.get('path') == '/app'
                 and identity.get('instance_id') == 'N/A:Fargate'
                 and identity.get('service') == 'vevo-daily-report-email'
@@ -99,17 +107,22 @@ class MetaSourceSnapshot:
                 and re.fullmatch(r'arn:aws:ecs:eu-central-1:919341186960:task-definition/vevo-reporting-daily:[0-9]+', identity.get('task_definition', ''))
                 and re.fullmatch(r'(?:[0-9]{1,3}\.){3}[0-9]{1,3}', identity.get('private_ip', '')), 'host-binding')
         require(ready_sha == sha(canonical(identity)), 'ready-binding')
-        require(prefix == 'data/vevo/reporting/runtime/probes/' + identity['release_id'] + '/', 'prefix')
+        expected_prefix = ('data/vevo/reporting/runtime/probes/' if capture_mode == 'probe'
+                           else 'daily-reports/vevo/source-inputs/') + identity['release_id'] + '/'
+        require(prefix == expected_prefix, 'prefix')
         first, last = date.fromisoformat(from_date), date.fromisoformat(to_date)
         require(first <= last and first.isoformat() == from_date and last.isoformat() == to_date, 'dates')
         self.identity, self.ready_sha = decode(canonical(identity)), ready_sha
         self.from_date, self.to_date = from_date, to_date
-        self.prefix, self.put = prefix + 'artifacts/source-inputs/meta/', put
+        self.capture_mode = capture_mode
+        self.prefix = prefix + ('artifacts/source-inputs/meta/' if capture_mode == 'probe' else 'meta/')
+        self.put = put
         self.credentials, self.pages, self.groups, self.errors = tuple(credentials), [], {}, []
         self.currency_reads, self.last_currency_page, self.finished = 0, None, False
         paths = source_paths if source_paths is not None else (
             Path(__file__), Path(__file__).with_name('reporting_migration_host_gate.py'),
-            Path(__file__).parents[1] / 'facebook_ads.py')
+            Path(__file__).parents[1] / 'facebook_ads.py', *(
+                (Path(__file__).with_name('vevo_report_image_host.py'),) if capture_mode == 'live' else ()))
         self.sources = {Path(path): sha(Path(path).read_bytes()) for path in paths}
         require(self.sources and len({path.name for path in self.sources}) == len(self.sources), 'source-paths')
         self.periods = {'latest': (from_date, to_date)}
@@ -314,7 +327,8 @@ class MetaSourceSnapshot:
             for group in self.groups.values()), 'daily-full-range-missing')
         groups = {key: {name: value for name, value in group.items()
                         if name not in {'expected_after', 'seen_cursors', 'row_keys'}} for key, group in self.groups.items()}
-        value = {'schema_version': 1, 'project': 'vevo', 'source_commit': self.identity['source_commit'],
+        value = {'schema_version': 1, 'project': 'vevo', 'capture_mode': self.capture_mode,
+                 'source_commit': self.identity['source_commit'],
                  'release_id': self.identity['release_id'], 'image_digest': self.identity['image_digest'],
                  'host_identity': self.identity, 'ready_sha256': self.ready_sha,
                  'report_from_date': self.from_date, 'report_to_date': self.to_date,
