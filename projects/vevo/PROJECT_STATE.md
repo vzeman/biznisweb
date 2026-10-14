@@ -1,3 +1,12 @@
+## 2026-10-14 20:05 UTC — Production financial verification passed; HTTP reader correction pending
+
+Date: 2026-10-14
+Repo: vzeman/biznisweb
+Branch: codex/vevo-meta-source-rollout-20261014
+What is verified: Release5121/source74a/imagefa0 finished; ENABLED definition52 uses dynamic yesterday. Actual LIVE generation20261014T194353Z/manifeste4cb passed original financial16 checks, all8241 orders/15234 rows with zero differences, and JSON+HTML geographic8 checks. Root actual source captureb27c is28 S3 GETs/12 recorded native Meta responses/Git LF4; composite0b8a/reviewcdf1 preserve independent Google/account evidence. Independent file-only review33f6cf6b rechecked exact original CSV00f79c→projectioncd802 and all source/row checks. All717 tip/insurance rows have0COGS. Historic probe exact ECS MISSING is backed by its immutable successful journal; physical LIVE STOPPED0 and localhost gate are independently verified.
+Results and limits: Oct7–13 modeled profit after ads/shared fixed pool: SK+685.47EUR/CZ−41.88EUR/HU−88.84EUR. Localized COGS binding alone improves2026+284.39EUR/week+62.16EUR against identical source data with binding disabled; VEVO2025 neutral. Full history estimated39 rows/13SKUs; recent week only2 rows/2SKUs (H-10AD9F60,5060033821138). Protected ROY83 unchanged.
+Known issue/next exact step: HTTP checker failed before SSM/auth/HTTP because raw AppRunner omits optional EncryptionConfiguration; normalized baseline represents it as null. Preserve diagnostics/failed ledgers and fix only all raw optional boundary reads with existing get(None) semantics, rejecting nonnull/mismatching fields. Then actual HTTP→browser, completed encrypted full archive/readback/fresh PID closure, finalize docsPR637 and synchronize source after74a-bound helpers. No duplicate reporting/deploy; no local dev process/tunnel started.
+
 ## 2026-10-14 19:49 UTC — Production complete and future52 enabled; final read-only checks pending
 
 Date: 2026-10-14
@@ -417,12 +426,3 @@ What is verified: The session started with a clean checkout, fetched/pruned and 
 Known issue: The strict monetary metadata path conflicts with an existing audited, status-bounded historical compensation-order exception. Repair only the evidenced exception while still proving its monetary totals; do not fabricate absent elements, broaden eligibility or omit the order. Shared zero-tax/net-total handling already landed with ROY, but VEVO needs complete-history verification. Shared Google country reporting must explicitly retain account spend whose physical country is unavailable without assigning it to a shop or bypassing total checks.
 
 Next exact step: Repair the narrow source exception and country-spend coverage with regressions, and preserve private failure diagnostics. Run full local/CI and primary-source checks, merge through a PR, wait for the exact image and dependent monthly workflow, then run a fresh bound VEVO recovery and ROY release sequentially. Each full-history probe, live generation, future schedule target, financial reconciliation and HTTP/UI check must be verified. No business/provider writes, report emails or invoice/creditnote mutations are part of the one-off regeneration. No persistent local process has been started.
-## 2026-10-14 20:05 UTC — Production financial verification passed; HTTP reader correction pending
-
-Date: 2026-10-14
-Repo: vzeman/biznisweb
-Branch: codex/vevo-meta-source-rollout-20261014
-What is verified: Release5121/source74a/imagefa0 finished; ENABLED definition52 uses dynamic yesterday. Actual LIVE generation20261014T194353Z/manifeste4cb passed original financial16 checks, all8241 orders/15234 rows with zero differences, and JSON+HTML geographic8 checks. Root actual source captureb27c is28 S3 GETs/12 recorded native Meta responses/Git LF4; composite0b8a/reviewcdf1 preserve independent Google/account evidence. Independent file-only review33f6cf6b rechecked exact original CSV00f79c→projectioncd802 and all source/row checks. All717 tip/insurance rows have0COGS. Historic probe exact ECS MISSING is backed by its immutable successful journal; physical LIVE STOPPED0 and localhost gate are independently verified.
-Results and limits: Oct7–13 modeled profit after ads/shared fixed pool: SK+685.47EUR/CZ−41.88EUR/HU−88.84EUR. Localized COGS binding alone improves2026+284.39EUR/week+62.16EUR against identical source data with binding disabled; VEVO2025 neutral. Full history estimated39 rows/13SKUs; recent week only2 rows/2SKUs (H-10AD9F60,5060033821138). Protected ROY83 unchanged.
-Known issue/next exact step: HTTP checker failed before SSM/auth/HTTP because raw AppRunner omits optional EncryptionConfiguration; normalized baseline represents it as null. Preserve diagnostics/failed ledgers and fix only all raw optional boundary reads with existing get(None) semantics, rejecting nonnull/mismatching fields. Then actual HTTP→browser, completed encrypted full archive/readback/fresh PID closure, finalize docsPR637 and synchronize source after74a-bound helpers. No duplicate reporting/deploy; no local dev process/tunnel started.
-
