@@ -137,7 +137,8 @@ class PeriodDiagnosticsTests(unittest.TestCase):
                      patch.object(runner, "load_dotenv"), patch.object(runner, "load_project_env"), \
                      patch.object(runner, "load_project_settings", return_value={}), \
                      patch.object(runner, "resolve_reporting_defaults", return_value={}), \
-                     patch.object(export_orders, "main"), patch.object(host, "isolate_outputs") as publisher:
+                     patch.object(export_orders, "main"), patch.object(host, "isolate_outputs") as publisher, \
+                     patch('scripts.reporting_meta_source_snapshot.MetaSourceSnapshot'):
                     with self.assertRaisesRegex(RuntimeError, "dashboard_payload_7d.json"):
                         host.run_authorized_probe(s3, prefix, identity, host.sha(host.canonical(identity)), policy=policy)
                 publisher.assert_not_called()
