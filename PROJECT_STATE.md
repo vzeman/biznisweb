@@ -1,3 +1,13 @@
+## 2026-10-14 — Probe complete; Meta snapshot reconciliation pending
+
+Date: 2026-10-14
+Repo: vzeman/biznisweb
+Branch: codex/vevo-native-source-checkpoint-20261014 (documentation only; keep unmerged while release pins f428)
+What changed: Sole release c0ed6d6f28344795b3cebdf7310ac0dd completed its isolated candidate and reached journal0012 independent-review-requested. Probe task bd7176b13b254289b68dfaeb6afd5999, definition VEVO51, IP172.31.36.140, service vevo-daily-report-email, path /app and sourcef428/image9adbc passed actual localhost marker before provider reads and stopped naturally exit0. It found8241 eligible orders and rendered all four reports, without publishing live outputs.
+What is verified: Actual financial proof a2b5efd3d5a9686e026f7e2b7bd69747b45f2ba817baf72bd47a828e858742ca passes all12 financial/country/shared-fixed checks. Actual manifest4ed6799483c3ac096cb1308001305b535dfb515a93822d91825726099387b605 and geographic JSON/HTML receipt1e47e48963fbcc908c214c1df37d56aa7d57136844be5347af82e0c654aa7fec pass8/8 display/ratio checks. GET-only observer998772c7cad7175b0d13bb965037e729d11bc49540b8887a16fa2758b7ceecdf confirms protected12 schedules/ROY83/apps/peer outputs unchanged, own outputs unchanged and originalVEVO48 paused under the same owner.
+Known issue: All four advertising checks reject Meta named-country spend changed since independent snapshotc972. Financial evidence remains unapproved and immutable; no authorization or production financial improvement is claimed. This is a current snapshot mismatch, not proof of a monetary formula defect. Never relax .05/source checks or reuse the idle runtime gate while a release owns a paused schedule.
+Next exact step: Review a narrow current phase12 owner-bound GET-only Meta refresh with full protected before/end boundaries and unchanged Google, preserve originalc972/contract6cc/faileda2b5, then independently replay the same manifest through all16 checks. Only full actual16+geo8 and reviewed current publisher may authorize the controller. Continue live host/fullCSV/future-enabled51/dynamic-date/HTTP/UI gates, completed private archive and exact-owned process cleanup. Keep documentation PR635 draft/mainf428 fixed until terminal outcome.
+
 ## 2026-10-14 — Financial inputs verified and normal VEVO release dispatched
 
 Date: 2026-10-14
