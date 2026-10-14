@@ -56,6 +56,28 @@ cannot prove the original cent allocation. Do not relax source equality merely
 because a fresh response differs slightly, infer source values from report QA,
 or substitute probe source evidence for LIVE source evidence.
 
+## Read-only terminal verification
+
+Compare scheduler and AppRunner business configuration through the same committed
+normalization used for the baseline. Raw scheduler responses include API metadata
+that a normalized snapshot deliberately excludes. AWS can omit an optional
+AppRunner configuration field whose captured normalized value is null. Preserve
+every captured key and compare its value using the existing optional-field
+semantics; missing required or nonnull values and changed configuration must
+still fail. A reader representation fix does not justify changing the baseline,
+financial rules, runtime, or original failed evidence.
+
+A historic stopped probe may expire from ECS after its successful approval.
+Terminal-only observation may retain an actual exact MISSING response and bind
+that probe to its immutable successful journal. This cannot authorize a new
+approval. Require the current LIVE task's physical successful terminal read and
+retain the separate provenance explicitly.
+
+The full financial CSV can be a separate generation-scoped export rather than a
+dashboard-manifest member. Bind its original downloaded bytes and the documented
+financial projection separately, then compare every financial row against the
+independent source contract. Do not invent an original CSV hash from its projection.
+
 ## Completion
 
 Authorization alone is not completion. Require the actual successful LIVE task,
