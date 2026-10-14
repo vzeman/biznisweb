@@ -17,6 +17,7 @@ import re
 import shutil
 import unicodedata
 import sys
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_HALF_DOWN, ROUND_DOWN
 from pathlib import Path
@@ -25,6 +26,14 @@ import calendar
 import numpy as np
 from logger_config import get_logger
 from order_status_identity import bind_catalogue, bind_status_identity, canonical_order, identity_for
+from order_inventory import InventoryScanBudget, internal_order_id, scan_order_inventory
+from api_read_backoff import (
+    check_read_deadline,
+    check_read_response_status,
+    prepare_query_read,
+    read_retry_delay,
+    wait_before_read,
+)
 from weather_client import WeatherClient
 from reporting_core import (
     BASE_DEFAULT_PROJECT,
@@ -156,6 +165,8 @@ MARGIN_15_LABEL_PATTERNS: List[str] = []  # Optional label patterns forced to 15
 EXCLUDE_ZERO_PRICE_LABEL_PATTERNS: List[str] = []  # Optional label patterns excluded only when line price is 0
 EXCLUDED_ORDER_STATUSES: List[str] = []  # Legacy status-only exclude list retained for compatibility
 ORDER_CACHE_SCHEMA_VERSION = 5
+COMPLETE_INVENTORY_SCHEMA_VERSION = 1
+REPORTING_INVENTORY_TIMEOUT_SEC = 3600
 PAYMENT_METADATA_MAX_RETRIES = 3
 PAYMENT_METADATA_RETRY_DELAY_SEC = 1
 MANUAL_FB_ADS_TOTAL: Optional[float] = None  # Optional fixed total FB spend for selected report range
@@ -608,6 +619,7 @@ query GetOrders($filter: OrderFilter, $params: OrderParams) {
       previousCursor
       pageIndex
       totalPages
+      totalRecords
     }
   }
 }
@@ -736,6 +748,7 @@ query GetOrdersWithoutPriceElements($filter: OrderFilter, $params: OrderParams) 
       previousCursor
       pageIndex
       totalPages
+      totalRecords
     }
   }
 }
@@ -816,6 +829,30 @@ query GetProductInventory($lang_code: CountryCodeAlpha2!, $params: ProductParams
 """)
 
 
+def load_reporting_order_inventory_policy(project_name: str) -> bool:
+    """Read an optional project policy without altering shared runtime settings."""
+    path = project_dir(project_name) / "order_inventory_policy.json"
+    if not path.exists():
+        return False
+    try:
+        policy = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("Invalid reporting order inventory policy") from exc
+    if (not isinstance(policy, dict)
+            or set(policy) != {"schema_version", "complete_order_inventory_enabled"}
+            or type(policy["schema_version"]) is not int or policy["schema_version"] != 1
+            or type(policy["complete_order_inventory_enabled"]) is not bool):
+        raise ValueError("Invalid reporting order inventory policy schema")
+    return policy["complete_order_inventory_enabled"]
+
+
+def scan_reporting_order_inventory(read, validate_order, *, budget, label, logger):
+    """Explicit host-audit boundary; only the complete trusted scan may return."""
+    return scan_order_inventory(
+        read, validate_order, budget=budget, label=label, logger=logger,
+    )
+
+
 class BizniWebExporter:
     def __init__(
         self,
@@ -838,6 +875,14 @@ class BizniWebExporter:
         self.artifact_subdir = normalized_subdir
         self.enable_period_bundle = enable_period_bundle and not order_facts_only
         self.project_settings = load_project_settings(project_name)
+        inventory_default = load_reporting_order_inventory_policy(project_name)
+        self.complete_order_inventory_enabled = self.project_settings.get(
+            "complete_order_inventory_enabled", inventory_default,
+        )
+        if type(self.complete_order_inventory_enabled) is not bool:
+            raise ValueError("complete_order_inventory_enabled must be boolean")
+        self.project_settings["complete_order_inventory_enabled"] = self.complete_order_inventory_enabled
+        self._inventory_read_deadline = None
         self.zero_revenue_gift_product_skus = self._resolve_exact_product_sku_setting(
             "zero_revenue_gift_product_skus"
         )
@@ -1016,9 +1061,91 @@ class BizniWebExporter:
 
         if delay > 0:
             logger.debug("BiznisWeb API pacing: %.3fs (%s)", delay, pause_reason)
-            time.sleep(delay)
+            self._wait_for_inventory_delay(delay)
 
         self._api_request_count += 1
+
+    def _wait_for_inventory_delay(self, delay: float) -> None:
+        deadline = getattr(self, "_inventory_read_deadline", None)
+        if deadline is None:
+            time.sleep(delay)
+        else:
+            wait_before_read(
+                delay, deadline=deadline, monotonic=time.monotonic, sleep=time.sleep,
+                message="Reporting inventory time limit reached before completion",
+            )
+
+    @contextmanager
+    def _complete_inventory_read_scope(self, deadline: float):
+        """Disable hidden retries only for this owned inventory, restoring state."""
+        from urllib3.util.retry import Retry
+
+        previous_deadline = getattr(self, "_inventory_read_deadline", None)
+        transport = getattr(self.client, "transport", None)
+        previous_retries = getattr(transport, "retries", None)
+        adapters = {}
+        self._inventory_read_deadline = deadline
+        try:
+            if isinstance(transport, RequestsHTTPTransport):
+                # Client.execute can create a new session on every call.
+                transport.retries = 0
+                session = getattr(transport, "session", None)
+                for adapter in getattr(session, "adapters", {}).values():
+                    if id(adapter) not in adapters:
+                        adapters[id(adapter)] = (adapter, adapter.max_retries)
+                        adapter.max_retries = Retry(total=0, connect=0, read=0, status=0, redirect=0)
+            yield
+        finally:
+            for adapter, retries in adapters.values():
+                adapter.max_retries = retries
+            if isinstance(transport, RequestsHTTPTransport):
+                transport.retries = previous_retries
+            self._inventory_read_deadline = previous_deadline
+
+    def _execute_inventory_graphql(self, query: Any, variable_values: Any) -> Dict[str, Any]:
+        """Bound every query, fallback and detail read by the same scan deadline."""
+        deadline = self._inventory_read_deadline
+        message = "Reporting inventory time limit reached before completion"
+
+        def check_deadline():
+            check_read_deadline(deadline, monotonic=time.monotonic, message=message)
+
+        for attempt in range(3):
+            check_deadline()
+            self._wait_for_api_request_slot()
+            check_deadline()
+            transport = prepare_query_read(self.client, query)
+            old_timeout = getattr(transport, "default_timeout", None)
+            if isinstance(transport, RequestsHTTPTransport):
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError(message)
+                transport.default_timeout = min(float(GRAPHQL_TIMEOUT_SEC), remaining)
+            try:
+                result = self.client.execute(query, variable_values=variable_values)
+                check_read_response_status(transport)
+                check_deadline()
+                if not isinstance(result, dict):
+                    raise RuntimeError("Reporting inventory received an invalid query response")
+                return result
+            except Exception as exc:
+                check_deadline()
+                # The established same-page reduced-query path owns this error.
+                if self._is_price_elements_error(exc):
+                    raise
+                delay = read_retry_delay(
+                    exc, attempt=attempt,
+                    response_headers=getattr(transport, "response_headers", None),
+                    response_status_code=getattr(transport, "response_status_code", None),
+                )
+                if delay is None or attempt == 2:
+                    raise
+                self._wait_for_inventory_delay(delay)
+            finally:
+                if isinstance(transport, RequestsHTTPTransport):
+                    transport.default_timeout = old_timeout
+                self._api_last_request_completed_at = time.monotonic()
+        raise RuntimeError("Reporting inventory query retries exhausted")
 
     def _execute_graphql(
         self,
@@ -1027,6 +1154,8 @@ class BizniWebExporter:
         variable_values: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Execute one paced request and cool down explicitly after HTTP 429."""
+        if getattr(self, "_inventory_read_deadline", None) is not None:
+            return self._execute_inventory_graphql(query, variable_values)
         for attempt in range(1, self.api_rate_limit_max_attempts + 1):
             self._wait_for_api_request_slot()
             try:
@@ -3747,6 +3876,8 @@ class BizniWebExporter:
                 variable_values={"order_num": order_num},
             )
         except Exception as exc:
+            if getattr(self, "_inventory_read_deadline", None) is not None:
+                raise  # A bounded scan must never turn a failed detail into partial success.
             logger.warning(
                 f"Could not fetch payment metadata for order {order_num}: {str(exc)[:200]}"
             )
@@ -3798,7 +3929,7 @@ class BizniWebExporter:
             if not unresolved:
                 return
             if attempt < PAYMENT_METADATA_MAX_RETRIES:
-                time.sleep(PAYMENT_METADATA_RETRY_DELAY_SEC)
+                self._wait_for_inventory_delay(PAYMENT_METADATA_RETRY_DELAY_SEC)
 
         raise PaymentMetadataEnrichmentError(
             [self._payment_metadata_order_num(order) for order in unresolved],
@@ -5668,6 +5799,8 @@ class BizniWebExporter:
         Note: API filter requires partner token, so we fetch all orders and filter client-side
         """
         self.prepare_reporting_status_identity()
+        if getattr(self, "complete_order_inventory_enabled", False):
+            return self._fetch_orders_complete_inventory(date_from, date_to)
         all_orders = []
         has_next_page = True
         cursor = None
@@ -5851,6 +5984,11 @@ class BizniWebExporter:
                     )
                     return None
                 orders = data.get('orders', [])
+                if getattr(self, "complete_order_inventory_enabled", False) and not self._valid_complete_cache_marker(
+                    date, orders, data.get("complete_inventory"),
+                ):
+                    logger.info("Refreshing order cache without complete inventory evidence for %s", date.strftime('%Y-%m-%d'))
+                    return None
                 # Validate even payment-complete cached rows before acceptance.
                 # Unknown renames invalidate the day for a fresh ordinary read.
                 for order in orders:
@@ -6034,9 +6172,139 @@ class BizniWebExporter:
         logger.info(f"Bulk fetch complete: {len(all_orders)} orders" + (f", next cursor available" if cursor else ""))
         return all_orders, cursor
 
+    @staticmethod
+    def _inventory_order_date(order: Any) -> datetime:
+        """Validate membership, not business eligibility, across the full inventory."""
+        if not isinstance(order, dict):
+            raise RuntimeError("Reporting inventory contains an invalid order")
+        internal_order_id(order)
+        if not isinstance(order.get("order_num"), str) or not order["order_num"].strip():
+            raise RuntimeError("Reporting inventory contains a missing order number")
+        raw = order.get("pur_date")
+        if not isinstance(raw, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}:\d{2})?", raw):
+            raise RuntimeError("Reporting inventory contains an invalid purchase date")
+        try:
+            parsed = datetime.strptime(raw, "%Y-%m-%d %H:%M:%S" if " " in raw else "%Y-%m-%d")
+        except ValueError as exc:
+            raise RuntimeError("Reporting inventory contains an invalid purchase date") from exc
+        return parsed.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    def _fetch_complete_order_inventory(self) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        budget = InventoryScanBudget(timeout_seconds=REPORTING_INVENTORY_TIMEOUT_SEC)
+        deadline = budget.start()
+        anchor_id = 0
+
+        def read(variables, page_deadline):
+            nonlocal anchor_id
+            if page_deadline != deadline:
+                raise RuntimeError("Reporting inventory deadline changed")
+            result = self._execute_order_page_with_price_elements_fallback(variables)
+            if variables["params"] == {"limit": 1, "order_by": "order_id", "sort": "DESC", "cursor": 0}:
+                payload = result.get("getOrderList") if isinstance(result, dict) else None
+                page = payload.get("data") if isinstance(payload, dict) else None
+                if isinstance(page, list) and len(page) == 1:
+                    anchor_id = internal_order_id(page[0])
+            return result
+
+        with self._complete_inventory_read_scope(deadline):
+            rows = scan_reporting_order_inventory(
+                read, self._inventory_order_date, budget=budget,
+                label="Reporting order inventory", logger=logger,
+            )
+        # No completion marker is created before the original scanner returns.
+        proof = {
+            "schema_version": COMPLETE_INVENTORY_SCHEMA_VERSION,
+            "algorithm": "anchored_order_id_v1", "project": self.project_name,
+            "complete": True, "anchor_max_id": anchor_id, "inventory_count": len(rows),
+            "pages": budget.pages, "completed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        return rows, proof
+
+    @staticmethod
+    def _inventory_rows_digest(orders: List[Dict[str, Any]]) -> str:
+        raw = json.dumps(orders, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _complete_cache_marker(self, date, orders, proof):
+        marker = {
+            **proof, "date": date.strftime("%Y-%m-%d"), "day_count": len(orders),
+            "rows_sha256": self._inventory_rows_digest(orders),
+        }
+        if not self._valid_complete_cache_marker(date, orders, marker):
+            raise RuntimeError("Cannot cache orders without complete inventory evidence")
+        return marker
+
+    def _valid_complete_cache_marker(self, date, orders, marker) -> bool:
+        if not isinstance(orders, list) or not isinstance(marker, dict):
+            return False
+        try:
+            if (type(marker.get("schema_version")) is not int
+                    or marker["schema_version"] != COMPLETE_INVENTORY_SCHEMA_VERSION
+                    or marker.get("algorithm") != "anchored_order_id_v1"
+                    or marker.get("project") != self.project_name or marker.get("complete") is not True
+                    or marker.get("date") != date.strftime("%Y-%m-%d")
+                    or any(type(marker.get(key)) is not int for key in ("anchor_max_id", "inventory_count", "pages", "day_count"))
+                    or marker["anchor_max_id"] < 0 or marker["inventory_count"] < len(orders)
+                    or marker["pages"] < 1 or marker["day_count"] != len(orders)
+                    or (marker["anchor_max_id"] == 0 and marker["inventory_count"] != 0)
+                    or not isinstance(marker.get("completed_at"), str)
+                    or datetime.fromisoformat(marker["completed_at"]).tzinfo is None
+                    or marker.get("rows_sha256") != self._inventory_rows_digest(orders)):
+                return False
+            ids, numbers = set(), set()
+            for order in orders:
+                if self._inventory_order_date(order).date() != date.date():
+                    return False
+                key = internal_order_id(order)
+                if key > marker["anchor_max_id"] or key in ids or order["order_num"] in numbers:
+                    return False
+                ids.add(key)
+                numbers.add(order["order_num"])
+            return True
+        except (ValueError, TypeError, RuntimeError, OverflowError):
+            return False
+
+    def _fetch_orders_complete_inventory(self, date_from, date_to):
+        if date_from > date_to:
+            raise ValueError("Reporting date range is reversed")
+        self.excluded_orders = []
+        self.excluded_status_orders = []
+        all_orders, missing_days = [], []
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        day = date_from
+        while day <= date_to:
+            cached = self.load_from_cache(day) if self.should_use_cache(day) else None
+            if cached is None:
+                missing_days.append(day)
+            else:
+                all_orders.extend(self._filter_by_status(cached))
+            day += timedelta(days=1)
+        if not missing_days:
+            return all_orders
+
+        raw_orders, proof = self._fetch_complete_order_inventory()
+        groups = {day.strftime("%Y-%m-%d"): [] for day in missing_days}
+        for order in raw_orders:
+            key = self._inventory_order_date(order).strftime("%Y-%m-%d")
+            if key in groups:
+                groups[key].append(order)
+        # Validate all requested business rows before any new cache write.
+        # Old/out-of-range rows were checked only for source membership/date.
+        for day in missing_days:
+            rows = groups[day.strftime("%Y-%m-%d")]
+            for order in rows:
+                self._reporting_order_context(order)
+            all_orders.extend(self._filter_by_status(rows))
+        for day in missing_days:
+            if (today - day).days > self.cache_days_threshold:
+                self.save_to_cache_simple(day, groups[day.strftime("%Y-%m-%d")], inventory_proof=proof)
+        return all_orders
+
     def fetch_orders(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         """Fetch all orders within the specified date range, using cache for older data"""
         self.prepare_reporting_status_identity()
+        if getattr(self, "complete_order_inventory_enabled", False):
+            return self._fetch_orders_complete_inventory(date_from, date_to)
         all_orders = []
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
@@ -6890,9 +7158,14 @@ class BizniWebExporter:
             .reindex(columns=columns)
         )
     
-    def save_to_cache_simple(self, date: datetime, orders: List[Dict[str, Any]]):
+    def save_to_cache_simple(self, date: datetime, orders: List[Dict[str, Any]], *, inventory_proof=None):
         """Save orders to cache for a specific date (simplified version for single-day fetches)"""
         cache_file = self.get_cache_filename(date)
+        complete_marker = None
+        if getattr(self, "complete_order_inventory_enabled", False):
+            if not isinstance(inventory_proof, dict):
+                raise RuntimeError("Cannot cache orders without complete inventory evidence")
+            complete_marker = self._complete_cache_marker(date, orders, inventory_proof)
         
         try:
             cache_data = {
@@ -6902,6 +7175,8 @@ class BizniWebExporter:
                 'order_count': len(orders),
                 'orders': orders
             }
+            if complete_marker is not None:
+                cache_data["complete_inventory"] = complete_marker
             
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, ensure_ascii=False, indent=2)
@@ -6909,10 +7184,14 @@ class BizniWebExporter:
             if orders:
                 print(f"  Cached {len(orders)} orders for {date.strftime('%Y-%m-%d')}")
         except Exception as e:
+            if complete_marker is not None:
+                raise
             print(f"  Error saving cache for {date.strftime('%Y-%m-%d')}: {e}")
     
     def _fetch_orders_original(self, date_from: datetime, date_to: datetime) -> List[Dict[str, Any]]:
         """Original fetch orders method (renamed for use in new caching logic)"""
+        if getattr(self, "complete_order_inventory_enabled", False):
+            return self.fetch_orders(date_from, date_to)
         all_orders = []
         
         # Generate weekly ranges
@@ -6970,6 +7249,8 @@ class BizniWebExporter:
         Note: API filter requires partner token, so we fetch all orders and filter client-side
         """
         self.prepare_reporting_status_identity()
+        if getattr(self, "complete_order_inventory_enabled", False):
+            return self._fetch_orders_complete_inventory(date_from, date_to)
         all_orders = []
         has_next_page = True
         cursor = None

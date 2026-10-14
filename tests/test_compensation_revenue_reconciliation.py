@@ -146,6 +146,7 @@ class CompensationRevenueReconciliationTests(unittest.TestCase):
         self.assertEqual(before, self.exporter._compensation_source_fingerprint(self.order, "vevo"))
 
     def test_cache_accepts_only_exact_evidence_with_original_missing_elements(self):
+        self.exporter.complete_order_inventory_enabled = False  # Isolate the legacy monetary cache contract.
         with tempfile.TemporaryDirectory() as tmp:
             cache = Path(tmp)/"day.json"
             cache.write_text(json.dumps({"schema_version": ORDER_CACHE_SCHEMA_VERSION, "orders": [self.order]}), encoding="utf-8")

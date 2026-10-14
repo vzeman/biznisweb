@@ -171,6 +171,7 @@ class ReportStatusIdentityTests(unittest.TestCase):
         fresh = copy.deepcopy(stale)
         fresh["status"]["name"] = "Unreviewed new queue"
         exp = exporter(rows=[*CATALOGUE, {"id": "80", "name": "Unreviewed new queue"}], orders=[fresh, order()])
+        exp.complete_order_inventory_enabled = False  # Legacy page fixture; status binding is the subject.
         with TemporaryDirectory() as folder:
             exp.cache_dir = Path(folder)
             cached = exp.get_cache_filename(datetime(2026, 9, 1))
@@ -199,6 +200,7 @@ class ReportStatusIdentityTests(unittest.TestCase):
         for method in ("fetch_all_orders_bulk", "fetch_orders_for_month", "fetch_orders_for_period"):
             with self.subTest(method=method):
                 exp = exporter()
+                exp.complete_order_inventory_enabled = False  # Exercise legacy entry points with a one-page fake.
                 with patch("export_orders.time.sleep"):
                     if method == "fetch_all_orders_bulk":
                         result, _ = exp.fetch_all_orders_bulk(max_orders=30)

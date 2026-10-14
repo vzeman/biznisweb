@@ -235,12 +235,134 @@ def isolate_outputs(s3, prefix, runner, paths, *, policy=VEVO):
     return {"key": key, "sha256": sha(raw)}
 
 
+class InventoryProbeAudit:
+    """Authorize overlap only inside the completed reporting inventory hook."""
+
+    def __init__(self, incomplete, diagnostic):
+        self.incomplete, self.diagnostic = incomplete, diagnostic
+        self.inventory, self.sessions, self.current = {}, [], None
+
+    def reject(self, code):
+        self.incomplete.append(code)
+        if self.current is not None:
+            self.current["state"] = "failed"
+        raise RuntimeError("probe-" + code)
+
+    def context(self, client, roots, variables):
+        session = self.current
+        if session is None or session["variables"] is None or "getOrderList" not in roots:
+            return None
+        if roots != ("getOrderList",) or canonical(variables) != session["variables"]:
+            self.reject("inventory-context-invalid")
+        if session["client"] is None:
+            session["client"] = client
+        if session["client"] is not client:
+            self.reject("inventory-client-changed")
+        return session
+
+    def observe(self, client, roots, variables, value, query_sha, session):
+        if "getOrderList" not in roots and not (isinstance(value, dict) and "getOrderList" in value):
+            return
+        page = value.get("getOrderList") if isinstance(value, dict) else None
+        rows = page.get("data") if isinstance(page, dict) else None
+        info = page.get("pageInfo") if isinstance(page, dict) else None
+        ids = [str(row.get("id") or "") if isinstance(row, dict) else "" for row in rows] if isinstance(rows, list) else []
+        flags = {"page_object": isinstance(page, dict), "rows_list": isinstance(rows, list),
+                 "page_info_object": isinstance(info, dict),
+                 "has_next_boolean": isinstance(info, dict) and type(info.get("hasNextPage")) is bool,
+                 "row_objects": isinstance(rows, list) and all(isinstance(row, dict) for row in rows),
+                 "ids_present": all(ids), "ids_unique_in_page": len(ids) == len(set(ids))}
+        more = isinstance(info, dict) and info.get("hasNextPage") is True
+        flags.update(nonempty_if_more=not more or bool(rows), next_cursor_if_more=not more or bool(info.get("nextCursor")))
+        params = variables.get("params", {}) if isinstance(variables, dict) else {}
+        if not isinstance(params, dict):
+            params = {}
+        key = (id(client), params.get("sort"), params.get("order_by"))
+        if session is None and not params.get("cursor"):
+            self.inventory[key] = set()
+        seen = session["seen_ids"] if session is not None else self.inventory.setdefault(key, set())
+        overlap = sorted(seen.intersection(ids))
+        flags["cross_page_disjoint"] = not overlap
+        flags["scoped_overlap"] = session is not None
+        valid = all(flags[key] for key in ("page_object", "rows_list", "page_info_object", "has_next_boolean",
+                    "row_objects", "ids_present", "ids_unique_in_page", "nonempty_if_more", "next_cursor_if_more"))
+        pairs = set()
+        if session is not None:
+            from order_inventory import internal_order_id
+            try:
+                normalized = [str(internal_order_id(row)) for row in rows]
+                pairs = {(str(internal_order_id(row)), str(row.get("order_num") or "").strip()) for row in rows}
+                flags["internal_ids_valid"] = True
+                flags["order_numbers_present"] = all(number for _, number in pairs)
+                flags["normalized_ids_unique"] = len(normalized) == len(set(normalized))
+            except (TypeError, AttributeError, RuntimeError):
+                flags.update(internal_ids_valid=False, order_numbers_present=False, normalized_ids_unique=False)
+                normalized = []
+            valid = valid and flags["internal_ids_valid"] and flags["order_numbers_present"] and flags["normalized_ids_unique"]
+            flags["total_records_nonnegative_integer"] = (isinstance(info, dict)
+                and type(info.get("totalRecords")) is int and info["totalRecords"] >= 0)
+        else:
+            valid = valid and not overlap
+        detail = {"variables": json.loads(canonical(variables)), "query_sha256": query_sha,
+                  "response": value, "predicate_flags": flags, "cross_page_intersection": overlap,
+                  "scope": "reporting-inventory" if session is not None else "ordinary-query"}
+        if session is not None:
+            session["last_page"] = detail
+        if not valid:
+            self.diagnostic(detail)
+            self.reject("inventory-page-invalid")
+        seen.update(ids)
+        if session is not None:
+            session["seen_pairs"].update(pairs)
+            session["read_count"] += 1
+
+    def scan(self, scanner, read, validate_order, **kwargs):
+        from order_inventory import internal_order_id
+        if self.current is not None:
+            self.reject("inventory-scan-nested")
+        session = {"state": "pending", "variables": None, "client": None,
+                   "seen_ids": set(), "seen_pairs": set(), "read_count": 0, "last_page": None}
+        self.sessions.append(session)
+        self.current = session
+
+        def scoped_read(variables, deadline):
+            if session["variables"] is not None:
+                self.reject("inventory-read-nested")
+            session["variables"] = canonical(variables)
+            try:
+                return read(variables, deadline)
+            finally:
+                session["variables"] = None
+
+        try:
+            result = scanner(scoped_read, validate_order, **kwargs)
+            require(session["state"] == "pending" and session["read_count"] > 0 and isinstance(result, list),
+                    "probe-inventory-scan-unproven")
+            ids = [str(internal_order_id(row)) for row in result]
+            numbers = [str(row.get("order_num") or "").strip() for row in result]
+            require(all(numbers) and len(ids) == len(set(ids)) and len(numbers) == len(set(numbers))
+                    and set(zip(ids, numbers)).issubset(session["seen_pairs"]), "probe-inventory-result-unproven")
+            session["state"] = "completed"
+            return result
+        except BaseException as exc:
+            session["state"] = "failed"
+            self.incomplete.append("inventory-scan-incomplete")
+            if session["last_page"] is not None:
+                self.diagnostic({**session["last_page"], "scanner_exception_type": type(exc).__name__})
+            raise
+        finally:
+            self.current = None
+
+    def complete(self):
+        return self.current is None and all(session["state"] == "completed" for session in self.sessions)
+
+
 def report_probe(s3, prefix, release_id, *, policy=VEVO):
     import daily_report_runner as runner
     import export_orders
     import requests
     from gql import Client
-    from graphql import OperationDefinitionNode, OperationType
+    from graphql import OperationDefinitionNode, OperationType, print_ast
     from reporting_core import metrics
 
     required = {"REPORT_PROJECT": policy.project, "REPORT_SKIP_INVOICES": "true",
@@ -253,7 +375,32 @@ def report_probe(s3, prefix, release_id, *, policy=VEVO):
     attempts = {"provider_writes": 0, "email": 0, "live_output": 0}
     incomplete_reads = []
     pending_reads = set()
-    inventory = {}
+    diagnostic_count = 0
+
+    def inventory_diagnostic(detail):
+        nonlocal diagnostic_count
+        if diagnostic_count >= 8:
+            return
+        diagnostic_count += 1
+        try:
+            require(prefix == policy.probe_prefix + release_id + "/", "probe-inventory-diagnostic-scope")
+            content = {"schema_version": 1, "project": policy.project, "release_id": release_id, **detail}
+            raw = canonical(content)
+            if len(raw) > DIAGNOSTIC_LIMIT:
+                content.pop("response")
+                content["response_retention"] = {"status": "too-large", "size": len(raw), "sha256": sha(raw)}
+                raw = canonical(content)
+            require(len(raw) <= DIAGNOSTIC_LIMIT, "probe-inventory-diagnostic-too-large")
+            put_private(s3, prefix + f"artifacts/diagnostics/inventory-page-{diagnostic_count:04d}.json", raw, policy=policy)
+        except Exception:
+            # Evidence is optional; the original invalid page remains fatal.
+            print("REPORT_PROBE_INVENTORY_DIAGNOSTICS_UNAVAILABLE", flush=True)
+
+    inventory = InventoryProbeAudit(incomplete_reads, inventory_diagnostic)
+    reporting_scan = export_orders.scan_reporting_order_inventory
+
+    def scan_inventory(read, validate_order, **kwargs):
+        return inventory.scan(reporting_scan, read, validate_order, **kwargs)
 
     def forbidden(kind):
         def reject(*_args, **_kwargs):
@@ -271,6 +418,7 @@ def report_probe(s3, prefix, release_id, *, policy=VEVO):
         roots = tuple(sorted(selection.name.value for operation in operations
                              for selection in operation.selection_set.selections if hasattr(selection, "name")))
         variables = kwargs.get("variable_values", args[0] if args else None) or {}
+        session = inventory.context(client, roots, variables)
         read_key = (id(client), roots, sha(canonical(variables)))
         try:
             value = execute(client, query, *args, **kwargs)
@@ -280,23 +428,7 @@ def report_probe(s3, prefix, release_id, *, policy=VEVO):
             pending_reads.add(read_key)
             raise
         pending_reads.discard(read_key)
-        if isinstance(value, dict) and "getOrderList" in value:
-            page = value["getOrderList"]
-            rows, info = page.get("data"), page.get("pageInfo", {})
-            valid = isinstance(rows, list) and type(info.get("hasNextPage")) is bool
-            if valid and info["hasNextPage"]:
-                valid = bool(rows) and bool(info.get("nextCursor"))
-            params = (kwargs.get("variable_values") or {}).get("params", {})
-            key = (id(client), params.get("sort"), params.get("order_by"))
-            if not params.get("cursor"):
-                inventory[key] = set()
-            seen = inventory.setdefault(key, set())
-            ids = [str(row.get("id") or "") for row in rows] if isinstance(rows, list) else []
-            valid = valid and all(ids) and len(ids) == len(set(ids)) and not seen.intersection(ids)
-            if not valid:
-                incomplete_reads.append("inventory-page-invalid")
-                raise RuntimeError("probe-inventory-page-invalid")
-            seen.update(ids)
+        inventory.observe(client, roots, variables, value, sha(print_ast(doc).encode()), session)
         return value
 
     send = requests.Session.send
@@ -327,7 +459,7 @@ def report_probe(s3, prefix, release_id, *, policy=VEVO):
         require(project == policy.project, "probe-output-project-invalid")
         require((os.environ.get("REPORT_S3_BUCKET"), os.environ.get("REPORT_S3_PREFIX")) == original_input,
                 "probe-input-location-changed")
-        require(not incomplete_reads and not pending_reads, "probe-provider-reads-incomplete")
+        require(not incomplete_reads and not pending_reads and inventory.complete(), "probe-provider-reads-incomplete")
         result.update(isolate_outputs(s3, prefix, runner, paths, policy=policy))
         return {}
 
@@ -350,12 +482,14 @@ def report_probe(s3, prefix, release_id, *, policy=VEVO):
             (metrics, "put_metric", lambda *_a, **_k: None),
             (runner, "run_export", export_in_process), (runner, "s3_upload_outputs", publish),
             (Client, "execute", query_only), (requests.Session, "send", read_native),
+            (export_orders, "scan_reporting_order_inventory", scan_inventory),
             (export_orders.logger, "warning", guard_inventory_limit),
         ):
             stack.enter_context(patch.object(target, name, replacement))
         stack.enter_context(patch.object(sys, "argv", argv))
         runner.main()
-    require(result and not any(attempts.values()) and not incomplete_reads and not pending_reads, "probe-report-not-verified")
+    require(result and not any(attempts.values()) and not incomplete_reads and not pending_reads and inventory.complete(),
+            "probe-report-not-verified")
     return result
 
 
