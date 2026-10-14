@@ -1,3 +1,12 @@
+## 2026-10-14 19:06 UTC — Partial approval reconciled; absolute-path safe resume pending
+
+Date: 2026-10-14
+Repo: vzeman/biznisweb
+Branch: codex/vevo-meta-source-rollout-20261014
+What changed: Original publisher e263 first failed before SDK access because the advertising-review path was outside its authorized financial-prep scope. Its exact b1e4475c bytes were copied into that scope. Admission checkpoint manifest b9d7ff068602a335fe84ca90bf00f76cd1b105b9404cf364bbb773bd78c72792 and ZIP b29e90ce211f29bce4670c0601fa45d50b72eac3c953597b56f6576dfbc55d2e passed private AES256/full decoded GET verification. The second publisher passed fresh owned runtime and archive gates and conditionally saved/read back the actual financial proof, then failed validating a relative local runtime-proof path against absolute ROOT. No controller review PUT, image promotion or live task occurred. Both failures and original publisher remain immutable.
+What is verified: Root GET-only recovery inspection 7a917f7935686dcd05491287cd1697918931bfc12e00d56d66723269482f28a3 at19:06 confirms existing private proof byte-exact281e01db00f0e29089b3ee027efb9179c7d54226c701e0bf1c9e8fa7d8f3e3ee (29121 bytes), final review absent, controller13176 owned at phase12, original48 paused/candidate52 active, stopped0 probe/role absent and protected schedules/definitions/outputs/ROY/apps unchanged. Fresh runtime33f703ae7406a030c3ac7c5c7a048c82913272ff05662a7212b8675ee61522c2; inspector9559ac80f92f134e83e5e8a033c8937e9dd5244be278975c632e2d52d6f8d718 exited0 naturally/no mutations. Failed attempt2 ledger30f58724cf7d3fc9301a98764d3cc2207add916ea5c554f3266bf179a5a320de/log806e1a6d9131bf46e6157902f7bed878826ae90789d6c9865bbe59d23f0736c3 bind exact pre-review failure.
+Next exact step: Finish offline tests/review of narrow resume: absolute paths, recent root inspection and failed attempt, existing-proof GET only, two new owned guards, unchanged financial16/geo8/Meta/archive replay and one conditional final-review PUT. Seal new private checkpoint before root execution. Never rerun controller or overwrite earlier proof/runtime directories. Hold main74a until LIVE/source/fullCSV/future dynamic schedule/protectedROY/HTTP/UI/closure; docs PRs remain draft. No local dev server or tunnel started.
+
 ## 2026-10-14 18:47 UTC — Actual probe and exact Meta source pass all gates; live not dispatched yet
 
 Date: 2026-10-14
