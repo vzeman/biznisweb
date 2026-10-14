@@ -1,3 +1,13 @@
+## 2026-10-14 — Finalization JSON roundtrip fixed; live cost rollout pending
+
+Date: 2026-10-14
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-finalization-json-roundtrip-20261014`
+What changed: Finalizer PR #628 merged as `5db15e4eef4faf7c910fc4cc1628537534735188` and exact ECR build `38508701789` passed. Actual GET-only inspection passed (`33afc00c9fe334c30d1e1583c83bd71794b11a954cbdd0505deed32aa94e4ac2`), but finalization failed before intent or any PUT because lease tuples roundtrip through JSON as lists. Both capture pairs now explicitly use lists, retaining their exact values and ETags.
+What is verified: The new real capture/JSON/second-capture regression fails on original bytes and passes with the one-line fix; 117/117 related tests, lint/AST/diff checks pass. All eleven author/test identities exited with no owned ports. Financial rules, prices, proof equality, single conditional release, original failure artifacts and protected ROY remain unchanged.
+Known issues: The original lease remains uncertain; actual VEVO reporting still uses the old production image. Fresh source preparation through 2026-10-13 is not live evidence.
+Next exact step: Merge/build/freeze the narrow correction; create fresh named inspect/finalize proofs and close the original exact-owner lease once. Verify normal readiness, refresh native/credit/advertising inputs and complete the real VEVO report/future-schedule/UI gates. Record actual published financial results only after verification.
+
 ## 2026-10-14 — Candidate costs verified; interrupted production rollout pending
 
 Date: 2026-10-14

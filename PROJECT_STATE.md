@@ -1,3 +1,13 @@
+## 2026-10-14 — Restored-release inspection JSON roundtrip repaired
+
+Date: 2026-10-14
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-finalization-json-roundtrip-20261014`
+What changed: PR #628 merged as `5db15e4eef4faf7c910fc4cc1628537534735188`; exact-source ECR run `38508701789` passed. Its actual GET-only inspection passed, SHA `33afc00c9fe334c30d1e1583c83bd71794b11a954cbdd0505deed32aa94e4ac2`. Explicit finalization then rejected `finalize-inspection-binding` before intent creation or any S3 PUT. The cause is tuple-valued lease snapshots being decoded as JSON lists. Capture now explicitly stores the two lease pairs as lists, retaining complete values and ETags; global normalization, financial logic and runtime gates are unchanged.
+What is verified: A real capture/JSON encode/decode/second-capture regression reproduces the original failure (117 tests, one error) and passes after the one-line fix (117/117). Critical lint, AST and diff checks pass. Independent cleanup proves eleven author/test process identities absent without owned listeners. Original failed inspection/finalization/controller evidence is preserved; unrelated recycled browser processes remain untouched.
+Known issues: The old release owner still has an uncertain lease. Actual price publication and future reporting remain on the original image; neither successful inspection nor this code fix is a completed cost rollout. New source/capture/contract preparations through 2026-10-13 are author-only until actual finalization and normal-readiness verification.
+Next exact step: Commit/push/review/merge this minimal fix and freeze its exact source/build. Use newly named inspection/finalization outputs, perform one exact-owner conditional closure, independently verify normal readiness, then collect fresh sources and complete the actual VEVO cost/report/UI deployment through 2026-10-13. Preserve all previous proofs and do not rerun the rejected representation.
+
 ## 2026-10-14 — VEVO cost release interrupted before promotion
 
 Date: 2026-10-14
