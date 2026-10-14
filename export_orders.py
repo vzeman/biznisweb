@@ -1137,6 +1137,10 @@ class BizniWebExporter:
                     exc, attempt=attempt,
                     response_headers=getattr(transport, "response_headers", None),
                     response_status_code=getattr(transport, "response_status_code", None),
+                    retry_internal_partial=(
+                        getattr(self, "project_name", None) == "vevo"
+                        and getattr(self, "complete_order_inventory_enabled", False) is True
+                    ),
                 )
                 if delay is None or attempt == 2:
                     raise
