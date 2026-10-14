@@ -182,8 +182,14 @@ def run_authorized_probe(s3, prefix, identity, ready_sha, *, policy=VEVO):
     to_date = runner.normalize_date(runner.resolve_to_date(flags.to_date, flags.timezone))
     paths = runner.build_artifact_set(policy.project, from_date, to_date,
                                       output_tag="migration_" + identity["release_id"]).as_dict()
+    meta_snapshot = None
+    if policy == VEVO:
+        from scripts.reporting_meta_source_snapshot import MetaSourceSnapshot
+        meta_snapshot = MetaSourceSnapshot(identity, ready_sha, from_date, to_date, prefix,
+            lambda key, raw: put_private(s3, key, raw, policy=policy),
+            credentials=tuple(os.environ.get(key, '') for key in ('FACEBOOK_ACCESS_TOKEN', 'FACEBOOK_APP_SECRET')))
     try:
-        return report_probe(s3, prefix, identity["release_id"], policy=policy)
+        return report_probe(s3, prefix, identity["release_id"], policy=policy, meta_snapshot=meta_snapshot)
     except BaseException as exc:
         try:
             diagnostics = None
@@ -357,7 +363,7 @@ class InventoryProbeAudit:
         return self.current is None and all(session["state"] == "completed" for session in self.sessions)
 
 
-def report_probe(s3, prefix, release_id, *, policy=VEVO):
+def report_probe(s3, prefix, release_id, *, policy=VEVO, meta_snapshot=None):
     import daily_report_runner as runner
     import export_orders
     import requests
@@ -441,7 +447,15 @@ def report_probe(s3, prefix, release_id, *, policy=VEVO):
                 return forbidden("provider_writes")()
         if any(parsed.hostname in other.native_hosts for other in PROJECTS.values() if other != policy):
             return forbidden("provider_writes")()
-        return send(session, request, **kwargs)
+        try:
+            response = send(session, request, **kwargs)
+        except BaseException:
+            if meta_snapshot is not None:
+                meta_snapshot.observe_failure(request)
+            raise
+        if meta_snapshot is not None:
+            meta_snapshot.observe(request, response)
+        return response
 
     def export_in_process(**kwargs):
         require(kwargs["project"] == policy.project and kwargs["output_tag"] == "migration_" + release_id,
@@ -460,6 +474,8 @@ def report_probe(s3, prefix, release_id, *, policy=VEVO):
         require((os.environ.get("REPORT_S3_BUCKET"), os.environ.get("REPORT_S3_PREFIX")) == original_input,
                 "probe-input-location-changed")
         require(not incomplete_reads and not pending_reads and inventory.complete(), "probe-provider-reads-incomplete")
+        if meta_snapshot is not None:
+            result["meta_source_manifest"] = meta_snapshot.finalize()
         result.update(isolate_outputs(s3, prefix, runner, paths, policy=policy))
         return {}
 
@@ -523,6 +539,8 @@ def main():
                     "output_manifest_key": manifest["key"], "output_manifest_sha256": manifest["sha256"],
                     "provider_writes": False, "email_sent": False, "live_outputs_changed": False,
                     "skip_invoices": True, "skip_inline_guard": True}
+        if policy == VEVO:
+            complete["meta_source_manifest"] = manifest["meta_source_manifest"]
         put_private(s3, prefix + "markers/complete.json", canonical(complete), policy=policy)
     print(policy.project.upper() + "_REPORT_PROBE_COMPLETE:private-evidence:zero-business-writes", flush=True)
 

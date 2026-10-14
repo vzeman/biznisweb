@@ -97,7 +97,8 @@ class FailureDiagnosticTests(unittest.TestCase):
                 raise failure
             artifact = SimpleNamespace(as_dict=lambda: {'data_quality_json': path})
             with patch.object(host, 'ROOT', root), patch.dict(host.os.environ, {'REPORT_FROM_DATE': '2025-09-24', 'REPORT_TO_DATE': '2026-10-06'}), \
-                 patch.object(runner, 'build_artifact_set', return_value=artifact), patch.object(host, 'report_probe', reject_before_upload):
+                 patch.object(runner, 'build_artifact_set', return_value=artifact), patch.object(host, 'report_probe', reject_before_upload), \
+                 patch('scripts.reporting_meta_source_snapshot.MetaSourceSnapshot'):
                 with self.assertRaises(RuntimeError) as caught:
                     host.run_authorized_probe(s3, prefix, identity, host.sha(host.canonical(identity)))
             self.assertIs(failure, caught.exception)
@@ -109,6 +110,7 @@ class FailureDiagnosticTests(unittest.TestCase):
         identity = {'release_id': 'a' * 32}
         with patch.dict(host.os.environ, {'REPORT_FROM_DATE': '2025-09-24', 'REPORT_TO_DATE': '2026-10-06'}), \
              patch.object(host, 'report_probe', side_effect=failure), \
+             patch('scripts.reporting_meta_source_snapshot.MetaSourceSnapshot'), \
              patch.object(host, 'retain_failure_diagnostics', side_effect=RuntimeError('write failed')), \
              patch('builtins.print') as output:
             with self.assertRaises(RuntimeError) as caught:
@@ -133,7 +135,8 @@ class FailureDiagnosticTests(unittest.TestCase):
                  patch.object(runner, 'load_project_settings', return_value={}), \
                  patch.object(runner, 'resolve_reporting_defaults', return_value={}), \
                  patch.object(export_orders, 'main', side_effect=lambda: path.write_text(json.dumps(quality))), \
-                 patch.object(host, 'isolate_outputs') as publisher:
+                 patch.object(host, 'isolate_outputs') as publisher, \
+                 patch('scripts.reporting_meta_source_snapshot.MetaSourceSnapshot'):
                 with self.assertRaisesRegex(RuntimeError, 'Refusing to publish'):
                     host.run_authorized_probe(s3, prefix, identity, host.sha(host.canonical(identity)))
             publisher.assert_not_called()
