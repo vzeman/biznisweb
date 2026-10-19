@@ -1,3 +1,13 @@
+## 2026-10-19 — Clarify item filtering in mixed baskets
+
+Date: 2026-10-19
+Repo: vzeman/biznisweb
+Branch: codex/vevo-natural-premium-analysis-20261019
+What changed: Clarified that extra products in the same order never remove an eligible Natural/Premium bottle purchase. Natural + a separate Shot already counted for Natural; Premium + another product already counted for Premium. The earlier unclear phrase "mixed sets excluded" referred to one-line bundle products. The follow-up now also includes verified 200/500 ml bottle components of those mixed sets in retention, with exact/alias title plus configured-source composition matching. Non-perfume components remain ignored. Joint bundle prices/costs are not attributed to perfume; financial scope and customer-retention scope are explicitly separate.
+What is verified: Initial text/test-only rerun produced identical aggregate JSON and independently confirmed multi-item baskets were already counted. The subsequent mixed-set extension adds 37 paid source rows to retention only. All 32 catalogue/analysis tests pass, including Natural/Premium + Shot, unrelated-only intervening orders, mixed-set components and loose-bottle/set order deduplication. Primary and singles financial dictionaries are exactly equal to the original snapshot. Separate private audits retain the original-basket evidence and independent component-based recalculation; the regenerated reports distinguish current retention from narrower monetary coverage.
+Known issues: Total perfume revenue across mixed sets remains unavailable without component price allocation; do not describe the unchanged financial subtotal as complete revenue for the expanded retention population. Historical report figures below are superseded only for retention where this extension applies. Production unchanged; no local dev server, worker, watcher or tunnel was started or left running, and no process was terminated.
+Next exact step: Review the updated PR #638 and reproduce reports from the same immutable source with current committed code. Do not rerun production. For a future full financial allocation of mixed sets, obtain an explicit component sales-price basis rather than assigning the whole set price to perfume.
+
 ## 2026-10-19 — Offline Natural/Premium bottle comparison
 
 Date: 2026-10-19

@@ -2,7 +2,7 @@
 
 import unittest
 
-from projects.vevo.laundry_series_catalog import classify
+from projects.vevo.laundry_series_catalog import classify, classify_retention_components
 
 
 class VevoLaundryCatalogTests(unittest.TestCase):
@@ -75,6 +75,64 @@ class VevoLaundryCatalogTests(unittest.TestCase):
     def test_unrelated_title_cannot_inherit_pure_set_cost_source(self):
         self.assertIsNone(classify({"item_label": "Different item", "expense_source":
                                   "bundle_components_configured:natural_complete_fragrance_6x200ml"}))
+
+    def test_retention_preserves_single_and_pure_set_classification(self):
+        for label in (
+            "Parfum do prania Vevo Premium No.07 Ylang Absolute (500ml)",
+            "Vevo Natural Bestsellers Set",
+        ):
+            with self.subTest(label=label):
+                row = {"item_label": label}
+                self.assertEqual([classify(row)], classify_retention_components(row))
+
+    def test_retention_recognizes_bottles_in_verified_mixed_sets(self):
+        cases = (
+            ("Combo Parfum do prania Ylang Absolute 500ml + Prací gél Ylang Absolute 1L",
+             "ylang_absolute_perfume_gel_1_1", 500, 1),
+            ("Combo 1x Parfum do prania Ylang Absolute 500ml + 3x Prací gél Ylang Absolute 1L",
+             "ylang_absolute_perfume_gel_1_3", 500, 1),
+            ("Dve najobľúbenejšie vône + čistá práčka", "ylang_pure_garden_shot_2_cups", 500, 2),
+            ("Vevo Natural Bestsellers 3×200 ml + Shot a odmerka ZADARMO",
+             "natural_bestsellers_200ml_shot_cup", 200, 3),
+            ("3× Ylang Absolute 500 ml + Vevo Shot a 2 odmerky ZADARMO",
+             "ylang_absolute_3x500_shot_2_cups", 500, 3),
+            ("Combo Parfém do praní Ylang Absolute 500 ml + Prací gel Ylang Absolute 1 l",
+             "ylang_absolute_perfume_gel_1_1", 500, 1),
+        )
+        for label, rule, size, count in cases:
+            with self.subTest(label=label):
+                row = {"item_label": label, "expense_source": f"bundle_components_configured:{rule}"}
+                self.assertIsNone(classify(row))
+                parts = classify_retention_components(row)
+                self.assertTrue(parts)
+                self.assertEqual({("Natural", size)}, {(p["series"], p["size_ml"]) for p in parts})
+                self.assertEqual(count, sum(p["bottles_per_item"] for p in parts))
+                self.assertTrue(all(p["basis"] == f"configured_retention_component:{rule}" for p in parts))
+
+    def test_retention_does_not_admit_samples_or_other_merchandise(self):
+        cases = (
+            ("Vevo Essence Sample Set", "essence_sample_set_9x10"),
+            ("Vevo Natural Discovery Set", "natural_discovery_sample_shot_1_1"),
+            ("Vevo Premium Discovery Set", "premium_discovery_sample_shot_1_1"),
+            ("Vevo Complete Discovery Set", "complete_discovery_samples_shot_1_1_1"),
+            ("Vlnené gule + Vevo Premium No.06 Royal Cotton 10ml", "wool_balls_royal_cotton_dryer_fragrance_1_1"),
+            ("Unrelated product", "natural_bestsellers_200ml_shot_cup"),
+        )
+        for label, rule in cases:
+            with self.subTest(label=label):
+                self.assertEqual([], classify_retention_components({"item_label": label,
+                    "expense_source": f"bundle_components_configured:{rule}"}))
+
+    def test_retention_mixed_set_needs_matching_export_composition(self):
+        row = {"item_label": "Vevo Natural Bestsellers 3×200 ml + Shot a odmerka ZADARMO"}
+        self.assertEqual([], classify_retention_components(row))
+        for source in ("bundle_components_inferred:x3:mapped_item_label_normalized",
+                       "not_bundle_components_configured:natural_bestsellers_200ml_shot_cup"):
+            with self.subTest(source=source):
+                self.assertEqual([], classify_retention_components({**row, "expense_source": source}))
+        with self.assertRaises(ValueError):
+            classify_retention_components({**row,
+                "expense_source": "bundle_components_configured:ylang_absolute_perfume_gel_1_1"})
 
 
 if __name__ == "__main__":

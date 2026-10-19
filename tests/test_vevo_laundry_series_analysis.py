@@ -222,6 +222,61 @@ class VevoLaundrySeriesAnalysisTests(unittest.TestCase):
         self.assertEqual(4, result["source_orders"])
         self.assertEqual(3, result["selected_orders"])
 
+    def test_unrelated_items_in_return_basket_do_not_remove_series_purchase(self):
+        for series in ("Natural", "Premium"):
+            with self.subTest(series=series):
+                other = "Premium" if series == "Natural" else "Natural"
+                baseline = [
+                    item("a1", "a", "2025-01-01T10:00:00", series),
+                    item("a2", "a", "2025-02-01T10:00:00", series),
+                    item("control", "control", "2025-01-01T00:00:00", other),
+                ]
+                extra = item("a2", "a", "2025-02-01T10:00:00", series,
+                             item_number="2", net="5", gross="6", cost="2",
+                             item_label="Vevo Shot - koncentrát na čistenie práčky 100ml",
+                             item_warehouse_number="")
+                expected = analyze(baseline, date(2025, 7, 1))
+                result = analyze([*baseline, extra], date(2025, 7, 1))
+                for metric in ("all_time", "financial", "all_buyer_series_windows", "transitions"):
+                    self.assertEqual(expected[metric], result[metric])
+                self.assertEqual(1, result["financial"][series]["buyers_repeat_same"])
+                self.assertEqual(2, result["financial"][series]["orders"])
+
+    def test_other_product_only_order_does_not_interrupt_switching_sequence(self):
+        rows = [
+            item("a1", "a", "2025-01-01T10:00:00", "Natural"),
+            item("a2", "a", "2025-01-10T10:00:00", item_label="Vevo Shot 100ml",
+                 item_warehouse_number=""),
+            item("a3", "a", "2025-02-01T10:00:00", "Premium"),
+            item("a3", "a", "2025-02-01T10:00:00", item_number="2",
+                 item_label="Parfum na podlahy Vevo 200ml", item_warehouse_number=""),
+        ]
+        result = analyze(rows, date(2025, 7, 1))
+        self.assertEqual(2, result["selected_orders"])
+        self.assertEqual(1, result["all_time"]["Natural"]["next"]["Premium"])
+        self.assertEqual(1, result["all_time"]["Natural"]["last"]["Premium"])
+        self.assertEqual(1, result["transitions"]["Natural->Premium"])
+
+    def test_verified_mixed_set_counts_for_return_without_allocating_joint_price(self):
+        bundle = item("a2", "a", "2025-02-01T10:00:00", net="50", gross="60", cost="20",
+                      item_label="Vevo Natural Bestsellers 3×200 ml + Shot a odmerka ZADARMO",
+                      item_warehouse_number="", expense_source="bundle_components_configured:natural_bestsellers_200ml_shot_cup")
+        rows = [item("a1", "a", "2025-01-01T10:00:00"), bundle, premium_control()]
+        result = analyze(rows, date(2025, 7, 1))
+        self.assertEqual(2, result["retention"]["Natural"]["orders"])
+        self.assertEqual(1, result["retention"]["Natural"]["buyers_repeat_same"])
+        self.assertEqual(1, result["all_buyer_series_windows"]["90"]["Natural"]["same_any"])
+        self.assertEqual(1, sum(result["retention_mixed_set_rows"].values()))
+        self.assertEqual(Decimal("10"), result["financial"]["Natural"]["net"])
+        self.assertEqual(Decimal("4"), result["financial"]["Natural"]["cogs"])
+        self.assertEqual(1, result["financial"]["Natural"]["orders"])
+        singles = analyze(rows, date(2025, 7, 1), include_pure_sets=False)
+        self.assertEqual(0, singles["retention"]["Natural"]["buyers_repeat_same"])
+        # A loose bottle beside the set still creates only one return order.
+        result = analyze([*rows, item("a2", "a", "2025-02-01T10:00:00", item_number="2")], date(2025, 7, 1))
+        self.assertEqual(2, result["retention"]["Natural"]["orders"])
+        self.assertEqual(1, result["retention"]["Natural"]["buyers_repeat_same"])
+
     def test_free_bottle_keeps_cost_but_does_not_create_a_paid_return(self):
         result = analyze([
             item("a1", "a", "2025-01-01T10:00:00"),

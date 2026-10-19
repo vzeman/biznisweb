@@ -4,10 +4,24 @@
 
 This is an offline customer-retention and merchandise-margin analysis, not a
 production reporting change. Only laundry perfumes in 200 ml and 500 ml bottles
-are eligible. The primary view includes verified perfume-only multipacks; a
-separate sensitivity view excludes every set. Samples, floor/dryer/interior
-fragrances, gel, cleaners and mixed gift bundles are excluded. Mixed-bundle
-revenue/costs are not attributed to perfume without component sales evidence.
+are eligible. Retention includes verified perfume-only multipacks and the
+fullsize perfume components of verified mixed sets. A separate sensitivity view
+excludes every set. Samples, floor/dryer/interior fragrances, gel and cleaners
+never count as a perfume purchase. Mixed-bundle revenue/costs are not attributed
+to perfume without component sales evidence; financial coverage is separately
+labelled and includes only standalone bottles and pure perfume sets.
+
+**Filter line items, never reject a basket because it contains other products.**
+An order containing a separate Natural bottle plus a Shot, sample, gel or floor
+cleaner is a Natural purchase; the extra line is ignored. Premium plus an extra
+product is a Premium purchase. A subsequent order with only unrelated products
+creates no qualifying perfume return. This behavior was already present in the
+original calculation and was explicitly reverified on 2026-10-19 after unclear
+user-facing wording. The follow-up also fixes the narrower one-line bundle
+exclusion: fullsize perfume in a mixed *set sold as one line at a joint price*
+now counts for retention when the exact/aliased title and the export's configured
+composition agree. Samples in the same set still do not count. This refinement
+does not allocate the joint selling price or bundle costs to perfume.
 
 `laundry_series_catalog.py` owns classification. Live catalogue verification on
 2026-10-19 confirmed Natural product IDs 248/244/1525/1531/1532/1533 and Premium
@@ -26,7 +40,8 @@ reviewed source. Pure-set composition comes from committed settings.
 ## Customer metrics
 
 - Customer = trimmed, lowercased email; no identity appears in public outputs.
-- Purchase = distinct realized order containing a paid eligible item. Multiple
+- Purchase = distinct realized order containing a paid eligible item, including
+  a fullsize perfume component of a paid verified mixed set. Multiple
   bottles in one order do not count as a return. Free items retain their cost in
   financial totals but create no purchase event.
 - First-purchase cohorts are mutually exclusive Natural, Premium or both. The
@@ -61,6 +76,12 @@ selling prices. Gross contribution here is item net revenue minus the export's
 item purchase costs. It excludes advertising, packaging, shipping, shared fixed
 costs and income tax; it is not accounting net profit. Mapped costs are the
 reporting cost model, not proof of historic supplier invoices.
+
+The `retention` output owns all-buyer metrics including mixed sets. `financial`
+retains its narrower price-attributable population and is unchanged by the
+mixed-set extension. Its monetary figures are not total perfume revenue across
+all mixed sets. Order-level set presence is sufficient to recognize a perfume
+purchase but is not sufficient to allocate the whole set price to perfume.
 
 The realized export excludes cancelled/credited orders under existing reporting
 policy. This is not a separate product-refund-rate analysis. Order-credit fields
@@ -102,8 +123,10 @@ negative selected amounts and unallocated credits stop the computation.
 The source was fetched twice identically from its immutable generation with
 expected AWS owner, AES256 and a stable latest pointer before/after. Dashboard
 manifest hash, data-quality checks, financial eligibility and credit semantics
-were checked. Catalogue selection includes exactly 4,491 item rows, including
-56 pure-set rows and one free item. Two historical identity notes are disclosed,
-with no unresolved series/volume conflicts. Focused synthetic tests and a
+were checked. Financial catalogue selection includes exactly 4,491 item rows,
+including 56 pure-set rows and one free item. The follow-up adds 37 verified
+mixed-set rows to retention only, with no double-counting when a loose bottle
+and a set share one order. Two historical identity notes are disclosed, with no
+unresolved series/volume conflicts. Focused synthetic tests and a
 separate source-to-aggregate calculation verify the metrics; private evidence
 lives beside the generated reports and can be reproduced from the source above.

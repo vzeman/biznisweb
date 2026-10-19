@@ -4,7 +4,9 @@ This classifier deliberately never uses EAN or reporting ``H-`` identifiers:
 the historical export reuses EANs across both series. Warehouse variant codes
 were read back from BiznisWeb on 2026-10-19. Existing project aliases preserve
 the historical Natural names; the word ``premium`` in descriptions is not an
-identity. Only bottle-only sets are eligible, never mixed gift bundles.
+identity. Financial classification admits bottle-only sets. Retention can also
+recognize the verified bottle components of mixed bundles, without assigning
+the other components' revenue or cost to perfume.
 """
 
 import json
@@ -166,3 +168,52 @@ def classify(row: Mapping[str, object], include_pure_sets: bool = True) -> Class
     if multiplier > 1:
         basis = f"pure_multipack:x{multiplier}:" + basis
     return _result(series, size, multiplier, basis, note)
+
+
+@lru_cache(maxsize=1)
+def _retention_bundle_components() -> dict[str, tuple[Classification, ...]]:
+    settings = json.loads((_ROOT / "settings.json").read_text(encoding="utf-8"))
+    result = {}
+    for rule in settings["product_cost_bundle_rules"]:
+        components = []
+        for component in rule["components"]:
+            bottle = _single(_normal(component["expense_key"]))
+            if bottle is None:
+                continue
+            quantity = component["quantity"]
+            if int(quantity) != quantity or quantity <= 0:
+                raise ValueError(f"Invalid perfume component quantity: {rule['rule_id']}")
+            series, size, _ = bottle
+            components.append(_result(
+                series, size, int(quantity),
+                basis=f"configured_retention_component:{rule['rule_id']}",
+                note="Mixed bundle bottle component; no revenue or cost allocation.",
+            ))
+        result[rule["rule_id"]] = tuple(components)
+    return result
+
+
+def classify_retention_components(row: Mapping[str, object]) -> list[Classification]:
+    """Recognize 200/500 ml laundry perfume purchases for retention only.
+
+    A qualifying single bottle or pure set keeps its financial classification.
+    A mixed bundle additionally requires both a known exact/alias title and the
+    matching configured composition in the export. Quantities describe bottles
+    per item, not order-line quantity; they do not allocate revenue or costs.
+    """
+    direct = classify(row)
+    if direct is not None:
+        return [direct]
+
+    aliases, _, sets = _catalog()
+    original = _normal(row.get("item_label", ""))
+    label = _resolve(original, aliases)
+    set_identity = sets.get(original) or sets.get(label)
+    configured = re.search(r"(?:^|:)bundle_components_configured:([^:]+)",
+                           str(row.get("expense_source", "")))
+    if set_identity is None or configured is None:
+        return []
+    rule_id = configured.group(1)
+    if set_identity[0] != rule_id:
+        raise ValueError(f"Conflicting retention bundle composition: {row.get('item_label')}")
+    return [dict(component) for component in _retention_bundle_components()[rule_id]]

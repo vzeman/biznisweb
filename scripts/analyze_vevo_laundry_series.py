@@ -18,7 +18,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from projects.vevo.laundry_series_catalog import classify  # noqa: E402
+from projects.vevo.laundry_series_catalog import classify, classify_retention_components  # noqa: E402
 
 SERIES = ("Natural", "Premium")
 STATES = (*SERIES, "Both")
@@ -120,6 +120,8 @@ def analyze(rows: list[dict], end: date, include_pure_sets: bool = True) -> dict
     seen = set()
     orders = {}
     selected_orders = {}
+    financial_order_series = defaultdict(set)
+    mixed_set_rows = Counter()
     labels = {}
     totals = {s: {"net": Decimal(0), "gross": Decimal(0), "cogs": Decimal(0),
                   "bottles": Decimal(0), "free_bottles": Decimal(0), "item_rows": 0, "pure_set_rows": 0,
@@ -147,16 +149,31 @@ def analyze(rows: list[dict], end: date, include_pure_sets: bool = True) -> dict
         if money(r["order_credit_net_adjustment"]) != 0:
             raise ValueError("Unallocated order credits require line-level attribution")
         product = classify(r, include_pure_sets=include_pure_sets)
-        if product is None:
+        components = classify_retention_components(r) if include_pure_sets else ([product] if product else [])
+        if not components:
             excluded[r["item_label"]] += 1
             continue
-        series = product["series"]
         quantity, net, gross, cost = (money(r[c]) for c in (
             "item_quantity", "item_total_without_tax", "item_total_with_tax", "total_expense"))
         if quantity <= 0 or net < 0 or cost < 0 or gross < net:
             raise ValueError("Nonpositive or inconsistent selected merchandise")
         if abs(net - cost - money(r["profit_before_ads"])) > Decimal("0.011"):
             raise ValueError("Export line profit does not reconcile")
+        if net > 0:
+            event = selected_orders.setdefault(order_key, {
+                "date": dt, "email": email, "series": set(), "sizes": set(),
+                "order_num": order_key, "country": r["delivery_country"] or r["invoice_country"]})
+            for component in components:
+                event["series"].add(component["series"])
+                event["sizes"].add(component["size_ml"])
+        if product is None:
+            # Known fullsize perfume in a paid mixed set is a purchase. Its joint
+            # price and total cost cannot be assigned entirely to perfume.
+            if net > 0:
+                mixed_set_rows[r["item_label"]] += 1
+            excluded[r["item_label"]] += 1
+            continue
+        series = product["series"]
         t = totals[series]
         t["net"] += net
         t["gross"] += gross
@@ -170,11 +187,7 @@ def analyze(rows: list[dict], end: date, include_pure_sets: bool = True) -> dict
         if product.get("identity_note"):
             notes[product["identity_note"]] += 1
         if net > 0:
-            event = selected_orders.setdefault(order_key, {
-                "date": dt, "email": email, "series": set(), "sizes": set(),
-                "order_num": order_key, "country": r["delivery_country"] or r["invoice_country"]})
-            event["series"].add(series)
-            event["sizes"].add(product["size_ml"])
+            financial_order_series[order_key].add(series)
         label_key = (r["item_label"], r["item_warehouse_number"], series)
         label = labels.setdefault(label_key, {"label": r["item_label"],
             "warehouse": r["item_warehouse_number"], **product, "rows": 0,
@@ -200,15 +213,23 @@ def analyze(rows: list[dict], end: date, include_pure_sets: bool = True) -> dict
     common = max(firsts.values()).replace(hour=0, minute=0, second=0, microsecond=0)
     all_metrics = cohort_metrics(sequences, cutoff)
     financial = {}
+    retention = {}
     for s, t in totals.items():
         buyers = [seq for seq in sequences if any(s in e["series"] for e in seq)]
         repeats = sum(sum(s in e["series"] for e in seq) >= 2 for seq in buyers)
-        financial[s] = {**t, "profit_before_other_costs": t["net"] - t["cogs"],
-            "gross_margin_pct": float(100 * (t["net"] - t["cogs"]) / t["net"]) if t["net"] else None,
-            "buyers": len(buyers), "buyers_repeat_same": repeats,
+        retention[s] = {"buyers": len(buyers), "buyers_repeat_same": repeats,
             "buyers_repeat_same_pct": percent(repeats, len(buyers)),
             "orders": sum(s in e["series"] for e in selected_orders.values()),
             "first_sale": firsts[s].isoformat()}
+        financial_counts = Counter(orders[key][1] for key, series_set in financial_order_series.items() if s in series_set)
+        financial_repeats = sum(count >= 2 for count in financial_counts.values())
+        financial_dates = [orders[key][2] for key, series_set in financial_order_series.items() if s in series_set]
+        financial[s] = {**t, "profit_before_other_costs": t["net"] - t["cogs"],
+            "gross_margin_pct": float(100 * (t["net"] - t["cogs"]) / t["net"]) if t["net"] else None,
+            "buyers": len(financial_counts), "buyers_repeat_same": financial_repeats,
+            "buyers_repeat_same_pct": percent(financial_repeats, len(financial_counts)),
+            "orders": sum(financial_counts.values()),
+            "first_sale": min(financial_dates).isoformat() if financial_dates else None}
     transitions = Counter()
     unique_transitions = Counter()
     for seq in sequences:
@@ -216,10 +237,12 @@ def analyze(rows: list[dict], end: date, include_pure_sets: bool = True) -> dict
         transitions.update(f"{a}->{b}" for a, b in pairs)
         unique_transitions.update({f"{a}->{b}" for a, b in pairs})
     return {
-        "scope": "single_bottles_and_perfume_only_sets" if include_pure_sets else "single_bottles_only",
+        "scope": "fullsize_bottles_including_verified_mixed_sets" if include_pure_sets else "single_bottles_only",
+        "financial_scope": "single_bottles_and_perfume_only_sets" if include_pure_sets else "single_bottles_only",
+        "retention_mixed_set_rows": dict(sorted(mixed_set_rows.items())),
         "source_rows": len(rows), "source_orders": len(orders),
         "selected_orders": len(selected_orders), "selected_customers": len(sequences),
-        "financial": financial, "all_time": all_metrics,
+        "financial": financial, "retention": retention, "all_time": all_metrics,
         "windows": {str(d): cohort_metrics(sequences, cutoff, d) for d in (60, 90, 180)},
         "common_start": common.date().isoformat(),
         "common_launch_windows": {str(d): cohort_metrics(sequences, cutoff, d, common) for d in (60, 90, 180)},
@@ -257,7 +280,10 @@ def write_html(result: dict, output: Path, series: str | None = None):
     title = f"VEVO {series}" if series else "VEVO Natural a Premium"
     body = f"<h1>{title}: návraty zákazníkov a tržby</h1><p>{result['from']} – {result['to']}</p>"
     body += "<p>Parfumy do prania 200 a 500 ml. Zahrnuté sú samostatné fľaše a čisté balíky týchto fliaš. " \
-        "Vzorky, podlahové a ostatné produkty aj zmiešané sety s iným tovarom sú vylúčené.</p>"
+        "Filtrujeme položky, nie celé objednávky: Natural + samostatne pridaný Shot sa ráta ako nákup Natural, " \
+        "Premium + iný produkt ako nákup Premium. Ostatné položky nepridávame do parfumových tržieb ani nákladov. " \
+        "Vzorky a ostatné produkty sa ignorujú. Do návratov rátame aj preukázané fľaše 200/500 ml " \
+        "v hotových zmiešaných setoch. Ich spoločnú cenu však nevieme celú pripísať parfumu.</p>"
     fair = a["all_buyer_series_windows"]["90"]
     n_rate, p_rate = fair["Natural"]["same_any_pct"], fair["Premium"]["same_any_pct"]
     finding = "Porovnanie potrebuje dozreté kohorty oboch radov."
@@ -274,7 +300,9 @@ def write_html(result: dict, output: Path, series: str | None = None):
         f = a["financial"][s]
         money_rows.append([s, number(f["net"], " €"), number(f["gross"], " €"), number(f["cogs"], " €"),
                            number(f["profit_before_other_costs"], " €"), int(f["bottles"]), f["buyers"]])
-    body += "<h2>Predaj za celé obdobie</h2>" + table(
+    body += "<h2>Financie: samostatné fľaše a čisté parfumové balíky</h2><p>" \
+        "Táto tabuľka zahŕňa iba položky s oddeliteľnou parfumovou cenou. Parfumy v hotových zmiešaných setoch " \
+        "sú zahrnuté do návratov nižšie, ale bez rozpisu ceny nie sú zahrnuté do týchto finančných súčtov.</p>" + table(
         ["Rada", "Tržby bez DPH", "Tržby s DPH", "Náklady na tovar", "Hrubá marža v €", "Platené fľaše", "Kupujúci"], money_rows)
     body += "<p>Hrubá marža = tržby bez DPH − vykázané náklady na tovar. Nie je to čistý zisk: " \
         "reklama, doprava, balenie, prevádzka a dane tu nie sú odpočítané. Meny sú prepočítané na EUR podľa reportingu. " \
@@ -294,8 +322,8 @@ def write_html(result: dict, output: Path, series: str | None = None):
         "Zákazníci s oboma radmi v prvom nákupe sú samostatná kohorta: " + str(a["all_time"]["Both"]["customers"]) + ".</p>"
     body += "<h2>Všetci kupujúci rady vrátane príchodov z druhej rady</h2>" + table(
         ["Rada", "Kúpili aspoň raz", "Kúpili túto radu v aspoň 2 objednávkach", "% opakovaných"],
-        [[s, a["financial"][s]["buyers"], a["financial"][s]["buyers_repeat_same"],
-          number(a["financial"][s]["buyers_repeat_same_pct"], " %")] for s in columns])
+        [[s, a["retention"][s]["buyers"], a["retention"][s]["buyers_repeat_same"],
+          number(a["retention"][s]["buyers_repeat_same_pct"], " %")] for s in columns])
     body += "<p>Tento menovateľ zahŕňa aj zákazníkov, ktorí najprv kúpili druhú radu. " \
         "Kupujúci oboch radov sa môžu objaviť v oboch riadkoch. Čas od prvého nákupu tu nie je vyrovnaný.</p>"
     body += "<h2>Rovnaké okná pre všetkých kupujúcich každej rady</h2><p>Počítané od prvého nákupu konkrétnej rady, " \
@@ -315,7 +343,8 @@ def write_html(result: dict, output: Path, series: str | None = None):
                            " – ".join(number(x, " %") for x in c["same_any_ci95"]) if c["same_any_ci95"] else "nedostupné"])
     body += table(["Dní", "Rada", "Dozretí zákazníci", "Návrat k pôvodnej rade", "% pôvodná rada", "% akýkoľvek návrat", "95 % interval pôvodnej rady"], mature)
     body += "<h2>Presedlanie: prvá a posledná pozorovaná voľba</h2><p>Len zákazníci s aspoň dvoma objednávkami. " \
-        "Každý je v jednej bunke. Zmiešaná posledná objednávka neprideľuje výlučný bod žiadnej rade.</p>"
+        "Každý je v jednej bunke. Posledná objednávka obsahujúca Natural aj Premium neprideľuje výlučný bod " \
+        "žiadnej rade. Shot či iný produkt sám osebe nemení zaradenie objednávky.</p>"
     body += table(["Prvá rada", "Posledná Natural", "Posledná Premium", "Posledná obe"],
                   [[s, *[a["all_time"][s]["last"][x] for x in STATES]] for s in STATES])
     body += "<p>Posledný nákup je posledná pozorovaná voľba, nie dôkaz trvalého odchodu. " \
@@ -330,7 +359,9 @@ def write_html(result: dict, output: Path, series: str | None = None):
     body += "<h2>Kontrola bez balíkov</h2>" + table(["Rada", "Tržby bez DPH", "Hrubá marža", "Návrat k rade do 90 dní / spoločné obdobie"],
         [[s, number(result["singles"]["financial"][s]["net"], " €"), number(result["singles"]["financial"][s]["profit_before_other_costs"], " €"),
           number(result["singles"]["all_buyer_series_windows"]["90"][s]["same_any_pct"], " %")] for s in columns])
-    body += "<h2>Zahrnuté položky</h2>" + table(["Názov v objednávke", "Rada", "Riadky", "Fľaše vrátane bezplatných", "Tržby bez DPH"],
+    body += "<h2>Zmiešané sety zahrnuté do návratov</h2>" + table(
+        ["Položka s overenou fľašou 200/500 ml", "Riadky"], a["retention_mixed_set_rows"].items())
+    body += "<h2>Položky zahrnuté aj do finančnej tabuľky</h2>" + table(["Názov v objednávke", "Rada", "Riadky", "Fľaše vrátane bezplatných", "Tržby bez DPH"],
         [[p["label"], p["series"], p["rows"], int(p["bottles"]), number(p["net"], " €")]
          for p in sorted(a["products"], key=lambda x: (x["series"], x["label"])) if p["series"] in columns])
     body += "<h2>Zdroj a hranice výpočtu</h2><p>" + html.escape(result["source_uri"]) + "</p>"
