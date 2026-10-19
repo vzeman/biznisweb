@@ -1,3 +1,13 @@
+## 2026-10-19 — Natural/Premium portfolio decision
+
+Date: 2026-10-19
+Repo: vzeman/biznisweb
+Branch: codex/vevo-natural-premium-analysis-20261019
+What changed: Added reproducible offline portfolio retention controls, recent/whole-period economics and delisting sensitivities. The private decision memo separates same-series retention, any-series return, pre-existing Natural buyers, shared-scent/single-bottle comparisons and subsequent choices after trying both. Financial models distinguish retained spending from same-size and same-scent bottle volume, and examine Premium 200/500 ml separately. See projects/vevo/PORTFOLIO_DECISION.md. Natural remains the supported core; higher Premium satisfaction and a profit benefit from full Premium removal are not established.
+What is verified: Existing immutable source is reused. An independent source-to-result audit confirms financial sums, retention counts, matching and scenario arithmetic without importing the new analyzers. Both extra-product baskets and verified mixed-set perfume components remain counted for retention. Original financial scope is unchanged. Public current dosing/availability was checked separately and is not treated as historical availability or measured consumption. All 44 focused tests pass. Final readback confirms matching source hashes, expected report sections and absence of source customer emails in both aggregate JSONs and the private decision HTML. Codex file preview is queued; no browser screenshot verification is claimed.
+Known issues: The configured Premium Ylang 200 ml cost matches the Natural counterpart; actual supplier invoices have not been verified. This is a model-input uncertainty, not a classification defect. Unknown substitution demand, historical availability, actual consumption, refunds excluded by source policy, inventory and truly avoidable costs prevent a causal satisfaction claim or definite net-profit forecast. Business figures/customer source remain out of public Git. No production mutation or local service was started.
+Next exact step: Review updated draft PR #638 and data/vevo-natural-premium-20261019/portfolio/vevo-rozhodnutie.html. Verify supplier costs/inventory and agree an experiment before any catalogue implementation. No experiment or delisting is authorized by this analysis request. The committed reproduction commands recover all important outputs from the immutable private source on another PC; no local service was left running or terminated.
+
 ## 2026-10-19 — Clarify item filtering in mixed baskets
 
 Date: 2026-10-19
