@@ -359,7 +359,7 @@ def main():
               "source_uri": args.source_uri, "source_sha256": hashlib.sha256(raw).hexdigest(),
               "primary": analyze(rows, args.to_date), "singles": analyze(rows, args.to_date, False)}
     args.output.mkdir(parents=True, exist_ok=True)
-    (args.output / "analysis.json").write_text(json.dumps(result, ensure_ascii=False, indent=2, default=serial), encoding="utf-8")
+    (args.output / "analysis.json").write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True, default=serial), encoding="utf-8")
     write_html(result, args.output / "vevo-porovnanie.html")
     for s in SERIES:
         write_html(result, args.output / f"vevo-{s.lower()}.html", s)
