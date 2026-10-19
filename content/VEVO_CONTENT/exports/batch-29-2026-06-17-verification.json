@@ -1,0 +1,257 @@
+{
+  "batch": 29,
+  "created_at": "2026-06-17T18:23:54",
+  "rss_status": 200,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Najčastejšie chyby pri parfumoch do prania: priveľa vône, zlý oplach a miešanie s avivážou",
+      "slug": "najcastejsie-chyby-pri-parfumoch-do-prania-privela-vone-zly-oplach-a-miesanie-s-avivazou",
+      "public_url": "https://www.vevo.sk/n/najcastejsie-chyby-pri-parfumoch-do-prania-privela-vone-zly-oplach-a-miesanie-s-avivazou",
+      "http_status": 200,
+      "post_id": 2268,
+      "date_published": "2025-09-23T08:00:00",
+      "content_length": 16445,
+      "word_count_public_text": 1661,
+      "has_quick_answer": true,
+      "has_tables": true,
+      "table_count": 2,
+      "has_styled_blocks": true,
+      "has_product_links": true,
+      "has_category_links": true,
+      "has_fixed_price_in_article": false,
+      "has_forbidden_internal_terms_in_article": false,
+      "rss_contains_title": true,
+      "link_checks": [
+        {
+          "url": "https://www.energy.gov/energysaver/laundry",
+          "status": 200,
+          "final_url": "https://www.energy.gov/energysaver/laundry",
+          "ok": true
+        },
+        {
+          "url": "https://dermnetnz.org/topics/fragrance-allergy",
+          "status": 200,
+          "final_url": "https://dermnetnz.org/topics/fragrance-allergy",
+          "ok": true
+        },
+        {
+          "url": "https://www.epa.gov/indoor-air-quality-iaq/volatile-organic-compounds-impact-indoor-air-quality",
+          "status": 200,
+          "final_url": "https://www.epa.gov/indoor-air-quality-iaq/volatile-organic-compounds-impact-indoor-air-quality",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-davkovat-parfum-do-prania-podla-mnozstva-bielizne",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/ako-davkovat-parfum-do-prania-podla-mnozstva-bielizne",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/preco-vona-z-prania-rychlo-vyprcha-a-ako-ju-udrzat-dlhsie",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/preco-vona-z-prania-rychlo-vyprcha-a-ako-ju-udrzat-dlhsie",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-prejst-z-avivaze-na-parfum-do-prania-bez-sklamania",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/ako-prejst-z-avivaze-na-parfum-do-prania-bez-sklamania",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+          "ok": true
+        }
+      ],
+      "all_article_links_ok": true,
+      "ok": true
+    },
+    {
+      "title": "Ako prevoňať oblečenie do kancelárie: jemná vôňa, košeľa pri krku a prádlo bez ťažkej parfumácie",
+      "slug": "ako-prevonat-oblecenie-do-kancelarie-jemna-vona-kosela-pri-krku-a-pradlo-bez-tazkej-parfumacie",
+      "public_url": "https://www.vevo.sk/n/ako-prevonat-oblecenie-do-kancelarie-jemna-vona-kosela-pri-krku-a-pradlo-bez-tazkej-parfumacie",
+      "http_status": 200,
+      "post_id": 2269,
+      "date_published": "2025-09-23T08:12:00",
+      "content_length": 16327,
+      "word_count_public_text": 1659,
+      "has_quick_answer": true,
+      "has_tables": true,
+      "table_count": 2,
+      "has_styled_blocks": true,
+      "has_product_links": true,
+      "has_category_links": true,
+      "has_fixed_price_in_article": false,
+      "has_forbidden_internal_terms_in_article": false,
+      "rss_contains_title": true,
+      "link_checks": [
+        {
+          "url": "https://dermnetnz.org/topics/fragrance-allergy",
+          "status": 200,
+          "final_url": "https://dermnetnz.org/topics/fragrance-allergy",
+          "ok": true
+        },
+        {
+          "url": "https://dermnetnz.org/topics/textile-contact-dermatitis",
+          "status": 200,
+          "final_url": "https://dermnetnz.org/topics/textile-contact-dermatitis",
+          "ok": true
+        },
+        {
+          "url": "https://pubmed.ncbi.nlm.nih.gov/21245015/",
+          "status": 200,
+          "final_url": "https://pubmed.ncbi.nlm.nih.gov/21245015/",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-odstranit-parfumovy-flak-z-oblecenia-a-jemnych-latok",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/ako-odstranit-parfumovy-flak-z-oblecenia-a-jemnych-latok",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/preco-boli-hlava-z-vone-a-ako-pouzivat-vone-doma-jemnejsie",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/preco-boli-hlava-z-vone-a-ako-pouzivat-vone-doma-jemnejsie",
+          "ok": true
+        }
+      ],
+      "all_article_links_ok": true,
+      "ok": true
+    },
+    {
+      "title": "Vôňa oblečenia v kufri: ako baliť čistú bielizeň na cestu, aby nezatuchla",
+      "slug": "vona-oblecenia-v-kufri-ako-balit-cistu-bielizen-na-cestu-aby-nezatuchla",
+      "public_url": "https://www.vevo.sk/n/vona-oblecenia-v-kufri-ako-balit-cistu-bielizen-na-cestu-aby-nezatuchla",
+      "http_status": 200,
+      "post_id": 2270,
+      "date_published": "2025-09-23T08:24:00",
+      "content_length": 16061,
+      "word_count_public_text": 1611,
+      "has_quick_answer": true,
+      "has_tables": true,
+      "table_count": 2,
+      "has_styled_blocks": true,
+      "has_product_links": true,
+      "has_category_links": true,
+      "has_fixed_price_in_article": false,
+      "has_forbidden_internal_terms_in_article": false,
+      "rss_contains_title": true,
+      "link_checks": [
+        {
+          "url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+          "status": 200,
+          "final_url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+          "ok": true
+        },
+        {
+          "url": "https://www.energy.gov/energysaver/laundry",
+          "status": 200,
+          "final_url": "https://www.energy.gov/energysaver/laundry",
+          "ok": true
+        },
+        {
+          "url": "https://www.epa.gov/indoor-air-quality-iaq/volatile-organic-compounds-impact-indoor-air-quality",
+          "status": 200,
+          "final_url": "https://www.epa.gov/indoor-air-quality-iaq/volatile-organic-compounds-impact-indoor-air-quality",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/c/vzorky/parfum-do-prania-vzorky",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/c/vzorky/parfum-do-prania-vzorky",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-prat-cestovne-oblecenie-po-dlhom-lete-alebo-vlaku",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/ako-prat-cestovne-oblecenie-po-dlhom-lete-alebo-vlaku",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-cestovneho-vankusa-po-lietadle",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-cestovneho-vankusa-po-lietadle",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+          "ok": true
+        },
+        {
+          "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+          "status": 200,
+          "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+          "ok": true
+        }
+      ],
+      "all_article_links_ok": true,
+      "ok": true
+    }
+  ]
+}

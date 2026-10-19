@@ -1,0 +1,40 @@
+{
+  "existing_count": 819,
+  "excluded_batch": 42,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Stálofarebnosť textilu: prečo farby blednú pri praní, svetle a trení",
+      "slug": "stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Pevnosť šva a posun nití: prečo oblečenie praská pri švoch",
+      "slug": "pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Zatrhávanie textilu: prečo vznikajú vytiahnuté očká a ako im predchádzať",
+      "slug": "zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Počet nití pri obliečkach: čo znamená thread count a čo o kvalite nehovorí",
+      "slug": "pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

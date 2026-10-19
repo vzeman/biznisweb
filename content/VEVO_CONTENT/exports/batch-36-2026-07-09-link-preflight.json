@@ -1,0 +1,125 @@
+{
+  "checked_count": 17,
+  "failure_count": 0,
+  "links": [
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-chranic-matraca-pot-prach-roztoce-a-spravne-susenie",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/care-your-air-guide-indoor-air-quality",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.cuh.nhs.uk/patient-information/dust-mites-in-your-home/",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.lung.org/clean-air/indoor-air/indoor-air-pollutants/dust-mites",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-osviezit-postel-medzi-praniami-vetranie-pyzamo-matrac-a-jemna-vona",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "kind": "article_link",
+      "ok": true,
+      "status": 200,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-paplon-a-prikryvku-velkost-bubna-vypln-a-susenie-bez-zapachu",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-plachtu-s-gumou-rohy-pot-zrazenie-a-susenie-bez-pokrcenia",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-prehoz-na-postel-prach-chlpy-objem-a-susenie",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-postelnu-suknu-a-textilie-okolo-postele-prach-chlpy-a-sezonne-pranie",
+      "kind": "target_slug_precheck",
+      "ok": true,
+      "status": 404,
+      "error": null
+    }
+  ]
+}

@@ -1,0 +1,213 @@
+{
+  "action": "deleted_bad_slug_posts_created_by_batch_35",
+  "deleted_count": 10,
+  "record_count": 10,
+  "all_deleted": true,
+  "rows": [
+    {
+      "post_id": "2298",
+      "title": "Prečo parfum do prania necítiť po usušení",
+      "expected_url": "https://www.vevo.sk/n/preco-parfum-do-prania-necitit-po-ususeni",
+      "deleted": true,
+      "result": {
+        "success": true,
+        "message": "Successfully deleted news post with ID: 2298"
+      }
+    },
+    {
+      "post_id": "2299",
+      "title": "Parfum do prania pri ručnom praní",
+      "expected_url": "https://www.vevo.sk/n/parfum-do-prania-pri-rucnom-prani",
+      "deleted": true,
+      "result": {
+        "success": true,
+        "message": "Successfully deleted news post with ID: 2299"
+      }
+    },
+    {
+      "post_id": "2300",
+      "title": "Parfum do prania pri praní na 30 stupňov",
+      "expected_url": "https://www.vevo.sk/n/parfum-do-prania-pri-prani-na-30-stupnov",
+      "deleted": true,
+      "result": {
+        "success": true,
+        "message": "Successfully deleted news post with ID: 2300"
+      }
+    },
+    {
+      "post_id": "2301",
+      "title": "Parfum do prania pri praní na 60 stupňov",
+      "expected_url": "https://www.vevo.sk/n/parfum-do-prania-pri-prani-na-60-stupnov",
+      "deleted": true,
+      "result": {
+        "success": true,
+        "message": "Successfully deleted news post with ID: 2301"
+      }
+    },
+    {
+      "post_id": "2302",
+      "title": "Prací gél alebo prášok: čo sa hodí na bežné pranie",
+      "expected_url": "https://www.vevo.sk/n/praci-gel-alebo-prasok-co-sa-hodi-na-bezne-pranie",
+      "deleted": true,
+      "result": {
+        "success": true,
+        "message": "Successfully deleted news post with ID: 2302"
+      }
+    },
+    {
+      "post_id": "2303",
+      "title": "Prací gél na čierne oblečenie",
+      "expected_url": "https://www.vevo.sk/n/praci-gel-na-cierne-oblecenie",
+      "deleted": true,
+      "result": {
+        "success": true,
+        "message": "Successfully deleted news post with ID: 2303"
+      }
+    },
+    {
+      "post_id": "2304",
+      "title": "Prací gél na biele oblečenie",
+      "expected_url": "https://www.vevo.sk/n/praci-gel-na-biele-oblecenie",
+      "deleted": true,
+      "result": {
+        "success": true,
+        "message": "Successfully deleted news post with ID: 2304"
+      }
+    },
+    {
+      "post_id": "2305",
+      "title": "Prací gél na farebné oblečenie",
+      "expected_url": "https://www.vevo.sk/n/praci-gel-na-farebne-oblecenie",
+      "deleted": true,
+      "result": {
+        "success": true,
+        "message": "Successfully deleted news post with ID: 2305"
+      }
+    },
+    {
+      "post_id": "2306",
+      "title": "Prací gél pri nízkych teplotách",
+      "expected_url": "https://www.vevo.sk/n/praci-gel-pri-nizkych-teplotach",
+      "deleted": true,
+      "result": {
+        "success": true,
+        "message": "Successfully deleted news post with ID: 2306"
+      }
+    },
+    {
+      "post_id": "2307",
+      "title": "Preplnená práčka: ako kazí pranie",
+      "expected_url": "https://www.vevo.sk/n/preplnena-pracka-ako-kazi-pranie",
+      "deleted": true,
+      "result": {
+        "success": true,
+        "message": "Successfully deleted news post with ID: 2307"
+      }
+    }
+  ],
+  "bad_url_checks": [
+    {
+      "url": "https://www.vevo.sk/n/111",
+      "status": 404,
+      "length": 124013
+    },
+    {
+      "url": "https://www.vevo.sk/n/111111",
+      "status": 404,
+      "length": 124019
+    },
+    {
+      "url": "https://www.vevo.sk/n/111111111",
+      "status": 404,
+      "length": 124025
+    },
+    {
+      "url": "https://www.vevo.sk/n/1111111111",
+      "status": 404,
+      "length": 124027
+    },
+    {
+      "url": "https://www.vevo.sk/n/1111111111111111111",
+      "status": 404,
+      "length": 124045
+    },
+    {
+      "url": "https://www.vevo.sk/n/11111111111111111111",
+      "status": 404,
+      "length": 124047
+    },
+    {
+      "url": "https://www.vevo.sk/n/111111111111111111111",
+      "status": 404,
+      "length": 124049
+    },
+    {
+      "url": "https://www.vevo.sk/n/1111111111111111111111",
+      "status": 404,
+      "length": 124051
+    },
+    {
+      "url": "https://www.vevo.sk/n/11111111111111111111111",
+      "status": 404,
+      "length": 124053
+    },
+    {
+      "url": "https://www.vevo.sk/n/111111111111111111111111",
+      "status": 404,
+      "length": 124055
+    }
+  ],
+  "clean_expected_url_checks_after_cleanup": [
+    {
+      "url": "https://www.vevo.sk/n/preco-parfum-do-prania-necitit-po-ususeni",
+      "status": 404,
+      "length": 124089
+    },
+    {
+      "url": "https://www.vevo.sk/n/parfum-do-prania-pri-rucnom-prani",
+      "status": 404,
+      "length": 124073
+    },
+    {
+      "url": "https://www.vevo.sk/n/parfum-do-prania-pri-prani-na-30-stupnov",
+      "status": 404,
+      "length": 124087
+    },
+    {
+      "url": "https://www.vevo.sk/n/parfum-do-prania-pri-prani-na-60-stupnov",
+      "status": 404,
+      "length": 124087
+    },
+    {
+      "url": "https://www.vevo.sk/n/praci-gel-alebo-prasok-co-sa-hodi-na-bezne-pranie",
+      "status": 404,
+      "length": 124105
+    },
+    {
+      "url": "https://www.vevo.sk/n/praci-gel-na-cierne-oblecenie",
+      "status": 404,
+      "length": 124065
+    },
+    {
+      "url": "https://www.vevo.sk/n/praci-gel-na-biele-oblecenie",
+      "status": 404,
+      "length": 124063
+    },
+    {
+      "url": "https://www.vevo.sk/n/praci-gel-na-farebne-oblecenie",
+      "status": 404,
+      "length": 124067
+    },
+    {
+      "url": "https://www.vevo.sk/n/praci-gel-pri-nizkych-teplotach",
+      "status": 404,
+      "length": 124069
+    },
+    {
+      "url": "https://www.vevo.sk/n/preplnena-pracka-ako-kazi-pranie",
+      "status": 404,
+      "length": 124071
+    }
+  ],
+  "publication_status": "rolled_back_due_to_mcp_generating_111_slugs"
+}

@@ -1,0 +1,233 @@
+{
+  "started_at": "2026-07-21T16:17:15+02:00",
+  "mode": "slug-safe-mcp-publication",
+  "article_file": "C:\\Users\\Patrik jankech\\Documents\\Playground\\content\\VEVO_CONTENT\\imports\\batch-41-2026-07-21-articles.json",
+  "block_id": "765",
+  "posts": [
+    {
+      "title": "Bavlna a elastan: starostlivosť o tričká, rifle a spodnú bielizeň",
+      "slug": "bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "post_id": "2340",
+      "create": {
+        "post_id": "2340",
+        "title": "Bavlna a elastan: starostlivosť o tričká, rifle a spodnú bielizeň",
+        "link": "bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+        "active": "0",
+        "short_length": 221,
+        "long_length": 27957,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "2340",
+        "title": "Bavlna a elastan: starostlivosť o tričká, rifle a spodnú bielizeň",
+        "link": "bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+        "active": "1",
+        "short_length": 221,
+        "long_length": 27957,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+        "status_code": 200,
+        "location": null,
+        "body_length": 143616
+      }
+    },
+    {
+      "title": "Vlna a polyamid: prečo sa miešajú vlákna a ako to ovplyvňuje pranie",
+      "slug": "vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "post_id": "2341",
+      "create": {
+        "post_id": "2341",
+        "title": "Vlna a polyamid: prečo sa miešajú vlákna a ako to ovplyvňuje pranie",
+        "link": "vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+        "active": "0",
+        "short_length": 209,
+        "long_length": 26204,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "2341",
+        "title": "Vlna a polyamid: prečo sa miešajú vlákna a ako to ovplyvňuje pranie",
+        "link": "vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+        "active": "1",
+        "short_length": 209,
+        "long_length": 26204,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 141894
+      }
+    },
+    {
+      "title": "Statická elektrina v oblečení: prečo látky priľnú a ako obmedziť iskrenie",
+      "slug": "staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+      "url": "https://www.vevo.sk/n/staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+      "post_id": "2342",
+      "create": {
+        "post_id": "2342",
+        "title": "Statická elektrina v oblečení: prečo látky priľnú a ako obmedziť iskrenie",
+        "link": "staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+        "active": "0",
+        "short_length": 218,
+        "long_length": 26129,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "2342",
+        "title": "Statická elektrina v oblečení: prečo látky priľnú a ako obmedziť iskrenie",
+        "link": "staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+        "active": "1",
+        "short_length": 218,
+        "long_length": 26129,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+        "status_code": 200,
+        "location": null,
+        "body_length": 141896
+      }
+    },
+    {
+      "title": "Odolnosť textilu proti oderu: čo znamená Martindale pri oblečení a bytových látkach",
+      "slug": "odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "post_id": "2343",
+      "create": {
+        "post_id": "2343",
+        "title": "Odolnosť textilu proti oderu: čo znamená Martindale pri oblečení a bytových látkach",
+        "link": "odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+        "active": "0",
+        "short_length": 218,
+        "long_length": 25580,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+          "status_code": 404,
+          "location": null
+        }
+      },
+      "state": "public_verified",
+      "publish": {
+        "post_id": "2343",
+        "title": "Odolnosť textilu proti oderu: čo znamená Martindale pri oblečení a bytových látkach",
+        "link": "odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+        "active": "1",
+        "short_length": 218,
+        "long_length": 25580,
+        "public_status": {
+          "checked": true,
+          "url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+          "status_code": 200,
+          "location": null
+        }
+      },
+      "public_status": {
+        "url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+        "status_code": 200,
+        "location": null,
+        "body_length": 141411
+      }
+    }
+  ],
+  "status": "complete",
+  "all_ok": true,
+  "last_run_at": "2026-07-21T16:18:04+02:00",
+  "last_run_mode": "publish",
+  "admin_catalog_count": 562,
+  "preflight": [
+    {
+      "title": "Bavlna a elastan: starostlivosť o tričká, rifle a spodnú bielizeň",
+      "slug": "bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+        "status_code": 404,
+        "location": null,
+        "body_length": 123583
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Vlna a polyamid: prečo sa miešajú vlákna a ako to ovplyvňuje pranie",
+      "slug": "vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 123589
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Statická elektrina v oblečení: prečo látky priľnú a ako obmedziť iskrenie",
+      "slug": "staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+        "status_code": 404,
+        "location": null,
+        "body_length": 123601
+      },
+      "mapped_post_id": null
+    },
+    {
+      "title": "Odolnosť textilu proti oderu: čo znamená Martindale pri oblečení a bytových látkach",
+      "slug": "odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "admin_match_count": 0,
+      "public_status": {
+        "url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+        "status_code": 404,
+        "location": null,
+        "body_length": 123621
+      },
+      "mapped_post_id": null
+    }
+  ],
+  "last_preflight_at": "2026-07-21T16:17:22+02:00",
+  "last_preflight_ok": true,
+  "publish_requested": true,
+  "record_count": 4,
+  "public_ok_count": 4,
+  "completed_at": "2026-07-21T16:19:38+02:00"
+}

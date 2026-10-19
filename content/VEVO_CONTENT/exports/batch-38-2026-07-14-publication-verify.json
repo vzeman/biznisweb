@@ -1,0 +1,324 @@
+{
+  "batch": "batch-38",
+  "verified_at": "2026-07-14T07:16:26.278145+00:00",
+  "article_count": 5,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Ako vyčistiť mop a vedro: špinavá voda, usadeniny a správne sušenie",
+      "slug": "ako-vycistit-mop-a-vedro-spinava-voda-usadeniny-a-spravne-susenie",
+      "url": "https://www.vevo.sk/n/ako-vycistit-mop-a-vedro-spinava-voda-usadeniny-a-spravne-susenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-mop-a-vedro-spinava-voda-usadeniny-a-spravne-susenie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3096,
+      "table_count": 2,
+      "styled_block_count": 19,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1553/parfum-na-podlahy-vevo-no-01-cotton-paradise"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+        "/c/vevo-home-care/upratovanie/cistiace-prostriedky/vona-na-umyvanie-podlah"
+      ],
+      "external_links": [
+        "https://www.epa.gov/coronavirus-and-disinfectants/whats-difference-between-products-disinfect-sanitize-and-clean",
+        "https://www.epa.gov/indoor-air-quality-iaq/improving-your-indoor-environment",
+        "https://www.epa.gov/indoor-air-quality-iaq/ventilation-important-indoor-air-quality-when-cleaning-andor-sanitizing"
+      ],
+      "body_length": 89102,
+      "ok": true
+    },
+    {
+      "title": "Ako vyčistiť hubky a kefy na upratovanie: mastnota, opotrebovanie a včasná výmena",
+      "slug": "ako-vycistit-hubky-a-kefy-na-upratovanie-mastnota-opotrebovanie-a-vcasna-vymena",
+      "url": "https://www.vevo.sk/n/ako-vycistit-hubky-a-kefy-na-upratovanie-mastnota-opotrebovanie-a-vcasna-vymena",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-hubky-a-kefy-na-upratovanie-mastnota-opotrebovanie-a-vcasna-vymena",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 2990,
+      "table_count": 2,
+      "styled_block_count": 19,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1630/univerzalny-cistic-vevo-pure-harmony-500ml"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+        "/c/vevo-home-care/upratovanie/cistiace-prostriedky/univerzalny-cistic-do-domacnosti"
+      ],
+      "external_links": [
+        "https://doi.org/10.1038/s41598-017-06055-9",
+        "https://www.epa.gov/coronavirus-and-disinfectants/whats-difference-between-products-disinfect-sanitize-and-clean",
+        "https://www.epa.gov/indoor-air-quality-iaq/ventilation-important-indoor-air-quality-when-cleaning-andor-sanitizing"
+      ],
+      "body_length": 88670,
+      "ok": true
+    },
+    {
+      "title": "Ako vyčistiť vetracie mriežky v domácnosti: prach, mastnota a prúdenie vzduchu",
+      "slug": "ako-vycistit-vetracie-mriezky-v-domacnosti-prach-mastnota-a-prudenie-vzduchu",
+      "url": "https://www.vevo.sk/n/ako-vycistit-vetracie-mriezky-v-domacnosti-prach-mastnota-a-prudenie-vzduchu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-vetracie-mriezky-v-domacnosti-prach-mastnota-a-prudenie-vzduchu",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 2880,
+      "table_count": 2,
+      "styled_block_count": 19,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1630/univerzalny-cistic-vevo-pure-harmony-500ml"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+        "/c/vevo-home-care/upratovanie/cistiace-prostriedky/univerzalny-cistic-do-domacnosti"
+      ],
+      "external_links": [
+        "https://www.epa.gov/indoor-air-quality-iaq/should-you-have-air-ducts-your-home-cleaned",
+        "https://www.epa.gov/indoor-air-quality-iaq/sources-indoor-particulate-matter-pm",
+        "https://www.epa.gov/indoor-air-quality-iaq/ventilation-important-indoor-air-quality-when-cleaning-andor-sanitizing"
+      ],
+      "body_length": 88315,
+      "ok": true
+    },
+    {
+      "title": "Ako vyčistiť strop a rohy od prachu a pavučín bez rozmazania",
+      "slug": "ako-vycistit-strop-a-rohy-od-prachu-a-pavucin-bez-rozmazania",
+      "url": "https://www.vevo.sk/n/ako-vycistit-strop-a-rohy-od-prachu-a-pavucin-bez-rozmazania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-strop-a-rohy-od-prachu-a-pavucin-bez-rozmazania",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3002,
+      "table_count": 2,
+      "styled_block_count": 19,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1630/univerzalny-cistic-vevo-pure-harmony-500ml"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+        "/c/vevo-home-care/upratovanie/cistiace-prostriedky/univerzalny-cistic-do-domacnosti"
+      ],
+      "external_links": [
+        "https://www.epa.gov/indoor-air-quality-iaq/sources-indoor-particulate-matter-pm",
+        "https://www.epa.gov/mold/mold-cleanup-your-home",
+        "https://www.osha.gov/sites/default/files/publications/PORTABLE_LADDER_QC.pdf"
+      ],
+      "body_length": 88628,
+      "ok": true
+    },
+    {
+      "title": "Ako vyčistiť garnižu a koľajnice záclon: prach, mastnota a zasekávanie",
+      "slug": "ako-vycistit-garnizu-a-kolajnice-zaclon-prach-mastnota-a-zasekavanie",
+      "url": "https://www.vevo.sk/n/ako-vycistit-garnizu-a-kolajnice-zaclon-prach-mastnota-a-zasekavanie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-garnizu-a-kolajnice-zaclon-prach-mastnota-a-zasekavanie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 2916,
+      "table_count": 2,
+      "styled_block_count": 19,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1630/univerzalny-cistic-vevo-pure-harmony-500ml"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+        "/c/vevo-home-care/upratovanie/cistiace-prostriedky/univerzalny-cistic-do-domacnosti"
+      ],
+      "external_links": [
+        "https://www.epa.gov/indoor-air-quality-iaq/sources-indoor-particulate-matter-pm",
+        "https://www.epa.gov/indoor-air-quality-iaq/ventilation-important-indoor-air-quality-when-cleaning-andor-sanitizing",
+        "https://www.osha.gov/sites/default/files/publications/PORTABLE_LADDER_QC.pdf"
+      ],
+      "body_length": 88401,
+      "ok": true
+    }
+  ],
+  "link_checks": [
+    {
+      "url": "https://doi.org/10.1038/s41598-017-06055-9",
+      "status": 200,
+      "final_url": "https://www.nature.com/articles/s41598-017-06055-9",
+      "ok": true
+    },
+    {
+      "url": "https://www.epa.gov/coronavirus-and-disinfectants/whats-difference-between-products-disinfect-sanitize-and-clean",
+      "status": 200,
+      "final_url": "https://www.epa.gov/coronavirus-and-disinfectants/whats-difference-between-products-disinfect-sanitize-and-clean",
+      "ok": true
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/improving-your-indoor-environment",
+      "status": 200,
+      "final_url": "https://www.epa.gov/indoor-air-quality-iaq/improving-your-indoor-environment",
+      "ok": true
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/should-you-have-air-ducts-your-home-cleaned",
+      "status": 200,
+      "final_url": "https://www.epa.gov/indoor-air-quality-iaq/should-you-have-air-ducts-your-home-cleaned",
+      "ok": true
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/sources-indoor-particulate-matter-pm",
+      "status": 200,
+      "final_url": "https://www.epa.gov/indoor-air-quality-iaq/sources-indoor-particulate-matter-pm",
+      "ok": true
+    },
+    {
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/ventilation-important-indoor-air-quality-when-cleaning-andor-sanitizing",
+      "status": 200,
+      "final_url": "https://www.epa.gov/indoor-air-quality-iaq/ventilation-important-indoor-air-quality-when-cleaning-andor-sanitizing",
+      "ok": true
+    },
+    {
+      "url": "https://www.epa.gov/mold/mold-cleanup-your-home",
+      "status": 200,
+      "final_url": "https://www.epa.gov/mold/mold-cleanup-your-home",
+      "ok": true
+    },
+    {
+      "url": "https://www.osha.gov/sites/default/files/publications/PORTABLE_LADDER_QC.pdf",
+      "status": 200,
+      "final_url": "https://www.osha.gov/sites/default/files/publications/PORTABLE_LADDER_QC.pdf",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/univerzalny-cistic-do-domacnosti",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/univerzalny-cistic-do-domacnosti",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/vona-na-umyvanie-podlah",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/upratovanie/cistiace-prostriedky/vona-na-umyvanie-podlah",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-cistit-textilne-tienidla-lamp-a-dekoracie-od-prachu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-cistit-textilne-tienidla-lamp-a-dekoracie-od-prachu",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-mikrovlaknove-utierky-aby-nezapachali-a-dobre-cistili",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-mikrovlaknove-utierky-aby-nezapachali-a-dobre-cistili",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-vyzehlit-zaclonu-kompletny-sprievodca",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-vyzehlit-zaclonu-kompletny-sprievodca",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-umyt-podlahu-bez-smuh-laminat-vinyl-dlazba-a-mopovanie-v-praxi",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-umyt-podlahu-bez-smuh-laminat-vinyl-dlazba-a-mopovanie-v-praxi",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vybrat-roboticky-vysavac-s-mopom",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-roboticky-vysavac-s-mopom",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-drez-a-bateriu-vodny-kamen-mastnota-zapach-a-bezpecne-cistenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-drez-a-bateriu-vodny-kamen-mastnota-zapach-a-bezpecne-cistenie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-interierove-dvere-a-zarubne-odtlacky-mastnota-a-povrch-bez-smuh",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-interierove-dvere-a-zarubne-odtlacky-mastnota-a-povrch-bez-smuh",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-kuchynsku-linku-od-mastnoty-prachu-a-smuh-bez-poskodenia-povrchu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-kuchynsku-linku-od-mastnoty-prachu-a-smuh-bez-poskodenia-povrchu",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-parapety-a-okenne-ramy-prach-pel-cierne-mapy-a-skvrny",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-parapety-a-okenne-ramy-prach-pel-cierne-mapy-a-skvrny",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-radiator-od-prachu-rebra-zadna-strana-mastnota-a-bezpecna-udrzba",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-radiator-od-prachu-rebra-zadna-strana-mastnota-a-bezpecna-udrzba",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/symboly-prania-kompletny-sprievodca-praciim-stitkom",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pracie-symboly-kompletny-sprievodca",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1553/parfum-na-podlahy-vevo-no-01-cotton-paradise",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1553/parfum-na-podlahy-vevo-no-01-cotton-paradise",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1630/univerzalny-cistic-vevo-pure-harmony-500ml",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1630/univerzalny-cistic-vevo-pure-harmony-500ml",
+      "ok": true
+    }
+  ]
+}

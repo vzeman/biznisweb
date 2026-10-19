@@ -1,0 +1,248 @@
+{
+  "batch": "batch-26",
+  "verified_at": "2026-06-16",
+  "post_count": 5,
+  "all_ok": true,
+  "results": [
+    {
+      "id": "2255",
+      "title": "Ako funguje prací gél: tenzidy, enzýmy, pH a dávkovanie pri bežnom praní",
+      "url": "https://www.vevo.sk/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "expected_date_prefix": "2025-09-26T08:00:00",
+      "date_meta_ok": true,
+      "title_present": true,
+      "article_html_length": 9271,
+      "styled_blocks_present": true,
+      "product_card_present": true,
+      "category_card_present": true,
+      "no_customer_cta_word": true,
+      "no_fixed_prices": true,
+      "malformed_href_count": 0,
+      "link_count": 8,
+      "failed_links": [],
+      "ok": true
+    },
+    {
+      "id": "2256",
+      "title": "Predpieranie v práčke: kedy má zmysel a kedy len míňa vodu, čas a prací prostriedok",
+      "url": "https://www.vevo.sk/n/predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "expected_date_prefix": "2025-09-26T08:12:00",
+      "date_meta_ok": true,
+      "title_present": true,
+      "article_html_length": 9020,
+      "styled_blocks_present": true,
+      "product_card_present": true,
+      "category_card_present": true,
+      "no_customer_cta_word": true,
+      "no_fixed_prices": true,
+      "malformed_href_count": 0,
+      "link_count": 8,
+      "failed_links": [],
+      "ok": true
+    },
+    {
+      "id": "2257",
+      "title": "Otáčky pri odstreďovaní: ako ovplyvňujú vlhkosť, krčenie a opotrebovanie oblečenia",
+      "url": "https://www.vevo.sk/n/otacky-pri-odstredovani-ako-ovplyvnuju-vlhkost-krcenie-a-opotrebovanie-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/otacky-pri-odstredovani-ako-ovplyvnuju-vlhkost-krcenie-a-opotrebovanie-oblecenia",
+      "expected_date_prefix": "2025-09-26T08:24:00",
+      "date_meta_ok": true,
+      "title_present": true,
+      "article_html_length": 8906,
+      "styled_blocks_present": true,
+      "product_card_present": true,
+      "category_card_present": true,
+      "no_customer_cta_word": true,
+      "no_fixed_prices": true,
+      "malformed_href_count": 0,
+      "link_count": 8,
+      "failed_links": [],
+      "ok": true
+    },
+    {
+      "id": "2258",
+      "title": "Preplnená práčka: prečo sa bielizeň nevyperie, neopláchne a zapácha",
+      "url": "https://www.vevo.sk/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "expected_date_prefix": "2025-09-26T08:36:00",
+      "date_meta_ok": true,
+      "title_present": true,
+      "article_html_length": 8751,
+      "styled_blocks_present": true,
+      "product_card_present": true,
+      "category_card_present": true,
+      "no_customer_cta_word": true,
+      "no_fixed_prices": true,
+      "malformed_href_count": 0,
+      "link_count": 7,
+      "failed_links": [],
+      "ok": true
+    },
+    {
+      "id": "2259",
+      "title": "Prečo je bielizeň po praní tvrdá alebo lepkavá: zvyšky gélu, dávkovanie a oplach",
+      "url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "expected_date_prefix": "2025-09-26T08:48:00",
+      "date_meta_ok": true,
+      "title_present": true,
+      "article_html_length": 8918,
+      "styled_blocks_present": true,
+      "product_card_present": true,
+      "category_card_present": true,
+      "no_customer_cta_word": true,
+      "no_fixed_prices": true,
+      "malformed_href_count": 0,
+      "link_count": 8,
+      "failed_links": [],
+      "ok": true
+    }
+  ],
+  "unique_link_checks": [
+    {
+      "url": "https://www.epa.gov/saferchoice/safer-choice-criteria-surfactants",
+      "status": 200,
+      "final_url": "https://www.epa.gov/saferchoice/safer-choice-criteria-surfactants",
+      "ok": true
+    },
+    {
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC1796038/",
+      "status": 200,
+      "final_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC1796038/",
+      "ok": true
+    },
+    {
+      "url": "https://www.epa.gov/saferchoice/standard",
+      "status": 200,
+      "final_url": "https://www.epa.gov/saferchoice/standard",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "ok": true
+    },
+    {
+      "url": "https://www.energy.gov/energysaver/laundry",
+      "status": 200,
+      "final_url": "https://www.energy.gov/energysaver/laundry",
+      "ok": true
+    },
+    {
+      "url": "https://www.energystar.gov/products/clothes_washers",
+      "status": 200,
+      "final_url": "https://www.energystar.gov/products/clothes_washers",
+      "ok": true
+    },
+    {
+      "url": "https://www.ftc.gov/business-guidance/resources/clothes-captioning-complying-care-labeling-rule",
+      "status": 200,
+      "final_url": "https://www.ftc.gov/business-guidance/resources/clothes-captioning-complying-care-labeling-rule",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vyprat-pracovne-tricko-po-zahradkarceni-od-hliny-a-potu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-pracovne-tricko-po-zahradkarceni-od-hliny-a-potu",
+      "ok": true
+    },
+    {
+      "url": "https://www.ginetex.net/GB/labelling/labelling.asp",
+      "status": 200,
+      "final_url": "https://www.ginetex.net/GB/labelling/labelling.asp",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-viskoza-vlastnosti-krcivost-zrazanie-a-starostlivost",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "ok": true
+    },
+    {
+      "url": "https://www.usgs.gov/water-science-school/science/hardness-water",
+      "status": 200,
+      "final_url": "https://www.usgs.gov/water-science-school/science/hardness-water",
+      "ok": true
+    },
+    {
+      "url": "https://www.epa.gov/saferchoice/learn-about-safer-choice-label",
+      "status": 200,
+      "final_url": "https://www.epa.gov/saferchoice/learn-about-safer-choice-label",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/tvrda-voda-a-pranie-preco-je-bielizen-tvrda-siva-a-bez-vone",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/tvrda-voda-a-pranie-preco-je-bielizen-tvrda-siva-a-bez-vone",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "ok": true
+    }
+  ]
+}

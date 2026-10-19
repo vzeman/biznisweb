@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-06-16T03:04:14.471200+00:00",
+  "project": "VEVO_CONTENT",
+  "batch": 24,
+  "news_block_id": "765",
+  "records": [
+    {
+      "news_id": "2245",
+      "title": "Čo je fleece: hrejivosť, žmolkovanie a starostlivosť pri praní",
+      "slug": "co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+      "url": "https://www.vevo.sk/n/co-je-fleece-hrejivost-zmolkovanie-a-starostlivost-pri-prani",
+      "date_posted": "2025-09-28",
+      "time_posted": "08:00:00"
+    },
+    {
+      "news_id": "2246",
+      "title": "Čo je softshell: vrstvy, membrána, impregnácia a správna starostlivosť",
+      "slug": "co-je-softshell-vrstvy-membrana-impregnacia-a-spravna-starostlivost",
+      "url": "https://www.vevo.sk/n/co-je-softshell-vrstvy-membrana-impregnacia-a-spravna-starostlivost",
+      "date_posted": "2025-09-28",
+      "time_posted": "08:12:00"
+    },
+    {
+      "news_id": "2247",
+      "title": "Čo je membránové oblečenie: vodný stĺpec, priedušnosť a pranie bez poškodenia",
+      "slug": "co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "url": "https://www.vevo.sk/n/co-je-membranove-oblecenie-vodny-stlpec-priedusnost-a-pranie-bez-poskodenia",
+      "date_posted": "2025-09-28",
+      "time_posted": "08:24:00"
+    },
+    {
+      "news_id": "2248",
+      "title": "Prečo sa oblečenie žmolkuje: vlákna, trenie, pranie a sušenie",
+      "slug": "preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "date_posted": "2025-09-28",
+      "time_posted": "08:36:00"
+    },
+    {
+      "news_id": "2249",
+      "title": "Mikroplasty z oblečenia: ako prať syntetiku zodpovednejšie bez paniky",
+      "slug": "mikroplasty-z-oblecenia-ako-prat-syntetiku-zodpovednejsie-bez-paniky",
+      "url": "https://www.vevo.sk/n/mikroplasty-z-oblecenia-ako-prat-syntetiku-zodpovednejsie-bez-paniky",
+      "date_posted": "2025-09-28",
+      "time_posted": "08:48:00"
+    }
+  ]
+}

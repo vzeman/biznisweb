@@ -1,0 +1,35 @@
+{
+  "batch": "22",
+  "project": "VEVO_CONTENT",
+  "status": "prepared_not_published",
+  "date": "2026-06-11",
+  "candidate_file": "content/VEVO_CONTENT/batches/batch-22-candidates-2026-06-11.txt",
+  "article_export": "content/VEVO_CONTENT/imports/batch-22-2026-06-11-articles.json",
+  "batch_generator": "content/VEVO_CONTENT/imports/build_batch_22_material_guides.py",
+  "xls_generated_at": "C:\\Users\\Patrik jankech\\AppData\\Local\\Temp\\vevo-batch-22-material-guides-clean-urls.xls",
+  "planned_news_block_id": "765",
+  "planned_date_posted": "2025-09-30",
+  "duplicate_guard": "OK for all 5 final candidates against 729 existing RSS articles",
+  "preflight": {
+    "links_checked": 17,
+    "fixed_prices": "none",
+    "customer_facing_cta_wording": "none",
+    "article_count": 5
+  },
+  "prepared_topics": [
+    "Čo je bavlna: vlastnosti, výhody, nevýhody a starostlivosť",
+    "Organická bavlna: čo znamená a či sa perie inak ako bežná bavlna",
+    "Čo je ľan: prečo sa krčí, ako ho prať a ako ho zjemniť",
+    "Ľan vs bavlna: rozdiely v savosti, krčivosti a starostlivosti",
+    "Modal vs lyocell vs viskóza: ako sa líšia pri praní a nosení"
+  ],
+  "blocker": "BiznisWeb admin is currently at https://vevo.flox.sk/erp/main/login and no local VEVO .env credentials are available. Safe publishing requires admin access because the available connector cannot set clean URL slugs or backdated date_posted/time_posted fields.",
+  "safety_decision": "Do not use direct biznisweb_add_news_post for this public batch while logged out because it cannot set clean slugs or dates and would risk creating bad URLs or wrong dates.",
+  "exact_next_step_after_login": [
+    "Open BiznisWeb admin Pages > SK Blog > Novinky block 765.",
+    "Create each article from content/VEVO_CONTENT/imports/batch-22-2026-06-11-articles.json through the admin form.",
+    "Set title, short text, rich HTML source, date_posted 30.09.2025, time_posted from the JSON, SEO title, SEO description, and URL identifier before saving each post.",
+    "Verify public URLs, IDs, datePublished meta, rich HTML styles, product/category cards, malformed hrefs, internal links, and external source links.",
+    "Save mapping and verification exports, then update PROJECT_STATE.md."
+  ]
+}

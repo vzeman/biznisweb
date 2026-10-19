@@ -1,0 +1,182 @@
+{
+  "batch": "batch-28",
+  "generated_at": "2026-06-17T14:14:13.387087+00:00",
+  "article_count": 3,
+  "json": "content\\VEVO_CONTENT\\imports\\batch-28-2026-06-17-articles.json",
+  "xls": "C:\\Users\\Patrik jankech\\AppData\\Local\\Temp\\vevo-batch-28-fragrance-laundry-clean-urls.xls",
+  "date_posted": "2025-09-24",
+  "slugs": [
+    "ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+    "ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+    "parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie"
+  ],
+  "lengths": {
+    "Ako vybrať vôňu do prania na zimu: deky, svetre, šály a sezónne textílie": 16541,
+    "Ako prevoňať bielizeň v malej kúpeľni: vlhkosť, sušenie a jemná vôňa bez zatuchnutia": 15554,
+    "Parfum do prania pri citlivej pokožke: kedy voliť jemnú vôňu a kedy radšej bez parfumácie": 16541
+  },
+  "link_count": 23,
+  "links": [
+    {
+      "href": "/c/vevo-fragrance/parfum-do-prania",
+      "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "ok": true
+    },
+    {
+      "href": "/c/vevo-home-care/pranie/hypoalergenne-pracie-prostriedky",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/hypoalergenne-pracie-prostriedky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/hypoalergenne-pracie-prostriedky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-solne-mapy-z-nohavic-a-kabata-po-zime",
+      "url": "https://www.vevo.sk/n/ako-odstranit-solne-mapy-z-nohavic-a-kabata-po-zime",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-solne-mapy-z-nohavic-a-kabata-po-zime",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-detske-oblecenie-a-oblecenie-pre-babaetko-bez-podrazdenia-pokozky",
+      "url": "https://www.vevo.sk/n/ako-prat-detske-oblecenie-a-oblecenie-pre-babaetko-bez-podrazdenia-pokozky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-detske-oblecenie-a-oblecenie-pre-babaetko-bez-podrazdenia-pokozky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "url": "https://www.vevo.sk/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-kuklu-nakrcnik-a-termo-ciapku-po-lyzovani",
+      "url": "https://www.vevo.sk/n/ako-prat-kuklu-nakrcnik-a-termo-ciapku-po-lyzovani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-kuklu-nakrcnik-a-termo-ciapku-po-lyzovani",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "url": "https://www.vevo.sk/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-vlneny-sveter-ked-zapacha-po-noseni",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bambusove-vlakno-vs-bavlna-vyhody-nevyhody-a-pranie-pri-citlivej-pokozke",
+      "ok": true
+    },
+    {
+      "href": "/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "url": "https://www.vevo.sk/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "ok": true
+    },
+    {
+      "href": "/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "url": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-vona-z-prania-rychlo-vyprcha-a-ako-ju-udrzat-dlhsie",
+      "url": "https://www.vevo.sk/n/preco-vona-z-prania-rychlo-vyprcha-a-ako-ju-udrzat-dlhsie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-vona-z-prania-rychlo-vyprcha-a-ako-ju-udrzat-dlhsie",
+      "ok": true
+    },
+    {
+      "href": "/n/smrdi-pracka-ako-vycistit-bubon-gumu-zasuvku-aj-filter",
+      "url": "https://www.vevo.sk/n/smrdi-pracka-ako-vycistit-bubon-gumu-zasuvku-aj-filter",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/smrdi-pracka-ako-vycistit-bubon-gumu-zasuvku-aj-filter",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "href": "/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+      "url": "https://www.vevo.sk/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+      "ok": true
+    },
+    {
+      "href": "/p-1621/vevo-essence-sample-set",
+      "url": "https://www.vevo.sk/p-1621/vevo-essence-sample-set",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1621/vevo-essence-sample-set",
+      "ok": true
+    },
+    {
+      "href": "https://dermnetnz.org/topics/fragrance-allergy",
+      "url": "https://dermnetnz.org/topics/fragrance-allergy",
+      "status": 200,
+      "final_url": "https://dermnetnz.org/topics/fragrance-allergy",
+      "ok": true
+    },
+    {
+      "href": "https://dermnetnz.org/topics/textile-contact-dermatitis",
+      "url": "https://dermnetnz.org/topics/textile-contact-dermatitis",
+      "status": 200,
+      "final_url": "https://dermnetnz.org/topics/textile-contact-dermatitis",
+      "ok": true
+    },
+    {
+      "href": "https://www.energy.gov/energysaver/laundry",
+      "url": "https://www.energy.gov/energysaver/laundry",
+      "status": 200,
+      "final_url": "https://www.energy.gov/energysaver/laundry",
+      "ok": true
+    },
+    {
+      "href": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "status": 200,
+      "final_url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "ok": true
+    }
+  ]
+}

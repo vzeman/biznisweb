@@ -1,0 +1,82 @@
+{
+  "project": "VEVO_CONTENT",
+  "batch": "batch-31",
+  "created_at": "2026-06-29",
+  "status": "partial_publication_duplicate_cleanup_done",
+  "admin_context": {
+    "domain": "vevo.sk",
+    "webpage_id": 309,
+    "news_block_id": 765
+  },
+  "rules": {
+    "publish_before": "2025-10-12",
+    "fixed_prices_in_articles": false,
+    "public_internal_workflow_words_allowed": false,
+    "final_slug_and_date_flow": "admin_ui_only"
+  },
+  "published": [
+    {
+      "id": 2275,
+      "title": "Čo je satén: nie je to vždy hodváb a ako ho správne prať",
+      "slug": "co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "target_date": "2025-09-21",
+      "target_time": "08:00:00",
+      "verification": {
+        "http_status": 200,
+        "canonical_matches_slug": true,
+        "visible_date_text": "21.9.2025",
+        "styled_blocks_present": true,
+        "product_link_present": true,
+        "perfume_category_link_present": true,
+        "old_numeric_url": "https://www.vevo.sk/n/111",
+        "old_numeric_url_status": 404
+      }
+    }
+  ],
+  "created_hidden": [
+    {
+      "id": 2278,
+      "title": "Čo je flanel: prečo hreje, ako sa perie a prečo môže žmolkovať",
+      "slug": "co-je-flanel-preco-hreje-ako-sa-perie-a-preco-moze-zmolkovat",
+      "target_url": "https://www.vevo.sk/n/co-je-flanel-preco-hreje-ako-sa-perie-a-preco-moze-zmolkovat",
+      "target_date": "2025-09-21",
+      "target_time": "08:12:00",
+      "expected_public_status_while_hidden": 404
+    },
+    {
+      "id": 2279,
+      "title": "Čo je manšester: rebrovaná látka, prach v rebrách a správne pranie",
+      "slug": "co-je-mansester-rebrovana-latka-prach-v-rebrach-a-spravne-pranie",
+      "target_url": "https://www.vevo.sk/n/co-je-mansester-rebrovana-latka-prach-v-rebrach-a-spravne-pranie",
+      "target_date": "2025-09-21",
+      "target_time": "08:24:00",
+      "expected_public_status_while_hidden": 404
+    }
+  ],
+  "duplicate_cleanup": {
+    "reason": "A failed response parse led to a second create attempt for flanel and mansester.",
+    "deleted_extra_post_ids": [
+      2276,
+      2277
+    ],
+    "delete_results": [
+      {
+        "post_id": 2276,
+        "success": true
+      },
+      {
+        "post_id": 2277,
+        "success": true
+      }
+    ],
+    "public_url_check_after_cleanup": {
+      "saten_clean_url_status": 200,
+      "flanel_clean_url_status": 404,
+      "mansester_clean_url_status": 404,
+      "numeric_urls_108_to_120_public": false
+    },
+    "new_guardrail": "Do not retry biznisweb-add_news_post when the response parse is null or unclear; inspect created IDs first."
+  },
+  "next_exact_step": "Finish admin UI-only publication for hidden posts 2278 and 2279, then run public HTTP/canonical/date/body/link verification."
+}

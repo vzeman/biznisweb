@@ -1,0 +1,56 @@
+{
+  "existing_count": 762,
+  "results": [
+    {
+      "title": "Ako prat kupelnovu predlozku: guma, vlhkost, chlpy a zapach po sprchovani",
+      "slug": "ako-prat-kupelnovu-predlozku-guma-vlhkost-chlpy-a-zapach-po-sprchovani",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Ako prat zupan, aby zostal makky, savy a nezatuchol po sprche",
+      "slug": "ako-prat-zupan-aby-zostal-makky-savy-a-nezatuchol-po-sprche",
+      "status": "ok",
+      "clusters": [
+        {
+          "cluster": "bathroom_towels",
+          "terms": [
+            "zupan"
+          ],
+          "intent_terms": [
+            "prat"
+          ],
+          "note": "Bathroom/towel topics should be separated by textile and problem."
+        }
+      ],
+      "issues": []
+    },
+    {
+      "title": "Ako osviežiť postel medzi praniami: vetranie, pyzamo, matrac a jemna vona",
+      "slug": "ako-osviezit-postel-medzi-praniami-vetranie-pyzamo-matrac-a-jemna-vona",
+      "status": "ok",
+      "clusters": [
+        {
+          "cluster": "bedding_sleep",
+          "terms": [
+            "matrac"
+          ],
+          "intent_terms": [
+            "vona"
+          ],
+          "note": "Bedding topics need clear separation by textile type and user problem."
+        },
+        {
+          "cluster": "fragrance_general",
+          "terms": [
+            "vona"
+          ],
+          "intent_terms": [],
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles."
+        }
+      ],
+      "issues": []
+    }
+  ]
+}

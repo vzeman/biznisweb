@@ -1,0 +1,63 @@
+{
+  "article_count": 4,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Priedušnosť, savosť a rýchloschnutie: ako čítať vlastnosti textilu",
+      "slug": "priedusnost-savost-a-rychloschnutie-ako-citat-vlastnosti-textilu",
+      "body_length": 23149,
+      "styled_block_count": 9,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-40-2026-07-16-articles.json"
+    },
+    {
+      "title": "Bavlna, ľan, satén alebo flanel: aké obliečky vybrať podľa sezóny a potenia",
+      "slug": "bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia",
+      "body_length": 22146,
+      "styled_block_count": 9,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-40-2026-07-16-articles.json"
+    },
+    {
+      "title": "Froté, bambus alebo mikrovlákno: ktorý uterák vybrať podľa savosti a schnutia",
+      "slug": "frote-bambus-alebo-mikrovlakno-ktory-uterak-vybrat-podla-savosti-a-schnutia",
+      "body_length": 22162,
+      "styled_block_count": 9,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-40-2026-07-16-articles.json"
+    },
+    {
+      "title": "Polyester, polyamid, merino alebo elastan: z čoho má byť športové oblečenie",
+      "slug": "polyester-polyamid-merino-alebo-elastan-z-coho-ma-byt-sportove-oblecenie",
+      "body_length": 22436,
+      "styled_block_count": 9,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-40-2026-07-16-articles.json"
+    }
+  ]
+}

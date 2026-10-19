@@ -1,0 +1,185 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-16T11:22:20.746141+00:00",
+  "wave_file": "content\\VEVO_CONTENT\\exports\\retrofit-wave-02-core-laundry-2026-06-16.json",
+  "article_count": 3,
+  "link_count": 15,
+  "all_ok": true,
+  "articles": [
+    {
+      "post_id": "2143",
+      "slug": "ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly",
+      "title_present": true,
+      "required_fragments": [
+        "Praktické odporúčanie k téme",
+        "Pozrieť produkt"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1549/vevo-shot-koncentrat-na-cistenie-pracky",
+        "/p-1626/prava-octova-avivaz-lesna-zmes-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/detox-pracky",
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2134",
+      "slug": "pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "url": "https://www.vevo.sk/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "title_present": true,
+      "required_fragments": [
+        "Praktické odporúčanie k téme",
+        "Pozrieť produkt"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2250",
+      "slug": "ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "title_present": true,
+      "required_fragments": [
+        "Praktické odporúčanie k téme",
+        "Pozrieť produkt"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    }
+  ],
+  "links": [
+    {
+      "href": "/c/vevo-home-care/pranie/detox-pracky",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/detox-pracky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/detox-pracky",
+      "ok": true
+    },
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-zapach-z-pracky-po-prani-uterakov",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-pracky-po-prani-uterakov",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-pracky-po-prani-uterakov",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "url": "https://www.vevo.sk/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-cierne-oblecenie-aby-nevybledlo",
+      "url": "https://www.vevo.sk/n/ako-prat-cierne-oblecenie-aby-nevybledlo",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-cierne-oblecenie-aby-nevybledlo",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-nove-oblecenie-pred-prvym-nosenim",
+      "url": "https://www.vevo.sk/n/ako-prat-nove-oblecenie-pred-prvym-nosenim",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-nove-oblecenie-pred-prvym-nosenim",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "ok": true
+    },
+    {
+      "href": "/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "ok": true
+    },
+    {
+      "href": "/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "url": "https://www.vevo.sk/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "ok": true
+    },
+    {
+      "href": "/n/symboly-prania-kompletny-sprievodca-praciim-stitkom",
+      "url": "https://www.vevo.sk/n/symboly-prania-kompletny-sprievodca-praciim-stitkom",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pracie-symboly-kompletny-sprievodca",
+      "ok": true
+    },
+    {
+      "href": "/n/zapach-pracky",
+      "url": "https://www.vevo.sk/n/zapach-pracky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/zapach-pracky",
+      "ok": true
+    },
+    {
+      "href": "/p-1549/vevo-shot-koncentrat-na-cistenie-pracky",
+      "url": "https://www.vevo.sk/p-1549/vevo-shot-koncentrat-na-cistenie-pracky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1549/vevo-shot-koncentrat-na-cistenie-pracky",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "href": "/p-1626/prava-octova-avivaz-lesna-zmes-1l",
+      "url": "https://www.vevo.sk/p-1626/prava-octova-avivaz-lesna-zmes-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1626/prava-octova-avivaz-lesna-zmes-1l",
+      "ok": true
+    }
+  ]
+}

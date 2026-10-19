@@ -1,0 +1,21 @@
+{
+  "article_count": 1,
+  "failure_count": 0,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Gramáž látky: čo znamená GSM pri uterákoch, obliečkach a tričkách",
+      "slug": "gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "body_length": 22891,
+      "styled_block_count": 9,
+      "table_count": 2,
+      "product_link_count": 1,
+      "category_link_count": 1,
+      "short_paragraph_count": 0,
+      "max_short_paragraph_run": 0,
+      "ok": true,
+      "failures": [],
+      "source_file": "content\\VEVO_CONTENT\\imports\\batch-39-test-gsm-2026-07-14-articles.json"
+    }
+  ]
+}

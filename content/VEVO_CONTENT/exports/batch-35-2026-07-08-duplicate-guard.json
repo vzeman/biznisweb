@@ -1,0 +1,413 @@
+﻿{
+  "existing_count": 783,
+  "results": [
+    {
+      "title": "Prečo parfum do prania necítiť po usušení",
+      "slug": "preco-parfum-do-prania-necitit-po-ususeni",
+      "status": "review",
+      "clusters": [
+        {
+          "cluster": "fragrance_general",
+          "terms": [
+            "parfum"
+          ],
+          "intent_terms": [],
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles."
+        }
+      ],
+      "issues": [
+        {
+          "type": "cluster_overlap",
+          "severity": "review",
+          "cluster": "fragrance_general",
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles.",
+          "matches": [
+            {
+              "score": 0.333,
+              "title": "Parfum do prania – Čo to je a ako funguje",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje"
+            },
+            {
+              "score": 0.333,
+              "title": "🌸 Čo je parfum do prania a ako funguje?",
+              "link": "https://www.vevo.sk/n/co-je-parfum-do-prania-a-ako-funguje"
+            },
+            {
+              "score": 0.333,
+              "title": "Parfum do prania Ylang Ylang",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-ylang-ylang"
+            },
+            {
+              "score": 0.333,
+              "title": "Najlepší parfum do prania",
+              "link": "https://www.vevo.sk/n/najlepsi-parfum-do-prania"
+            },
+            {
+              "score": 0.3,
+              "title": "Parfum do prania a tvrdá voda: prečo bielizeň nevonia a čo s tým",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-a-tvrda-voda-preco-bielizen-nevonia-a-co-s-tym"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Parfum do prania pri ručnom praní",
+      "slug": "parfum-do-prania-pri-rucnom-prani",
+      "status": "review",
+      "clusters": [
+        {
+          "cluster": "fragrance_general",
+          "terms": [
+            "parfum"
+          ],
+          "intent_terms": [],
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles."
+        }
+      ],
+      "issues": [
+        {
+          "type": "cluster_overlap",
+          "severity": "review",
+          "cluster": "fragrance_general",
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles.",
+          "matches": [
+            {
+              "score": 0.4,
+              "title": "Parfum do prania – Čo to je a ako funguje",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "🌸 Čo je parfum do prania a ako funguje?",
+              "link": "https://www.vevo.sk/n/co-je-parfum-do-prania-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "Parfum do prania Ylang Ylang",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-ylang-ylang"
+            },
+            {
+              "score": 0.4,
+              "title": "Najlepší parfum do prania",
+              "link": "https://www.vevo.sk/n/najlepsi-parfum-do-prania"
+            },
+            {
+              "score": 0.286,
+              "title": "Aviváž vs Parfum do prania - Rozdiely a výhody",
+              "link": "https://www.vevo.sk/n/avivaz-vs-parfum-do-prania-rozdiely-a-vyhody"
+            }
+          ]
+        },
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.4,
+              "title": "Parfum do prania – Čo to je a ako funguje",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+              "slug": "parfum-do-prania-co-to-je-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "🌸 Čo je parfum do prania a ako funguje?",
+              "link": "https://www.vevo.sk/n/co-je-parfum-do-prania-a-ako-funguje",
+              "slug": "co-je-parfum-do-prania-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "Parfum do prania Ylang Ylang",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-ylang-ylang",
+              "slug": "parfum-do-prania-ylang-ylang"
+            },
+            {
+              "score": 0.4,
+              "title": "Najlepší parfum do prania",
+              "link": "https://www.vevo.sk/n/najlepsi-parfum-do-prania",
+              "slug": "najlepsi-parfum-do-prania"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Parfum do prania pri praní na 30 stupňov",
+      "slug": "parfum-do-prania-pri-prani-na-30-stupnov",
+      "status": "review",
+      "clusters": [
+        {
+          "cluster": "fragrance_general",
+          "terms": [
+            "parfum"
+          ],
+          "intent_terms": [],
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles."
+        }
+      ],
+      "issues": [
+        {
+          "type": "cluster_overlap",
+          "severity": "review",
+          "cluster": "fragrance_general",
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles.",
+          "matches": [
+            {
+              "score": 0.4,
+              "title": "Parfum do prania – Čo to je a ako funguje",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "🌸 Čo je parfum do prania a ako funguje?",
+              "link": "https://www.vevo.sk/n/co-je-parfum-do-prania-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "Parfum do prania Ylang Ylang",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-ylang-ylang"
+            },
+            {
+              "score": 0.4,
+              "title": "Najlepší parfum do prania",
+              "link": "https://www.vevo.sk/n/najlepsi-parfum-do-prania"
+            },
+            {
+              "score": 0.286,
+              "title": "Aviváž vs Parfum do prania - Rozdiely a výhody",
+              "link": "https://www.vevo.sk/n/avivaz-vs-parfum-do-prania-rozdiely-a-vyhody"
+            }
+          ]
+        },
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.4,
+              "title": "Parfum do prania – Čo to je a ako funguje",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+              "slug": "parfum-do-prania-co-to-je-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "🌸 Čo je parfum do prania a ako funguje?",
+              "link": "https://www.vevo.sk/n/co-je-parfum-do-prania-a-ako-funguje",
+              "slug": "co-je-parfum-do-prania-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "Parfum do prania Ylang Ylang",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-ylang-ylang",
+              "slug": "parfum-do-prania-ylang-ylang"
+            },
+            {
+              "score": 0.4,
+              "title": "Najlepší parfum do prania",
+              "link": "https://www.vevo.sk/n/najlepsi-parfum-do-prania",
+              "slug": "najlepsi-parfum-do-prania"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Parfum do prania pri praní na 60 stupňov",
+      "slug": "parfum-do-prania-pri-prani-na-60-stupnov",
+      "status": "review",
+      "clusters": [
+        {
+          "cluster": "fragrance_general",
+          "terms": [
+            "parfum"
+          ],
+          "intent_terms": [],
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles."
+        }
+      ],
+      "issues": [
+        {
+          "type": "cluster_overlap",
+          "severity": "review",
+          "cluster": "fragrance_general",
+          "note": "Fragrance topics need room/use-case separation and cannot be generic scent articles.",
+          "matches": [
+            {
+              "score": 0.4,
+              "title": "Parfum do prania – Čo to je a ako funguje",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "🌸 Čo je parfum do prania a ako funguje?",
+              "link": "https://www.vevo.sk/n/co-je-parfum-do-prania-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "Parfum do prania Ylang Ylang",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-ylang-ylang"
+            },
+            {
+              "score": 0.4,
+              "title": "Najlepší parfum do prania",
+              "link": "https://www.vevo.sk/n/najlepsi-parfum-do-prania"
+            },
+            {
+              "score": 0.286,
+              "title": "Aviváž vs Parfum do prania - Rozdiely a výhody",
+              "link": "https://www.vevo.sk/n/avivaz-vs-parfum-do-prania-rozdiely-a-vyhody"
+            }
+          ]
+        },
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.4,
+              "title": "Parfum do prania – Čo to je a ako funguje",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+              "slug": "parfum-do-prania-co-to-je-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "🌸 Čo je parfum do prania a ako funguje?",
+              "link": "https://www.vevo.sk/n/co-je-parfum-do-prania-a-ako-funguje",
+              "slug": "co-je-parfum-do-prania-a-ako-funguje"
+            },
+            {
+              "score": 0.4,
+              "title": "Parfum do prania Ylang Ylang",
+              "link": "https://www.vevo.sk/n/parfum-do-prania-ylang-ylang",
+              "slug": "parfum-do-prania-ylang-ylang"
+            },
+            {
+              "score": 0.4,
+              "title": "Najlepší parfum do prania",
+              "link": "https://www.vevo.sk/n/najlepsi-parfum-do-prania",
+              "slug": "najlepsi-parfum-do-prania"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Prací gél alebo prášok: čo sa hodí na bežné pranie",
+      "slug": "praci-gel-alebo-prasok-co-sa-hodi-na-bezne-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Prací gél na čierne oblečenie",
+      "slug": "praci-gel-na-cierne-oblecenie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.4,
+              "title": "Ako vyrobiť prací gél doma",
+              "link": "https://www.vevo.sk/n/ako-vyrobit-praci-gel-doma-casto-kladene-otazky-a-odpovede",
+              "slug": "ako-vyrobit-praci-gel-doma-casto-kladene-otazky-a-odpovede"
+            },
+            {
+              "score": 0.4,
+              "title": "Hypoalergénny prací gél",
+              "link": "https://www.vevo.sk/n/hypoalergenny-praci-gel",
+              "slug": "hypoalergenny-praci-gel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Prací gél na biele oblečenie",
+      "slug": "praci-gel-na-biele-oblecenie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.4,
+              "title": "Ako vyrobiť prací gél doma",
+              "link": "https://www.vevo.sk/n/ako-vyrobit-praci-gel-doma-casto-kladene-otazky-a-odpovede",
+              "slug": "ako-vyrobit-praci-gel-doma-casto-kladene-otazky-a-odpovede"
+            },
+            {
+              "score": 0.4,
+              "title": "Hypoalergénny prací gél",
+              "link": "https://www.vevo.sk/n/hypoalergenny-praci-gel",
+              "slug": "hypoalergenny-praci-gel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Prací gél na farebné oblečenie",
+      "slug": "praci-gel-na-farebne-oblecenie",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.4,
+              "title": "Ako vyrobiť prací gél doma",
+              "link": "https://www.vevo.sk/n/ako-vyrobit-praci-gel-doma-casto-kladene-otazky-a-odpovede",
+              "slug": "ako-vyrobit-praci-gel-doma-casto-kladene-otazky-a-odpovede"
+            },
+            {
+              "score": 0.4,
+              "title": "Hypoalergénny prací gél",
+              "link": "https://www.vevo.sk/n/hypoalergenny-praci-gel",
+              "slug": "hypoalergenny-praci-gel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Prací gél pri nízkych teplotách",
+      "slug": "praci-gel-pri-nizkych-teplotach",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.4,
+              "title": "Ako vyrobiť prací gél doma",
+              "link": "https://www.vevo.sk/n/ako-vyrobit-praci-gel-doma-casto-kladene-otazky-a-odpovede",
+              "slug": "ako-vyrobit-praci-gel-doma-casto-kladene-otazky-a-odpovede"
+            },
+            {
+              "score": 0.4,
+              "title": "Hypoalergénny prací gél",
+              "link": "https://www.vevo.sk/n/hypoalergenny-praci-gel",
+              "slug": "hypoalergenny-praci-gel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Preplnená práčka: ako kazí pranie",
+      "slug": "preplnena-pracka-ako-kazi-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}
