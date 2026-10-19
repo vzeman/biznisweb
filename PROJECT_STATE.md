@@ -1,3 +1,13 @@
+## 2026-10-19 — Offline Natural/Premium bottle comparison
+
+Date: 2026-10-19
+Repo: vzeman/biznisweb
+Branch: codex/vevo-natural-premium-analysis-20261019
+What changed: Added an offline, reproducible comparison of Natural/Premium laundry perfumes in 200/500 ml, excluding samples and other merchandise. Verified perfume-only sets are included with a singles-only sensitivity view; mixed bundles are excluded. Catalogue identity uses verified warehouse variants and exact names/aliases, never EAN alone. See projects/vevo/LAUNDRY_SERIES_ANALYSIS.md for source, definitions and reproduction.
+What is verified: Latest immutable source generation 20261018T232902Z covers 2025-05-03 through 2026-10-18. Two identical private S3 GETs, stable latest pointer, expected owner/AES256, manifest and source QA verified. Shared EANs and a historical no-series Premium row require explicit identity resolution. One free item retains cost but creates no paid purchase. No financial fallback costs occur in selected rows. Source/customer data and numerical business reports remain in ignored data/ because this repository is public.
+Known issues: Final metrics are being independently reconciled. Revenue less reporting purchase costs is gross contribution, not net profit after advertising/overhead. Purchase behavior is not causal proof of satisfaction; full-history rates require the displayed matured/common-period controls. Production and the prior production-browser limitation are unchanged; no infrastructure mutation or local service has been started.
+Next exact step: Finish focused tests and independent source reconciliation, regenerate and deliver the two private HTML reports plus comparison, then commit/push the final verification record and PR. Reproduce reports from Git and immutable private S3; never commit customer exports or financial report bodies to this public repository.
+
 ## 2026-10-14 20:14 UTC — VEVO production rollout and private evidence closed; UI limitation explicit
 
 Date: 2026-10-14
