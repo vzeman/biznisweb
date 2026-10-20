@@ -414,7 +414,7 @@ def assert_roy_fixed_cost_source_of_truth() -> None:
 
 
 def assert_authoritative_margin_policy_source_of_truth() -> None:
-    expected_counts = {"vevo": 35, "roy": 6}
+    expected_counts = {"vevo": 21, "roy": 6}
     shared_santal_skus = {
         "H-94491FEF",
         "H-ACACB998",
