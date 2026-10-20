@@ -1,3 +1,12 @@
+## 2026-10-20 — VEVO profitable-growth research
+
+Date: 2026-10-20
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-growth-research-20261020`
+What changed: Owner-requested analysis of retail, perfumed softener, new scents and reformulation, using the updated purchase costs and primary company/retailer sources. [VEVO state](projects/vevo/PROJECT_STATE.md) records verified economics, exact cohort definitions, sources and proposed90-day experiments. These are recommendations, not approved operating changes.
+What is verified: Latest30days revenue EUR9,628.92; contribution after ads before fixed EUR2,134.74; modeled result after estimated fixed costs EUR34.74. SK contribution before fixed +2,553.76 / CZ -1.55 / HU -417.46. 65.2% of first orders contain samples without200/500ml; mature60-day sample-to-fullsize conversion11.14%. One comparable Ylang500ml SKU shows Natural/Premium product margins79.15%/60.71%. Retail calculations are explicit scenarios, not quotations. Fees/fixed-cost coverage, restated historic COGS and observational attribution limits remain explicit.
+Next exact step: Owner decision on proposals: improve SK/funnel/repeat contribution first; bounded SK retail test; one validated new scent; softener prototype conditional on distinct demand/economics; preserve core fragrance performance. No ad, shop, production, email or reporting mutation; no local persistent process started.
+
 ## 2026-10-20 — Updated VEVO report email resent on owner request
 
 Date: 2026-10-20
