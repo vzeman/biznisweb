@@ -1,3 +1,13 @@
+## 2026-10-20 — Updated VEVO report email resent on owner request
+
+Date: 2026-10-20
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-resend-20261020`
+What changed: Owner explicitly requested sending the report with new numbers again. Sent the verified generation `20261020T084149Z`, covering through2026-10-19, once to the same three recipients from the active definition53 runtime secret. Used the existing committed `daily_report_runner.send_email_ses` MIME builder and summary/body helpers; no export, S3 republication, invoice/credit-note processing, scheduler change or deployment. Subject: `Daily Vevo report - aktualizovane nakupne ceny (19.10.2026)`.
+What is verified: Sender/recipient configuration rechecked against the active AWS runtime; raw HTML attachment matches its generation-manifest hash. Full-history product COGS33,679.78EUR and email summary after-ads/fixed result27,249.72EUR match the new publication. QA has0 failures,6 existing warnings and is not partial. Preview MIME6,898,961bytes is below SES limit. A conditional private send-intent was written before the sole SES call; automatic SDK retries disabled. SES returned HTTP200 and MessageId `010701a159003259-6bc5e8a5-df9d-430f-839f-c93bc32480ae-000000` at `2026-10-20T11:09:10.524713+00:00`. This confirms SES acceptance, not each recipient's inbox delivery.
+Evidence: Private bucket `biznisweb-reporting-artifacts-919341186960-eu-central-1`, prefix `data/vevo/reporting/email-resends/20261020-new-purchase-costs/`; `intent.json` binds exact recipients, source, generation, MIME/attachment hashes and preview. `accepted.json` SHA256 `2540f2661a372811c9a39802914690514bad8f4162687f73e4b1ce065d96c3a4` records the actual SES response identity. Both objects have conditional create, AES256 and full readback verification. No credentials or recipient list committed.
+Next exact step: Email resend is complete; do not repeat it on resume. For any delivery question, reconcile this MessageId first. Scheduled reporting stays enabled on53. Finite prepare/send commands ended naturally; no dev server, worker, tunnel or persistent process was started.
+
 ## 2026-10-20 — Same-order financial impact of the purchase-cost update
 
 Date: 2026-10-20
