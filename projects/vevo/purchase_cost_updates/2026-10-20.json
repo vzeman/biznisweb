@@ -1,0 +1,656 @@
+{
+  "schema_version": 1,
+  "project": "vevo",
+  "imported_on": "2026-10-20",
+  "source_filename": "VEVO_nakupne_ceny_2026-10-13 (1).xlsx",
+  "source_sha256": "afaf1f9029cc281cabe30aec2341a109cd872c6dd2afbad31f292873c1807493",
+  "sheet": "Nákupné ceny",
+  "key_column": "A",
+  "cost_column": "C",
+  "first_data_row": 11,
+  "last_data_row": 344,
+  "currency": "EUR",
+  "vat_basis": "net",
+  "entries": 334,
+  "changed_entries": 102,
+  "previous_registry_sha256": "ce484c167c9300f5102c301e5ab3f101b6fd8e9cb8a6e09f4fd2980c5eb32ef9",
+  "registry_sha256": "e9398cc18362623c5b1040979a4389c39a436d33fc8630bcde89ee3e5a33d027",
+  "application": "Replace the existing flat purchase-cost registry for recomputed reporting history; no new date cutoff was supplied. Preserve exact workbook labels and identifier-specific costs.",
+  "retained_alias_differences": [
+    {
+      "rows": [
+        43,
+        61
+      ],
+      "values": [
+        2.33,
+        2.32
+      ]
+    },
+    {
+      "rows": [
+        55,
+        83
+      ],
+      "values": [
+        2.31,
+        2.3
+      ]
+    }
+  ],
+  "policy_decision": "User explicitly confirmed that new purchase costs replace the authoritative 90% margin rule on the 14 changed floor/dryer products (source rows 100-113). Other authoritative policies and zero-cost services remain in force.",
+  "changes": [
+    {
+      "row": 34,
+      "key": "Parfém do praní Vevo No.01 Cotton Paradise (500ml)",
+      "previous_eur_per_unit": 7.02,
+      "new_eur_per_unit": 5.19
+    },
+    {
+      "row": 36,
+      "key": "Parfém na praní Vevo Natural No.01 Cotton Paradise (500ml)",
+      "previous_eur_per_unit": 7.02,
+      "new_eur_per_unit": 5.19
+    },
+    {
+      "row": 37,
+      "key": "Parfém na praní Vevo Natural No.09 Pure Garden (500ml)",
+      "previous_eur_per_unit": 6.33,
+      "new_eur_per_unit": 4.27
+    },
+    {
+      "row": 38,
+      "key": "Parfém na praní Vevo No.07 Ylang Absolute (200ml)",
+      "previous_eur_per_unit": 2.99,
+      "new_eur_per_unit": 2.0
+    },
+    {
+      "row": 39,
+      "key": "Parfém na praní Vevo No.08 Cotton Dream (500ml)",
+      "previous_eur_per_unit": 7.12,
+      "new_eur_per_unit": 5.13
+    },
+    {
+      "row": 40,
+      "key": "Parfém na praní Vevo No.09 Pure Garden (200ml)",
+      "previous_eur_per_unit": 3.07,
+      "new_eur_per_unit": 1.96
+    },
+    {
+      "row": 41,
+      "key": "Parfém na praní Vevo No.09 Pure Garden (500ml)",
+      "previous_eur_per_unit": 6.33,
+      "new_eur_per_unit": 4.27
+    },
+    {
+      "row": 42,
+      "key": "Parfém na praní Vevo No.09 Pure Garden (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.29,
+      "new_eur_per_unit": 0.2
+    },
+    {
+      "row": 43,
+      "key": "Parfum do prania Vevo Natural No.01 Cotton Paradise (200ml)",
+      "previous_eur_per_unit": 3.35,
+      "new_eur_per_unit": 2.33
+    },
+    {
+      "row": 44,
+      "key": "Parfum do prania Vevo Natural No.01 Cotton Paradise (500ml)",
+      "previous_eur_per_unit": 7.02,
+      "new_eur_per_unit": 5.19
+    },
+    {
+      "row": 45,
+      "key": "Parfum do prania Vevo Natural No.01 Cotton Paradise (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.3,
+      "new_eur_per_unit": 0.22
+    },
+    {
+      "row": 46,
+      "key": "Parfum do prania Vevo Natural No.02 Sweet Paradise (200ml)",
+      "previous_eur_per_unit": 4.29,
+      "new_eur_per_unit": 3.11
+    },
+    {
+      "row": 47,
+      "key": "Parfum do prania Vevo Natural No.02 Sweet Paradise (500ml)",
+      "previous_eur_per_unit": 9.38,
+      "new_eur_per_unit": 7.15
+    },
+    {
+      "row": 48,
+      "key": "Parfum do prania Vevo Natural No.02 Sweet Paradise (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.35,
+      "new_eur_per_unit": 0.26
+    },
+    {
+      "row": 49,
+      "key": "Parfum do prania Vevo Natural No.06 Royal Cotton (200ml)",
+      "previous_eur_per_unit": 2.46,
+      "new_eur_per_unit": 1.7
+    },
+    {
+      "row": 50,
+      "key": "Parfum do prania Vevo Natural No.06 Royal Cotton (500ml)",
+      "previous_eur_per_unit": 4.79,
+      "new_eur_per_unit": 3.61
+    },
+    {
+      "row": 51,
+      "key": "Parfum do prania Vevo Natural No.06 Royal Cotton (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.26,
+      "new_eur_per_unit": 0.19
+    },
+    {
+      "row": 52,
+      "key": "Parfum do prania Vevo Natural No.07 Ylang Absolute (200ml)",
+      "previous_eur_per_unit": 2.99,
+      "new_eur_per_unit": 2.0
+    },
+    {
+      "row": 53,
+      "key": "Parfum do prania Vevo Natural No.07 Ylang Absolute (500ml)",
+      "previous_eur_per_unit": 6.14,
+      "new_eur_per_unit": 4.39
+    },
+    {
+      "row": 54,
+      "key": "Parfum do prania Vevo Natural No.07 Ylang Absolute (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.29,
+      "new_eur_per_unit": 0.2
+    },
+    {
+      "row": 55,
+      "key": "Parfum do prania Vevo Natural No.08 Cotton Dream (200ml)",
+      "previous_eur_per_unit": 3.38,
+      "new_eur_per_unit": 2.31
+    },
+    {
+      "row": 56,
+      "key": "Parfum do prania Vevo Natural No.08 Cotton Dream (500ml)",
+      "previous_eur_per_unit": 7.12,
+      "new_eur_per_unit": 5.13
+    },
+    {
+      "row": 57,
+      "key": "Parfum do prania Vevo Natural No.08 Cotton Dream (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.31,
+      "new_eur_per_unit": 0.22
+    },
+    {
+      "row": 58,
+      "key": "Parfum do prania Vevo Natural No.09 Pure Garden (200ml)",
+      "previous_eur_per_unit": 3.07,
+      "new_eur_per_unit": 1.96
+    },
+    {
+      "row": 59,
+      "key": "Parfum do prania Vevo Natural No.09 Pure Garden (500ml)",
+      "previous_eur_per_unit": 6.33,
+      "new_eur_per_unit": 4.27
+    },
+    {
+      "row": 60,
+      "key": "Parfum do prania Vevo Natural No.09 Pure Garden (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.29,
+      "new_eur_per_unit": 0.2
+    },
+    {
+      "row": 61,
+      "key": "Parfum do prania Vevo No.01 Cotton Paradise (200ml)",
+      "previous_eur_per_unit": 3.35,
+      "new_eur_per_unit": 2.32
+    },
+    {
+      "row": 62,
+      "key": "Parfum do prania Vevo No.01 Cotton Paradise (500ml)",
+      "previous_eur_per_unit": 7.02,
+      "new_eur_per_unit": 5.19
+    },
+    {
+      "row": 63,
+      "key": "Parfum do prania Vevo No.01 Cotton Paradise (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.3,
+      "new_eur_per_unit": 0.22
+    },
+    {
+      "row": 64,
+      "key": "Parfum do prania Vevo No.01 Cotton Paradise (Vzorka)",
+      "previous_eur_per_unit": 0.3,
+      "new_eur_per_unit": 0.22
+    },
+    {
+      "row": 65,
+      "key": "Parfum do prania Vevo No.02 Sweet Paradise (200ml)",
+      "previous_eur_per_unit": 4.29,
+      "new_eur_per_unit": 3.11
+    },
+    {
+      "row": 66,
+      "key": "Parfum do prania Vevo No.02 Sweet Paradise (500ml)",
+      "previous_eur_per_unit": 9.38,
+      "new_eur_per_unit": 7.15
+    },
+    {
+      "row": 67,
+      "key": "Parfum do prania Vevo No.02 Sweet Paradise (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.35,
+      "new_eur_per_unit": 0.26
+    },
+    {
+      "row": 68,
+      "key": "Parfum do prania Vevo No.02 Sweet Paradise (Vzorka)",
+      "previous_eur_per_unit": 0.35,
+      "new_eur_per_unit": 0.26
+    },
+    {
+      "row": 75,
+      "key": "Parfum do prania Vevo No.06 Royal Cotton (200ml)",
+      "previous_eur_per_unit": 2.46,
+      "new_eur_per_unit": 1.7
+    },
+    {
+      "row": 76,
+      "key": "Parfum do prania Vevo No.06 Royal Cotton (500ml)",
+      "previous_eur_per_unit": 4.79,
+      "new_eur_per_unit": 3.61
+    },
+    {
+      "row": 77,
+      "key": "Parfum do prania Vevo No.06 Royal Cotton (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.26,
+      "new_eur_per_unit": 0.19
+    },
+    {
+      "row": 78,
+      "key": "Parfum do prania Vevo No.06 Royal Cotton (Vzorka)",
+      "previous_eur_per_unit": 0.26,
+      "new_eur_per_unit": 0.19
+    },
+    {
+      "row": 79,
+      "key": "Parfum do prania Vevo No.07 Ylang Absolute (200ml)",
+      "previous_eur_per_unit": 2.99,
+      "new_eur_per_unit": 2.0
+    },
+    {
+      "row": 80,
+      "key": "Parfum do prania Vevo No.07 Ylang Absolute (500ml)",
+      "previous_eur_per_unit": 6.14,
+      "new_eur_per_unit": 4.39
+    },
+    {
+      "row": 81,
+      "key": "Parfum do prania Vevo No.07 Ylang Absolute (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.29,
+      "new_eur_per_unit": 0.2
+    },
+    {
+      "row": 82,
+      "key": "Parfum do prania Vevo No.07 Ylang Absolute (Vzorka)",
+      "previous_eur_per_unit": 0.29,
+      "new_eur_per_unit": 0.2
+    },
+    {
+      "row": 83,
+      "key": "Parfum do prania Vevo No.08 Cotton Dream (200ml)",
+      "previous_eur_per_unit": 3.38,
+      "new_eur_per_unit": 2.3
+    },
+    {
+      "row": 84,
+      "key": "Parfum do prania Vevo No.08 Cotton Dream (500ml)",
+      "previous_eur_per_unit": 7.12,
+      "new_eur_per_unit": 5.13
+    },
+    {
+      "row": 85,
+      "key": "Parfum do prania Vevo No.08 Cotton Dream (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.31,
+      "new_eur_per_unit": 0.22
+    },
+    {
+      "row": 86,
+      "key": "Parfum do prania Vevo No.08 Cotton Dream (Vzorka)",
+      "previous_eur_per_unit": 0.31,
+      "new_eur_per_unit": 0.22
+    },
+    {
+      "row": 87,
+      "key": "Parfum do prania Vevo No.09 Pure Garden (200ml)",
+      "previous_eur_per_unit": 3.07,
+      "new_eur_per_unit": 1.96
+    },
+    {
+      "row": 88,
+      "key": "Parfum do prania Vevo No.09 Pure Garden (500ml)",
+      "previous_eur_per_unit": 6.33,
+      "new_eur_per_unit": 4.27
+    },
+    {
+      "row": 89,
+      "key": "Parfum do prania Vevo No.09 Pure Garden (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.29,
+      "new_eur_per_unit": 0.2
+    },
+    {
+      "row": 90,
+      "key": "Parfum do prania Vevo No.09 Pure Garden (Vzorka)",
+      "previous_eur_per_unit": 0.29,
+      "new_eur_per_unit": 0.2
+    },
+    {
+      "row": 91,
+      "key": "Parfum do prania Vevo Premium No.07 Ylang Absolute (200ml)",
+      "previous_eur_per_unit": 2.99,
+      "new_eur_per_unit": 4.11
+    },
+    {
+      "row": 92,
+      "key": "Parfum do prania Vevo Premium No.07 Ylang Absolute (500ml)",
+      "previous_eur_per_unit": 13.9,
+      "new_eur_per_unit": 9.55
+    },
+    {
+      "row": 93,
+      "key": "Parfum do prania Vevo Premium No.07 Ylang Absolute (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.42,
+      "new_eur_per_unit": 0.31
+    },
+    {
+      "row": 94,
+      "key": "Parfum do prania Vevo Premium No.08 Cotton Dream (200ml)",
+      "previous_eur_per_unit": 6.96,
+      "new_eur_per_unit": 4.85
+    },
+    {
+      "row": 95,
+      "key": "Parfum do prania Vevo Premium No.08 Cotton Dream (500ml)",
+      "previous_eur_per_unit": 16.35,
+      "new_eur_per_unit": 11.4
+    },
+    {
+      "row": 96,
+      "key": "Parfum do prania Vevo Premium No.08 Cotton Dream (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.47,
+      "new_eur_per_unit": 0.35
+    },
+    {
+      "row": 97,
+      "key": "Parfum do prania Vevo Premium No.09 Pure Garden (200ml)",
+      "previous_eur_per_unit": 6.16,
+      "new_eur_per_unit": 3.99
+    },
+    {
+      "row": 98,
+      "key": "Parfum do prania Vevo Premium No.09 Pure Garden (500ml)",
+      "previous_eur_per_unit": 14.36,
+      "new_eur_per_unit": 9.25
+    },
+    {
+      "row": 99,
+      "key": "Parfum do prania Vevo Premium No.09 Pure Garden (Vzorka 10ml)",
+      "previous_eur_per_unit": 0.43,
+      "new_eur_per_unit": 0.3
+    },
+    {
+      "row": 100,
+      "key": "Parfum do sušičky Vevo Premium No.01 Cotton Paradise 10ml",
+      "previous_eur_per_unit": 0.5,
+      "new_eur_per_unit": 0.4
+    },
+    {
+      "row": 101,
+      "key": "Parfum do sušičky Vevo Premium No.02 Sweet Paradise 10ml",
+      "previous_eur_per_unit": 0.5,
+      "new_eur_per_unit": 0.4
+    },
+    {
+      "row": 102,
+      "key": "Parfum do sušičky Vevo Premium No.06 Royal Cotton 10ml",
+      "previous_eur_per_unit": 0.5,
+      "new_eur_per_unit": 0.4
+    },
+    {
+      "row": 103,
+      "key": "Parfum do sušičky Vevo Premium No.07 Ylang Absolute 10ml",
+      "previous_eur_per_unit": 0.5,
+      "new_eur_per_unit": 0.4
+    },
+    {
+      "row": 104,
+      "key": "Parfum do sušičky Vevo Premium No.08 Cotton Dream 10ml",
+      "previous_eur_per_unit": 0.5,
+      "new_eur_per_unit": 0.4
+    },
+    {
+      "row": 105,
+      "key": "Parfum do sušičky Vevo Premium No.09 Pure Garden 10ml",
+      "previous_eur_per_unit": 0.5,
+      "new_eur_per_unit": 0.4
+    },
+    {
+      "row": 106,
+      "key": "Parfum na podlahy Vevo Premium No.01 Cotton Paradise (10ml)",
+      "previous_eur_per_unit": 0.5,
+      "new_eur_per_unit": 0.4
+    },
+    {
+      "row": 107,
+      "key": "Parfum na podlahy Vevo Premium No.02 Sweet Paradise (30ml)",
+      "previous_eur_per_unit": 1.0,
+      "new_eur_per_unit": 1.1
+    },
+    {
+      "row": 108,
+      "key": "Parfum na podlahy Vevo Premium No.07 Ylang Absolute (10ml)",
+      "previous_eur_per_unit": 0.5,
+      "new_eur_per_unit": 0.4
+    },
+    {
+      "row": 109,
+      "key": "Parfum na podlahy Vevo Premium No.07 Ylang Absolute (30ml)",
+      "previous_eur_per_unit": 1.0,
+      "new_eur_per_unit": 1.1
+    },
+    {
+      "row": 110,
+      "key": "Parfum na podlahy Vevo Premium No.08 Cotton Dream (10ml)",
+      "previous_eur_per_unit": 0.5,
+      "new_eur_per_unit": 0.4
+    },
+    {
+      "row": 111,
+      "key": "Parfum na podlahy Vevo Premium No.08 Cotton Dream (30ml)",
+      "previous_eur_per_unit": 1.0,
+      "new_eur_per_unit": 1.1
+    },
+    {
+      "row": 112,
+      "key": "Parfum na podlahy Vevo Premium No.09 Pure Garden (10ml)",
+      "previous_eur_per_unit": 0.5,
+      "new_eur_per_unit": 0.4
+    },
+    {
+      "row": 113,
+      "key": "Parfum na podlahy Vevo Premium No.09 Pure Garden (30ml)",
+      "previous_eur_per_unit": 1.0,
+      "new_eur_per_unit": 1.1
+    },
+    {
+      "row": 116,
+      "key": "Pojištění proti rozbití",
+      "previous_eur_per_unit": 1.0,
+      "new_eur_per_unit": 0.0
+    },
+    {
+      "row": 124,
+      "key": "Sada 6 najpredávanejších vzoriek po 1ks",
+      "previous_eur_per_unit": 1.79,
+      "new_eur_per_unit": 1.3
+    },
+    {
+      "row": 125,
+      "key": "Sada najpredávanejších vzoriek 6 x 10ml",
+      "previous_eur_per_unit": 1.79,
+      "new_eur_per_unit": 1.3
+    },
+    {
+      "row": 126,
+      "key": "Sada najpredávanejších vzoriek Vevo 6 x 10ml",
+      "previous_eur_per_unit": 1.79,
+      "new_eur_per_unit": 1.3
+    },
+    {
+      "row": 127,
+      "key": "Sada nejprodávanějších vzorků 6 x 10ml",
+      "previous_eur_per_unit": 1.79,
+      "new_eur_per_unit": 1.3
+    },
+    {
+      "row": 128,
+      "key": "Sada vzoriek najpredávanejších vôní Vevo 3 x 10ml",
+      "previous_eur_per_unit": 0.86,
+      "new_eur_per_unit": 0.63
+    },
+    {
+      "row": 129,
+      "key": "Sada vzoriek najpredávanejších vôní Vevo 6 x 10ml",
+      "previous_eur_per_unit": 1.79,
+      "new_eur_per_unit": 1.3
+    },
+    {
+      "row": 130,
+      "key": "Sada vzoriek najpredávanejších vôní Vevo Natural 3 x 10ml",
+      "previous_eur_per_unit": 0.86,
+      "new_eur_per_unit": 0.63
+    },
+    {
+      "row": 131,
+      "key": "Sada vzoriek všetkých vôní Vevo 6 x 10ml",
+      "previous_eur_per_unit": 1.79,
+      "new_eur_per_unit": 1.3
+    },
+    {
+      "row": 132,
+      "key": "Sada vzoriek všetkých vôní Vevo Natural 6 x 10ml",
+      "previous_eur_per_unit": 1.79,
+      "new_eur_per_unit": 1.3
+    },
+    {
+      "row": 133,
+      "key": "Sada vzorků nejprodávanějších vůní Vevo (3 × 10 ml)",
+      "previous_eur_per_unit": 0.86,
+      "new_eur_per_unit": 0.63
+    },
+    {
+      "row": 134,
+      "key": "Sada vzorků všech vůní Vevo (6 × 10 ml)",
+      "previous_eur_per_unit": 1.79,
+      "new_eur_per_unit": 1.3
+    },
+    {
+      "row": 135,
+      "key": "Set Sada vzoriek Vevo Natural 6 x 10ml + Vevo Shot",
+      "previous_eur_per_unit": 2.44,
+      "new_eur_per_unit": 2.11
+    },
+    {
+      "row": 138,
+      "key": "Spropitné",
+      "previous_eur_per_unit": 1.0,
+      "new_eur_per_unit": 0.0
+    },
+    {
+      "row": 164,
+      "key": "Vevo No.02 Sweet Paradise mosóparfüm (200ml)",
+      "previous_eur_per_unit": 4.29,
+      "new_eur_per_unit": 3.11
+    },
+    {
+      "row": 167,
+      "key": "Vevo No.06 Royal Cotton mosóparfüm (500ml)",
+      "previous_eur_per_unit": 4.79,
+      "new_eur_per_unit": 3.61
+    },
+    {
+      "row": 168,
+      "key": "Vevo No.07 Ylang Absolute mosóparfüm (200ml)",
+      "previous_eur_per_unit": 2.99,
+      "new_eur_per_unit": 2.0
+    },
+    {
+      "row": 169,
+      "key": "Vevo No.08 Cotton Dream mosóparfüm (500ml)",
+      "previous_eur_per_unit": 7.12,
+      "new_eur_per_unit": 5.13
+    },
+    {
+      "row": 170,
+      "key": "Vevo No.09 Pure Garden mosóparfüm (200ml)",
+      "previous_eur_per_unit": 3.07,
+      "new_eur_per_unit": 1.96
+    },
+    {
+      "row": 171,
+      "key": "Vevo No.09 Pure Garden mosóparfüm (500ml)",
+      "previous_eur_per_unit": 6.33,
+      "new_eur_per_unit": 4.27
+    },
+    {
+      "row": 173,
+      "key": "Vevo Shot - koncentrát na čistenie práčky 100ml",
+      "previous_eur_per_unit": 0.65,
+      "new_eur_per_unit": 0.81
+    },
+    {
+      "row": 174,
+      "key": "Vevo Shot – koncentrát na čištění pračky 100 ml",
+      "previous_eur_per_unit": 1.0,
+      "new_eur_per_unit": 0.81
+    },
+    {
+      "row": 175,
+      "key": "Vevo Shot – mosógép tisztító koncentrátum 100 ml",
+      "previous_eur_per_unit": 1.0,
+      "new_eur_per_unit": 0.81
+    },
+    {
+      "row": 183,
+      "key": "Vzorky najpredávanejších vôní Vevo Natural 3 x 10ml",
+      "previous_eur_per_unit": 0.89,
+      "new_eur_per_unit": 0.63
+    },
+    {
+      "row": 184,
+      "key": "Vzorky parfumov do prania Vevo Premium 3 x 10ml",
+      "previous_eur_per_unit": 1.33,
+      "new_eur_per_unit": 0.96
+    },
+    {
+      "row": 185,
+      "key": "Vzorky Vevo Natural 6 x 10ml",
+      "previous_eur_per_unit": 1.79,
+      "new_eur_per_unit": 1.3
+    },
+    {
+      "row": 189,
+      "key": "Parfum do prania Vevo Premium No.08 Cotton Dream (200ml)||08200p",
+      "previous_eur_per_unit": 6.69,
+      "new_eur_per_unit": 4.85
+    },
+    {
+      "row": 190,
+      "key": "Parfum do prania Vevo Premium No.08 Cotton Dream (200ml)||8586024430464",
+      "previous_eur_per_unit": 6.96,
+      "new_eur_per_unit": 4.85
+    },
+    {
+      "row": 286,
+      "key": "H-759CDB11",
+      "previous_eur_per_unit": 1.79,
+      "new_eur_per_unit": 1.3
+    }
+  ]
+}
