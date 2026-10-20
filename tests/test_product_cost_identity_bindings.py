@@ -515,13 +515,14 @@ class ProductCostIdentityBindingTests(unittest.TestCase):
         actual._rebuild_product_expense_indexes(json.loads((project_path / "product_expenses.json").read_text(encoding="utf-8")))
         actual.project_settings["order_revenue_reconciliation_enabled"] = False
         self.assertEqual(date(2026, 1, 1), actual.product_cost_identity_effective_from)
-        self.assertEqual(6.69, actual._resolve_product_expense(
+        self.assertEqual(4.85, actual._resolve_product_expense(
             "", CZ_LABEL, warehouse_number="08200p", purchase_date="2026-09-01",
         )[0])
         cases = (
-            ("Combo Parfém do praní Ylang Absolute 500 ml + Prací gel Ylang Absolute 1 l", "8594201618000", 8.57),
-            ("Combo 1× Parfém do praní Ylang Absolute 500 ml + 3× Prací gel Ylang Absolute 1 l", "8594201618000", 14.39),
-            ("2x Parfém na praní Vevo Natural No.07 Ylang Absolute 500 ml", "", 12.28),
+            ("Combo Parfém do praní Ylang Absolute 500 ml + Prací gel Ylang Absolute 1 l", "8594201618000", 6.82),
+            # The reviewed identity includes the Shot and measuring-cup gifts.
+            ("Combo 1× Parfém do praní Ylang Absolute 500 ml + 3× Prací gel Ylang Absolute 1 l", "8594201618000", 12.80),
+            ("2x Parfém na praní Vevo Natural No.07 Ylang Absolute 500 ml", "", 8.78),
             ("2× Vevo Ylang Absolute čistič podlah pro všechny vysavače s mytím – 500 ml", "", 4.70),
             ("3× Vevo Ylang Absolute čistič podlah pro všechny vysavače s mytím – 500 ml", "", 7.05),
         )
