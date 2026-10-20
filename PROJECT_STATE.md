@@ -1,3 +1,12 @@
+## 2026-10-20 — Measured VEVO purchase-cost impact on identical orders
+
+Date: 2026-10-20
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cost-impact-20261020`
+What changed: Added analysis only; no reporting/runtime mutation. Recomputed the same published 15,411 rows offline using old/new purchase-cost configurations. Cost-update effect on modeled profit: full +12,322.14EUR;7d +187.88EUR;30d +811.23EUR;90d +1,897.46EUR. New actual result after ads and configured fixed costs: full27,249.72EUR;7d141.80EUR;30d34.74EUR;90d−32.28EUR. See [VEVO state](projects/vevo/PROJECT_STATE.md) for exact date ranges, basis and archived evidence.
+What is verified: All new-scenario row costs and sources exactly reproduce publication; old/new core calculations are identical; independent review confirms configuration injection and arithmetic. Raw previous/current displayed reports are separately manifest/hash verified and have different ending dates, orders and ads. Do not conflate their visible deltas with isolated cost effects or newly earned cash.
+Next exact step: Use the same-order table to explain the price update. Existing production/browser status is unchanged; no deployment or rerun required. Analysis commands ended; no local server or persistent process was started.
+
 ## 2026-10-20 — VEVO purchase costs published and recalculated
 
 Date: 2026-10-20

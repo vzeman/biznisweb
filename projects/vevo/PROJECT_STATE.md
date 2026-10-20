@@ -1,3 +1,27 @@
+## 2026-10-20 — Same-order financial impact of the purchase-cost update
+
+Date: 2026-10-20
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cost-impact-20261020`
+What changed: Analysis only. Compare old config at `b7b35c6d49cb05db420d667d558045a1ea9c4556` against production config `acda2e95f9c08c94e16e83e46f528093414843d7` using the exact same published generation20261020T084149Z CSV (15,411 rows/8,347 orders). Revenue, order selection, quantities, dates, advertising, shipping, packaging and fixed costs are held constant. The old columns below are counterfactual current-data results under old prices/policies, not the previous displayed snapshot.
+
+| Period | Old product COGS EUR | New product COGS EUR | Profit increase EUR | Old after-ads/fixed result EUR | New after-ads/fixed result EUR |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2025-05-03–2026-10-19 | 46,001.92 | 33,679.78 | 12,322.14 | 14,927.58 | 27,249.72 |
+| 2026-10-13–2026-10-19 | 733.64 | 545.76 | 187.88 | −46.08 | 141.80 |
+| 2026-09-20–2026-10-19 | 3,257.31 | 2,446.08 | 811.23 | −776.49 | 34.74 |
+| 2026-07-22–2026-10-19 | 7,447.56 | 5,550.10 | 1,897.46 | −1,929.74 | −32.28 |
+
+Interpretation: Full-history product margin increases67.37%→76.11% (+8.74pp); product COGS falls26.79%. Price changes with old policies account for+12,208.20EUR and subsequently removing the approved14 policies adds+113.94EUR.2025 accounts for+5,333.56EUR and2026 for+6,988.58EUR. These are modeled historical margin changes under the new costs, not extra revenue/cash. The latest30d result is only34.74EUR after ads/fixed (about0.36% of revenue), while90d remains slightly negative. Do not equate higher product margin with strong company profitability.
+
+Displayed snapshot distinction: Previous generation20261018T232902Z ended2026-10-18; the new report ends2026-10-19. Actual displayed full after-fixed result15,032.04→27,249.72EUR (+12,217.68EUR) differs from the isolated cost effect. The refresh also adds October19 (17 orders,237.95EUR revenue,−36.52EUR after-fixed result) and changes existing dates by−4 orders/−63.70EUR revenue/+1.36EUR ads. Rolling windows shift a day. Raw visible after-fixed results:7d37.86→141.80;30d−841.47→34.74;90d−1,761.02→−32.28EUR. `series.profit_without_fixed` is after ads before fixed; `series.profit_with_fixed` includes fixed costs. The dashboard KPI `metrics.profit` is before fixed.
+
+What is verified: Offline network-blocked replay of3 scenarios (old;new prices with old policies;new prices and approved policy removal). Old/new `export_orders.py` and runtime are byte-identical. Exact old/current settings, price registry and identity-policy bindings come from Git. Each of15,411 new-scenario row costs and expense sources matches published CSV; all4 payload COGS totals reconcile. The existing audited bundle resolver runs in every scenario. Independent review confirms scenario injection, hashes, all sums and interpretation. Actual baseline4 JSON payloads were GET-only downloaded by exact manifest keys and SHA/size verified. No external provider calls or production mutations.
+
+Evidence: Private archive `s3://biznisweb-reporting-artifacts-919341186960-eu-central-1/data/vevo/reporting/analyses/purchase-cost-update-20261020/aa0cf07e474db6ac319179f73e2d021d9e5b650455891d638b94b336706f49d8/impact-analysis.zip`, SHA256 `aa0cf07e474db6ac319179f73e2d021d9e5b650455891d638b94b336706f49d8`,410,981bytes,8files plus inventory. Contains exact comparison script/results, baseline JSONs/download receipt and displayed comparison. Private access/AES256/conditional create/full readback/every member hash verified at11:01:42UTC. Inputs and original cost-audit helper are in the prior final-evidence archive recorded below; source configs are in Git. No customer rows or secrets committed.
+
+Next exact step: Use the same-order table for the owner's explanation and keep the visible-snapshot difference separate. No further deployment/recalculation is required. The previously documented unavailable visual browser check remains separate. Finite analysis commands ended; no local dev service, tunnel or persistent process was started.
+
 ## 2026-10-20 — New purchase costs active in production; recalculation verified
 
 Date: 2026-10-20
