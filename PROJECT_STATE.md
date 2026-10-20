@@ -1,3 +1,14 @@
+## 2026-10-20 — VEVO purchase costs published and recalculated
+
+Date: 2026-10-20
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cost-rollout-20261020` (documentation); production source `acda2e95f9c08c94e16e83e46f528093414843d7`, merged PR639.
+What changed: All 334 supplied purchase prices are represented; 102 prices changed. The owner-approved 14 floor/dryer products now use their purchase costs instead of the 90% margin policy. The normal release controller completed release `0acd5d7496a9458f909f9fb6bcbbe853`; production generation `20261020T084149Z` covers 2025-05-03 through 2026-10-19. Daily schedule `vevo-daily-report-email` is ENABLED on `vevo-reporting-daily:53`, using dynamic yesterday and the new immutable image. Changes persist in Git and future scheduled runtime.
+What is verified: 161 focused tests, reporting smoke, PR/main CI, image build 39385285447 and accounting deployment 39385285646 passed. Probe and LIVE host/localhost gates passed; both Fargate tasks exited0. All 15,411 exported rows from 8,347 orders passed cost verification, including 257 rows affected by the approved policy replacement. All four period COGS totals and eight authenticated JSON/HTML HTTP responses match the published generation. Twelve protected schedules and ROY stayed unchanged. Controller 31516 and wrapper 25120 ended naturally; fresh CIM confirmed no owned PID/listener. No local dev server or tunnel was started.
+Known limits: Browser visual verification is unavailable: IAB reports unavailable and the only available surface is Codex MCP Apps. This is not a visual pass. The existing fallback remains on 43 rows; 21 retained margin policies cover 1,028 rows. No email, invoice or inline credit-note guard was run for this one-off recomputation. The previous scheduled job's generic QA rejection remains a separate historical issue; today's probe and LIVE passed without weakening QA.
+Evidence: Detailed runtime identity, immutable hashes, private source/final archives, observer correction and limitations are recorded in [VEVO PROJECT_STATE](projects/vevo/PROJECT_STATE.md). Final private archive SHA256 `7a0f0e650ab874bcdf4220132c4f40c7412617d8602b99185ead6119e2754289` contains 42 evidence files; encrypted full readback and every member hash verified.
+Next exact step: No further release/recalculation is needed. From an available authenticated browser, visually check the VEVO report through 2026-10-19. Keep the daily schedule on 53 with dynamic yesterday; do not rerun the completed controller to resolve browser availability.
+
 ## 2026-10-20 — New VEVO purchase costs prepared for reporting recalculation
 
 Date: 2026-10-20

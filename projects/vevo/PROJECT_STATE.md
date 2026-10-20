@@ -1,3 +1,42 @@
+## 2026-10-20 — New purchase costs active in production; recalculation verified
+
+Date: 2026-10-20
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-cost-rollout-20261020` (final documentation).
+
+What changed:
+- PR639 merged as `acda2e95f9c08c94e16e83e46f528093414843d7`. The supplied workbook matches all 334 registry entries: 102 changed (96 lower, 6 higher), 232 unchanged. The row-level import receipt remains in `purchase_cost_updates/2026-10-20.json`.
+- Explicit owner approval replaces the authoritative 90% margin rule for exactly 14 floor/dryer products with actual supplied costs. Other 21 policies, zero-cost services, ROY and exact one-cent Natural/legacy distinctions remain. No shared-EAN price propagation or invented effective date was added; the flat registry applies across matched historical rows and existing identity-binding dates remain unchanged.
+- Build 39385285447 and settings-triggered accounting deployment 39385285646 succeeded before the canonical `scripts/vevo_report_image_release.py` release. RID `0acd5d7496a9458f909f9fb6bcbbe853` completed at 08:42:36UTC. New generation `20261020T084149Z` covers 2025-05-03 through 2026-10-19; all 4 report periods are published.
+
+Runtime identity and persistence:
+- Account 919341186960, eu-central-1, cluster `vevo-reporting-cluster`, service/schedule `vevo-daily-report-email`, path `/app`, instance ID not applicable (Fargate). Preflight captured definition 52 with no active reporting task before mutations.
+- New definition `vevo-reporting-daily:53`, image `919341186960.dkr.ecr.eu-central-1.amazonaws.com/vevo-reporting@sha256:175f32f87bc3088ee9c849ac0ff26feed82429e70d972f6035312b7b43fd0b60`.
+- Probe task `2d3b14720409426d81daab021a9ac3ab` at 172.31.17.47 and LIVE task `6bcf7b74998a4b21b5072f65089f094c` both passed their own host/localhost marker before providers and stopped with exit 0. Exact LIVE host identity is retained in terminal evidence. No UI check preceded these gates.
+- Daily schedule is ENABLED on 53; original schedule input/timezone preserved with dynamic yesterday, no fixed REPORT_TO_DATE. Released lease and absent temporary role verified. Twelve protected schedules and ROY boundaries remained unchanged. Frontend AppRunner `biznisweb-vevo-production-board` image/configuration remained unchanged.
+
+What is verified:
+- 161 focused tests, reporting smoke and all PR/main CI passed. Initial PR smoke failure was only the obsolete expected policy count 35; expectation corrected to 21 while ROY remains 6.
+- All 15,411 CSV rows / 8,347 orders passed cost-source, quantity, profit and reference checks with zero failed rows. All334 workbook costs match; 257 rows for the 14 approved products use purchase costs. 721 service rows have zero cost. Full/7d/30d/90d COGS totals reconcile.
+- Independent download receipt binds the exact generation CSV key `daily-reports/vevo/20261020T084149Z/export_20250503-20261019.csv` to SHA256 `d0b7430137ee0ec444579077b865062b1206fbf1a99f4c401257115ac4ceff08`; version/ETag/full readback verified. Generation manifest SHA256 `569a2a801478768e690c150c72ad8979edfa093d2967b35af11ece729a359f01` and all 8 artifact hashes agree.
+- Eight authenticated JSON/HTML HTTP checks returned 200 and matched exact generation artifacts (HTML accounts for deterministic navigation injection). Site `https://2mhmsmgq3m.eu-central-1.awsapprunner.com/report/vevo?period=7d`. Independent final evidence review found no mismatched conclusions.
+- Cost audit SHA256 `bc510efd65732139fa70da41603b63a92726cddf9e117c75b1a5878dc49901b1`; terminal audit `dfd168b43b452807fcc23cb01ad79120b08f77df05466ba9e1dcc04cf4c5605f`; HTTP audit `0d013ab45887078fba9bf314649379d0a43e77fc5781667a19dc9b6d89c7b07e`.
+
+Known issues and limits:
+- Browser visual check is BLOCKED by unavailable website browser. Creating IAB returned `Browser is not available: iab`; actual inventory contained only Codex MCP Apps. No tab created, no user tab closed, no credentials entered. HTTP success does not prove rendered UI success.
+- 43 rows still use the existing 35% fallback estimate; 1,028 rows use the intentionally retained 90% policy. Do not claim every product now has actual purchase cost. Row-level product profit excludes ads and unallocated order credits; it is not overall business profit.
+- The one-off recomputation skipped email, invoices and inline credit-note guard. Normal scheduled configuration was preserved.
+- Initial terminal observer falsely reported candidate drift because its registration-request projection omitted `taskDefinitionArn`. Bound the expected definition to the exact journal ARN, matching the committed controller; positive and wrong-ARN/role/image/env tests passed. This corrected the read-only observer only, not production. Failed original and diagnosis are preserved.
+- The prior scheduled job on 2026-10-19 at 23 UTC rejected publication with generic incomplete/unverified data_quality error. Its exact failed QA predicate was not logged; two price-elements fallbacks recovered and are not established as its cause. Today's isolated probe and LIVE passed unchanged QA. Do not claim the price import diagnosed that historical failure.
+
+Evidence and process closure:
+- Private bucket `biznisweb-reporting-artifacts-919341186960-eu-central-1`; controller's 19 receipts are under `data/vevo/reporting/image-releases/0acd5d7496a9458f909f9fb6bcbbe853/`, ending `0019-release-complete.json`.
+- Source workbook/import/test evidence: `data/vevo/reporting/analyses/purchase-cost-update-20261020/899f45f8e68bc9168bb02494b3dae57909bdb730682919157851e4d9a15afb71/source-evidence.zip`, SHA256 899f45f8e68bc9168bb02494b3dae57909bdb730682919157851e4d9a15afb71 (38,622 bytes, 10 files).
+- Final evidence: `data/vevo/reporting/analyses/purchase-cost-update-20261020/7a0f0e650ab874bcdf4220132c4f40c7412617d8602b99185ead6119e2754289/final-evidence.zip`, SHA256 7a0f0e650ab874bcdf4220132c4f40c7412617d8602b99185ead6119e2754289 (3,451,074 bytes, 42 files plus inventory). Contains exact audit helpers/results, original observer failure/diagnosis, published/HTTP artifacts, process records and truthful browser status. Private owner/region/access checks, conditional create, AES256, full decoded readback and every member hash passed at 08:50:03UTC. No secrets committed.
+- Controller PID 31516 / wrapper 25120 exited0 naturally. Independent 08:43:55UTC CIM found both absent and no listeners; no kills. Audit/archive commands are finite and ended. No dev server, worker, watcher, tunnel, PM2 or Docker stack was started. Production daily reporting intentionally remains enabled.
+
+Next exact step: Production cost update and all-period recalculation are complete; no further deployment or duplicate reporting run is needed. With an available authenticated browser, visually verify the report through 2026-10-19. Preserve definition 53/dynamic-yesterday schedule and the explicit remaining cost-estimate/UI limitations across PCs.
+
 ## 2026-10-20 — New VEVO purchase costs prepared for reporting recalculation
 
 Date: 2026-10-20
