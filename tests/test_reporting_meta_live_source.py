@@ -24,6 +24,18 @@ LIVE_IDENTITY = {**IDENTITY, 'marker':'VEVO_REPORT_IMAGE_LIVE_HOST_OK', 'report_
 BASE = 'daily-reports/vevo/source-inputs/'+IDENTITY['release_id']+'/'
 
 
+def rejected_publication():
+    health = {'is_partial':False,'qa_status':'critical','qa_failure_count':1,'qa_errors':['Geo confidence'],
+        'qa':{'geo':{'status':'error','failure_count':1,'failures':['private row must not be copied'],
+            'spend_attribution':{'facebook_ads':{'status':'unavailable','total_spend':38003.41,
+                'validation_error':'country spend does not reconcile to daily/account spend'}}}},
+        'sources':{'facebook_ads':{'status':'ok','healthy':True,'message':'secret@example.test'}}}
+    return {'schema_version':1,'project':'vevo','report_from_date':START,'report_to_date':END,
+        'periods':{key:{'read_status':'available','date_from':START,'date_to':END,
+            'source_health':copy.deepcopy(health),'invalid_fields':['source_health.qa_status','source_health.qa_failure_count']}
+            for key in ('latest','7d','30d','90d')}}
+
+
 class LiveSourceTests(unittest.TestCase):
     def setUp(self):
         self.folder = TemporaryDirectory()
@@ -238,6 +250,45 @@ class LiveRunnerTests(unittest.TestCase):
         self.fake.finalize.assert_not_called()
         self.upload.assert_not_called()
 
+    def test_prepublication_quality_rejection_retains_four_periods_and_original_exception(self):
+        failure = RuntimeError('private original error must not be copied')
+        failure.publication_diagnostics = rejected_publication()
+        self.runner.main = Mock(side_effect=failure)
+        captured = {}
+        self.private.side_effect = lambda _s3,_prefix,key,raw:captured.setdefault(key,raw)
+        with self.assertRaises(RuntimeError) as caught:
+            self.execute()
+        self.assertIs(failure,caught.exception)
+        self.assertEqual({BASE+'diagnostics/publication.json',BASE+'diagnostics/failed.json'},set(captured))
+        saved = json.loads(captured[BASE+'diagnostics/publication.json'])
+        self.assertEqual({'latest','7d','30d','90d'},set(saved['periods']))
+        marker = json.loads(captured[BASE+'diagnostics/failed.json'])
+        self.assertFalse(marker['publication_attempted'])
+        self.assertEqual('live-report-rejected-before-publication',marker['phase'])
+        self.assertEqual(source.sha(source.canonical(LIVE_IDENTITY)),marker['localhost_marker_sha256'])
+        self.assertEqual(source.sha(source.canonical(failure.publication_diagnostics)),marker['diagnostic']['original_diagnostics_sha256'])
+        self.upload.assert_not_called()
+        self.fake.finalize.assert_not_called()
+        self.assertNotIn(b'private original error',b''.join(captured.values()))
+        self.assertNotIn(b'secret@example.test',b''.join(captured.values()))
+
+    def test_diagnostic_write_failure_keeps_original_exception_and_logs_only_fixed_message(self):
+        failure = RuntimeError('original private rejection')
+        self.runner.main = Mock(side_effect=failure)
+        with patch.object(live,'retain_live_failure',side_effect=RuntimeError('private S3 failure')), \
+             patch('builtins.print') as output, self.assertRaises(RuntimeError) as caught:
+            self.execute()
+        self.assertIs(failure,caught.exception)
+        output.assert_called_once_with('REPORT_LIVE_FAILURE_DIAGNOSTICS_UNAVAILABLE',flush=True)
+        self.upload.assert_not_called()
+
+    def test_ambiguous_uploader_failure_does_not_claim_prepublication_rejection(self):
+        self.upload.side_effect = RuntimeError('upload failed after possible writes')
+        with patch.object(live,'retain_live_failure') as retain, self.assertRaisesRegex(RuntimeError,'upload failed'):
+            self.execute()
+        retain.assert_not_called()
+        self.assertEqual(1,self.upload.call_count)
+
     def test_roy_uses_original_cli_without_meta_factory_or_writer(self):
         self.runner.main = Mock(return_value='roy-result')
         with patch.object(source,'MetaSourceSnapshot') as constructor:
@@ -268,9 +319,10 @@ class LivePrivateWriterTests(unittest.TestCase):
 
     def test_existing_sink_scope_conditional_aes_and_full_readback(self):
         s3 = self.S3()
-        for key in (BASE+'meta/0001-response.json',BASE+'source-complete.json'):
+        for key in (BASE+'meta/0001-response.json',BASE+'source-complete.json',
+                    BASE+'diagnostics/publication.json',BASE+'diagnostics/failed.json'):
             live.put_live_source(s3,BASE,key,b'{"synthetic":"native"}')
-        self.assertEqual(['put','get','put','get'],[name for name,_ in s3.calls])
+        self.assertEqual(['put','get']*4,[name for name,_ in s3.calls])
         for method,kwargs in s3.calls:
             self.assertEqual(live.probe.ACCOUNT,kwargs['ExpectedBucketOwner'])
             self.assertEqual(live.probe.BUCKET,kwargs['Bucket'])
@@ -283,7 +335,8 @@ class LivePrivateWriterTests(unittest.TestCase):
         s3 = self.S3()
         for prefix,key in [(BASE.replace('/vevo/','/roy/'),BASE+'meta/1.json'),
                            (BASE,BASE+'../live.json'),(BASE,'daily-reports/vevo/latest/generation.json'),
-                           (BASE,BASE.replace('a'*32,'b'*32)+'meta/1.json')]:
+                           (BASE,BASE.replace('a'*32,'b'*32)+'meta/1.json'),
+                           (BASE,BASE+'diagnostics/arbitrary.json')]:
             with self.subTest(key=key),self.assertRaises(RuntimeError):
                 live.put_live_source(s3,prefix,key,b'{}')
         self.assertEqual([],s3.calls)
@@ -298,6 +351,66 @@ class LivePrivateWriterTests(unittest.TestCase):
         live.put_live_source(s3,BASE,BASE+'meta/1.json',b'{}')
         with self.assertRaisesRegex(RuntimeError,'conditional conflict'):
             live.put_live_source(s3,BASE,BASE+'meta/1.json',b'{}')
+
+
+class LiveFailureDiagnosticTests(unittest.TestCase):
+    def retain(self, value, *, identity=None):
+        s3 = LivePrivateWriterTests.S3()
+        failure = RuntimeError('original private exception')
+        if value is not None:
+            failure.publication_diagnostics = value
+        live.retain_live_failure(s3,BASE,identity or LIVE_IDENTITY,START,END,failure)
+        return s3,json.loads(s3.objects[BASE+'diagnostics/failed.json'])
+
+    def test_only_allowlisted_aggregate_qa_is_retained(self):
+        value = rejected_publication()
+        value['periods']['latest']['customer_rows'] = [{'email':'private@example.test'}]
+        value['periods']['latest']['source_health']['qa']['geo']['failures'] = [{'order_num':'private-order','email':'private@example.test'}]
+        s3,marker = self.retain(value)
+        self.assertEqual('available',marker['diagnostic']['status'])
+        self.assertEqual(source.sha(s3.objects[marker['diagnostic']['key']]),marker['diagnostic']['sha256'])
+        content = json.loads(s3.objects[marker['diagnostic']['key']])
+        check = content['periods']['latest']['source_health']['qa']['geo']
+        self.assertEqual(1,check['failure_count'])
+        self.assertEqual(38003.41,check['spend_attribution']['facebook_ads']['total_spend'])
+        self.assertEqual('country spend does not reconcile to daily/account spend',
+                         check['spend_attribution']['facebook_ads']['validation_error'])
+        all_bytes = b''.join(s3.objects.values())
+        for private in (b'private@example.test',b'private-order',b'secret@example.test',b'original private exception'):
+            self.assertNotIn(private,all_bytes)
+        self.assertFalse(any(key.endswith('source-complete.json') for key in s3.objects))
+
+    def test_missing_oversize_or_unbound_payload_retains_only_safe_failure_marker(self):
+        cases = [('missing',None),('too-large',{**rejected_publication(),'extra':'secret'*1000}),
+                 ('invalid-json',{**rejected_publication(),'project':'roy'}),
+                 ('invalid-json',{**rejected_publication(),'report_to_date':'2026-10-12'}),
+                 ('invalid-json',{**rejected_publication(),'schema_version':True})]
+        for status,value in cases:
+            with self.subTest(status=status),patch.object(live.probe,'DIAGNOSTIC_LIMIT',2048 if status=='too-large' else 8*1024*1024):
+                s3,marker = self.retain(value)
+                self.assertEqual(status,marker['diagnostic']['status'])
+                self.assertEqual([BASE+'diagnostics/failed.json'],list(s3.objects))
+                self.assertNotIn(b'secret',b''.join(s3.objects.values()))
+
+    def test_malformed_nested_values_cannot_drop_the_failure_marker_or_leak_strings(self):
+        for malformed in ('private-string',[],{'status':[],'validation_error':{},'failure_count':10**400}):
+            value = rejected_publication()
+            value['periods']['latest']['source_health']['qa']['geo'] = malformed
+            value['periods']['latest']['source_health']['qa_status'] = []
+            value['periods']['latest']['read_status'] = {}
+            with self.subTest(type=type(malformed).__name__):
+                s3,marker = self.retain(value)
+                self.assertIn(BASE+'diagnostics/failed.json',s3.objects)
+                self.assertEqual('available',marker['diagnostic']['status'])
+                self.assertNotIn(b'private-string',b''.join(s3.objects.values()))
+
+    def test_unknown_identity_fields_and_oversize_direct_write_reject_before_s3(self):
+        s3 = LivePrivateWriterTests.S3()
+        with self.assertRaisesRegex(RuntimeError,'diagnostic-identity'):
+            live.retain_live_failure(s3,BASE,{**LIVE_IDENTITY,'secret':'do-not-copy'},START,END,RuntimeError())
+        with patch.object(live.probe,'DIAGNOSTIC_LIMIT',3),self.assertRaisesRegex(RuntimeError,'diagnostic-size'):
+            live.put_live_source(s3,BASE,BASE+'diagnostics/publication.json',b'1234')
+        self.assertEqual([],s3.calls)
 
 
 class LiveHostOrderingTests(unittest.TestCase):

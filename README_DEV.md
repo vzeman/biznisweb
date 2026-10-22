@@ -206,6 +206,15 @@ The controller preserves its key/hash/status before cleanup. Failure evidence is
 never a successful artifact manifest, never changes live aliases, and never
 permits promotion. Missing or malformed diagnostics do not weaken rejection.
 
+The VEVO live host wrapper also retains pre-publication failures under its own
+`daily-reports/vevo/source-inputs/<release-id>/diagnostics/` prefix. The bounded
+projection includes all four periods' publication predicates and allowlisted
+aggregate QA fields; it excludes customer rows, arbitrary provider messages and
+exception text. The failure marker binds the host, localhost identity hash,
+source and dates. Storage failure still re-raises the original report failure.
+A failure after entering the uploader is never labeled a safe pre-publication
+rejection. No diagnostic object authorizes publication or email.
+
 Google measured country costs are reconciled to the same-period account total.
 The provider's reported `unknown` country remains separate from `unallocated`
 (account cost minus the full physical-country report). Neither residual is
@@ -317,6 +326,26 @@ old disabled target and conditionally returns its uncertain lease. A live or
 uncertain failure still requires inspection. Other schedules are captured anew
 after concurrent CI finishes, with changes since the stopped release recorded
 in recovery evidence, then strictly protected for the whole new release.
+
+A failed same-image `vevo_report_current_rerun.py` has a different receipt
+contract: it never registered a candidate or ran an isolated probe. Use the
+image-release controller's separate `--recover-current-rerun <old-id>` argument
+with the exact `--recovery-receipt-sha256`. Do not feed this chain to
+`--recover-paused-release`. The admission checks the seven current-rerun
+receipts, unchanged active definition/image, unchanged nine publication objects,
+the original schedule with only State disabled, stopped owned live task and
+uncertain lease. If ECS returns MISSING, the reviewed private failure ZIP and
+its SHA256 supplied through `--recovery-readback-key` and
+`--recovery-readback-sha256` bind the original observer projection, host marker,
+observer implementation and receipt bytes. This projection is not a raw ECS
+response; conflicting or unavailable reads cannot use it. The normal new-image
+isolated probe, live verification, conditional ownership transfer and final
+dynamic schedule restoration still apply. Neither recovery mode sends email.
+This admission binds the old lease ETag as well as its owner. If a subsequent
+pre-live recovery fails and returns that owner with a new ETag, the original
+archive cannot authorize another attempt; review the new terminal/handoff
+evidence first. Current-rerun recovery disables automatic SDK retries for its
+mutations, retaining unknown outcomes for inspection.
 
 GitHub inspection uses explicit GET requests with at most three 45-second
 attempts and 2/5-second backoff for recognized transport timeouts, connection
