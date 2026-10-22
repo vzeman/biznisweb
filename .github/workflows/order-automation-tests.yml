@@ -106,6 +106,7 @@ jobs:
           tests.test_ads_measurement tests.test_live_report_quality_gate tests.test_vevo_report_image_release tests.test_finalize_restored_report_release tests.test_reporting_image_release_policy tests.test_roy_report_image_release
           tests.test_vevo_report_current_rerun
           tests.test_vevo_report_current_rerun_recovery
+          tests.test_vevo_report_preprobe_return_recovery
           tests.test_roy_paused_release_recovery tests.test_reporting_github_read_retry tests.test_roy_foreign_payment_coverage
           tests.test_partial_credit_adjustments tests.test_cfo_credit_adjustments tests.test_refund_status_population tests.test_reporting_financial_adjustments tests.test_report_period_failure_diagnostics tests.test_report_summary_advertising_language tests.test_reporting_marketing_semantics tests.test_live_dashboard_marketing_semantics tests.test_customer_lifetime_credit_aggregation tests.test_report_dashboard_image_release
           tests.test_cost_estimate_publication_policy

@@ -347,6 +347,17 @@ archive cannot authorize another attempt; review the new terminal/handoff
 evidence first. Current-rerun recovery disables automatic SDK retries for its
 mutations, retaining unknown outcomes for inspection.
 
+A single proven failure before any probe dispatch can supply that new review
+through `--recovery-preprobe-return-key` and
+`--recovery-preprobe-return-sha256`, together with the original current-rerun
+arguments. This private handoff binds the complete ten-receipt rollback chain,
+the original failure archive and lease ETag, the inactive candidate, absent
+probe role/tasks/artifacts, unchanged outputs and protected schedules, and the
+exact returned uncertain lease value and new ETag. Fresh reads recheck these
+conditions before conditional ownership transfer. It cannot admit a live or
+unknown dispatch, another return chain, a new lease generation, or an arbitrary
+ETag override. The original archive remains immutable.
+
 GitHub inspection uses explicit GET requests with at most three 45-second
 attempts and 2/5-second backoff for recognized transport timeouts, connection
 resets, temporary DNS failures and HTTP 502/503/504. Authorization errors,
