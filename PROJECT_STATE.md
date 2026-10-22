@@ -1,3 +1,14 @@
+## 2026-10-22 — VEVO rerun blocked by publication quality gate; no resend
+
+Date: 2026-10-22
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-rerun-failure-20261022`
+What changed: PR #644 merged as `235438beb1444b0997f0c8ebb62a382a03ec8167`. One fresh same-image rerun through 2026-10-21 was dispatched with release ID `061f1bc3ef3244169d805f7fe5bae986`. It finished with exit 1 because `daily_report_runner.validate_publish_quality` rejected `data_quality.json` before publication. The requested corrected report and email resend are NOT complete. No retry or email was sent. See [VEVO state](projects/vevo/PROJECT_STATE.md).
+What is verified: Original TD53/image175f32f8/sourceacda2e95 were retained. The actual host and localhost marker passed before provider reads; the observed task stopped at 06:49:28 UTC. The controller's failure path disabled the VEVO report schedule and retained its uncertain lease for review. The local finite controller PID36252 ended naturally; no dev server or tunnel was started.
+Final read-only audit at10:15:36 UTC: the old generation20261021T233137Z, all eight live artifacts and its pointer are exactly unchanged; TD53, ROY schedule/lease/outputs and12 other schedules are unchanged. Zero active VEVO tasks. Private51-file failure archive `data/vevo/reporting/reruns/20261022-through-20261021/106c0b50c157e3cae32b0c88112c3146993e7e33a2a18120e8c234a5c7eda216/failure-evidence.zip` has matching SHA256, encryption, conditional create and full member readback. It includes the failure journal, boundary audit and unexecuted verification/send helpers for recovery.
+Known issues: The four generated period files passed logged ROAS/margin/CAC consistency checks, but that is not full publication QA. The live wrapper did not retain the precise failing QA fields; do not invent a business cause from the generic rejection. A later ECS read can return MISSING after stopped-task retention; the contemporaneous independent terminal observation remains the evidence of exit 1.
+Next exact step: Work stopped on the owner's error-stop rule. A subsequent repair must retain/read the actual publication diagnostics, identify the failed source/QA predicate, and resolve it before a reviewed recovery, fresh publication and once-only resend. Do not bypass quality checks, repeat the failed run blindly, send the old report as corrected, or silently re-enable the paused schedule.
+
 ## 2026-10-22 — VEVO same-image report rerun prepared
 
 Date: 2026-10-22
