@@ -1,3 +1,13 @@
+## 2026-10-22 — VEVO pre-probe failure under investigation
+
+Date: 2026-10-22
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-preprobe-recovery-20261022`
+What changed: PR #646 merged as d4768cf778a69464a6dc8f78c2f40d3d226d8b67; its exact-main image build39772729203 passed. One release8365e43b62d449c9877ca4d66d71f85a registered candidate54, then failed with AttributeError before any probe or live dispatch. It restored the original paused target53 and returned the uncertain lease to061f1bc3ef3244169d805f7fe5bae986. No corrected report or email exists yet. See [VEVO state](projects/vevo/PROJECT_STATE.md).
+What is verified: Independent AWS readback12:00:36UTC confirms candidate54 INACTIVE, source53 ACTIVE, probe role absent, no active reporting tasks, all9 original VEVO outputs and ROY/12other schedules unchanged. Local finite PID37824 ended naturally with no listening ports. A new lease ETag prevents reusing the old recovery archive as standalone authorization.
+Known issues: AttributeError location was not retained by the old CLI. Real role lifecycle, read-only checkpoint, GitHub exclusion, network overrides and strict-memory lease renewal replay all pass; no specific missing attribute or transient-SDK cause is established. Source-only failure frames now preserve future locations without exception messages/locals. The daily VEVO report remains paused; no new report/send is claimed.
+Next exact step: Review/test/merge the strict single pre-probe return admission and diagnostics. After fresh exact-boundary admission, one separately identified isolated attempt is supported by the confirmed rollback; do not infer an automatic or recursive retry. Complete fresh all-period report/order/cost verification and once-only email.
+
 ## 2026-10-22 — VEVO publication repair in progress
 
 Date: 2026-10-22

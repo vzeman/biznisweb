@@ -101,6 +101,26 @@ def exact_source(commit):
                 "git@github.com:vzeman/biznisweb.git"}, "image-release-repository-invalid")
 
 
+def failure_summary(exc):
+    """Keep source locations, never exception payloads, source lines or locals."""
+    reason = str(exc)
+    if not re.fullmatch(r"(?:image-release|report|runtime)-[a-z0-9-]+", reason):
+        reason = type(exc).__name__
+    frames = []
+    current = exc.__traceback__
+    while current is not None:
+        code = current.tb_frame.f_code
+        try:
+            path = Path(code.co_filename).resolve().relative_to(ROOT.resolve())
+        except ValueError:
+            pass
+        else:
+            if path.parts[0] == "scripts" and path.suffix == ".py":
+                frames.append({"file": path.as_posix(), "function": code.co_name, "line": current.tb_lineno})
+        current = current.tb_next
+    return {"reason": reason, "source_frames": frames[-12:]}
+
+
 def committed_gate_sha(commit):
     """Hash the exact Git blob copied by Linux CI, independent of local EOLs."""
     return sha(subprocess.check_output(["git", "show", commit + ":scripts/reporting_migration_host_gate.py"],
@@ -315,10 +335,14 @@ class ImageRelease(Deployment):
     def __init__(self, session, commit, to_date, timeout, *, release_id=None, recover_paused_release=None,
                  recovery_receipt_sha256=None, recovery_readback_key=None, recovery_readback_sha256=None,
                  project="vevo", retained_peer_release=None, retained_peer_lease_sha256=None, retained_peer_lease_etag=None,
-                 independent_contract_sha256=None, recover_current_rerun=None):
+                 independent_contract_sha256=None, recover_current_rerun=None,
+                 recovery_preprobe_return_key=None, recovery_preprobe_return_sha256=None):
         require(not recover_current_rerun or (project == "vevo" and not recover_paused_release
                 and recovery_receipt_sha256 and recovery_readback_key and recovery_readback_sha256),
                 "image-release-current-recovery-arguments")
+        require(bool(recovery_preprobe_return_key) == bool(recovery_preprobe_return_sha256)
+                and (not recovery_preprobe_return_key or (recover_current_rerun and project == "vevo")),
+                "image-release-preprobe-return-arguments")
         require(independent_contract_sha256 is None or (isinstance(independent_contract_sha256, str)
                 and re.fullmatch(r"[a-f0-9]{64}", independent_contract_sha256)), "image-release-independent-contract-invalid")
         self.independent_contract_sha256 = independent_contract_sha256
@@ -343,6 +367,8 @@ class ImageRelease(Deployment):
         self.role_trust = None
         self.recover_paused_release = recover_paused_release
         self.recover_current_rerun = recover_current_rerun
+        self.recovery_preprobe_return_key = recovery_preprobe_return_key
+        self.recovery_preprobe_return_sha256 = recovery_preprobe_return_sha256
         self.recovery_receipt_sha256 = recovery_receipt_sha256
         self.recovery_readback_key, self.recovery_readback_sha256 = recovery_readback_key, recovery_readback_sha256
         self.recovery = None
@@ -1051,6 +1077,8 @@ def main():
     parser.add_argument("--recovery-receipt-sha256")
     parser.add_argument("--recovery-readback-key")
     parser.add_argument("--recovery-readback-sha256")
+    parser.add_argument("--recovery-preprobe-return-key", help="Reviewed private handoff after one proven pre-probe rollback")
+    parser.add_argument("--recovery-preprobe-return-sha256")
     parser.add_argument("--independent-contract-sha256", help="Require independent source review of this contract before promotion/live")
     parser.add_argument("--timeout-seconds", type=int, default=7200)
     args = parser.parse_args()
@@ -1085,6 +1113,9 @@ def main():
             and (recovering or not (args.recovery_readback_key or args.recovery_readback_sha256))
             and (not args.recover_current_rerun or (args.project == "vevo" and args.recovery_readback_key and args.recovery_readback_sha256)),
             "image-release-recovery-arguments")
+    require(bool(args.recovery_preprobe_return_key) == bool(args.recovery_preprobe_return_sha256)
+            and (not args.recovery_preprobe_return_key or (args.recover_current_rerun and args.project == "vevo")),
+            "image-release-preprobe-return-arguments")
     date.fromisoformat(args.to_date)
     release_id = args.release_id or uuid.uuid4().hex
     require(re.fullmatch(r"[a-f0-9]{32}", release_id), "image-release-id-invalid")
@@ -1093,15 +1124,14 @@ def main():
                      recover_paused_release=args.recover_paused_release, recovery_receipt_sha256=args.recovery_receipt_sha256,
                      recovery_readback_key=args.recovery_readback_key, recovery_readback_sha256=args.recovery_readback_sha256,
                      recover_current_rerun=args.recover_current_rerun,
+                     recovery_preprobe_return_key=args.recovery_preprobe_return_key,
+                     recovery_preprobe_return_sha256=args.recovery_preprobe_return_sha256,
                      project=args.project, retained_peer_release=args.retained_peer_release,
                      retained_peer_lease_sha256=args.retained_peer_lease_sha256,
                      retained_peer_lease_etag=args.retained_peer_lease_etag,
                      independent_contract_sha256=args.independent_contract_sha256).run()
     except Exception as exc:
-        reason = str(exc)
-        if not re.fullmatch(r"(?:image-release|report|runtime)-[a-z0-9-]+", reason):
-            reason = type(exc).__name__
-        print(json.dumps({"release_id": release_id, "phase": "failed", "reason": reason}), file=sys.stderr)
+        print(json.dumps({"release_id": release_id, "phase": "failed", **failure_summary(exc)}), file=sys.stderr)
         raise SystemExit(1) from None
 
 

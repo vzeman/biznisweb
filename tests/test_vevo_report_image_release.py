@@ -842,5 +842,26 @@ class IndependentReviewTests(unittest.TestCase):
                         self.assertEqual(not paused, obj.lease.release.called)
 
 
+class FailureSummaryTests(unittest.TestCase):
+    def test_known_guard_retains_only_code_and_repo_source_location(self):
+        try:
+            release.exact_source("invalid")
+        except RuntimeError as exc:
+            evidence = release.failure_summary(exc)
+        self.assertEqual(evidence["reason"], "image-release-source-invalid")
+        self.assertTrue(any(row["function"] == "exact_source" for row in evidence["source_frames"]))
+        self.assertTrue(all(set(row) == {"file", "function", "line"} and row["file"].startswith("scripts/")
+                            and type(row["line"]) is int for row in evidence["source_frames"]))
+
+    def test_unknown_exception_does_not_include_message_or_local_values(self):
+        private_value = "synthetic-recipient@example.invalid private-token"
+        try:
+            raise AttributeError(private_value)
+        except AttributeError as exc:
+            evidence = release.failure_summary(exc)
+        self.assertEqual(evidence, {"reason": "AttributeError", "source_frames": []})
+        self.assertNotIn(private_value, json.dumps(evidence))
+
+
 if __name__ == "__main__":
     unittest.main()

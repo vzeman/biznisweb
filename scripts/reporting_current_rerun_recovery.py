@@ -28,6 +28,10 @@ TOTAL_LIMIT = 128 * 1024 * 1024
 # Reviewed observer used by the 2026-10-22 evidence format. Other projection
 # producers need a separately reviewed adapter, not a claimed verified boolean.
 OBSERVER_SHA256 = "52417f3f39b6a2839bf6bd67e5932b53c418ef2972b5259fdd02f042b195c515"
+PREPROBE_PHASES = ("preflight-complete", "paused-recovery-handoff-requested", "report-pause-requested",
+                  "report-pause-verified", "candidate-register-requested", "candidate-registered",
+                  "probe-role-create-requested", "release-failed-inspection-required",
+                  "paused-recovery-lease-return-requested", "failed-before-live-restored")
 
 
 def normalized(value):
@@ -198,13 +202,166 @@ def inspect(controller):
             "image-release-current-recovery-archive-key")
     raw = read_private(controller.s3, key, ARCHIVE_LIMIT)
     recovery.update(validate_archive(raw, digest, recovery, raws, {name: sha(value) for name, value in raws.items()}))
+    # The original archive remains authoritative for its old lease generation.
+    # A single separately reviewed pre-probe return may prove the subsequent
+    # generation; never infer it from the current ETag or recursively recover.
+    recovery.update(original_readback_key=key, original_readback_sha256=digest)
+    inspect_preprobe_return(controller, recovery)
     controller.recovery = recovery
     verify_boundary(controller)
-    return {"kind": "current-rerun", "release_id": owner, "receipt_key": keys[-1], "receipt_sha256": recovery["receipt_sha256"],
+    proof = {"kind": "current-rerun", "release_id": owner, "receipt_key": keys[-1], "receipt_sha256": recovery["receipt_sha256"],
             "preflight_sha256": recovery["preflight_sha256"], "readback_key": key, "readback_sha256": digest,
             "lease_etag": recovery["lease_etag"], "terminal_evidence_kind": recovery["terminal_evidence_kind"],
             "terminal_observation_sha256": recovery["terminal_observation_sha256"],
             "observer_script_sha256": recovery["observer_script_sha256"], "archive_manifest_sha256": recovery["archive_manifest_sha256"]}
+    if "preprobe_return" in recovery:
+        returned = recovery["preprobe_return"]
+        proof["preprobe_return"] = {"key": returned["key"], "sha256": returned["sha256"],
+            "failed_release_id": returned["document"]["failed_release_id"],
+            "terminal_receipt_sha256": returned["document"]["receipts"][-1]["sha256"],
+            "original_lease_etag": returned["original_lease_etag"], "returned_lease_etag": recovery["lease_etag"],
+            "returned_lease_sha256": sha(canonical(returned["document"]["returned_lease"]["value"]))}
+    return proof
+
+
+def preprobe_journal(controller, failed_id):
+    prefix = VEVO.release_prefix + failed_id + "/"
+    page = controller.s3.list_objects_v2(Bucket=binding.BUCKET, Prefix=prefix, MaxKeys=11, ExpectedBucketOwner=ACCOUNT)
+    keys = sorted(row["Key"] for row in page.get("Contents", []))
+    require(not page.get("IsTruncated") and keys == [prefix + f"{index:04d}-{phase}.json"
+            for index, phase in enumerate(PREPROBE_PHASES, 1)], "image-release-preprobe-return-receipt-sequence")
+    return {key: read_private(controller.s3, key, 1024 * 1024) for key in keys}
+
+
+def validate_preprobe_return(document, raw_records, recovery, new_owner):
+    """Validate exactly one no-dispatch rollback, never a general ETag override."""
+    from scripts.vevo_report_image_release import image_only_definition
+    failed_id = document.get("failed_release_id", "")
+    require(document.get("schema_version") == 1 and document.get("kind") == "current-rerun-preprobe-return"
+            and document.get("project") == "vevo" and re.fullmatch(r"[a-f0-9]{32}", failed_id)
+            and failed_id not in (recovery["previous_owner"], new_owner)
+            and re.fullmatch(r"[a-f0-9]{40}", document.get("source_commit", "")),
+            "image-release-preprobe-return-identity")
+    records = [json.loads(raw) for raw in raw_records.values()]
+    require(len(records) == 10 and tuple(row.get("phase") for row in records) == PREPROBE_PHASES
+            and document["receipts"] == [{"key": key, "sha256": sha(raw)} for key, raw in raw_records.items()],
+            "image-release-preprobe-return-journal")
+    prefix = VEVO.release_prefix + failed_id + "/"
+    require(list(raw_records) == [prefix + f"{index:04d}-{phase}.json" for index, phase in enumerate(PREPROBE_PHASES, 1)],
+            "image-release-preprobe-return-journal-keys")
+    require(all(row.get("schema_version") == 1 and row.get("project") == "vevo"
+                and row.get("release_id") == failed_id and row.get("source_commit") == document["source_commit"]
+                and row.get("report_to_date") == document["report_to_date"] == recovery["before"]["report_to_date"]
+                and row.get("known_task_arns") == {} and row.get("promoted") is False
+                and row.get("rerun_attempted") is False and row.get("legacy_current_binding_changed") is False
+                for row in records), "image-release-preprobe-return-no-dispatch")
+    times = [binding.stamp(row["at"]) for row in records]
+    require(times == sorted(times) and times[0] >= binding.stamp(recovery["failed"]["at"])
+            and binding.stamp(document["checked_at"]) >= times[-1], "image-release-preprobe-return-time-order")
+    before, final = records[0], records[-1]
+    old_etag = recovery["lease_etag"]
+    original = {"kind": "current-rerun", "release_id": recovery["previous_owner"],
+        "receipt_key": recovery["receipt_key"], "receipt_sha256": recovery["receipt_sha256"],
+        "preflight_sha256": recovery["preflight_sha256"], "readback_key": recovery["original_readback_key"],
+        "readback_sha256": recovery["original_readback_sha256"], "lease_etag": old_etag,
+        "terminal_evidence_kind": before.get("recovered_from", {}).get("terminal_evidence_kind"),
+        "terminal_observation_sha256": recovery["terminal_observation_sha256"],
+        "observer_script_sha256": recovery["observer_script_sha256"], "archive_manifest_sha256": recovery["archive_manifest_sha256"]}
+    require(original["terminal_evidence_kind"] in {"archived-reviewed-observer-projection-ecs-missing",
+                "fresh-ecs-plus-archived-observer-projection"}
+            and document["original_recovery"] == before["recovered_from"] == original,
+            "image-release-preprobe-return-original-proof")
+    require(records[1].get("previous_owner") == records[8].get("previous_owner")
+            == final.get("paused_recovery_owner") == recovery["previous_owner"]
+            and records[1].get("previous_lease_etag") == old_etag
+            and records[1].get("recovery_receipt_sha256") == recovery["receipt_sha256"]
+            and records[7].get("start_uncertain") is False and final.get("all_owned_tasks_stopped") is True,
+            "image-release-preprobe-return-handoff")
+    expected_schedule = binding.schedule_snapshot(recovery["before"]["schedule"])
+    expected_schedule["State"] = "DISABLED"
+    require(all(binding.schedule_snapshot(value) == expected_schedule for value in
+                (before["schedule"], records[2]["schedule"], records[3]["schedule"], final["schedule"], document["schedule"]))
+            and document["source_definition"].get("status") == "ACTIVE"
+            and document["source_definition"].get("taskDefinitionArn") == recovery["candidate_arn"]
+            and before["source_definition"].get("taskDefinitionArn") == recovery["candidate_arn"]
+            and binding.definition_snapshot(document["source_definition"]) == binding.definition_snapshot(before["source_definition"])
+            == binding.definition_snapshot(recovery["before"]["source_definition"]),
+            "image-release-preprobe-return-source-boundary")
+    require(before["original_live_outputs"] == document["live_outputs"] == recovery["before"]["original_live_outputs"]
+            and before["protected_schedules"] == document["protected_schedules"] == recovery["before"]["protected_schedules"]
+            and before["protected_peer"] == document["protected_peer"] == recovery["before"]["protected_peer"],
+            "image-release-preprobe-return-protected-boundary")
+    candidate_arn = records[5]["task_definition"]
+    require(re.fullmatch(rf"arn:aws:ecs:{REGION}:{ACCOUNT}:task-definition/{VEVO.family}:[1-9][0-9]*", candidate_arn)
+            and candidate_arn != recovery["candidate_arn"] and before["image"] != recovery["before"]["image"]
+            and document["candidate_definition"].get("taskDefinitionArn") == candidate_arn
+            and document["candidate_definition"].get("status") == "INACTIVE", "image-release-preprobe-return-candidate")
+    expected_candidate = image_only_definition(before["source_definition"], before["image"])
+    require(normalized(records[4]["definition"]) == normalized(expected_candidate)
+            and binding.definition_snapshot(document["candidate_definition"]) == binding.definition_snapshot(
+                {**expected_candidate, "taskDefinitionArn": candidate_arn})
+            and records[6].get("role_arn") == f"arn:aws:iam::{ACCOUNT}:role/{VEVO.role_prefix}{failed_id}"
+            and document.get("candidate_probe_role_absent") is True
+            and document.get("owned_tasks") == document.get("active_reporting_tasks") == [],
+            "image-release-preprobe-return-cleanup")
+    returned = document["returned_lease"]
+    binding.validate_lock(returned["value"])
+    require(isinstance(returned.get("etag"), str) and returned["etag"] and returned["etag"] != old_etag
+            and returned["value"]["owner"] == recovery["previous_owner"] and returned["value"]["state"] == "uncertain"
+            and times[8] <= binding.stamp(returned["value"]["updated_at"]) <= times[9],
+            "image-release-preprobe-return-lease-generation")
+    return candidate_arn
+
+
+def inspect_preprobe_return(controller, recovery):
+    key = getattr(controller, "recovery_preprobe_return_key", None)
+    digest = getattr(controller, "recovery_preprobe_return_sha256", None)
+    if key is None and digest is None:
+        return
+    require(controller.policy == VEVO and controller.recover_current_rerun and not controller.recover_paused_release
+            and isinstance(key, str) and re.fullmatch(r"[a-f0-9]{64}", digest or "")
+            and re.fullmatch(r"data/vevo/reporting/recovery-handoffs/[a-f0-9]{32}/" + re.escape(digest)
+                             + r"/preprobe-return\.json", key), "image-release-preprobe-return-arguments")
+    raw = read_private(controller.s3, key, 2 * 1024 * 1024)
+    require(sha(raw) == digest, "image-release-preprobe-return-readback-hash")
+    document = json.loads(raw)
+    failed_id = document.get("failed_release_id", "")
+    require(re.fullmatch(r"[a-f0-9]{32}", failed_id) and key.split("/")[4] == failed_id,
+            "image-release-preprobe-return-key-identity")
+    raws = preprobe_journal(controller, failed_id)
+    candidate = validate_preprobe_return(document, raws, recovery, controller.release_id)
+    recovery["preprobe_return"] = {"key": key, "sha256": digest, "document": document,
+        "journal_raws": raws, "candidate_arn": candidate, "original_lease_etag": recovery["lease_etag"]}
+    recovery["lease_etag"] = document["returned_lease"]["etag"]
+
+
+def verify_preprobe_return_boundary(controller):
+    returned = controller.recovery.get("preprobe_return")
+    if returned is None:
+        return
+    document = returned["document"]
+    require(sha(read_private(controller.s3, returned["key"], 2 * 1024 * 1024)) == returned["sha256"],
+            "image-release-preprobe-return-document-drift")
+    require(preprobe_journal(controller, document["failed_release_id"]) == returned["journal_raws"],
+            "image-release-preprobe-return-journal-drift")
+    candidate = controller.definition(returned["candidate_arn"])
+    require(candidate.get("status") == "INACTIVE" and candidate.get("taskDefinitionArn") == returned["candidate_arn"]
+            and binding.definition_snapshot(candidate) == binding.definition_snapshot(document["candidate_definition"]),
+            "image-release-preprobe-return-candidate-drift")
+    try:
+        controller.iam.get_role(RoleName=VEVO.role_prefix + document["failed_release_id"])
+    except Exception as error:
+        require(binding.error_code(error) == "NoSuchEntity", "image-release-preprobe-return-role-read")
+    else:
+        raise RuntimeError("image-release-preprobe-return-role-present")
+    require(not [task for task in controller.tasks(VEVO.family) if task.get("startedBy") == document["failed_release_id"]],
+            "image-release-preprobe-return-task-present")
+    objects = controller.s3.list_objects_v2(Bucket=binding.BUCKET,
+        Prefix=VEVO.probe_prefix + document["failed_release_id"] + "/", MaxKeys=1, ExpectedBucketOwner=ACCOUNT)
+    require(not objects.get("Contents") and not objects.get("IsTruncated"), "image-release-preprobe-return-probe-objects")
+    lease, etag = read_lease(controller.s3, "vevo")
+    require(normalized(lease) == document["returned_lease"]["value"] and etag == document["returned_lease"]["etag"],
+            "image-release-preprobe-return-lease-drift")
 
 
 def verify_boundary(controller):
@@ -223,6 +380,7 @@ def verify_boundary(controller):
             and normalized(controller.peer_snapshot) == before["protected_peer"], "image-release-current-recovery-protected-drift")
     controller.verify_peer_boundary()
     controller.no_report_tasks()
+    verify_preprobe_return_boundary(controller)
     task_arn = recovery["tasks"]["live"]
     response = controller.ecs.describe_tasks(cluster=CLUSTER, tasks=[task_arn])
     tasks, failures = response.get("tasks", []), response.get("failures", [])
