@@ -1,3 +1,13 @@
+## 2026-10-22 — Requested single-day update blocked before execution
+
+Date: 2026-10-22
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-day-update-audit-20261022`
+What changed: Owner requested recalculating only21October and explicitly chose updating that day inside the existing reporting. Read-only investigation found no safe supported single-day replacement path. Work stopped under the owner's error/unsupported-operation gate; no rerun, publication or further email occurred. See [VEVO state](projects/vevo/PROJECT_STATE.md).
+What is verified: Order9513 is Shipped4/COD7 and eligible again at14:04:09UTC. This supersedes its expired status seen in the preceding task, but does not change the still-published report. Generation20261022T133046Z and enabled daily definition55 were independently read back unchanged. Audit evidence is privately archived with full readback; no persistent process was started.
+Known issues: The14 saved artifacts cannot reconstruct every original daily input required for a consistent four-period rebuild. A one-day standalone export is not a safe update of the existing dashboard. Do not silently run full history, override eligibility, patch only embedded JSON, or claim that9513 has been added.
+Next exact step: Add a versioned replay-input contract and pure rendering boundary, obtain an aligned baseline during a normal scheduled full run, then implement/test exact day replacement with unchanged-history verification and atomic publication. The requested21October update remains incomplete.
+
 ## 2026-10-22 — VEVO recalculated, resend accepted, daily schedule restored
 
 Date: 2026-10-22
