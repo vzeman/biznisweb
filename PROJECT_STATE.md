@@ -1,3 +1,12 @@
+## 2026-10-22 — VEVO same-image report rerun prepared
+
+Date: 2026-10-22
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-rerun-20261022`
+What changed: Owner requested regenerating through yesterday, 2026-10-21, after a previously omitted order became eligible, and resending the report to its existing recipients. Added a reusable controller for the existing deployed VEVO image; it reuses the established lease, schedule/peer guards, host marker, fresh export and four-period verification. It never registers/deregisters a definition or changes the runtime image. Email remains a separate once-only action after order-delta verification. See [VEVO state](projects/vevo/PROJECT_STATE.md).
+What is verified: Read-only AWS preflight confirms account919341186960/eu-central-1, service vevo-daily-report-email, /app, Fargate (no EC2 instance), definition53/image175f32f8, no active/pending VEVO task, both project leases released. Existing image source acda2e95 and successful build39385285447 match ECR. Baseline generation20261021T233137Z covers through21October: 23 orders that day, net revenue392.40EUR, modeled after-fixed result78.56EUR. All baseline artifact hashes and15,478 CSV row costs reconcile. Fresh shop read also shows a formerly included order now cancelled; do not assume the count must increase by exactly one.
+Next exact step: Review/merge the controller and focused checks, run it from clean synchronized main against the exact existing definition/image, then compare added/removed/changed orders and advertising before sending the verified publication once. No report dispatch/email has occurred in this preparation step.
+
 ## 2026-10-20 — VEVO profitable-growth research
 
 Date: 2026-10-20

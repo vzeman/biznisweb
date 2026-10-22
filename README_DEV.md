@@ -109,6 +109,18 @@ Use `PROJECT_STATE.md` only for this repo plus short integration notes.
 
 ## ROY and VEVO report image release and dated regeneration
 
+For a VEVO data refresh on the already deployed image, use
+`python scripts/vevo_report_current_rerun.py --help` from clean, synchronized
+`main`. Bind the controller commit separately from the deployed image's source
+commit, and supply the freshly verified expected task-definition ARN and image.
+This rerun pauses only the VEVO report schedule under the existing lease,
+uses the image-resident host/localhost gate with fresh provider reads, skips
+email/invoices/inline credit-note actions, verifies all four periods, and restores
+the exact original schedule. It never registers or deregisters a task definition
+or creates a probe role. Verify the new order delta before a separately authorized
+email resend. An uncertain or attempted-live failure retains a paused schedule
+and uncertain lease for inspection; do not blindly retry or force-release it.
+
 After a reviewed PR is merged and its exact `build-and-push-ecr.yml` run succeeds,
 use a clean checkout whose HEAD equals fetched `origin/main`. Resolve the real
 current Fargate task/IP (or confirmed absence), the selected report service, and
