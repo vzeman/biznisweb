@@ -13670,8 +13670,10 @@ class BizniWebExporter:
             'date_from': date_from.strftime('%Y-%m-%d'),
             'date_to': date_to.strftime('%Y-%m-%d'),
             'expected_totals': {
-                'facebook_ads': sum((fb_daily_spend or {}).values()),
-                'google_ads': sum((google_daily_spend or {}).values()),
+                # Sum provider decimal amounts before converting to the existing
+                # payload type; float accumulation can cross the EUR 0.05 gate.
+                'facebook_ads': float(sum((Decimal(str(value)) for value in (fb_daily_spend or {}).values()), Decimal(0))),
+                'google_ads': float(sum((Decimal(str(value)) for value in (google_daily_spend or {}).values()), Decimal(0))),
             },
             'expected_account_ids': {
                 'google_ads': str(getattr(self.google_ads_client, 'customer_id', '')).replace('-', ''),
@@ -13760,7 +13762,12 @@ class BizniWebExporter:
                 parsed = {str(country).lower(): self._safe_float(value) for country, value in values.items()}
                 if any(value is None or not np.isfinite(value) or value < 0 for value in parsed.values()):
                     problem = 'invalid country spend amount'
-                elif abs(sum(parsed.values()) - total) > 0.05 or abs(total - expected) > 0.05:
+                # Meta totals use six decimal places and Google supplies micros.
+                # Decimal arithmetic preserves the inclusive five-cent boundary
+                # without rounding away genuine differences above that limit.
+                elif (abs(sum((Decimal(str(value)) for value in parsed.values()), Decimal(0))
+                          - Decimal(str(total))) > Decimal('0.05')
+                      or abs(Decimal(str(total)) - Decimal(str(expected))) > Decimal('0.05')):
                     problem = 'country spend does not reconcile to daily/account spend'
                 elif key == 'google_ads':
                     problem = self._validate_google_country_coverage(

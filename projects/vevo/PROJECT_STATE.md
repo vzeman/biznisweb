@@ -1,3 +1,17 @@
+## 2026-10-22 — Confirmed Meta reconciliation boundary defect; repair authorized
+
+Date: 2026-10-22
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-qa-repair-20261022`
+What changed: Owner explicitly instructed fixing the failed rerun and completing the existing request. This supersedes the prior stop for this known failure. No eligibility, purchase-cost, provider-state or recipient policy change is intended.
+What is verified: Fresh AWS preflight11:17:42UTC: account919341186960/eu-central-1, service vevo-daily-report-email, path /app, Fargate instance N/A and no current task/IP; active definition53, immutable digest175f32f87bc3088ee9c849ac0ff26feed82429e70d972f6035312b7b43fd0b60/sourceacda2e95f9c08c94e16e83e46f528093414843d7. Schedule remains DISABLED and lease uncertain under061f1bc3ef3244169d805f7fe5bae986. All9 original output snapshots, ROY boundaries and12 other schedules unchanged. A new task must independently prove its actual task/IP/image and localhost marker before provider reads.
+
+Cause evidence: Hash-verified source responses from the failed run, parsed by the exact deployed source, produce full-period Meta daily spend EUR38,003.36 and country spend EUR38,003.410000. Their decimal difference is exactly EUR0.050000, within the existing inclusive EUR0.05 tolerance. Binary subtraction produces0.05000000000291038, so `_validate_country_ads` raises the country reconciliation failure, Geo confidence becomes critical, and `validate_publish_quality` rejects. The captured7d/30d/90d inputs pass the same isolated reproduction. Evidence `failure/meta-boundary-reproduction.json` SHA256770e1fe15522c948a5ee97b0711c19728bc5ddeb51c615e2ccce36454afcf638 under the ignored prior-run evidence directory; its script and12 response/receipt hash bindings will be archived privately. Google is explicitly a synthetic valid-zero fixture in this reproduction to isolate Meta. Original QA files were not retained, so this proves a sufficient actual-input trigger, not absence of all other failures.
+
+Decision: Correct numerical boundary handling without rounding genuine over-limit differences away or expanding tolerance. Preserve strict publication QA. Add bounded private live-failure diagnostics, since the deployed wrapper discarded exception diagnostics. Use a separately typed current-rerun recovery contract: exact immutable receipt chain, paused target/output/lease bindings, and expired-task evidence accepted only for ECS MISSING. Existing image-release recovery validation stays intact. A new image must pass an isolated source probe, then the live report and all-period verification before schedule enable/email.
+Known issues: No new report, deploy or email in this repair yet; schedule remains intentionally paused pending successful recovery. No local persistent process started.
+Next exact step: Review code/tests and merge/build from Git; recover the exact retained failure using a CAS lease handoff, verify publication through2026-10-21, compare added/removed orders and approved costs, restore original dynamic cron, resend once and archive terminal evidence.
+
 ## 2026-10-22 — Rerun rejected before publication; schedule paused, email unsent
 
 Date: 2026-10-22

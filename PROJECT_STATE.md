@@ -1,3 +1,13 @@
+## 2026-10-22 — VEVO publication repair in progress
+
+Date: 2026-10-22
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-report-qa-repair-20261022`
+What changed: Owner explicitly resumed repair of the failed rerun. Captured Meta source responses reproduce a numerical boundary defect: full-period country spend EUR38,003.41 minus daily spend EUR38,003.36 is exactly the allowed EUR0.05, but binary subtraction produces0.05000000000291038 and rejects publication. The repair must preserve the existing economic tolerance. See [VEVO state](projects/vevo/PROJECT_STATE.md).
+What is verified: Fresh read-only preflight11:17:42UTC confirms the unchanged TD53/sourceacda, paused VEVO schedule, uncertain failed-run lease and no active reporting tasks. All9 VEVO publication objects, ROY boundaries and12 other schedules remain unchanged. The exact deployed parser/QA/gate reproduces the rejection from retained Meta inputs; this does not establish that no other original QA failed.
+Known issues: Corrected report/email remain pending. The live wrapper lost specific failure diagnostics; repair also adds private bounded retention. No production mutation has occurred in this resumed repair.
+Next exact step: Review/test/merge the monetary fix, diagnostic retention and narrowly bound recovery admission. Build from Git, run the isolated probe before live publication, verify actual order/cost changes and all periods, restore the original dynamic schedule and resend once to existing recipients.
+
 ## 2026-10-22 — VEVO rerun blocked by publication quality gate; no resend
 
 Date: 2026-10-22
