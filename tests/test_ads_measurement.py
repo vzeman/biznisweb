@@ -11,6 +11,7 @@ from unittest.mock import Mock
 import pandas as pd
 
 from dashboard_modern import generate_modern_dashboard
+from daily_report_runner import validate_publish_quality
 from export_orders import BizniWebExporter
 from facebook_ads import ADS_MEASUREMENT_SCHEMA_VERSION, FacebookAdsClient, PURCHASE_ACTION
 from google_ads import GoogleAdsClient
@@ -246,6 +247,81 @@ class GoogleCountryTests(unittest.TestCase):
 
 
 class CountryEconomicsTests(unittest.TestCase):
+    def test_recorded_meta_five_cent_boundary_does_not_block_publication(self):
+        # Actual aggregate amounts from the failed 2026-10-22 full-period fetch.
+        # Binary subtraction produces 0.05000000000291038 although both sources
+        # differ by exactly the allowed EUR 0.05. No customer/provider IDs needed.
+        values = evidence()
+        countries = {'cz': 1474.075127, 'hu': 1706.197509,
+                     'sk': 34822.987362, 'unknown': .150002}
+        values['facebook_ads'] = provider('meta_country_breakdown', countries)
+        values['facebook_ads']['total_spend'] = 38003.41
+        values['expected_totals']['facebook_ads'] = 38003.36
+        self.assertGreater(abs(38003.41 - 38003.36), .05)
+        original = deepcopy(values)
+        instance = exporter()
+        result = instance._validate_country_ads(values)
+        self.assertEqual(result['failure_count'], 0)
+        self.assertEqual(result['facebook_ads']['spend_by_country'], countries)
+        self.assertEqual(values, original)
+        qa = instance._build_geo_qa(None, {'spend_attribution': result})
+        health = instance._finalize_source_health({'sources': {}, 'qa': {'geo': qa}})
+        validate_publish_quality(health, 'data_quality.json')
+
+    def test_daily_provider_totals_do_not_accumulate_binary_boundary_noise(self):
+        instance = exporter()
+        instance.project_settings['measured_country_ads_enabled'] = True
+        instance.fb_client = Mock()
+        instance.google_ads_client = Mock(customer_id='123-456')
+        instance.fb_client.get_country_spend.return_value = provider('meta_country_breakdown', {'sk': .25})
+        instance.google_ads_client.get_country_spend.return_value = provider('google_user_location', {'sk': .25})
+        values = instance._fetch_country_ads(START, END, {'a': .1, 'b': .2}, {'a': .1, 'b': .2})
+        self.assertEqual(values['expected_totals'], {'facebook_ads': .3, 'google_ads': .3})
+        self.assertEqual(instance._validate_country_ads(values)['failure_count'], 0)
+
+    def test_five_cent_gate_includes_boundary_but_rejects_next_micro(self):
+        for provider_key, basis in (('facebook_ads', 'meta_country_breakdown'), ('google_ads', 'google_user_location')):
+            for actual, allowed in ((38003.41, True), (38003.31, True),
+                                    (38003.410001, False), (38003.309999, False)):
+                with self.subTest(provider=provider_key, actual=actual):
+                    values = evidence()
+                    values[provider_key] = provider(basis, {'sk': actual})
+                    values['expected_totals'][provider_key] = 38003.36
+                    instance = exporter()
+                    result = instance._validate_country_ads(values)
+                    self.assertEqual(result['failure_count'], 0 if allowed else 1)
+                    qa = instance._build_geo_qa(None, {'spend_attribution': result})
+                    health = instance._finalize_source_health({'sources': {}, 'qa': {'geo': qa}})
+                    if allowed:
+                        validate_publish_quality(health, 'data_quality.json')
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            validate_publish_quality(health, 'data_quality.json')
+        # The independent country-sum check uses the same strict boundary.
+        for country_total, allowed in ((38003.41, True), (38003.410001, False),
+                                       (38003.31, True), (38003.309999, False)):
+            with self.subTest(country_total=country_total):
+                values = evidence()
+                values['facebook_ads'] = provider('meta_country_breakdown', {'sk': country_total})
+                values['facebook_ads']['total_spend'] = 38003.36
+                values['expected_totals']['facebook_ads'] = 38003.36
+                self.assertEqual(exporter()._validate_country_ads(values)['failure_count'], 0 if allowed else 1)
+
+    def test_invalid_monetary_evidence_still_fails_closed(self):
+        for invalid in (-1, float('nan'), float('inf'), -float('inf')):
+            for location in ('country', 'total', 'expected'):
+                with self.subTest(invalid=invalid, location=location):
+                    values = evidence()
+                    if location == 'country':
+                        values['facebook_ads']['spend_by_country']['sk'] = invalid
+                    elif location == 'total':
+                        values['facebook_ads']['total_spend'] = invalid
+                    else:
+                        values['expected_totals']['facebook_ads'] = invalid
+                    result = exporter()._validate_country_ads(values)
+                    self.assertEqual(result['facebook_ads']['status'], 'unavailable')
+                    self.assertEqual(result['failure_count'], 1)
+
     def test_residual_conservation_and_warning_do_not_allocate_to_orders(self):
         values = evidence()
         values['google_ads'] = provider('google_user_location', {'sk': 2, 'hu': 1, 'ro': 3, 'unknown': .5}, residual=4)

@@ -315,7 +315,10 @@ class ImageRelease(Deployment):
     def __init__(self, session, commit, to_date, timeout, *, release_id=None, recover_paused_release=None,
                  recovery_receipt_sha256=None, recovery_readback_key=None, recovery_readback_sha256=None,
                  project="vevo", retained_peer_release=None, retained_peer_lease_sha256=None, retained_peer_lease_etag=None,
-                 independent_contract_sha256=None):
+                 independent_contract_sha256=None, recover_current_rerun=None):
+        require(not recover_current_rerun or (project == "vevo" and not recover_paused_release
+                and recovery_receipt_sha256 and recovery_readback_key and recovery_readback_sha256),
+                "image-release-current-recovery-arguments")
         require(independent_contract_sha256 is None or (isinstance(independent_contract_sha256, str)
                 and re.fullmatch(r"[a-f0-9]{64}", independent_contract_sha256)), "image-release-independent-contract-invalid")
         self.independent_contract_sha256 = independent_contract_sha256
@@ -339,6 +342,7 @@ class ImageRelease(Deployment):
         self.candidate = None
         self.role_trust = None
         self.recover_paused_release = recover_paused_release
+        self.recover_current_rerun = recover_current_rerun
         self.recovery_receipt_sha256 = recovery_receipt_sha256
         self.recovery_readback_key, self.recovery_readback_sha256 = recovery_readback_key, recovery_readback_sha256
         self.recovery = None
@@ -722,6 +726,9 @@ class ImageRelease(Deployment):
 
     def inspect_paused_recovery(self):
         """Read historical identity proof, then verify every current safety boundary."""
+        if getattr(self, "recover_current_rerun", None):
+            from scripts.reporting_current_rerun_recovery import inspect
+            return inspect(self)
         previous_id = self.recover_paused_release
         require(re.fullmatch(r"[a-f0-9]{32}", previous_id or "") and previous_id != self.release_id
                 and re.fullmatch(r"[a-f0-9]{64}", self.recovery_receipt_sha256 or ""),
@@ -790,6 +797,9 @@ class ImageRelease(Deployment):
 
     def verify_paused_boundary(self):
         recovery = self.recovery
+        if recovery.get("kind") == "current-rerun":
+            from scripts.reporting_current_rerun_recovery import verify_boundary
+            return verify_boundary(self)
         require(binding.schedule_snapshot(self.schedule()) == binding.schedule_snapshot(self.original),
                 "image-release-recovery-schedule-drift")
         require(binding.definition_snapshot(self.definition(recovery["candidate_arn"])) ==
@@ -897,7 +907,8 @@ class ImageRelease(Deployment):
         self.image, self.build_id = self.exact_image()
         self.original = self.schedule()
         self.known_schedule = copy.deepcopy(self.original)
-        require(self.original["State"] == ("DISABLED" if self.recover_paused_release else "ENABLED")
+        recovering = self.recover_paused_release or getattr(self, "recover_current_rerun", None)
+        require(self.original["State"] == ("DISABLED" if recovering else "ENABLED")
                 and self.original["Target"]["Arn"] == CLUSTER
                 and self.original["Target"]["EcsParameters"].get("LaunchType") == "FARGATE", "image-release-schedule-identity")
         self.original_source = self.definition(self.original["Target"]["EcsParameters"]["TaskDefinitionArn"])
@@ -929,7 +940,7 @@ class ImageRelease(Deployment):
                 "image-release-history-start-required")
         self.gate_sha = committed_gate_sha(self.commit)
         self.no_report_tasks()
-        recovery_proof = self.inspect_paused_recovery() if self.recover_paused_release else None
+        recovery_proof = self.inspect_paused_recovery() if recovering else None
         self.event("preflight-complete", schedule=self.original, source_definition=self.original_source,
                    protected_schedules=self.protected, build_run_id=self.build_id, image=self.image,
                    original_live_outputs=self.original_outputs, final_schedule_state="ENABLED", recovered_from=recovery_proof,
@@ -1036,6 +1047,7 @@ def main():
     parser.add_argument("--to-date")
     parser.add_argument("--release-id")
     parser.add_argument("--recover-paused-release")
+    parser.add_argument("--recover-current-rerun", help="Recover a reviewed failed same-definition VEVO rerun; requires its private failure ZIP")
     parser.add_argument("--recovery-receipt-sha256")
     parser.add_argument("--recovery-readback-key")
     parser.add_argument("--recovery-readback-sha256")
@@ -1048,9 +1060,12 @@ def main():
     from botocore.config import Config
     session = boto3.Session(profile_name=args.profile, region_name=REGION)
     # Finite SDK operations; workflows may poll for a long report, never one unbounded call.
+    # The current-rerun recovery never retries mutation transport calls: a lost
+    # registration, role, schedule, lease or dispatch response needs readback.
+    attempts = 1 if args.recover_current_rerun else 2
     original_client = session.client
     session.client = lambda name: original_client(name, config=Config(connect_timeout=10, read_timeout=45,
-        retries={"total_max_attempts": 2}))
+        retries={"total_max_attempts": attempts}))
     if args.mode == "status":
         require(args.release_id and re.fullmatch(r"[a-f0-9]{32}", args.release_id), "image-release-id-required")
         s3 = session.client("s3")
@@ -1064,8 +1079,11 @@ def main():
                                                        "at", "promoted", "rerun_attempted", "known_task_arns")}))
         return
     require(args.commit and args.to_date and 300 <= args.timeout_seconds <= 14400, "image-release-arguments-invalid")
-    require(bool(args.recover_paused_release) == bool(args.recovery_receipt_sha256)
-            and (args.recover_paused_release or not (args.recovery_readback_key or args.recovery_readback_sha256)),
+    recovering = args.recover_paused_release or args.recover_current_rerun
+    require(not (args.recover_paused_release and args.recover_current_rerun)
+            and bool(recovering) == bool(args.recovery_receipt_sha256)
+            and (recovering or not (args.recovery_readback_key or args.recovery_readback_sha256))
+            and (not args.recover_current_rerun or (args.project == "vevo" and args.recovery_readback_key and args.recovery_readback_sha256)),
             "image-release-recovery-arguments")
     date.fromisoformat(args.to_date)
     release_id = args.release_id or uuid.uuid4().hex
@@ -1074,6 +1092,7 @@ def main():
         ImageRelease(session, args.commit, args.to_date, args.timeout_seconds, release_id=release_id,
                      recover_paused_release=args.recover_paused_release, recovery_receipt_sha256=args.recovery_receipt_sha256,
                      recovery_readback_key=args.recovery_readback_key, recovery_readback_sha256=args.recovery_readback_sha256,
+                     recover_current_rerun=args.recover_current_rerun,
                      project=args.project, retained_peer_release=args.retained_peer_release,
                      retained_peer_lease_sha256=args.retained_peer_lease_sha256,
                      retained_peer_lease_etag=args.retained_peer_lease_etag,
