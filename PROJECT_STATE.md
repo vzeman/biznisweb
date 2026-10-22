@@ -1,3 +1,13 @@
+## 2026-10-22 — VEVO recalculated, resend accepted, daily schedule restored
+
+Date: 2026-10-22
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-rerun-completion-20261022`
+What changed: PR #647/source854c91ff was built and released as immutable VEVO definition55. The isolated probe and live calculation succeeded; generation20261022T133046Z covers through21October. The original dynamic daily schedule is enabled. The recalculated report was sent once to its existing three recipients; SES accepted it at13:47:38UTC. See [VEVO state](projects/vevo/PROJECT_STATE.md) for exact runtime, financial, email and private evidence receipts.
+What is verified: Four-period QA,14 downloaded artifacts,8 authenticated HTTP surfaces and all15,470 exported purchase-cost rows passed. Both Fargate tasks exited0; finite local controller18244 ended naturally with no ports. ROY and12other schedules remained unchanged. The964-file private evidence archive has full readback verification.
+Known issues: No extra order was added:9513 changed in the shop from Shipped to Payment online - expired between source reads and remains excluded; its actor and exact live snapshot status are not retained. The resend corrects an existing email-only creditnote denominator wording defect; the reusable scheduled-email template remains a separate follow-up. No provider status or financial document was mutated.
+Next exact step: Do not repeat this resend; reconcile the recorded SES MessageId for delivery questions. Review the upstream9513 status change before any status correction. Fix/test the reusable creditnote email wording through a separate Git-reviewed deployment; current report HTML and recalculated financial data are correct.
+
 ## 2026-10-22 — VEVO pre-probe failure under investigation
 
 Date: 2026-10-22
