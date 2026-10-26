@@ -2244,6 +2244,22 @@ Branch: codex/vevo-content-batch-54
 - The stale global MCP registration remains a non-blocking warning. This batch deliberately used the explicit repo-local script whose account, block, hidden smoke and final readback all passed.
 - Planning commit `7b69cf4f`, prepared-content commit `64058bf9` and publication verification commit `e7a1d8e6` are pushed on `codex/vevo-content-batch-56`. Stacked PR `#597` targets `codex/vevo-content-batch-55`; `env-check`, `secret-scan`, `security-baseline` and `observability-baseline` passed.
 
+## Batch 57 Surface Colour, Denim Washing, Peaching And Pleats - Prepared 2026-10-26
+
+- Status: prepared and fully validated before live mutation; publication is the next gated step.
+- Work is isolated in `D:/CodexWorktrees/Playground-vevo-b57` on `codex/vevo-content-batch-57`, stacked on the pushed batch 56 handoff. The unrelated dirty root checkout was not modified.
+- The current BiznisWeb News-block guidance was rechecked on `2026-10-26`; it confirms separate SEO metadata and an editable URL identifier. The explicit repo-local slug-safe MCP/API workflow remains mandatory.
+- Fourteen exploratory finishing and decorative-textile subjects were checked against `879` merged Blog, FAQ, glossary, RSS and local records. Exact phrase-boundary scans found zero subject matches in Blog block `765` (`626` records), FAQ block `774` (`177`) and glossary block `1905` (`95`).
+- Mercerized cotton and batik remain deferred because the title guard returned manual review against the existing moleskin and Madras guides. The four selected subjects are pigment-dyed clothing, stonewashed/enzyme-washed denim, peach finish and plisse/permanently pleated textiles.
+- Canonical alias families and regression tests now prevent future duplicate definitions under pigment-dyed garment, stone-washed/biostoned denim, peached/peach-skin/sueded fabric and permanent/heat-set pleats names.
+- The four prepared articles contain `3426`, `3360`, `3374` and `3489` visible words; `30-31` H2 headings, two responsive tables, eleven styled blocks, one conditional concrete-product card, one category card, thirteen authored FAQ entries and zero short or one-character paragraphs each.
+- Seven-word-shingle overlap is `0.1078-0.1116`, below the `0.13` ceiling. Definitions, manufacturing mechanisms, diagnostics, procedures, failure boundaries and expert sections remain topic-specific.
+- Primary and technical evidence is constrained to accessible CottonWorks, AATCC, GINETEX, EU, PubMed/PMC, NC State JTATM, J-STAGE, V&A and National Park Service sources.
+- Direct link preflight rejected a stale VEVO flannel URL (`404`), a retired V&A HTML route (`404`) and Smithsonian/Canada HTML routes that returned `403` or timed out under direct automation. The internal reference was removed and the external evidence was replaced with directly accessible V&A and National Park Service PDFs; no exception allowlist was used.
+- Product recommendations remain conditional on the complete care label. The current VEVO liquid laundry gel and category are shown without prices and do not claim to fix pigment, reproduce stonewashing, rebuild peached fibres or reset pleats.
+- The full prepared project check passes `54/54` tests. Final duplicate checking returns four `OK` results; public-wording, fixed-price, depth, HTML-safety and direct link gates have zero failures.
+- Durable prepared artifacts include the exploratory and selected candidate lists, live-admin candidate scanner, batch plan, alias regression, deterministic builder, four-article JSON and independent admin/public verification scripts.
+
 ## Known Issues
 
 - The initial VEVO snapshot migration and batch 43 work are isolated on `codex/vevo-content-batch-43`; they are not part of `main` until the branch is reviewed and merged through a pull request.
@@ -2279,10 +2295,10 @@ Branch: codex/vevo-content-batch-54
 
 For the next VEVO work:
 
-1. Start batch 57 with a broad candidate scan against the updated Blog, FAQ, glossary, RSS and local catalog; treat all batch 56 aliases as occupied.
-2. Prefer a small set of technically distinct topics with honest VEVO product relevance and enough primary evidence for a long practical guide.
-3. Run exact live-admin scans and the merged duplicate guard before fixing titles or slugs, then repeat the established rich-HTML, link, MCP smoke, publication and mobile-verification gates.
-4. Keep batch 57 stacked on the latest content branch until earlier pull requests merge, push every durable checkpoint and merge only through pull requests.
+1. Push the prepared batch 57 checkpoint, then run the repo-local MCP read-only preflight for account `vevo.flox.sk`, public domain `www.vevo.sk`, language `1`, Blog page `309` and News block `765`.
+2. Require zero exact title and slug matches and run the disposable hidden rich-HTML/slug smoke; delete it and verify no admin or public residue before publishing.
+3. Publish the four prepared articles through one resumable explicit `--publish` call, then run independent admin readback, public-depth/link verification and mobile layout QA.
+4. Record post IDs and canonical URLs, rerun the project audit, push the publication checkpoint and open a pull request stacked on `codex/vevo-content-batch-56`.
 
 ## Handoff Template
 
