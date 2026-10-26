@@ -501,6 +501,60 @@ class DuplicateGuardTests(unittest.TestCase):
                         {issue["type"] for issue in results[0]["issues"]},
                     )
 
+    def test_batch_57_surface_finish_aliases_are_blocked_by_canonical_articles(self):
+        families = (
+            (
+                "Čo je pigmentovo farbené oblečenie: patina, oter farby a starostlivosť",
+                "co-je-pigmentovo-farbene-oblecenie-patina-oter-farby-a-starostlivost",
+                (
+                    "Čo je pigment-dyed clothing: povrchová farba a pranie",
+                    "Čo je pigment-dyed garment: patina a oter farby",
+                ),
+            ),
+            (
+                "Čo je stonewashed a enzyme-washed denim: čo úpravy znamenajú a ako prať",
+                "co-je-stonewashed-a-enzyme-washed-denim-co-upravy-znamenaju-a-ako-prat",
+                (
+                    "Čo je stone-washed denim: kamene, oder a pranie",
+                    "Čo je biostoned denim: enzýmy a vyblednutie",
+                ),
+            ),
+            (
+                "Čo je peach finish alebo brúsený povrch: jemnosť, lesk a starostlivosť",
+                "co-je-peach-finish-alebo-bruseny-povrch-jemnost-lesk-a-starostlivost",
+                (
+                    "Čo je peached fabric: zamatový dotyk a pranie",
+                    "Čo je peach-skin fabric: jemný brúsený povrch",
+                    "Čo je sueded fabric: brúsenie a starostlivosť",
+                ),
+            ),
+            (
+                "Čo je plisé a krčená úprava: trvalé sklady, teplo a pranie",
+                "co-je-plise-a-krcena-uprava-trvale-sklady-teplo-a-pranie",
+                (
+                    "Čo je permanent pleats: trvalé sklady a pranie",
+                    "Čo je heat-set pleats: polyester a teplo",
+                ),
+            ),
+        )
+
+        for title, slug, candidates in families:
+            existing = [
+                duplicate_guard.row_from_title_link(
+                    title,
+                    f"https://www.vevo.sk/n/{slug}",
+                    "rss",
+                )
+            ]
+            for candidate in candidates:
+                with self.subTest(candidate=candidate):
+                    results = duplicate_guard.analyze([candidate], existing, 0.28)
+                    self.assertEqual(results[0]["status"], "block")
+                    self.assertIn(
+                        "canonical_definition_head",
+                        {issue["type"] for issue in results[0]["issues"]},
+                    )
+
     def test_cross_section_title_tokens_remove_template_words(self):
         left = cross_section_audit.title_tokens(
             "Ako umyt okna bez smuh - Kompletny sprievodca"
