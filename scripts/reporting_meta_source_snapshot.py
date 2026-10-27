@@ -225,8 +225,8 @@ class MetaSourceSnapshot:
                 require(isinstance(limits, dict) and set(limits) == {'since', 'until'}
                         and (limits['since'], limits['until']) in self.periods.values(), 'insights-period')
                 if query.get('breakdowns') == 'country':
-                    require(fields == {'spend'} and 'time_increment' not in query, 'country-query')
-                    kind = 'country'
+                    require(fields == {'spend'} and query.get('time_increment') in (None, '1'), 'country-query')
+                    kind = 'country_daily' if query.get('time_increment') == '1' else 'country'
                 else:
                     if query.get('time_increment') != '1':
                         return False
@@ -255,13 +255,13 @@ class MetaSourceSnapshot:
                     group = {'kind': kind, 'query': base_query, 'pages': [], 'expected_after': None,
                              'complete': False, 'seen_cursors': set(), 'row_keys': set(),
                              'currency_metadata_page': self.last_currency_page}
-                    require(kind != 'country' or self.last_currency_page is not None, 'country-currency-missing')
+                    require(kind not in {'country', 'country_daily'} or self.last_currency_page is not None, 'country-currency-missing')
                     self.groups[group_id] = group
                 else:
                     require(not group['complete'] and query.get('after') == group['expected_after'], 'repeated-or-wrong-page')
                 rows = payload['data']
                 for row in rows:
-                    allowed = fields | {'date_start', 'date_stop'} | ({'country'} if kind == 'country' else set())
+                    allowed = fields | {'date_start', 'date_stop'} | ({'country'} if kind in {'country', 'country_daily'} else set())
                     require(isinstance(row, dict) and {'spend', 'date_start', 'date_stop'} <= set(row)
                             and set(row) <= allowed, 'native-row-shape')
                     try:
@@ -275,6 +275,18 @@ class MetaSourceSnapshot:
                                 and row['date_start'] == row['date_stop']
                                 and limits['since'] <= row['date_start'] <= limits['until'], 'daily-date')
                         row_key = row['date_start']
+                    elif kind == 'country_daily':
+                        try:
+                            native_date = date.fromisoformat(row['date_start']).isoformat()
+                        except (TypeError, ValueError):
+                            native_date = None
+                        require(isinstance(row['date_start'], str) and native_date == row['date_start']
+                                and row['date_start'] == row['date_stop']
+                                and limits['since'] <= row['date_start'] <= limits['until']
+                                and isinstance(row.get('country'), str)
+                                and (row['country'] == 'unknown' or re.fullmatch('[A-Za-z]{2}', row['country'])),
+                                'country-daily-row')
+                        row_key = (row['date_start'], row['country'].lower())
                     else:
                         require(row['date_start'] == limits['since'] and row['date_stop'] == limits['until']
                                 and isinstance(row.get('country'), str)
@@ -321,6 +333,10 @@ class MetaSourceSnapshot:
         country_ranges = {(group['query']['time_range']['since'], group['query']['time_range']['until'])
                           for group in self.groups.values() if group['kind'] == 'country'}
         require(country_ranges == set(self.periods.values()), 'country-periods-incomplete')
+        country_daily_ranges = {(group['query']['time_range']['since'], group['query']['time_range']['until'])
+                                for group in self.groups.values() if group['kind'] == 'country_daily'}
+        if country_daily_ranges:
+            require(country_daily_ranges == set(self.periods.values()), 'country-daily-periods-incomplete')
         require(any(group['kind'] == 'daily' and group['query']['time_range'] == {
             'since': self.from_date, 'until': self.to_date}
             and set(group['query']['fields'].split(',')) == PRIMARY_DAILY_FIELDS

@@ -6,6 +6,7 @@ Production dashboard renderer used by the main HTML reporting output.
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import date, datetime
 from html import escape
@@ -402,7 +403,112 @@ def _days_to_green_cell_html(maturation: Optional[Dict[str, Any]]) -> str:
     )
 
 
-def _kpis(payload: Optional[dict]) -> Dict[str, Any]:
+def _country_kpi_metadata(source: Any) -> Dict[str, Any]:
+    """Retain finite accounting provenance without mirroring provider diagnostics."""
+    if not isinstance(source, dict):
+        return {}
+    result = {}
+    providers = {"facebook_ads", "google_ads"}
+
+    def finite(value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+        try:
+            return math.isfinite(value)
+        except OverflowError:
+            return False
+
+    def numeric_map(values, *, country_keys=False, allowed_keys=None, allow_none=True):
+        if not isinstance(values, dict):
+            return {}
+        return {
+            key: value for key, value in values.items()
+            if isinstance(key, str)
+            and (not country_keys or re.fullmatch(r"[a-z]{2}|unknown|unallocated|other", key))
+            and (allowed_keys is None or key in allowed_keys)
+            and ((allow_none and value is None) or finite(value))
+        }
+
+    for key in ("date_from", "date_to"):
+        value = source.get(key)
+        if isinstance(value, str):
+            try:
+                if len(value) == 10 and date.fromisoformat(value).isoformat() == value:
+                    result[key] = value
+            except ValueError:
+                pass
+    for key in ("calendar_complete", "residual_reallocated", "advertising_reallocated", "creditnote_fulfillment_included"):
+        if type(source.get(key)) is bool:
+            result[key] = source[key]
+    days = source.get("calendar_days")
+    if type(days) is int and 0 <= days <= 366000:
+        result["calendar_days"] = days
+    enums = {
+        "basis": {"canonical_order_financials_and_measured_daily_country_ads"},
+        "market_basis": {"delivery_country_with_invoice_fallback"},
+        "fixed_cost_basis": {"existing_daily_order_share"},
+        "customer_basis": {"global_first_purchase_date"},
+        "creditnote_fulfillment_source": {"same_selected_company_events", "company_residual_only"},
+        "residual_basis": {"other_or_unknown_markets_unallocated_ads_and_orderless_day_fixed_costs"},
+    }
+    for key, allowed in enums.items():
+        value = source.get(key)
+        if isinstance(value, str) and value in allowed:
+            result[key] = value
+    unavailable = source.get("unavailable_ad_sources")
+    if isinstance(unavailable, list):
+        result["unavailable_ad_sources"] = list(dict.fromkeys(
+            provider for provider in unavailable if isinstance(provider, str) and provider in providers
+        ))
+    statuses = source.get("provider_status")
+    if isinstance(statuses, dict):
+        result["provider_status"] = {
+            key: value for key, value in statuses.items()
+            if key in providers and isinstance(value, str) and value in {"ok", "partial", "unavailable"}
+        }
+    coverage = source.get("provider_country_coverage")
+    if isinstance(coverage, dict):
+        selected = {}
+        for provider, values in coverage.items():
+            if provider not in providers or not isinstance(values, dict):
+                continue
+            entry = numeric_map(values, allowed_keys={"unknown_spend_eur", "unallocated_spend_eur"})
+            status = values.get("status")
+            if isinstance(status, str) and status in {"complete", "partial", "unavailable"}:
+                entry["status"] = status
+            selected[provider] = entry
+        result["provider_country_coverage"] = selected
+    totals = source.get("provider_daily_totals")
+    if isinstance(totals, dict):
+        result["provider_daily_totals"] = {
+            provider: numeric_map(values, country_keys=True, allow_none=False)
+            for provider, values in totals.items() if provider in providers and isinstance(values, dict)
+        }
+    comparisons = source.get("daily_vs_period")
+    if isinstance(comparisons, dict):
+        selected = {}
+        for provider, values in comparisons.items():
+            if provider not in providers:
+                continue
+            if values is None:
+                selected[provider] = None
+            elif isinstance(values, dict):
+                entry = numeric_map(values, allowed_keys={"daily_minus_period_total_eur"}, allow_none=False)
+                by_country = values.get("daily_minus_period_by_country_eur")
+                if isinstance(by_country, dict):
+                    entry["daily_minus_period_by_country_eur"] = numeric_map(by_country, country_keys=True, allow_none=False)
+                selected[provider] = entry
+        result["daily_vs_period"] = selected
+    residuals = source.get("company_minus_displayed_countries")
+    if isinstance(residuals, dict):
+        result["company_minus_displayed_countries"] = numeric_map(residuals, allowed_keys={
+            "total_revenue", "product_expense", "packaging_cost", "shipping_net_cost",
+            "unique_orders", "fixed_daily_cost", "fb_ads_spend", "google_ads_spend",
+        })
+    return result
+
+
+def _kpis(payload: Optional[dict], *, include_countries: bool = True) -> Dict[str, Any]:
     payload = payload or {}
     metric_defs = []
     for metric in payload.get("metric_defs") or []:
@@ -439,13 +545,54 @@ def _kpis(payload: Optional[dict]) -> Dict[str, Any]:
         comparisons[window_key] = {}
         for metric_key, metric_comp in comp_payload.items():
             comparisons[window_key][metric_key] = {k: _maybe_num(v) for k, v in (metric_comp or {}).items()}
-    return {
+    result = {
         "default_window": str(payload.get("default_window") or "monthly"),
         "metric_defs": metric_defs,
         "windows": windows,
         "comparisons": comparisons,
         "comparison_labels": COMPARISON_LABELS,
     }
+    # Country payloads have the same finite CFO contract. Never recursively
+    # serialize arbitrary nested country dictionaries from an upstream source.
+    if include_countries:
+        country_metadata = _country_kpi_metadata(payload.get("country_metadata"))
+        if country_metadata:
+            result["country_metadata"] = country_metadata
+        country_labels = {
+            "sk": ("Slovakia", "Slovensko"),
+            "cz": ("Czechia", "Česko"),
+            "hu": ("Hungary", "Maďarsko"),
+        }
+        supplied = payload.get("countries") or {}
+        if isinstance(supplied, dict):
+            requested_order = payload.get("country_order") or list(country_labels)
+            if not isinstance(requested_order, (list, tuple)):
+                requested_order = list(country_labels)
+            order = list(dict.fromkeys(
+                country for country in requested_order
+                if isinstance(country, str) and country in country_labels
+            ))
+            countries = {}
+            for country in order:
+                source = supplied.get(country)
+                if not isinstance(source, dict) or not source.get("windows"):
+                    continue
+                country_payload = _kpis(source, include_countries=False)
+                country_payload.update({
+                    "country": country,
+                    "label_en": str(source.get("label_en") or country_labels[country][0]),
+                    "label_sk": str(source.get("label_sk") or country_labels[country][1]),
+                })
+                if source.get("status") in ("ok", "unavailable"):
+                    country_payload["status"] = source["status"]
+                metadata = _country_kpi_metadata(source.get("metadata"))
+                if metadata:
+                    country_payload["metadata"] = metadata
+                countries[country] = country_payload
+            if countries:
+                result["country_order"] = list(countries)
+                result["countries"] = countries
+    return result
 
 
 def _cost_mix(date_agg: pd.DataFrame) -> Dict[str, Any]:
@@ -943,6 +1090,30 @@ def generate_modern_dashboard(
     daily_profit_best_class = _profit_status_class(daily_profit_summary.get("best_day_profit"))
     daily_profit_worst_class = _profit_status_class(daily_profit_summary.get("worst_day_profit"))
     kpi_payload = _kpis(cfo_kpi_payload)
+    country_kpi_unavailable_html = (
+        '<p class="country-kpi-note country-kpi-unavailable" role="status">'
+        '<span class="lang-en">Advertising data is unavailable. Profit and advertising-based metrics are shown as N/A.</span>'
+        '<span class="lang-sk hidden">Reklamné údaje nie sú dostupné. Zisk a ukazovatele závislé od reklamy sú označené N/A.</span>'
+        '</p>'
+    )
+    country_kpi_decks_html = "".join(
+        f'''<section class="country-kpi-deck" data-kpi-country="{country}"
+                    aria-labelledby="countryKpiHeading-{country}">
+                <div class="country-kpi-heading">
+                    <h3 id="countryKpiHeading-{country}"><span class="lang-en">{country.upper()} · {escape(country_payload["label_en"])}</span><span class="lang-sk hidden">{country.upper()} · {escape(country_payload["label_sk"])}</span></h3>
+                    {country_kpi_unavailable_html if country_payload.get("status") == "unavailable" else ""}
+                </div>
+                <div id="countryKpiGrid-{country}" class="kpi-grid"></div>
+            </section>'''
+        for country, country_payload in (kpi_payload.get("countries") or {}).items()
+    )
+    if country_kpi_decks_html:
+        country_kpi_decks_html += (
+            '<p class="country-kpi-note country-kpi-footnote">'
+            '<span class="lang-en">SK, CZ and HU are shown separately. Company totals may also include other countries and unallocated amounts.</span>'
+            '<span class="lang-sk hidden">SK, CZ a HU sú zobrazené samostatne. Celkový súhrn môže obsahovať aj ďalšie krajiny a nepriradené sumy.</span>'
+            '</p>'
+        )
     cost_mix = _cost_mix(date_agg)
     cities = _top_rows(
         city_analysis,
@@ -4702,6 +4873,11 @@ def generate_modern_dashboard(
         .section-head p {{ margin: 6px 0 14px; color: var(--muted); line-height: 1.55; max-width: 760px; }}
         .kpi-band {{ padding: 22px; }}
         .kpi-grid {{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }}
+        .country-kpi-deck {{ margin-top: 26px; padding-top: 22px; border-top: 1px solid rgba(255,138,31,.18); }}
+        .country-kpi-heading h3 {{ margin: 0; font-size: 22px; letter-spacing: -.03em; }}
+        .country-kpi-note {{ color: var(--muted); font-size: 12px; line-height: 1.6; margin: 9px 0 0; }}
+        .country-kpi-unavailable {{ color: var(--red); }}
+        .country-kpi-footnote {{ margin-top: 20px; }}
         .kpi-card {{ padding: 20px; border-radius: 22px; background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,245,233,.92)); border:1px solid rgba(255,138,31,.14); min-height: 228px; display:flex; flex-direction:column; }}
         .kpi-card small {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing:.08em; }}
         .kpi-value {{ font-size: 36px; font-weight: 900; line-height: 1; letter-spacing: -.05em; margin: 10px 0 6px; }}
@@ -4896,6 +5072,7 @@ def generate_modern_dashboard(
                             <button type="button" class="window-btn" data-window="all_time"><span class="lang-en">All-time</span><span class="lang-sk hidden">Celé obdobie</span></button>
                         </div>
                         <div id="kpiGrid" class="kpi-grid"></div>
+                        {country_kpi_decks_html}
                     </div>
                 </section>
 
@@ -5851,6 +6028,11 @@ def generate_modern_dashboard(
         function fmtPercent(v) {{ if (v === null || v === undefined || Number.isNaN(Number(v))) return 'N/A'; return `${{Number(v).toFixed(1)}}%`; }}
         function fmtMultiple(v) {{ if (v === null || v === undefined || Number.isNaN(Number(v))) return 'N/A'; return `${{Number(v).toFixed(2)}}x`; }}
         function nullableNumber(v) {{ return (v === null || v === undefined || Number.isNaN(Number(v))) ? null : Number(v); }}
+        function kpiText(value) {{
+            return String(value ?? '').replace(/[&<>"']/g, character => ({{
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }})[character]);
+        }}
         function fmtMetric(key, value) {{
             const type = KPI_TYPES[key] || 'text';
             if (type === 'currency') return fmtCurrency(value);
@@ -5887,13 +6069,25 @@ def generate_modern_dashboard(
                 min -= 1;
                 max += 1;
             }}
-            const points = cleaned.map((value, idx) => {{
-                const x = (idx / Math.max(cleaned.length - 1, 1)) * width;
+            const segments = [];
+            let points = [];
+            (values || []).forEach((raw, idx) => {{
+                const value = nullableNumber(raw);
+                if (value === null) {{
+                    if (points.length) segments.push(points);
+                    points = [];
+                    return;
+                }}
+                const x = (idx / Math.max(values.length - 1, 1)) * width;
                 const y = height - pad - (((value - min) / (max - min)) * (height - pad * 2));
-                return [x, y];
+                points.push([x, y]);
             }});
-            const linePath = points.map(([x, y], idx) => `${{idx === 0 ? 'M' : 'L'}}${{x.toFixed(2)}},${{y.toFixed(2)}}`).join(' ');
-            const areaPath = `${{linePath}} L${{width.toFixed(2)}},${{(height - pad).toFixed(2)}} L0,${{(height - pad).toFixed(2)}} Z`;
+            if (points.length) segments.push(points);
+            const segmentPath = segment => segment.map(([x, y], idx) => `${{idx === 0 ? 'M' : 'L'}}${{x.toFixed(2)}},${{y.toFixed(2)}}`).join(' ');
+            const linePath = segments.map(segmentPath).join(' ');
+            const areaPath = segments.filter(segment => segment.length > 1).map(segment =>
+                `${{segmentPath(segment)}} L${{segment[segment.length - 1][0].toFixed(2)}},${{(height - pad).toFixed(2)}} L${{segment[0][0].toFixed(2)}},${{(height - pad).toFixed(2)}} Z`
+            ).join(' ');
             const cls = compClass(trendDelta(cleaned), direction);
             const stroke = cls === 'good' ? '#18b07a' : (cls === 'bad' ? '#e25d4d' : '#ff8a1f');
             return `<svg viewBox=\"0 0 ${{width}} ${{height}}\" preserveAspectRatio=\"none\" aria-hidden=\"true\"><path d=\"${{areaPath}}\" fill=\"${{stroke}}\" opacity=\"0.10\"></path><path d=\"${{linePath}}\" fill=\"none\" stroke=\"${{stroke}}\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg>`;
@@ -5935,17 +6129,13 @@ def generate_modern_dashboard(
             return `${{n > 0 ? '+' : ''}}${{n.toFixed(1)}}%`;
         }}
         let currentWindow = DATA.kpis.default_window || 'monthly';
-        function renderKpis(windowKey) {{
-            currentWindow = windowKey;
-            const grid = document.getElementById('kpiGrid');
-            const currentLang = lang();
-            document.querySelectorAll('.window-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.window === windowKey));
-            const defs = DATA.kpis.metric_defs || [];
-            const windows = DATA.kpis.windows || {{}};
-            const comps = DATA.kpis.comparisons || {{}};
-            const compLabels = DATA.kpis.comparison_labels || {{}};
+        function renderKpiCards(kpis, windowKey, currentLang) {{
+            const defs = kpis.metric_defs || [];
+            const windows = kpis.windows || {{}};
+            const comps = kpis.comparisons || {{}};
+            const compLabels = kpis.comparison_labels || {{}};
             const current = windows[windowKey] || {{ metrics: {{}} }};
-            grid.innerHTML = defs.map(def => {{
+            return defs.map(def => {{
                 const label = currentLang === 'sk' ? def.label_sk : def.label_en;
                 const period = currentLang === 'sk' ? current.label_sk : current.label_en;
                 const secondaryMetrics = current.secondary_metrics || {{}};
@@ -5959,7 +6149,7 @@ def generate_modern_dashboard(
                     ? 'N/A'
                     : `${{trendDeltaValue > 0 ? '+' : ''}}${{Number(trendDeltaValue).toFixed(1)}}%`;
                 const trendHtml = trendValues.length >= 2
-                    ? `<div class=\"kpi-trend\"><div class=\"kpi-trend-head\"><span class=\"kpi-trend-label\">${{trendLabel}}</span><span class=\"kpi-trend-delta ${{trendDeltaClass}}\">${{trendDeltaText}}</span></div><div class=\"kpi-sparkline\">${{sparklineSvg(trendValues, def.direction)}}</div></div>`
+                    ? `<div class=\"kpi-trend\"><div class=\"kpi-trend-head\"><span class=\"kpi-trend-label\">${{kpiText(trendLabel)}}</span><span class=\"kpi-trend-delta ${{trendDeltaClass}}\">${{trendDeltaText}}</span></div><div class=\"kpi-sparkline\">${{sparklineSvg(trendValues, def.direction)}}</div></div>`
                     : '';
                 const secondaryHtml = def.key === 'company_margin_with_fixed' && secondaryValue !== null && secondaryValue !== undefined
                     ? `<div class=\"kpi-secondary\">${{fmtCurrency(secondaryValue)}}</div>`
@@ -5967,10 +6157,21 @@ def generate_modern_dashboard(
                 const metricComps = ((comps[windowKey] || {{}})[def.key]) || {{}};
                 const rows = Object.entries(metricComps).slice(0, 2).map(([compKey, compVal]) => {{
                     const names = (compLabels[windowKey] || {{}})[compKey] || {{ en: compKey, sk: compKey }};
-                    return `<div class=\"compare-row ${{compClass(compVal, def.direction)}}\">${{compText(compVal)}} <span style=\"opacity:.85;\">${{currentLang === 'sk' ? names.sk : names.en}}</span></div>`;
+                    return `<div class=\"compare-row ${{compClass(compVal, def.direction)}}\">${{compText(compVal)}} <span style=\"opacity:.85;\">${{kpiText(currentLang === 'sk' ? names.sk : names.en)}}</span></div>`;
                 }}).join('');
-                return `<article class=\"kpi-card\"><small>${{label}}</small><div class=\"kpi-value\">${{fmtMetric(def.key, (current.metrics || {{}})[def.key])}}</div>${{secondaryHtml}}<div class=\"kpi-period\">${{period}}</div><div class=\"compare-list\">${{rows}}</div>${{trendHtml}}</article>`;
+                return `<article class=\"kpi-card\"><small>${{kpiText(label)}}</small><div class=\"kpi-value\">${{kpiText(fmtMetric(def.key, (current.metrics || {{}})[def.key]))}}</div>${{secondaryHtml}}<div class=\"kpi-period\">${{kpiText(period)}}</div><div class=\"compare-list\">${{rows}}</div>${{trendHtml}}</article>`;
             }}).join('');
+        }}
+        function renderKpis(windowKey) {{
+            currentWindow = windowKey;
+            const currentLang = lang();
+            document.querySelectorAll('.window-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.window === windowKey));
+            document.getElementById('kpiGrid').innerHTML = renderKpiCards(DATA.kpis, windowKey, currentLang);
+            const countries = DATA.kpis.countries || {{}};
+            (DATA.kpis.country_order || []).forEach(country => {{
+                const grid = document.getElementById(`countryKpiGrid-${{country}}`);
+                if (grid && countries[country]) grid.innerHTML = renderKpiCards(countries[country], windowKey, currentLang);
+            }});
         }}
         function gradient(ctx, top, bottom) {{
             const area = ctx.chart.chartArea;

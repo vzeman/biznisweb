@@ -23,7 +23,6 @@ from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formatdate, make_msgid
-from html import escape
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -1234,6 +1233,31 @@ def _build_creditnote_summary(file_paths: Dict[str, Path]) -> str:
         error = str(summary.get("error") or "unknown error")
         return "DOBROPISY\n- Creditnote metriky sa nepodarilo nacitat: " + error
 
+    def rate_counts(row):
+        cohort = (
+            row.get("rate_basis") == "unique_issued_credited_orders_over_all_purchase_cohort_orders"
+            or row.get("cohort_orders") is not None
+            or row.get("cohort_creditnoted_orders") is not None
+        )
+        numerator_key = "cohort_creditnoted_orders" if cohort else "creditnoted_orders"
+        denominator_key = "cohort_orders" if cohort else "realized_orders"
+        # An explicit zero belongs to this cohort. Missing cohort counts must
+        # not silently borrow a numerator/denominator from the shipped cohort.
+        numerator = row.get(numerator_key)
+        denominator = row.get(denominator_key)
+        numerator_text = "N/A" if cohort and numerator is None else str(int(float(numerator or 0)))
+        denominator_text = "N/A" if cohort and denominator is None else str(int(float(denominator or 0)))
+        return cohort, numerator_text, denominator_text
+
+    cohort_rate, rate_numerator, rate_denominator = rate_counts(summary)
+    rate = summary.get("creditnote_rate_pct")
+    rate_text = "N/A" if rate is None else f"{float(rate):.2f}%"
+    rate_line = (
+        f"- Dobropis rate: {rate_text} ({rate_numerator}/{rate_denominator} "
+        "objednavok z rovnakej nakupnej kohorty)."
+        if cohort_rate else
+        f"- Dobropis rate: {rate_text} z {rate_denominator} odoslanych objednavok."
+    )
     lines = [
         "DOBROPISY",
         (
@@ -1243,10 +1267,7 @@ def _build_creditnote_summary(file_paths: Dict[str, Path]) -> str:
             f"{int(float(summary.get('creditnoted_orders') or 0))} odoslanych dobropisovanych objednavok "
             f"(celkovo {int(float(summary.get('all_creditnoted_orders') or summary.get('creditnoted_orders') or 0))})."
         ),
-        (
-            f"- Dobropis rate: {float(summary.get('creditnote_rate_pct') or 0.0):.2f}% z "
-            f"{int(float(summary.get('realized_orders') or 0))} odoslanych objednavok."
-        ),
+        rate_line,
         (
             f"- Kontrola revenue: {int(float(summary.get('revenue_excluded_orders') or 0))} dobropisovanych objednavok je mimo revenue, "
             f"{int(float(summary.get('revenue_included_orders') or 0))} este ostava v revenue; "
@@ -1261,7 +1282,11 @@ def _build_creditnote_summary(file_paths: Dict[str, Path]) -> str:
     nonzero_rows = [
         row
         for row in carrier_rows
-        if int(float(row.get("creditnoted_orders") or 0)) > 0
+        if int(float(
+            row.get("cohort_creditnoted_orders")
+            if row.get("cohort_creditnoted_orders") is not None
+            else row.get("creditnoted_orders") or 0
+        )) > 0
     ][:5]
     if nonzero_rows:
         lines.append("- Prepravcovia s dobropismi podla percenta:")
@@ -1272,9 +1297,11 @@ def _build_creditnote_summary(file_paths: Dict[str, Path]) -> str:
             index = row.get("rate_index")
             index_text = "N/A" if index is None else f"{float(index):.2f}x"
             flag = " OUTLIER" if bool(row.get("outlier")) else ""
+            carrier_cohort, carrier_numerator, carrier_denominator = rate_counts(row)
+            count_label = "objednavok kohorty" if carrier_cohort else "odosl. obj."
             lines.append(
-                f"  - {carrier}: {rate_text}, {int(float(row.get('creditnoted_orders') or 0))}/"
-                f"{int(float(row.get('realized_orders') or 0))} odosl. obj., index {index_text}, "
+                f"  - {carrier}: {rate_text}, {carrier_numerator}/"
+                f"{carrier_denominator} {count_label}, index {index_text}, "
                 f"suma {_fmt_eur(float(row.get('credited_gross_eur') or 0.0))}{flag}."
             )
     else:

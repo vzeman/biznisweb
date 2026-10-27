@@ -7,6 +7,7 @@ import os
 import json
 import re
 import math
+from decimal import Decimal
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -208,6 +209,74 @@ class FacebookAdsClient:
             logger.warning('Meta country spend unavailable (%s)', type(exc).__name__)
         return result
     
+    def get_country_daily_spend(self, date_from: datetime, date_to: datetime) -> Dict[str, Any]:
+        """Read measured daily countries without allocating missing geography."""
+        result = {
+            'status': 'disabled' if not self.is_configured else 'unavailable',
+            'basis': 'meta_country_breakdown_daily', 'currency': None,
+            'date_from': date_from.strftime('%Y-%m-%d'),
+            'date_to': date_to.strftime('%Y-%m-%d'),
+            'daily_spend_by_country': {}, 'spend_by_country': {}, 'total_spend': None,
+        }
+        if not self.is_configured:
+            return result
+        try:
+            first = datetime.strptime(result['date_from'], '%Y-%m-%d').date()
+            last = datetime.strptime(result['date_to'], '%Y-%m-%d').date()
+            if first > last:
+                raise ValueError('Invalid Meta daily country date range')
+            account = self._get_json(f'{self.base_url}/{self.ad_account_id}',
+                                     {'fields': 'currency'}, 'Meta account currency')
+            if 'error' in account or account.get('currency') != 'EUR':
+                raise ValueError('Meta daily country spend requires verified EUR account')
+            result['currency'] = 'EUR'
+            rows = self._get_all_rows(f'{self.base_url}/{self.ad_account_id}/insights', {
+                'fields': 'spend', 'level': 'account', 'breakdowns': 'country', 'time_increment': 1,
+                'time_range': json.dumps({'since': result['date_from'], 'until': result['date_to']}),
+                'limit': 500,
+            }, 'Meta daily country spend')
+            daily = {(first + timedelta(days=offset)).isoformat(): {}
+                     for offset in range((last - first).days + 1)}
+            countries, seen = {}, set()
+            for row in rows:
+                if not isinstance(row, dict) or not {'date_start', 'date_stop', 'country', 'spend'} <= row.keys():
+                    raise ValueError('Incomplete Meta daily country row')
+                day = row['date_start']
+                if not isinstance(day, str) or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', day):
+                    raise ValueError('Invalid Meta daily country date')
+                datetime.strptime(day, '%Y-%m-%d')
+                if day not in daily or row['date_stop'] != day:
+                    raise ValueError('Meta daily country row outside requested day')
+                if row['country'] is not None and not isinstance(row['country'], str):
+                    raise ValueError('Invalid Meta daily country identity')
+                native_country = str(row['country'] or 'unknown').strip().lower()
+                identity = (day, native_country)
+                if identity in seen:
+                    raise ValueError('Duplicate Meta daily country row')
+                seen.add(identity)
+                country = native_country if re.fullmatch('[a-z]{2}', native_country) else 'unknown'
+                if isinstance(row['spend'], bool):
+                    raise ValueError('Invalid Meta daily country spend')
+                spend = Decimal(str(row['spend']))
+                if not spend.is_finite() or spend < 0 or not math.isfinite(float(spend)):
+                    raise ValueError('Invalid Meta daily country spend')
+                daily[day][country] = daily[day].get(country, Decimal(0)) + spend
+                countries[country] = countries.get(country, Decimal(0)) + spend
+            total = sum(countries.values(), Decimal(0))
+            if not math.isfinite(float(total)):
+                raise ValueError('Invalid Meta daily country total')
+            result.update(status='ok', account_id=self.ad_account_id,
+                          daily_spend_by_country={day: {country: float(value) for country, value in values.items()}
+                                                  for day, values in daily.items()},
+                          daily_total_spend={day: float(sum(values.values(), Decimal(0)))
+                                             for day, values in daily.items()},
+                          spend_by_country={country: float(value) for country, value in countries.items()},
+                          total_spend=float(total))
+        except Exception as exc:
+            result['error_code'] = type(exc).__name__
+            logger.warning('Meta daily country spend unavailable (%s)', type(exc).__name__)
+        return result
+
     def get_cache_filename(self, date_from: datetime, date_to: datetime) -> Path:
         """Generate cache filename for a date range"""
         from_str = date_from.strftime('%Y%m%d')

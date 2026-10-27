@@ -1,3 +1,32 @@
+## 2026-10-27 — Country KPI final release gate; Windows fixture normalized
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-country-kpi-20261027
+What changed: Complete implementation plus pure publication verifier and once-only SES prepare/send CLI committed through3bf9303 in PR651. VEVO activation is an explicit client setting; reusable export code has no merchant-name branch. Root final215-test release pack and43-test verifier/email pack pass; critical lint is clean after removing three genuinely unused legacy imports. Existing economic functions/provider methods remain unchanged.
+Known CI issue/fix: Windows40441785685 rejected the email test fixture's noncanonical TemporaryDirectory root at the strict local-path guard. Production ROOT already uses resolve(); only the fixture is now canonicalized to match it. No relaxation of traversal/reparse/send guards, no production/financial change. Original failure log retained. Linux and the other gates passed, but final Windows success is still required.
+Next exact step: Require fresh complete PR651 CI/review, merge via PR, wait exact-source image build and monthly dependency terminal smoke, freeze merged source for one normal isolated probe/LIVE through26October, verify actual native four-country-daily ranges/CSV/card arithmetic/fixed/CAC/HTTP/browser, then one authorized SES resend. Original55 enabled/UI4fec remain untouched; no production mutation/email or persistent local process yet. See [rollout contract](docs/vevo-country-kpis-rollout.md).
+
+## 2026-10-27 — Country KPI code and native-source feasibility verified
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-country-kpi-20261027
+What changed: DraftPR651 contains additive native daily-country providers/Meta receipts, country CFO builder, three modern nine-card decks with shared four-window controls, bounded provenance/N/A notices and matching-cohort email wording. Original global/ROY financial logic and30 provider methods remain unchanged. Code commits througha98cba9 are pushed.
+What is verified: Root315 integration tests, final34 frontend/email tests, independent130-test provider/source review, reporting smoke, critical lint/YAML and six PR checks pass; counts overlap. Actual542-day read-only Meta/Google sources are complete/OK. Native Meta daily/period per-country cent differences are retained, not rescaled; Google deltas0. Baseline20261027T003047Z eleven-object capture/hash/encryption/owner/latest invariance verified. Monthly66 actual OCI path/app/image8203526c confirmed with no active task/IP. Details and proof hashes in [rollout contract](docs/vevo-country-kpis-rollout.md).
+Known issues: No new production release/email yet. The initial monthly image reader failed on two legitimate tags for one immutable digest; corrected read-only V2 checks identical manifests/config and is verified, with original failure retained. Actual new release approval must require four country_daily ranges and usable decks, not merely legacy-compatible recorder completion.
+Next exact step: Finish pure publication verifier and portable once-only resend CLI/tests; final review/CI/merge, exact-source build and monthly terminal smoke; freeze source for normal isolated probe/LIVE, actual native/card/CSV/HTTP/browser verification, then one conditional SES resend. All local finite tests/readers ended; no dev service/tunnel started. Original production remains55 ENABLED and AppRunner4fec unchanged.
+
+## 2026-10-27 — VEVO country executive cards implementation
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-country-kpi-20261027
+What changed: Owner requests identical nine executive cards for SK/CZ/HU directly below overall, shared daily/weekly/monthly/all-time controls, live publication and once-only email. Current request authorizes normal complete regeneration through26October; no prior single-day replacement is forced. Fresh clean GitHub clone avoids a broken internal checkpoint ref in the shared old checkout; original data/refs are preserved.
+What is verified: Actual AWS account919341186960/eu-central-1, vevo-daily-report-email TD55/imagec3ccd24c, /app/FargateN/A, no active report task/IP, original dynamic schedule ENABLED at01:00 Europe/Bratislava. Existing AppRunner image4fec remains RUNNING; pictured report is generated modern HTML served from S3. No runtime mutation or email yet.
+Known implementation needs: Existing country ads are period totals only. Add genuine daily-country sources and additive Meta snapshot admission; reuse CFO calculation on the global calendar, global-first-purchase CAC, single shared fixed allocation with country fallback0, credit adjustments and credited fulfillment attribution. Preserve unknown/unallocated and unavailable source semantics. See [rollout contract](docs/vevo-country-kpis-rollout.md).
+Next exact step: Complete independently owned backend/provider/renderer changes and tests, root source admission/review, PR/main exact image build, normal isolated probe/LIVE, all-period/CSV/country/HTTP/browser verification, then conditional once-only resend to existing recipients. Confirm/wait triggered monthly deployment before report runtime capture. No local dev service/tunnel started.
+
 ## 2026-10-22 — Requested single-day update blocked before execution
 
 Date: 2026-10-22

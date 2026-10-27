@@ -179,6 +179,141 @@ class GoogleAdsClient:
             logger.warning('Google country spend unavailable (%s)', type(exc).__name__)
         return result
     
+    def get_country_daily_spend(self, date_from: datetime, date_to: datetime) -> Dict[str, Any]:
+        """Retain daily physical-country costs and each day's account residual."""
+        result = {
+            'status': 'disabled' if not self.is_configured else 'unavailable',
+            'basis': 'google_user_location_daily', 'currency': None,
+            'date_from': date_from.strftime('%Y-%m-%d'),
+            'date_to': date_to.strftime('%Y-%m-%d'),
+            'daily_spend_by_country': {}, 'spend_by_country': {}, 'total_spend': None,
+        }
+        if not self.is_configured or self.client is None:
+            return result
+        try:
+            first = datetime.strptime(result['date_from'], '%Y-%m-%d').date()
+            last = datetime.strptime(result['date_to'], '%Y-%m-%d').date()
+            if first > last:
+                raise ValueError('Invalid Google daily country date range')
+            days = [(first + timedelta(days=offset)).isoformat() for offset in range((last - first).days + 1)]
+            customer_id = self.customer_id.replace('-', '')
+            if not re.fullmatch('[0-9]+', customer_id):
+                raise ValueError('Invalid Google daily country account')
+            service = self.client.get_service('GoogleAdsService')
+
+            def query(statement):
+                return [row for batch in service.search_stream(customer_id=customer_id, query=statement)
+                        for row in batch.results]
+
+            def micros(row):
+                value = row.metrics.cost_micros
+                if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                    raise ValueError('Invalid Google cost micros')
+                if str(row.customer.id) != customer_id:
+                    raise ValueError('Google spend account identity mismatch')
+                return value
+
+            def row_day(row):
+                value = row.segments.date
+                if not isinstance(value, str) or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', value):
+                    raise ValueError('Invalid Google daily country date')
+                datetime.strptime(value, '%Y-%m-%d')
+                if value not in daily_account:
+                    raise ValueError('Google daily country row outside requested dates')
+                return value
+
+            date_filter = f"WHERE segments.date BETWEEN '{result['date_from']}' AND '{result['date_to']}'"
+            rows = query('SELECT customer.id, segments.date, user_location_view.country_criterion_id, '
+                         'user_location_view.targeting_location, metrics.cost_micros '
+                         'FROM user_location_view ' + date_filter)
+            account = query('SELECT customer.id, customer.currency_code, metrics.cost_micros '
+                            'FROM customer ' + date_filter)
+            if len(account) != 1 or account[0].customer.currency_code != 'EUR':
+                raise ValueError('Google daily country spend requires verified EUR account total')
+            account_total = micros(account[0])
+            account_rows = query('SELECT customer.id, customer.currency_code, segments.date, metrics.cost_micros '
+                                 'FROM customer ' + date_filter)
+            daily_account = dict.fromkeys(days, 0)
+            seen_days = set()
+            for row in account_rows:
+                day = row_day(row)
+                if day in seen_days or row.customer.currency_code != 'EUR':
+                    raise ValueError('Invalid or duplicate Google daily account row')
+                seen_days.add(day)
+                daily_account[day] = micros(row)
+            if sum(daily_account.values()) != account_total:
+                raise ValueError('Google daily account totals do not reconcile')
+            country_ids = set()
+            for row in rows:
+                value = row.user_location_view.country_criterion_id
+                if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                    raise ValueError('Invalid Google daily country identity')
+                if value:
+                    country_ids.add(value)
+            codes = {}
+            if country_ids:
+                constants = query('SELECT geo_target_constant.id, geo_target_constant.country_code '
+                                  'FROM geo_target_constant WHERE geo_target_constant.id IN ('
+                                  + ','.join(str(value) for value in sorted(country_ids)) + ')')
+                for row in constants:
+                    identity, country = row.geo_target_constant.id, row.geo_target_constant.country_code
+                    if (type(identity) is not int or identity in codes or identity not in country_ids
+                            or not isinstance(country, str) or not re.fullmatch('[a-zA-Z]{2}', country)):
+                        raise ValueError('Invalid or duplicate Google country code')
+                    codes[identity] = country.lower()
+                if set(codes) != country_ids:
+                    raise ValueError('Google country code coverage unavailable')
+            daily_geo = {day: {} for day in days}
+            seen = set()
+            for row in rows:
+                day, location = row_day(row), row.user_location_view
+                if not isinstance(location.targeting_location, bool):
+                    raise ValueError('Invalid Google daily targeting flag')
+                identity = (day, location.country_criterion_id, location.targeting_location)
+                if identity in seen:
+                    raise ValueError('Duplicate Google daily country row')
+                seen.add(identity)
+                country = codes[location.country_criterion_id] if location.country_criterion_id else 'unknown'
+                daily_geo[day][country] = daily_geo[day].get(country, 0) + micros(row)
+            geo_totals = {day: sum(values.values()) for day, values in daily_geo.items()}
+            residuals = {day: daily_account[day] - geo_totals[day] for day in days}
+            if any(value < 0 for value in residuals.values()):
+                raise ValueError('Google daily country spend exceeds daily account total')
+            reported, daily = {}, {}
+            for day, values in daily_geo.items():
+                daily[day] = {country: value / 1_000_000 for country, value in values.items()}
+                if residuals[day]:
+                    daily[day]['unallocated'] = residuals[day] / 1_000_000
+                for country, value in values.items():
+                    reported[country] = reported.get(country, 0) + value
+            geo_total, residual = sum(geo_totals.values()), sum(residuals.values())
+            unknown = reported.get('unknown', 0)
+            countries = {country: value / 1_000_000 for country, value in reported.items()}
+            if residual:
+                countries['unallocated'] = residual / 1_000_000
+            result.update(status='ok', currency='EUR', customer_id=customer_id,
+                          daily_spend_by_country=daily, spend_by_country=countries,
+                          total_spend=account_total / 1_000_000, account_total_spend=account_total / 1_000_000,
+                          daily_account_spend={day: value / 1_000_000 for day, value in daily_account.items()},
+                          reported_spend_by_country={country: value / 1_000_000 for country, value in reported.items()},
+                          daily_reported_spend_by_country={day: {country: value / 1_000_000 for country, value in values.items()}
+                                                           for day, values in daily_geo.items()},
+                          reported_geo_total_spend=geo_total / 1_000_000,
+                          daily_reported_geo_total_spend={day: value / 1_000_000 for day, value in geo_totals.items()},
+                          reported_unknown_spend=unknown / 1_000_000,
+                          daily_reported_unknown_spend={day: values.get('unknown', 0) / 1_000_000
+                                                        for day, values in daily_geo.items()},
+                          unallocated_spend=residual / 1_000_000,
+                          daily_unallocated_spend={day: value / 1_000_000 for day, value in residuals.items()},
+                          country_coverage_ratio=(geo_total - unknown) / account_total if account_total else 1.0,
+                          country_coverage_status='partial' if residual or unknown else 'complete',
+                          residual_basis='account_total_minus_user_location',
+                          account_query_rows=len(account_rows), geo_query_rows=len(rows))
+        except Exception as exc:
+            result['error_code'] = type(exc).__name__
+            logger.warning('Google daily country spend unavailable (%s)', type(exc).__name__)
+        return result
+
     def should_use_cache(self, date: datetime) -> bool:
         """Determine if cache should be used for a given date"""
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
