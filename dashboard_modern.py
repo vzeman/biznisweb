@@ -6,6 +6,7 @@ Production dashboard renderer used by the main HTML reporting output.
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import date, datetime
 from html import escape
@@ -402,6 +403,111 @@ def _days_to_green_cell_html(maturation: Optional[Dict[str, Any]]) -> str:
     )
 
 
+def _country_kpi_metadata(source: Any) -> Dict[str, Any]:
+    """Retain finite accounting provenance without mirroring provider diagnostics."""
+    if not isinstance(source, dict):
+        return {}
+    result = {}
+    providers = {"facebook_ads", "google_ads"}
+
+    def finite(value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+        try:
+            return math.isfinite(value)
+        except OverflowError:
+            return False
+
+    def numeric_map(values, *, country_keys=False, allowed_keys=None, allow_none=True):
+        if not isinstance(values, dict):
+            return {}
+        return {
+            key: value for key, value in values.items()
+            if isinstance(key, str)
+            and (not country_keys or re.fullmatch(r"[a-z]{2}|unknown|unallocated|other", key))
+            and (allowed_keys is None or key in allowed_keys)
+            and ((allow_none and value is None) or finite(value))
+        }
+
+    for key in ("date_from", "date_to"):
+        value = source.get(key)
+        if isinstance(value, str):
+            try:
+                if len(value) == 10 and date.fromisoformat(value).isoformat() == value:
+                    result[key] = value
+            except ValueError:
+                pass
+    for key in ("calendar_complete", "residual_reallocated", "advertising_reallocated", "creditnote_fulfillment_included"):
+        if type(source.get(key)) is bool:
+            result[key] = source[key]
+    days = source.get("calendar_days")
+    if type(days) is int and 0 <= days <= 366000:
+        result["calendar_days"] = days
+    enums = {
+        "basis": {"canonical_order_financials_and_measured_daily_country_ads"},
+        "market_basis": {"delivery_country_with_invoice_fallback"},
+        "fixed_cost_basis": {"existing_daily_order_share"},
+        "customer_basis": {"global_first_purchase_date"},
+        "creditnote_fulfillment_source": {"same_selected_company_events", "company_residual_only"},
+        "residual_basis": {"other_or_unknown_markets_unallocated_ads_and_orderless_day_fixed_costs"},
+    }
+    for key, allowed in enums.items():
+        value = source.get(key)
+        if isinstance(value, str) and value in allowed:
+            result[key] = value
+    unavailable = source.get("unavailable_ad_sources")
+    if isinstance(unavailable, list):
+        result["unavailable_ad_sources"] = list(dict.fromkeys(
+            provider for provider in unavailable if isinstance(provider, str) and provider in providers
+        ))
+    statuses = source.get("provider_status")
+    if isinstance(statuses, dict):
+        result["provider_status"] = {
+            key: value for key, value in statuses.items()
+            if key in providers and isinstance(value, str) and value in {"ok", "partial", "unavailable"}
+        }
+    coverage = source.get("provider_country_coverage")
+    if isinstance(coverage, dict):
+        selected = {}
+        for provider, values in coverage.items():
+            if provider not in providers or not isinstance(values, dict):
+                continue
+            entry = numeric_map(values, allowed_keys={"unknown_spend_eur", "unallocated_spend_eur"})
+            status = values.get("status")
+            if isinstance(status, str) and status in {"complete", "partial", "unavailable"}:
+                entry["status"] = status
+            selected[provider] = entry
+        result["provider_country_coverage"] = selected
+    totals = source.get("provider_daily_totals")
+    if isinstance(totals, dict):
+        result["provider_daily_totals"] = {
+            provider: numeric_map(values, country_keys=True, allow_none=False)
+            for provider, values in totals.items() if provider in providers and isinstance(values, dict)
+        }
+    comparisons = source.get("daily_vs_period")
+    if isinstance(comparisons, dict):
+        selected = {}
+        for provider, values in comparisons.items():
+            if provider not in providers:
+                continue
+            if values is None:
+                selected[provider] = None
+            elif isinstance(values, dict):
+                entry = numeric_map(values, allowed_keys={"daily_minus_period_total_eur"}, allow_none=False)
+                by_country = values.get("daily_minus_period_by_country_eur")
+                if isinstance(by_country, dict):
+                    entry["daily_minus_period_by_country_eur"] = numeric_map(by_country, country_keys=True, allow_none=False)
+                selected[provider] = entry
+        result["daily_vs_period"] = selected
+    residuals = source.get("company_minus_displayed_countries")
+    if isinstance(residuals, dict):
+        result["company_minus_displayed_countries"] = numeric_map(residuals, allowed_keys={
+            "total_revenue", "product_expense", "packaging_cost", "shipping_net_cost",
+            "unique_orders", "fixed_daily_cost", "fb_ads_spend", "google_ads_spend",
+        })
+    return result
+
+
 def _kpis(payload: Optional[dict], *, include_countries: bool = True) -> Dict[str, Any]:
     payload = payload or {}
     metric_defs = []
@@ -449,6 +555,9 @@ def _kpis(payload: Optional[dict], *, include_countries: bool = True) -> Dict[st
     # Country payloads have the same finite CFO contract. Never recursively
     # serialize arbitrary nested country dictionaries from an upstream source.
     if include_countries:
+        country_metadata = _country_kpi_metadata(payload.get("country_metadata"))
+        if country_metadata:
+            result["country_metadata"] = country_metadata
         country_labels = {
             "sk": ("Slovakia", "Slovensko"),
             "cz": ("Czechia", "Česko"),
@@ -457,6 +566,8 @@ def _kpis(payload: Optional[dict], *, include_countries: bool = True) -> Dict[st
         supplied = payload.get("countries") or {}
         if isinstance(supplied, dict):
             requested_order = payload.get("country_order") or list(country_labels)
+            if not isinstance(requested_order, (list, tuple)):
+                requested_order = list(country_labels)
             order = list(dict.fromkeys(
                 country for country in requested_order
                 if isinstance(country, str) and country in country_labels
@@ -472,6 +583,11 @@ def _kpis(payload: Optional[dict], *, include_countries: bool = True) -> Dict[st
                     "label_en": str(source.get("label_en") or country_labels[country][0]),
                     "label_sk": str(source.get("label_sk") or country_labels[country][1]),
                 })
+                if source.get("status") in ("ok", "unavailable"):
+                    country_payload["status"] = source["status"]
+                metadata = _country_kpi_metadata(source.get("metadata"))
+                if metadata:
+                    country_payload["metadata"] = metadata
                 countries[country] = country_payload
             if countries:
                 result["country_order"] = list(countries)
@@ -974,16 +1090,30 @@ def generate_modern_dashboard(
     daily_profit_best_class = _profit_status_class(daily_profit_summary.get("best_day_profit"))
     daily_profit_worst_class = _profit_status_class(daily_profit_summary.get("worst_day_profit"))
     kpi_payload = _kpis(cfo_kpi_payload)
+    country_kpi_unavailable_html = (
+        '<p class="country-kpi-note country-kpi-unavailable" role="status">'
+        '<span class="lang-en">Advertising data is unavailable. Profit and advertising-based metrics are shown as N/A.</span>'
+        '<span class="lang-sk hidden">Reklamné údaje nie sú dostupné. Zisk a ukazovatele závislé od reklamy sú označené N/A.</span>'
+        '</p>'
+    )
     country_kpi_decks_html = "".join(
         f'''<section class="country-kpi-deck" data-kpi-country="{country}"
                     aria-labelledby="countryKpiHeading-{country}">
                 <div class="country-kpi-heading">
                     <h3 id="countryKpiHeading-{country}"><span class="lang-en">{country.upper()} · {escape(country_payload["label_en"])}</span><span class="lang-sk hidden">{country.upper()} · {escape(country_payload["label_sk"])}</span></h3>
+                    {country_kpi_unavailable_html if country_payload.get("status") == "unavailable" else ""}
                 </div>
                 <div id="countryKpiGrid-{country}" class="kpi-grid"></div>
             </section>'''
         for country, country_payload in (kpi_payload.get("countries") or {}).items()
     )
+    if country_kpi_decks_html:
+        country_kpi_decks_html += (
+            '<p class="country-kpi-note country-kpi-footnote">'
+            '<span class="lang-en">SK, CZ and HU are shown separately. Company totals may also include other countries and unallocated amounts.</span>'
+            '<span class="lang-sk hidden">SK, CZ a HU sú zobrazené samostatne. Celkový súhrn môže obsahovať aj ďalšie krajiny a nepriradené sumy.</span>'
+            '</p>'
+        )
     cost_mix = _cost_mix(date_agg)
     cities = _top_rows(
         city_analysis,
@@ -4745,6 +4875,9 @@ def generate_modern_dashboard(
         .kpi-grid {{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }}
         .country-kpi-deck {{ margin-top: 26px; padding-top: 22px; border-top: 1px solid rgba(255,138,31,.18); }}
         .country-kpi-heading h3 {{ margin: 0; font-size: 22px; letter-spacing: -.03em; }}
+        .country-kpi-note {{ color: var(--muted); font-size: 12px; line-height: 1.6; margin: 9px 0 0; }}
+        .country-kpi-unavailable {{ color: var(--red); }}
+        .country-kpi-footnote {{ margin-top: 20px; }}
         .kpi-card {{ padding: 20px; border-radius: 22px; background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,245,233,.92)); border:1px solid rgba(255,138,31,.14); min-height: 228px; display:flex; flex-direction:column; }}
         .kpi-card small {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing:.08em; }}
         .kpi-value {{ font-size: 36px; font-weight: 900; line-height: 1; letter-spacing: -.05em; margin: 10px 0 6px; }}

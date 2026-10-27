@@ -9,6 +9,10 @@ on:
       - 'order_status_safety.py'
       - 'order_status_identity.py'
       - 'export_orders.py'
+      - 'facebook_ads.py'
+      - 'google_ads.py'
+      - 'dashboard_modern.py'
+      - 'html_report_generator.py'
       - 'operations_inventory.py'
       - '*operations_dashboard.py'
       - 'production_board.py'
@@ -28,6 +32,7 @@ on:
       - scripts/deploy_vevo_report.py
       - scripts/reporting_identity_probe.py
       - scripts/reporting_migration_host_gate.py
+      - scripts/reporting_meta_source_snapshot.py
       - scripts/dashboard_routing_host_gate.py
       - scripts/vevo_report_image_release.py
       - scripts/vevo_report_current_rerun.py
@@ -110,3 +115,11 @@ jobs:
           tests.test_roy_paused_release_recovery tests.test_reporting_github_read_retry tests.test_roy_foreign_payment_coverage
           tests.test_partial_credit_adjustments tests.test_cfo_credit_adjustments tests.test_refund_status_population tests.test_reporting_financial_adjustments tests.test_report_period_failure_diagnostics tests.test_report_summary_advertising_language tests.test_reporting_marketing_semantics tests.test_live_dashboard_marketing_semantics tests.test_customer_lifetime_credit_aggregation tests.test_report_dashboard_image_release
           tests.test_cost_estimate_publication_policy
+      - name: Verify country executive metrics and native daily advertising
+        run: >-
+          python -m unittest
+          tests.test_country_daily_ads
+          tests.test_country_cfo_kpis
+          tests.test_dashboard_country_kpis
+          tests.test_reporting_meta_country_daily_snapshot
+          tests.test_daily_report_creditnote_cohort

@@ -162,6 +162,94 @@ class DashboardCountryKpiTests(unittest.TestCase):
         self.assertIn("&lt;/script&gt;&lt;img", html)
         self.assertEqual(dangerous, extract_embedded_dashboard_payload(html)["kpis"]["countries"]["sk"]["label_en"])
 
+    def test_country_provenance_retains_native_residuals_without_reallocation(self):
+        self.source["country_metadata"] = {
+            "basis": "canonical_order_financials_and_measured_daily_country_ads",
+            "date_from": "2025-05-03", "date_to": "2026-10-26",
+            "calendar_complete": True, "calendar_days": 542,
+            "provider_status": {"facebook_ads": "ok", "google_ads": "unavailable"},
+            "provider_country_coverage": {
+                "facebook_ads": {"status": "partial", "unknown_spend_eur": 1.2, "unallocated_spend_eur": 0.0},
+                "google_ads": {"status": "unavailable", "unknown_spend_eur": None, "unallocated_spend_eur": None},
+            },
+            "provider_daily_totals": {"facebook_ads": {"sk": 100.0, "cz": 10.0, "hu": 20.0, "other": 0.3, "unknown": 1.2}},
+            "daily_vs_period": {
+                "facebook_ads": {"daily_minus_period_by_country_eur": {"sk": 0.120205, "cz": -0.044675, "hu": -0.075525, "unknown": -0.000002}, "daily_minus_period_total_eur": 0.000003},
+                "google_ads": None,
+            },
+            "company_minus_displayed_countries": {"total_revenue": 5.0, "fb_ads_spend": -0.000003, "google_ads_spend": None, "fixed_daily_cost": 70.0},
+            "residual_basis": "other_or_unknown_markets_unallocated_ads_and_orderless_day_fixed_costs",
+            "residual_reallocated": False,
+        }
+        self.source["countries"]["hu"].update(status="unavailable", metadata={
+            "date_from": "2025-05-03", "date_to": "2026-10-26", "calendar_complete": True,
+            "calendar_days": 542, "market_basis": "delivery_country_with_invoice_fallback",
+            "fixed_cost_basis": "existing_daily_order_share", "customer_basis": "global_first_purchase_date",
+            "advertising_reallocated": False, "unavailable_ad_sources": ["google_ads"],
+            "creditnote_fulfillment_included": True,
+            "creditnote_fulfillment_source": "same_selected_company_events",
+        })
+        serialized = _kpis(self.source)
+        self.assertEqual(self.source["country_metadata"], serialized["country_metadata"])
+        self.assertEqual("unavailable", serialized["countries"]["hu"]["status"])
+        self.assertEqual(self.source["countries"]["hu"]["metadata"], serialized["countries"]["hu"]["metadata"])
+        self.assertFalse(serialized["country_metadata"]["residual_reallocated"])
+
+    def test_country_metadata_rejects_unexpected_keys_credentials_and_nonfinite_values(self):
+        self.source["country_metadata"] = {
+            "secret_token": "private-value", "basis": "private-value", "date_from": "private-value",
+            "date_to": "2026-10-26", "calendar_complete": "private-value", "calendar_days": True,
+            "provider_status": {"facebook_ads": "ok", "google_ads": "private-value", "private-value": "ok"},
+            "provider_country_coverage": {"facebook_ads": {
+                "status": "partial", "unknown_spend_eur": float("nan"), "unallocated_spend_eur": 0,
+                "error": "private-value", "access_token": "private-value",
+            }},
+            "provider_daily_totals": {"facebook_ads": {
+                "sk": 1.0, "cz": float("inf"), "hu": float("nan"), "ro": None, "si": True,
+                "hr": "private-value", "other": 0.1, "unallocated": 0, "secret_token": 100,
+            }, "private-value": {"sk": 1.0}},
+            "daily_vs_period": {"facebook_ads": {
+                "daily_minus_period_total_eur": float("inf"), "error": "private-value",
+                "daily_minus_period_by_country_eur": {"sk": -0.1, "cz": float("nan"), "private-value": 1},
+            }},
+            "company_minus_displayed_countries": {
+                "total_revenue": 0.1, "product_expense": None, "google_ads_spend": float("inf"),
+                "fb_ads_spend": True, "secret_token": 1,
+            },
+        }
+        self.source["countries"]["sk"].update(status="private-value", metadata={
+            "error": "private-value", "date_to": "2026-10-26",
+            "unavailable_ad_sources": ["google_ads", "private-value", {"secret_token": "private-value"}],
+        })
+        serialized = _kpis(self.source)
+        encoded = json.dumps(serialized, allow_nan=False)
+        self.assertNotIn("private-value", encoded)
+        self.assertNotIn("secret_token", encoded)
+        self.assertNotIn("access_token", encoded)
+        self.assertNotIn("status", serialized["countries"]["sk"])
+        self.assertEqual({"sk": 1.0, "other": 0.1, "unallocated": 0}, serialized["country_metadata"]["provider_daily_totals"]["facebook_ads"])
+        self.assertEqual({"total_revenue": 0.1, "product_expense": None}, serialized["country_metadata"]["company_minus_displayed_countries"])
+        self.assertEqual({"sk": -0.1}, serialized["country_metadata"]["daily_vs_period"]["facebook_ads"]["daily_minus_period_by_country_eur"])
+
+    def test_unavailable_country_has_one_honest_bilingual_notice_and_one_shared_footnote(self):
+        self.source["countries"]["sk"]["status"] = "ok"
+        self.source["countries"]["cz"]["status"] = "ok"
+        self.source["countries"]["hu"]["status"] = "unavailable"
+        html = report_html(self.source)
+        self.assertEqual(1, html.count('<p class="country-kpi-note country-kpi-unavailable" role="status">'))
+        country_section = html.split('data-kpi-country="hu"', 1)[1].split('</section>', 1)[0]
+        self.assertIn("Advertising data is unavailable.", country_section)
+        self.assertIn("Reklamné údaje nie sú dostupné.", country_section)
+        self.assertEqual(1, html.count('<p class="country-kpi-note country-kpi-footnote">'))
+        self.assertIn("Company totals may also include other countries and unallocated amounts.", html)
+        legacy = report_html(cfo_payload())
+        self.assertNotIn('<p class="country-kpi-note country-kpi-unavailable"', legacy)
+        self.assertNotIn('<p class="country-kpi-note country-kpi-footnote"', legacy)
+
+    def test_invalid_country_order_cannot_break_an_otherwise_valid_report(self):
+        self.source["country_order"] = 7
+        self.assertEqual(["sk", "cz", "hu"], _kpis(self.source)["country_order"])
+
     @unittest.skipUnless(NODE, "Node.js is required to execute the emitted browser functions")
     def test_shared_renderer_switches_all_twenty_seven_country_cards_in_all_four_windows(self):
         rendered = rendered_windows(report_html(self.source))
