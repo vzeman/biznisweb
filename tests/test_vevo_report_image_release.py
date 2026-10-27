@@ -1,8 +1,8 @@
 import copy
 import json
 import unittest
-from unittest.mock import Mock, patch
-from botocore.exceptions import ClientError
+from unittest.mock import Mock, call, patch
+from botocore.exceptions import ClientError, ConnectTimeoutError, ReadTimeoutError
 
 from scripts import vevo_report_image_release as release
 from scripts.vevo_report_image_host import report_arguments
@@ -86,6 +86,7 @@ class ProbeFailureEvidenceTests(unittest.TestCase):
         ready['marker'] = obj.policy.probe_marker
         obj.release_id, obj.owned_task = ready['release_id'], ready['task_arn']
         obj.clock, obj.timeout = Mock(return_value=0), 100
+        obj.session, obj.sleep = Mock(), Mock()
         obj.checkpoint, obj.verify_host, obj.record_probe_failure = Mock(), Mock(), Mock()
         obj.task = Mock(return_value={'lastStatus': 'STOPPED', 'containers': [{'exitCode': 1}]})
         raw = release.canonical(ready)
@@ -861,6 +862,243 @@ class FailureSummaryTests(unittest.TestCase):
             evidence = release.failure_summary(exc)
         self.assertEqual(evidence, {"reason": "AttributeError", "source_frames": []})
         self.assertNotIn(private_value, json.dumps(evidence))
+
+
+class TaskStatusReadRetryTests(unittest.TestCase):
+    def setUp(self):
+        self.elapsed = 0
+        self.client, self.factory = Mock(), Mock()
+        self.factory.return_value = self.client
+        self.delays = []
+        self.reader = release.TaskStatusReads(self.factory, 7200, lambda: self.elapsed, self.sleep)
+
+    def sleep(self, seconds):
+        self.delays.append(seconds)
+        self.elapsed += seconds
+
+    def test_connect_and_read_timeouts_retry_only_identical_status_request(self):
+        request = {"cluster": release.CLUSTER, "tasks": ["owned-task"]}
+        expected = {"tasks": [{"taskArn": "owned-task", "lastStatus": "RUNNING"}]}
+        for operation in ("describe_tasks", "list_tasks"):
+            with self.subTest(operation=operation):
+                self.setUp()
+                method = getattr(self.client, operation)
+                method.side_effect = [ConnectTimeoutError(endpoint_url="https://private.invalid/token"),
+                                      ReadTimeoutError(endpoint_url="https://private.invalid/token"), expected]
+                with patch("builtins.print") as output:
+                    actual = getattr(self.reader, operation)(**request)
+                self.assertIs(expected, actual)
+                self.assertEqual([call(**request)] * 3, method.call_args_list)
+                self.assertEqual([2, 5], self.delays)
+                self.assertNotIn("private.invalid", repr(output.call_args_list))
+                self.assertEqual(3, self.client.close.call_count)
+                for entry in self.factory.call_args_list:
+                    self.assertEqual(("ecs",), entry.args)
+                    config = entry.kwargs["config"]
+                    self.assertEqual({"total_max_attempts": 1}, config.retries)
+                    self.assertEqual((10, 45), (config.connect_timeout, config.read_timeout))
+                self.assertTrue(all(entry[0] in {operation, "close"} for entry in self.client.mock_calls))
+
+    def test_fifth_transport_failure_is_final_without_an_extra_attempt(self):
+        error = ConnectTimeoutError(endpoint_url="https://private.invalid")
+        def fail(**_request):
+            self.elapsed += 10
+            raise error
+        self.client.describe_tasks.side_effect = fail
+        with patch("builtins.print"), self.assertRaises(ConnectTimeoutError) as caught:
+            self.reader.describe_tasks(cluster=release.CLUSTER, tasks=["owned"])
+        self.assertIs(error, caught.exception)
+        self.assertEqual(5, self.client.describe_tasks.call_count)
+        self.assertEqual([2, 5, 10, 15], self.delays)
+        self.assertEqual(82, self.elapsed)
+        self.assertEqual(5, self.client.close.call_count)
+
+    def test_operation_cap_and_original_report_deadline_are_not_extended(self):
+        for report_deadline, expected_deadline in ((7200, 180), (60, 60)):
+            with self.subTest(report_deadline=report_deadline):
+                self.setUp()
+                self.reader.deadline = report_deadline
+                def fail(**_request):
+                    config = self.factory.call_args.kwargs["config"]
+                    duration = config.connect_timeout + config.read_timeout
+                    self.assertLessEqual(duration, expected_deadline - self.elapsed)
+                    self.elapsed += duration
+                    raise ReadTimeoutError(endpoint_url="https://private.invalid")
+                self.client.describe_tasks.side_effect = fail
+                with patch("builtins.print"), self.assertRaisesRegex(RuntimeError, "task-status-read-timeout"):
+                    self.reader.describe_tasks(cluster=release.CLUSTER, tasks=["owned"])
+                self.assertEqual(expected_deadline, self.elapsed)
+                self.assertLessEqual(self.client.describe_tasks.call_count, 5)
+
+    def test_expired_budget_or_late_success_is_not_accepted(self):
+        for stage in ("before", "client", "read"):
+            with self.subTest(stage=stage):
+                self.setUp()
+                self.reader.deadline = 1
+                if stage == "before":
+                    self.elapsed = 1
+                elif stage == "client":
+                    def create(*_args, **_kwargs):
+                        self.elapsed = 1
+                        return self.client
+                    self.factory.side_effect = create
+                else:
+                    def read(**_request):
+                        self.elapsed = 1
+                        return {"tasks": [{"lastStatus": "STOPPED", "containers": [{"exitCode": 0}]}]}
+                    self.client.describe_tasks.side_effect = read
+                with self.assertRaisesRegex(RuntimeError, "task-status-read-timeout"):
+                    self.reader.describe_tasks(cluster=release.CLUSTER, tasks=["owned"])
+                self.assertEqual(1 if stage == "read" else 0, self.client.describe_tasks.call_count)
+                self.assertEqual([], self.delays)
+
+    def test_service_errors_and_mutation_operations_are_never_retried(self):
+        for error in (ClientError({"Error": {"Code": "AccessDeniedException"}}, "DescribeTasks"),
+                      ClientError({"Error": {"Code": "ThrottlingException"}}, "DescribeTasks"),
+                      ValueError("invalid response")):
+            with self.subTest(error=type(error).__name__):
+                self.setUp()
+                self.client.describe_tasks.side_effect = error
+                with self.assertRaises(type(error)):
+                    self.reader.describe_tasks(cluster=release.CLUSTER, tasks=["owned"])
+                self.assertEqual(1, self.client.describe_tasks.call_count)
+                self.assertEqual([], self.delays)
+        self.setUp()
+        with self.assertRaisesRegex(RuntimeError, "read-operation"):
+            self.reader._read("run_task", {"cluster": release.CLUSTER})
+        self.factory.assert_not_called()
+
+
+class PollingTaskReadIntegrationTests(unittest.TestCase):
+    def fixture(self, mode="probe"):
+        rid, records, _schedule, candidate, tasks = stopped_release_fixture()
+        obj = object.__new__(release.ImageRelease)
+        task = copy.deepcopy(tasks[0 if mode == "probe" else 1])
+        obj.release_id, obj.commit, obj.image = rid, records[0]["source_commit"], IMAGE
+        obj.gate_sha = records[2]["identity"]["gate_sha256"]
+        obj.to_date, obj.report_from_date = DATE, "2025-05-03"
+        obj.task_mode, obj.owned_task = mode, task["taskArn"]
+        obj.probe_definition = obj.candidate = candidate
+        obj.session, obj.ecs, obj.s3, obj.event = Mock(), Mock(), Mock(), Mock()
+        obj.prefix = release.VEVO.probe_prefix + rid + "/"
+        elapsed = [0]
+        obj.clock = lambda: elapsed[0]
+        obj.sleep = lambda seconds: elapsed.__setitem__(0, elapsed[0] + seconds)
+        obj.timeout = 7200
+        obj.checkpoint, obj.verify_host, obj.record_probe_failure = Mock(), Mock(), Mock()
+        obj.live_marker = Mock()
+        client = obj.session.client.return_value
+        client.describe_tasks.return_value = {"tasks": [task], "failures": []}
+        return obj, client, task, elapsed, records[2]
+
+    def test_checkpoint_inventory_and_owned_poll_use_read_client_without_writes(self):
+        obj, client, task, _elapsed, _proof = self.fixture()
+        client.list_tasks.side_effect = [ConnectTimeoutError(endpoint_url="https://private.invalid"),
+                                        {"taskArns": [task["taskArn"]]}, {"taskArns": []}]
+        with obj.polling_task_reads(7200), patch("builtins.print"):
+            self.assertEqual([task], obj.tasks())
+            self.assertEqual(task, obj.task())
+        self.assertEqual(client.list_tasks.call_args_list[0], client.list_tasks.call_args_list[1])
+        self.assertEqual(3, client.list_tasks.call_count)
+        self.assertEqual(2, client.describe_tasks.call_count)
+        self.assertEqual([], obj.ecs.mock_calls)
+        self.assertIsNone(obj._task_status_reads)
+        obj.ecs.describe_tasks.return_value = {"tasks": [task], "failures": []}
+        self.assertEqual(task, obj.task())
+        obj.ecs.describe_tasks.assert_called_once_with(cluster=release.CLUSTER, tasks=[obj.owned_task])
+
+    def test_invalid_status_responses_and_foreign_identity_are_not_retried(self):
+        for change in ("failures", "missing", "foreign", "override"):
+            with self.subTest(change=change):
+                obj, client, task, _elapsed, _proof = self.fixture()
+                if change == "failures":
+                    client.describe_tasks.return_value["failures"] = [{"reason": "MISSING"}]
+                elif change == "missing":
+                    client.describe_tasks.return_value["tasks"] = []
+                elif change == "foreign":
+                    task["taskArn"] = "foreign-task"
+                else:
+                    task["overrides"]["containerOverrides"] = []
+                with obj.polling_task_reads(7200), self.assertRaises(RuntimeError):
+                    obj.task()
+                self.assertEqual(1, client.describe_tasks.call_count)
+                self.assertIsNone(obj._task_status_reads)
+                self.assertEqual([], obj.ecs.mock_calls)
+
+    def test_original_deadline_checked_after_checkpoint_and_task_in_both_waits(self):
+        for mode in ("probe", "live"):
+            for stage in ("checkpoint", "task"):
+                with self.subTest(mode=mode, stage=stage):
+                    obj, client, task, elapsed, _proof = self.fixture(mode)
+                    obj.timeout = 5
+                    def expire(*_args, **_kwargs):
+                        elapsed[0] = 5
+                        return task
+                    if stage == "checkpoint":
+                        obj.checkpoint.side_effect = expire
+                    else:
+                        obj.task = Mock(side_effect=expire)
+                    with self.assertRaisesRegex(RuntimeError, "task-status-read-timeout"):
+                        getattr(obj, "wait_" + mode)()
+                    client.describe_tasks.assert_not_called()
+                    obj.s3.put_object.assert_not_called()
+                    obj.live_marker.assert_not_called()
+                    self.assertIsNone(obj._task_status_reads)
+
+    def test_live_timeout_recovery_keeps_terminal_failure_and_does_not_redispatch(self):
+        obj, client, task, _elapsed, _proof = self.fixture("live")
+        client.describe_tasks.side_effect = [ConnectTimeoutError(endpoint_url="https://private.invalid"),
+                                             {"tasks": [task], "failures": []}]
+        with patch("builtins.print"), self.assertRaisesRegex(RuntimeError, "live-not-successful"):
+            obj.wait_live()
+        self.assertEqual(137, task["containers"][0]["exitCode"])
+        self.assertEqual(2, client.describe_tasks.call_count)
+        obj.live_marker.assert_not_called()
+        self.assertEqual([], obj.ecs.mock_calls)
+        self.assertIsNone(obj._task_status_reads)
+
+    def test_terminal_success_still_requires_probe_source_or_live_marker(self):
+        for mode in ("probe", "live"):
+            with self.subTest(mode=mode):
+                obj, client, task, _elapsed, proof = self.fixture(mode)
+                task["containers"][0]["exitCode"] = 0
+                client.describe_tasks.side_effect = [ReadTimeoutError(endpoint_url="https://private.invalid"),
+                                                     {"tasks": [task], "failures": []}]
+                if mode == "live":
+                    obj.live_marker.side_effect = RuntimeError("missing-live-marker")
+                    context = patch.object(release, "read_private")
+                    reason = "missing-live-marker"
+                else:
+                    ready = proof["identity"]
+                    raw = release.canonical(ready)
+                    signal = release.canonical({"phase": "host-authorized", "release_id": obj.release_id,
+                                                "task_arn": obj.owned_task, "ready_sha256": release.sha(raw)})
+                    context = patch.object(release, "read_private", side_effect=[raw, signal, b"{}"])
+                    reason = "probe-completion-invalid"
+                with context, patch("builtins.print"), self.assertRaisesRegex(RuntimeError, reason):
+                    getattr(obj, "wait_" + mode)()
+                self.assertFalse(any(entry.args[0] in {"probe-complete", "live-complete"} for entry in obj.event.call_args_list))
+                self.assertEqual([], obj.ecs.mock_calls)
+                self.assertIsNone(obj._task_status_reads)
+
+    def test_cli_read_config_does_not_replace_mutation_config(self):
+        import boto3
+        session = Mock()
+        original = session.client
+        commit, rid = "a" * 40, "b" * 32
+        argv = ["release", "run", "--commit", commit, "--to-date", DATE, "--release-id", rid]
+        def run(controller_session, *_args, **_kwargs):
+            controller_session.client("ecs")
+            custom = release.Config(connect_timeout=1, read_timeout=2, retries={"total_max_attempts": 1})
+            controller_session.client("ecs", config=custom)
+            controller_session.client("s3")
+            self.assertEqual({"total_max_attempts": 2}, original.call_args_list[0].kwargs["config"].retries)
+            self.assertIs(custom, original.call_args_list[1].kwargs["config"])
+            self.assertEqual({"total_max_attempts": 2}, original.call_args_list[2].kwargs["config"].retries)
+            return Mock()
+        with patch.object(release.sys, "argv", argv), patch.object(boto3, "Session", return_value=session), \
+                patch.object(release, "ImageRelease", side_effect=run):
+            release.main()
 
 
 if __name__ == "__main__":

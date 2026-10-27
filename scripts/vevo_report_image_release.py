@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+from contextlib import closing, contextmanager
 from datetime import date, datetime, timezone
 import json
 import os
@@ -20,6 +21,9 @@ import subprocess
 import sys
 import time
 import uuid
+
+from botocore.config import Config
+from botocore.exceptions import ConnectTimeoutError, ReadTimeoutError
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -40,6 +44,52 @@ RELEASE_PREFIX = VEVO.release_prefix
 EXPECTED_ARTIFACTS = {"report_latest.html", "dashboard_payload_latest.json"} | {
     f"{kind}_{period}.{extension}" for period in ("7d", "30d", "90d")
     for kind, extension in (("report", "html"), ("dashboard_payload", "json"))}
+
+
+class TaskStatusReads:
+    """Bounded transport retries for two ECS reads, never task mutations."""
+
+    def __init__(self, client_factory, deadline, clock, sleep):
+        self.client_factory, self.deadline = client_factory, deadline
+        self.clock, self.sleep = clock, sleep
+
+    def _read(self, operation, request):
+        require(operation in {"describe_tasks", "list_tasks"}, "image-release-task-status-read-operation")
+        # A brief control-plane outage must not abort a healthy long-running
+        # report. Do not stack SDK retries, renew the report deadline, or retry
+        # response validation and AWS service errors.
+        deadline = min(self.deadline, self.clock() + 180)
+        delays = (2, 5, 10, 15)
+        for attempt in range(len(delays) + 1):
+            remaining = deadline - self.clock()
+            require(remaining > 0, "image-release-task-status-read-timeout")
+            connect_timeout = min(10.0, remaining / 2)
+            config = Config(connect_timeout=connect_timeout,
+                            read_timeout=min(45.0, remaining - connect_timeout),
+                            retries={"total_max_attempts": 1})
+            try:
+                with closing(self.client_factory("ecs", config=config)) as client:
+                    require(self.clock() < deadline, "image-release-task-status-read-timeout")
+                    result = getattr(client, operation)(**request)
+            except (ConnectTimeoutError, ReadTimeoutError) as exc:
+                remaining = deadline - self.clock()
+                require(remaining > 0, "image-release-task-status-read-timeout")
+                if attempt == len(delays):
+                    raise
+                delay = min(delays[attempt], remaining)
+                print(json.dumps({"phase": "ecs-task-status-read-retry", "operation": operation,
+                                  "attempt": attempt + 1, "reason": type(exc).__name__,
+                                  "delay_seconds": delay}), flush=True)
+                self.sleep(delay)
+            else:
+                require(self.clock() < deadline, "image-release-task-status-read-timeout")
+                return result
+
+    def describe_tasks(self, **request):
+        return self._read("describe_tasks", request)
+
+    def list_tasks(self, **request):
+        return self._read("list_tasks", request)
 
 
 def unique_review_object(pairs):
@@ -504,8 +554,20 @@ class ImageRelease(Deployment):
         self.update(desired)
         self.event(phase + "-verified", schedule=self.known_schedule)
 
+    @contextmanager
+    def polling_task_reads(self, deadline):
+        previous = getattr(self, "_task_status_reads", None)
+        self._task_status_reads = TaskStatusReads(self.session.client, deadline, self.clock, self.sleep)
+        try:
+            yield
+        finally:
+            self._task_status_reads = previous
+
+    def tasks(self, family="vevo-reporting-daily"):
+        return super().tasks(family, read_client=getattr(self, "_task_status_reads", None))
+
     def task(self):
-        task = super().task()
+        task = super().task(read_client=getattr(self, "_task_status_reads", None))
         expected = task_overrides(self.release_id, self.commit, self.image, self.gate_sha, self.to_date,
                                   probe=self.task_mode == "probe", policy=self.policy)
         actual = task.get("overrides", {})
@@ -546,10 +608,17 @@ class ImageRelease(Deployment):
         self.event(mode + "-dispatched", task_arn=self.owned_task)
 
     def wait_probe(self):
-        deadline, ready, task = self.clock() + self.timeout, None, None
+        deadline = self.clock() + self.timeout
+        with self.polling_task_reads(deadline):
+            return self._wait_probe(deadline)
+
+    def _wait_probe(self, deadline):
+        ready, task = None, None
         while self.clock() < deadline:
             self.checkpoint(poll=True)
+            require(self.clock() < deadline, "image-release-task-status-read-timeout")
             task = self.task()
+            require(self.clock() < deadline, "image-release-task-status-read-timeout")
             if ready is None:
                 try:
                     raw = read_private(self.s3, self.prefix + "markers/ready.json")
@@ -559,6 +628,7 @@ class ImageRelease(Deployment):
                     ready = json.loads(raw)
                     require(ready.get("marker") == self.policy.probe_marker, "image-release-ready-marker")
                     self.verify_host(task, ready)
+                    require(self.clock() < deadline, "image-release-task-status-read-timeout")
                     self.event("probe-host-verified-before-provider", identity=ready)
                     signal = canonical({"phase": "host-authorized", "release_id": self.release_id,
                                         "task_arn": self.owned_task, "ready_sha256": sha(raw)})
@@ -567,7 +637,8 @@ class ImageRelease(Deployment):
                     require(read_private(self.s3, self.prefix + "authorize.json") == signal, "image-release-authorize-readback")
             if task["lastStatus"] == "STOPPED":
                 break
-            self.sleep(10)
+            self.sleep(min(10, max(0, deadline - self.clock())))
+        require(self.clock() < deadline, "image-release-task-status-read-timeout")
         successful = (ready is not None and task is not None and task["lastStatus"] == "STOPPED"
                       and task["containers"][0].get("exitCode") == 0)
         if not successful and ready is not None and task is not None and task["lastStatus"] == "STOPPED":
@@ -725,13 +796,21 @@ class ImageRelease(Deployment):
         return markers[0]
 
     def wait_live(self):
-        deadline, task = self.clock() + self.timeout, None
+        deadline = self.clock() + self.timeout
+        with self.polling_task_reads(deadline):
+            return self._wait_live(deadline)
+
+    def _wait_live(self, deadline):
+        task = None
         while self.clock() < deadline:
             self.checkpoint(poll=True)
+            require(self.clock() < deadline, "image-release-task-status-read-timeout")
             task = self.task()
+            require(self.clock() < deadline, "image-release-task-status-read-timeout")
             if task["lastStatus"] == "STOPPED":
                 break
-            self.sleep(10)
+            self.sleep(min(10, max(0, deadline - self.clock())))
+        require(self.clock() < deadline, "image-release-task-status-read-timeout")
         require(task is not None and task["lastStatus"] == "STOPPED" and task["containers"][0].get("exitCode") == 0,
                 "image-release-live-not-successful")
         marker = self.live_marker()
@@ -1085,15 +1164,14 @@ def main():
     require(args.independent_contract_sha256 is None or re.fullmatch(r"[a-f0-9]{64}", args.independent_contract_sha256),
             "image-release-independent-contract-invalid")
     import boto3
-    from botocore.config import Config
     session = boto3.Session(profile_name=args.profile, region_name=REGION)
     # Finite SDK operations; workflows may poll for a long report, never one unbounded call.
     # The current-rerun recovery never retries mutation transport calls: a lost
     # registration, role, schedule, lease or dispatch response needs readback.
     attempts = 1 if args.recover_current_rerun else 2
     original_client = session.client
-    session.client = lambda name: original_client(name, config=Config(connect_timeout=10, read_timeout=45,
-        retries={"total_max_attempts": attempts}))
+    default_config = Config(connect_timeout=10, read_timeout=45, retries={"total_max_attempts": attempts})
+    session.client = lambda name, **kwargs: original_client(name, **({"config": default_config} | kwargs))
     if args.mode == "status":
         require(args.release_id and re.fullmatch(r"[a-f0-9]{32}", args.release_id), "image-release-id-required")
         s3 = session.client("s3")

@@ -1,3 +1,14 @@
+## 2026-10-27 — ECS status-read timeout repair authorized
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-ecs-read-timeout-20261027
+What changed: The owner explicitly authorized repairing the AWS timeout, completing VEVO deployment, regenerating the country-card report and sending it once to existing recipients. Work starts from clean, fetched and rebased main587e18c. Meta pagination repair PR653 remains unchanged.
+Decision: Add bounded transient recovery only to ECS task-status reads (ListTasks/DescribeTasks), including the read paths used by checkpoints. Never retry a whole checkpoint because it renews a CAS lease; do not widen mutation retries. Preserve exact task validation, original poll deadlines, failure/ownership gates and uncertain-dispatch behavior. No financial changes.
+What is verified: Fresh read-only preflight at05:27UTC confirms account919341186960/eu-central-1, VEVO55 ENABLED, path/app, Fargate instanceN/A and no active task/IP. ROY83/monthly67 remain enabled/idle; AppRunner4fec RUNNING. Latest generation20261027T003047Z remains byte-identical (manifestSHA ae1a7dd77c3ffcb6a5d6022fc03a7f99999b0d560cf340168a35ebfe223c0428). Evidence is under data/vevo-ecs-timeout-20261027. No new production mutation or email yet.
+Validation: 241 focused integration tests passed, including VEVO/ROY releases, current-rerun/recovery, runtime bindings, Meta snapshots, country verification and email. Independent code review and critical lint pass. The read-only adapter allows only ListTasks/DescribeTasks, at most five attempts with2/5/10/15-second backoff,180-second per-operation cap and the unchanged report deadline. Dedicated read clients have one SDKattempt; mutation clients and shared base validations remain unchanged.
+Next exact step: Commit/push/PR/CI, then exact-source build and a fresh normal release ID. Complete actual probe/LIVE, independent country-source/CSV/card and HTTP/UI checks, then one conditional SES resend. Keep both previous failed release IDs historical; neither may be re-dispatched.
+
 ## 2026-10-27 — Meta fix merged; production country-card rollout still incomplete
 
 Date: 2026-10-27
