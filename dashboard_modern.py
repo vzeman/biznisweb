@@ -402,7 +402,7 @@ def _days_to_green_cell_html(maturation: Optional[Dict[str, Any]]) -> str:
     )
 
 
-def _kpis(payload: Optional[dict]) -> Dict[str, Any]:
+def _kpis(payload: Optional[dict], *, include_countries: bool = True) -> Dict[str, Any]:
     payload = payload or {}
     metric_defs = []
     for metric in payload.get("metric_defs") or []:
@@ -439,13 +439,44 @@ def _kpis(payload: Optional[dict]) -> Dict[str, Any]:
         comparisons[window_key] = {}
         for metric_key, metric_comp in comp_payload.items():
             comparisons[window_key][metric_key] = {k: _maybe_num(v) for k, v in (metric_comp or {}).items()}
-    return {
+    result = {
         "default_window": str(payload.get("default_window") or "monthly"),
         "metric_defs": metric_defs,
         "windows": windows,
         "comparisons": comparisons,
         "comparison_labels": COMPARISON_LABELS,
     }
+    # Country payloads have the same finite CFO contract. Never recursively
+    # serialize arbitrary nested country dictionaries from an upstream source.
+    if include_countries:
+        country_labels = {
+            "sk": ("Slovakia", "Slovensko"),
+            "cz": ("Czechia", "Česko"),
+            "hu": ("Hungary", "Maďarsko"),
+        }
+        supplied = payload.get("countries") or {}
+        if isinstance(supplied, dict):
+            requested_order = payload.get("country_order") or list(country_labels)
+            order = list(dict.fromkeys(
+                country for country in requested_order
+                if isinstance(country, str) and country in country_labels
+            ))
+            countries = {}
+            for country in order:
+                source = supplied.get(country)
+                if not isinstance(source, dict) or not source.get("windows"):
+                    continue
+                country_payload = _kpis(source, include_countries=False)
+                country_payload.update({
+                    "country": country,
+                    "label_en": str(source.get("label_en") or country_labels[country][0]),
+                    "label_sk": str(source.get("label_sk") or country_labels[country][1]),
+                })
+                countries[country] = country_payload
+            if countries:
+                result["country_order"] = list(countries)
+                result["countries"] = countries
+    return result
 
 
 def _cost_mix(date_agg: pd.DataFrame) -> Dict[str, Any]:
@@ -943,6 +974,16 @@ def generate_modern_dashboard(
     daily_profit_best_class = _profit_status_class(daily_profit_summary.get("best_day_profit"))
     daily_profit_worst_class = _profit_status_class(daily_profit_summary.get("worst_day_profit"))
     kpi_payload = _kpis(cfo_kpi_payload)
+    country_kpi_decks_html = "".join(
+        f'''<section class="country-kpi-deck" data-kpi-country="{country}"
+                    aria-labelledby="countryKpiHeading-{country}">
+                <div class="country-kpi-heading">
+                    <h3 id="countryKpiHeading-{country}"><span class="lang-en">{country.upper()} · {escape(country_payload["label_en"])}</span><span class="lang-sk hidden">{country.upper()} · {escape(country_payload["label_sk"])}</span></h3>
+                </div>
+                <div id="countryKpiGrid-{country}" class="kpi-grid"></div>
+            </section>'''
+        for country, country_payload in (kpi_payload.get("countries") or {}).items()
+    )
     cost_mix = _cost_mix(date_agg)
     cities = _top_rows(
         city_analysis,
@@ -4702,6 +4743,8 @@ def generate_modern_dashboard(
         .section-head p {{ margin: 6px 0 14px; color: var(--muted); line-height: 1.55; max-width: 760px; }}
         .kpi-band {{ padding: 22px; }}
         .kpi-grid {{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 16px; }}
+        .country-kpi-deck {{ margin-top: 26px; padding-top: 22px; border-top: 1px solid rgba(255,138,31,.18); }}
+        .country-kpi-heading h3 {{ margin: 0; font-size: 22px; letter-spacing: -.03em; }}
         .kpi-card {{ padding: 20px; border-radius: 22px; background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,245,233,.92)); border:1px solid rgba(255,138,31,.14); min-height: 228px; display:flex; flex-direction:column; }}
         .kpi-card small {{ color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing:.08em; }}
         .kpi-value {{ font-size: 36px; font-weight: 900; line-height: 1; letter-spacing: -.05em; margin: 10px 0 6px; }}
@@ -4896,6 +4939,7 @@ def generate_modern_dashboard(
                             <button type="button" class="window-btn" data-window="all_time"><span class="lang-en">All-time</span><span class="lang-sk hidden">Celé obdobie</span></button>
                         </div>
                         <div id="kpiGrid" class="kpi-grid"></div>
+                        {country_kpi_decks_html}
                     </div>
                 </section>
 
@@ -5851,6 +5895,11 @@ def generate_modern_dashboard(
         function fmtPercent(v) {{ if (v === null || v === undefined || Number.isNaN(Number(v))) return 'N/A'; return `${{Number(v).toFixed(1)}}%`; }}
         function fmtMultiple(v) {{ if (v === null || v === undefined || Number.isNaN(Number(v))) return 'N/A'; return `${{Number(v).toFixed(2)}}x`; }}
         function nullableNumber(v) {{ return (v === null || v === undefined || Number.isNaN(Number(v))) ? null : Number(v); }}
+        function kpiText(value) {{
+            return String(value ?? '').replace(/[&<>"']/g, character => ({{
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }})[character]);
+        }}
         function fmtMetric(key, value) {{
             const type = KPI_TYPES[key] || 'text';
             if (type === 'currency') return fmtCurrency(value);
@@ -5887,13 +5936,25 @@ def generate_modern_dashboard(
                 min -= 1;
                 max += 1;
             }}
-            const points = cleaned.map((value, idx) => {{
-                const x = (idx / Math.max(cleaned.length - 1, 1)) * width;
+            const segments = [];
+            let points = [];
+            (values || []).forEach((raw, idx) => {{
+                const value = nullableNumber(raw);
+                if (value === null) {{
+                    if (points.length) segments.push(points);
+                    points = [];
+                    return;
+                }}
+                const x = (idx / Math.max(values.length - 1, 1)) * width;
                 const y = height - pad - (((value - min) / (max - min)) * (height - pad * 2));
-                return [x, y];
+                points.push([x, y]);
             }});
-            const linePath = points.map(([x, y], idx) => `${{idx === 0 ? 'M' : 'L'}}${{x.toFixed(2)}},${{y.toFixed(2)}}`).join(' ');
-            const areaPath = `${{linePath}} L${{width.toFixed(2)}},${{(height - pad).toFixed(2)}} L0,${{(height - pad).toFixed(2)}} Z`;
+            if (points.length) segments.push(points);
+            const segmentPath = segment => segment.map(([x, y], idx) => `${{idx === 0 ? 'M' : 'L'}}${{x.toFixed(2)}},${{y.toFixed(2)}}`).join(' ');
+            const linePath = segments.map(segmentPath).join(' ');
+            const areaPath = segments.filter(segment => segment.length > 1).map(segment =>
+                `${{segmentPath(segment)}} L${{segment[segment.length - 1][0].toFixed(2)}},${{(height - pad).toFixed(2)}} L${{segment[0][0].toFixed(2)}},${{(height - pad).toFixed(2)}} Z`
+            ).join(' ');
             const cls = compClass(trendDelta(cleaned), direction);
             const stroke = cls === 'good' ? '#18b07a' : (cls === 'bad' ? '#e25d4d' : '#ff8a1f');
             return `<svg viewBox=\"0 0 ${{width}} ${{height}}\" preserveAspectRatio=\"none\" aria-hidden=\"true\"><path d=\"${{areaPath}}\" fill=\"${{stroke}}\" opacity=\"0.10\"></path><path d=\"${{linePath}}\" fill=\"none\" stroke=\"${{stroke}}\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg>`;
@@ -5935,17 +5996,13 @@ def generate_modern_dashboard(
             return `${{n > 0 ? '+' : ''}}${{n.toFixed(1)}}%`;
         }}
         let currentWindow = DATA.kpis.default_window || 'monthly';
-        function renderKpis(windowKey) {{
-            currentWindow = windowKey;
-            const grid = document.getElementById('kpiGrid');
-            const currentLang = lang();
-            document.querySelectorAll('.window-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.window === windowKey));
-            const defs = DATA.kpis.metric_defs || [];
-            const windows = DATA.kpis.windows || {{}};
-            const comps = DATA.kpis.comparisons || {{}};
-            const compLabels = DATA.kpis.comparison_labels || {{}};
+        function renderKpiCards(kpis, windowKey, currentLang) {{
+            const defs = kpis.metric_defs || [];
+            const windows = kpis.windows || {{}};
+            const comps = kpis.comparisons || {{}};
+            const compLabels = kpis.comparison_labels || {{}};
             const current = windows[windowKey] || {{ metrics: {{}} }};
-            grid.innerHTML = defs.map(def => {{
+            return defs.map(def => {{
                 const label = currentLang === 'sk' ? def.label_sk : def.label_en;
                 const period = currentLang === 'sk' ? current.label_sk : current.label_en;
                 const secondaryMetrics = current.secondary_metrics || {{}};
@@ -5959,7 +6016,7 @@ def generate_modern_dashboard(
                     ? 'N/A'
                     : `${{trendDeltaValue > 0 ? '+' : ''}}${{Number(trendDeltaValue).toFixed(1)}}%`;
                 const trendHtml = trendValues.length >= 2
-                    ? `<div class=\"kpi-trend\"><div class=\"kpi-trend-head\"><span class=\"kpi-trend-label\">${{trendLabel}}</span><span class=\"kpi-trend-delta ${{trendDeltaClass}}\">${{trendDeltaText}}</span></div><div class=\"kpi-sparkline\">${{sparklineSvg(trendValues, def.direction)}}</div></div>`
+                    ? `<div class=\"kpi-trend\"><div class=\"kpi-trend-head\"><span class=\"kpi-trend-label\">${{kpiText(trendLabel)}}</span><span class=\"kpi-trend-delta ${{trendDeltaClass}}\">${{trendDeltaText}}</span></div><div class=\"kpi-sparkline\">${{sparklineSvg(trendValues, def.direction)}}</div></div>`
                     : '';
                 const secondaryHtml = def.key === 'company_margin_with_fixed' && secondaryValue !== null && secondaryValue !== undefined
                     ? `<div class=\"kpi-secondary\">${{fmtCurrency(secondaryValue)}}</div>`
@@ -5967,10 +6024,21 @@ def generate_modern_dashboard(
                 const metricComps = ((comps[windowKey] || {{}})[def.key]) || {{}};
                 const rows = Object.entries(metricComps).slice(0, 2).map(([compKey, compVal]) => {{
                     const names = (compLabels[windowKey] || {{}})[compKey] || {{ en: compKey, sk: compKey }};
-                    return `<div class=\"compare-row ${{compClass(compVal, def.direction)}}\">${{compText(compVal)}} <span style=\"opacity:.85;\">${{currentLang === 'sk' ? names.sk : names.en}}</span></div>`;
+                    return `<div class=\"compare-row ${{compClass(compVal, def.direction)}}\">${{compText(compVal)}} <span style=\"opacity:.85;\">${{kpiText(currentLang === 'sk' ? names.sk : names.en)}}</span></div>`;
                 }}).join('');
-                return `<article class=\"kpi-card\"><small>${{label}}</small><div class=\"kpi-value\">${{fmtMetric(def.key, (current.metrics || {{}})[def.key])}}</div>${{secondaryHtml}}<div class=\"kpi-period\">${{period}}</div><div class=\"compare-list\">${{rows}}</div>${{trendHtml}}</article>`;
+                return `<article class=\"kpi-card\"><small>${{kpiText(label)}}</small><div class=\"kpi-value\">${{kpiText(fmtMetric(def.key, (current.metrics || {{}})[def.key]))}}</div>${{secondaryHtml}}<div class=\"kpi-period\">${{kpiText(period)}}</div><div class=\"compare-list\">${{rows}}</div>${{trendHtml}}</article>`;
             }}).join('');
+        }}
+        function renderKpis(windowKey) {{
+            currentWindow = windowKey;
+            const currentLang = lang();
+            document.querySelectorAll('.window-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.window === windowKey));
+            document.getElementById('kpiGrid').innerHTML = renderKpiCards(DATA.kpis, windowKey, currentLang);
+            const countries = DATA.kpis.countries || {{}};
+            (DATA.kpis.country_order || []).forEach(country => {{
+                const grid = document.getElementById(`countryKpiGrid-${{country}}`);
+                if (grid && countries[country]) grid.innerHTML = renderKpiCards(countries[country], windowKey, currentLang);
+            }});
         }}
         function gradient(ctx, top, bottom) {{
             const area = ctx.chart.chartArea;
