@@ -15,6 +15,9 @@ from urllib.parse import parse_qsl, quote, quote_plus, unquote, unquote_plus, ur
 ACCOUNT = 'act_1131531703632101'
 ORIGIN = 'https://graph.facebook.com'
 VERSION = 'v21.0'
+# Meta may advertise a newer version in native paging metadata. Requests still
+# use VERSION and the provider follows only cursors against its original URL.
+PAGING_VERSIONS = frozenset({VERSION, 'v24.0'})
 PUBLIC_PARAMS = frozenset({'fields', 'level', 'time_range', 'time_increment', 'breakdowns', 'limit', 'after'})
 AUTH_PARAMS = frozenset({'access_token', 'appsecret_proof'})
 DAILY_FIELDS = frozenset({'spend', 'impressions', 'clicks', 'cpc', 'cpm', 'ctr', 'reach',
@@ -59,7 +62,7 @@ def credential_reflected(value, variants):
                for secret in variants)
 
 
-def endpoint(value):
+def _endpoint(value, paths):
     try:
         parsed = urlparse(value)
         port = parsed.port
@@ -67,9 +70,43 @@ def endpoint(value):
         raise RuntimeError('probe-meta-source-endpoint') from None
     require(parsed.scheme == 'https' and parsed.hostname == 'graph.facebook.com'
             and port is None and not parsed.username and not parsed.password
-            and not parsed.fragment, 'endpoint')
-    require(parsed.path in {f'/{VERSION}/{ACCOUNT}', f'/{VERSION}/{ACCOUNT}/insights'}, 'account-version-path')
+            and not parsed.fragment and not parsed.params, 'endpoint')
+    require(parsed.path in paths, 'account-version-path')
     return parsed
+
+
+def endpoint(value):
+    return _endpoint(value, {f'/{VERSION}/{ACCOUNT}', f'/{VERSION}/{ACCOUNT}/insights'})
+
+
+def paging_endpoint(value):
+    return _endpoint(value, {f'/{version}/{ACCOUNT}/insights' for version in PAGING_VERSIONS})
+
+
+def paging_query(parsed, direction, request_query):
+    """Admit only native paging metadata for the unchanged request's scope."""
+    pairs = parse_qsl(parsed.query, keep_blank_values=True)
+    require(len(pairs) == len(dict(pairs)), 'paging-query-duplicates')
+    cursor_key = 'after' if direction == 'next' else 'before'
+    allowed = PUBLIC_PARAMS | ({'before'} if direction == 'previous' else set())
+    require(set(dict(pairs)) <= allowed | AUTH_PARAMS, 'paging-query-key')
+    public = {key: value for key, value in pairs if key in allowed}
+    expected = {key: value for key, value in request_query.items() if key != 'after'}
+    require(set(public) == set(expected) | {cursor_key}, 'paging-query-scope')
+
+    def normalized(query):
+        value = dict(query)
+        if 'time_range' in value:
+            value['time_range'] = decode(value['time_range'].encode())
+        if 'fields' in value:
+            fields = value['fields'].split(',')
+            require(len(fields) == len(set(fields)), 'paging-query-fields')
+            value['fields'] = sorted(fields)
+        return value
+
+    require(normalized({key: value for key, value in public.items() if key != cursor_key})
+            == normalized(expected), 'paging-query-scope')
+    return public, any(key in AUTH_PARAMS for key, _ in pairs)
 
 
 def public_query(parsed):
@@ -133,7 +170,7 @@ class MetaSourceSnapshot:
         require(not self.finished and self.ready_sha == sha(canonical(self.identity))
                 and all(sha(path.read_bytes()) == digest for path, digest in self.sources.items()), 'code-changed-or-finished')
 
-    def _sanitize(self, raw, secrets):
+    def _sanitize(self, raw, secrets, request_query):
         variants = credential_variants(secrets)
         original = decode(raw)
         def inspect(value, path=()):
@@ -163,11 +200,14 @@ class MetaSourceSnapshot:
             require(isinstance(paging, dict) and set(paging) <= {'cursors', 'next', 'previous'}, 'paging-shape')
             for name in ('next', 'previous'):
                 if name in paging:
-                    parsed = endpoint(paging[name])
-                    pairs = parse_qsl(parsed.query, keep_blank_values=True)
-                    require(len(pairs) == len(dict(pairs)), 'paging-query-duplicates')
-                    redacted = redacted or any(key in AUTH_PARAMS for key, _ in pairs)
-                    public = [(key, value) for key, value in pairs if key in PUBLIC_PARAMS]
+                    parsed = paging_endpoint(paging[name])
+                    public, has_auth = paging_query(parsed, name, request_query)
+                    redacted = redacted or has_auth
+                    cursor_key = 'after' if name == 'next' else 'before'
+                    cursors = paging.get('cursors')
+                    require(isinstance(cursors, dict) and isinstance(cursors.get(cursor_key), str)
+                            and cursors[cursor_key] and public[cursor_key] == cursors[cursor_key],
+                            'server-cursor-mismatch')
                     original_url = paging[name]
                     paging[name] = ORIGIN + parsed.path + ('?' + urlencode(public) if public else '')
                     paging_replacements[original_url] = paging[name]
@@ -237,7 +277,7 @@ class MetaSourceSnapshot:
             bearer = authorization[7:] if authorization.startswith('Bearer ') else ''
             secrets = (*self.credentials, *query_secrets, bearer)
             require(not credential_reflected(canonical(query).decode(), credential_variants(secrets)), 'query-credential-reflection')
-            payload, stored, redacted = self._sanitize(response.content, secrets)
+            payload, stored, redacted = self._sanitize(response.content, secrets, query)
             require(isinstance(payload, dict), 'response-object')
             group = None
             if kind == 'identity':
@@ -299,7 +339,7 @@ class MetaSourceSnapshot:
                 if next_url:
                     cursor = (paging.get('cursors') or {}).get('after')
                     require(rows and isinstance(cursor, str) and cursor and cursor not in group['seen_cursors'], 'nonadvancing-cursor')
-                    next_query = dict(parse_qsl(endpoint(next_url).query))
+                    next_query = dict(parse_qsl(paging_endpoint(next_url).query))
                     require(next_query.get('after') == cursor, 'server-cursor-mismatch')
                     group['seen_cursors'].add(cursor)
                     group['expected_after'] = cursor

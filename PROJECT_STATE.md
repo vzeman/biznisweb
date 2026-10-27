@@ -1,3 +1,14 @@
+## 2026-10-27 — Meta pagination repair authorized; fresh release preparation
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-meta-pagination-20261027
+What changed: The owner explicitly authorized repairing the Meta pagination blocker, completing the VEVO country-card deployment and regenerating/sending the report. New branch starts from synchronized main9d3aaca; the previously merged branch's remote was deleted, so no rebase/force-push of that historical branch was attempted. Separate native paging metadata admission from actual v21 request validation in the recorder and independent verifier. Financial calculations and existing country-card implementation remain unchanged.
+What is verified: Fresh read-only AWS identity at04:36:55UTC confirms account919341186960/eu-central-1, VEVO schedule55/imagec3ccd24c ENABLED, Fargate instanceN/A, no active task/IP and path/app. ROY83 and monthly67 enabled/idle; AppRunner4fec RUNNING unchanged. Published baseline remains20261027T003047Z with manifestSHA ae1a7dd77c3ffcb6a5d6022fc03a7f99999b0d560cf340168a35ebfe223c0428. Evidence: data/vevo-meta-pagination-20261027/preflight_identity.json. No new production mutation or mail yet.
+Known issues: Actual Meta server paging uses v24 while requests remain v21. This repair must permit only the observed same-origin/account/insights metadata versions, keep cursor/query/credential guards, and preserve monetary bytes. Previous failed release8f1ad088f28845d2b8462b1776736538 remains historical and must not be re-dispatched.
+Validation: 179 focused source/provider/verifier/release/email tests pass, critical lint and independent diff review pass. Fresh local read-only Meta check at04:44UTC accepted500+101 native rows across v24 next/previous links while both actual requests stayed v21. ProofSHA ccacdcfd99f3f6712aa76acb72c310a6f5d22ca2d7d874c6c9261d0f94afe260 is local admission evidence, not host/publication approval. No provider or financial formula changed.
+Next exact step: PR/CI/merge/exact-image build, then one fresh normal controlled probe/LIVE through26October. Verify actual four-range sources, cards/CSV/fixed/CAC and HTTP/UI before one conditional resend to existing runtime recipients. No persistent local runtime is needed.
+
 ## 2026-10-27 — Country KPI release stopped at probe; no LIVE publication or resend
 
 Date: 2026-10-27

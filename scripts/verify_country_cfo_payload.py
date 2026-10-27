@@ -87,6 +87,35 @@ def window_dates(first: str, last: str, key: str) -> list[str]:
     return days(start, last)
 
 
+def _meta_paging_cursor(value: Any, params: dict, direction: str, cursors: dict) -> str:
+    """Check native link metadata independently; request receipts stay on v21.
+
+    Meta may advertise its upgraded v24 endpoint in a response to a v21 request.
+    The provider follows only the cursor using its original request URL.
+    """
+    if not isinstance(value, str):
+        raise ValueError("meta_daily_cursor")
+    endpoint = urlparse(value)
+    pairs = parse_qsl(endpoint.query, keep_blank_values=True)
+    cursor_key = "after" if direction == "next" else "before"
+    cursor = cursors.get(cursor_key)
+    base = {key: item for key, item in params.items() if key != "after"}
+    if (endpoint.scheme != "https" or endpoint.netloc != "graph.facebook.com" or endpoint.fragment or endpoint.params
+            or endpoint.path not in {f"/{version}/{ACCOUNT}/insights" for version in ("v21.0", "v24.0")}
+            or len(pairs) != len(dict(pairs)) or set(dict(pairs)) != set(base) | {cursor_key}
+            or not isinstance(cursor, str) or not cursor):
+        raise ValueError("meta_daily_cursor")
+    query = dict(pairs)
+    if query.pop(cursor_key) != cursor:
+        raise ValueError("meta_daily_cursor")
+    query["time_range"] = decode(query["time_range"])
+    if isinstance(base["time_range"], str):
+        base["time_range"] = decode(base["time_range"])
+    if query != base:
+        raise ValueError("meta_daily_cursor_scope")
+    return cursor
+
+
 def _native_meta(manifest: dict, directory: Path) -> dict:
     """Reconstruct exact complete per-query native responses, not report values."""
     if (manifest.get("project") != "vevo" or manifest.get("complete") is not True
@@ -149,7 +178,7 @@ def _native_meta(manifest: dict, directory: Path) -> dict:
             raise ValueError("meta_currency_receipt")
         calendar = dict.fromkeys(days(*scope))
         daily = {day: {} for day in calendar}
-        seen, after = set(), None
+        seen, seen_cursors, after = set(), set(), None
         page_numbers = group["pages"]
         if not isinstance(page_numbers, list) or not page_numbers:
             raise ValueError("meta_daily_pages")
@@ -184,14 +213,18 @@ def _native_meta(manifest: dict, directory: Path) -> dict:
                     raise ValueError("meta_daily_negative")
                 daily[day][country] = amount
             paging = body.get("paging") or {}
-            if paging.get("next"):
-                endpoint = urlparse(paging["next"])
-                after = (paging.get("cursors") or {}).get("after")
-                if (not body["data"] or not isinstance(after, str) or not after
-                        or endpoint.scheme != "https" or endpoint.netloc != "graph.facebook.com"
-                        or endpoint.path != f"/v21.0/{ACCOUNT}/insights"
-                        or dict(parse_qsl(endpoint.query)).get("after") != after):
+            if not isinstance(paging, dict) or not set(paging) <= {"next", "previous", "cursors"}:
+                raise ValueError("meta_daily_cursor")
+            cursors = paging.get("cursors") or {}
+            if not isinstance(cursors, dict):
+                raise ValueError("meta_daily_cursor")
+            if "previous" in paging:
+                _meta_paging_cursor(paging["previous"], params, "previous", cursors)
+            if "next" in paging:
+                after = _meta_paging_cursor(paging["next"], params, "next", cursors)
+                if not body["data"] or after in seen_cursors:
                     raise ValueError("meta_daily_cursor")
+                seen_cursors.add(after)
             else:
                 after = None
         if after is not None:
