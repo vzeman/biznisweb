@@ -5,6 +5,28 @@ Repo: vzeman/biznisweb
 Branch: codex/vevo-country-kpi-probe-stop-20261027
 Base: 05ce88a21533f1f3bbae74188de0327040d79ee2
 
+## 2026-10-27 continuation: pagination repair ready for release
+
+The owner authorized fixing the known blocker and completing deployment, fresh
+report generation and one resend. Branch codex/vevo-meta-pagination-20261027
+starts from main9d3aaca. The recorder and independent verifier now separate native
+paging metadata (explicit v21/v24 allowlist) from unchanged v21 request paths.
+Both preserve exact Graph/account/insights scope, query parameters, directional
+cursor chains and secret handling. No provider query or economic formula changes.
+
+179 focused tests pass, including hostile metadata and500+1 row regressions.
+Independent review and critical lint pass. A fresh read-only full-range native
+check accepted500+101 rows over two pages, including v24 previous/before metadata;
+proofSHA ccacdcfd99f3f6712aa76acb72c310a6f5d22ca2d7d874c6c9261d0f94afe260.
+This is local admission evidence only, not production-host or publication approval.
+Fresh preflight retains55 ENABLED, no running task/IP, /app, FargateN/A,
+account919341186960, unchanged ROY83/monthly67/AppRunner4fec and old generation.
+
+Next: PR/CI/exact-source image, fresh release ID, actual probe/LIVE verification,
+source/CSV/cards/HTTP/native UI and one conditional SES resend. The narrow repair
+does not trigger the monthly accounting workflow. The failed release below is
+historical; it will not be retried under the old ID. No production change yet.
+
 ## Current outcome: stopped before LIVE, production update and email incomplete
 
 PR651 merged as2820e2679b35f0e27ae52e42f2f688910d236e88 and its exact-source

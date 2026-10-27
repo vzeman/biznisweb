@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from urllib.parse import parse_qsl, urlencode, urlparse
 
 from scripts.verify_country_cfo_payload import (
     ACCOUNT, COUNTRIES, METRICS, WINDOWS, days, load_payload, sha, verify_country_cfo_payload,
@@ -74,7 +75,7 @@ def fixture():
     return payload, google, rows, daily
 
 
-def meta_fixture(directory):
+def meta_fixture(directory, paging_version=None):
     release = "a" * 32
     prefix = f"data/vevo/reporting/runtime/probes/{release}/artifacts/source-inputs/meta/"
     manifest = {"project": "vevo", "complete": True, "currency": "EUR", "meta_account_id": ACCOUNT,
@@ -98,9 +99,27 @@ def meta_fixture(directory):
                  "time_range": {"since": first, "until": last}}
         record_params = {**query, "time_range": json.dumps(query["time_range"])}
         body = {"data": [dict(country=country.upper(), spend="10", date_start=LAST, date_stop=LAST) for country in COUNTRIES]}
-        page = store("country_daily", f"/v21.0/{ACCOUNT}/insights", record_params, body)
+        if paging_version:
+            url = f"https://graph.facebook.com/{paging_version}/{ACCOUNT}/insights?"
+            # Native Meta shape: a v21 request's next link may name v24. The
+            # JSON object's order/spacing may differ without changing scope.
+            native_params = {**record_params, "time_range": json.dumps({"until": last, "since": first}, separators=(",", ":"))}
+            first_body = {"data": body["data"][:1], "paging": {
+                "cursors": {"before": "MAZDZD", "after": "NDk5"},
+                "next": url + urlencode({**native_params, "after": "NDk5"}),
+            }}
+            page = store("country_daily", f"/v21.0/{ACCOUNT}/insights", record_params, first_body)
+            second_body = {"data": body["data"][1:], "paging": {
+                "cursors": {"before": "NTAw", "after": "NTAx"},
+                "previous": url + urlencode({**native_params, "before": "NTAw"}),
+            }}
+            following = store("country_daily", f"/v21.0/{ACCOUNT}/insights", {**record_params, "after": "NDk5"}, second_body)
+            pages = [page, following]
+        else:
+            page = store("country_daily", f"/v21.0/{ACCOUNT}/insights", record_params, body)
+            pages = [page]
         manifest["query_groups"][first] = {"kind": "country_daily", "complete": True, "query": query,
-                                           "pages": [page], "currency_metadata_page": identity}
+                                           "pages": pages, "currency_metadata_page": identity}
     return manifest
 
 
@@ -224,6 +243,104 @@ class CountryCfoVerificationTests(unittest.TestCase):
         proof = self.verify()
         self.assertFalse(proof["passed"])
         self.assertIn("native_meta_source_invalid", proof["errors"])
+
+    def rewrite_native_page(self, index, mutate_body=None, mutate_record=None):
+        """Keep fixture hashes valid to test semantic admission, not corruption."""
+        record = self.meta["native_responses"][index - 1]
+        target = self.folder / f"{index:04d}-response.json"
+        body = json.loads(target.read_bytes())
+        if mutate_body:
+            mutate_body(body)
+        raw = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+        record.update(size=len(raw), sha256=sha(raw), original_response_sha256=sha(raw))
+        if mutate_record:
+            mutate_record(record)
+        target.write_bytes(raw)
+        (self.folder / f"{index:04d}-receipt.json").write_bytes(
+            json.dumps(record, sort_keys=True, separators=(",", ":")).encode())
+
+    def test_native_v21_and_v24_paging_metadata_preserves_v21_request_proof(self):
+        for version in ("v21.0", "v24.0"):
+            with self.subTest(version=version):
+                self.meta = meta_fixture(self.folder, paging_version=version)
+                proof = self.verify()
+                self.assertTrue(proof["passed"], proof)
+                self.assertTrue(proof["checks"]["all_ad_sources_verified"])
+                self.assertFalse(proof["publication_approval"])
+                self.assertTrue(all(record["path"].startswith("/v21.0/") for record in self.meta["native_responses"]))
+
+    def test_native_paging_endpoint_and_query_changes_are_rejected(self):
+        mutations = {
+            "host": lambda url: url.replace("graph.facebook.com", "example.test"),
+            "scheme": lambda url: url.replace("https:", "http:"),
+            "account": lambda url: url.replace(ACCOUNT, "act_999"),
+            "version": lambda url: url.replace("/v24.0/", "/v25.0/"),
+            "path": lambda url: url.replace("/insights?", "/campaigns?"),
+            "path-params": lambda url: url.replace("/insights?", "/insights;extra?"),
+            "port": lambda url: url.replace("graph.facebook.com", "graph.facebook.com:443"),
+            "userinfo": lambda url: url.replace("graph.facebook.com", "user@graph.facebook.com"),
+            "fragment": lambda url: url + "#fragment",
+            "duplicate": lambda url: url + "&limit=500",
+            "unknown": lambda url: url + "&filtering=unexpected",
+            "credential": lambda url: url + "&access_token=not-a-real-token",
+            "scope": lambda url: url.replace("level=account", "level=campaign"),
+            "cursor": lambda url: url.replace("after=NDk5", "after=wrong"),
+            "empty": lambda url: "",
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(mutation=name):
+                self.meta = meta_fixture(self.folder, paging_version="v24.0")
+                self.rewrite_native_page(2, lambda body: body["paging"].update(next=mutate(body["paging"]["next"])))
+                proof = self.verify()
+                self.assertFalse(proof["passed"], name)
+                self.assertIn("native_meta_source_invalid", proof["errors"])
+
+    def test_native_paging_cannot_change_dates_or_drop_request_parameters(self):
+        for change in ("date", "missing"):
+            with self.subTest(change=change):
+                self.meta = meta_fixture(self.folder, paging_version="v24.0")
+                def mutate(body):
+                    endpoint = urlparse(body["paging"]["next"])
+                    query = dict(parse_qsl(endpoint.query))
+                    if change == "date":
+                        query["time_range"] = json.dumps({"since": LAST, "until": LAST})
+                    else:
+                        query.pop("breakdowns")
+                    body["paging"]["next"] = endpoint._replace(query=urlencode(query)).geturl()
+                self.rewrite_native_page(2, mutate)
+                self.assertFalse(self.verify()["passed"])
+
+    def test_previous_direction_and_cursor_are_independently_validated(self):
+        for change in ("direction", "cursor", "host"):
+            with self.subTest(change=change):
+                self.meta = meta_fixture(self.folder, paging_version="v24.0")
+                def mutate(body):
+                    url = body["paging"]["previous"]
+                    if change == "direction":
+                        url = url.replace("before=NTAw", "after=NTAw")
+                    elif change == "cursor":
+                        url = url.replace("before=NTAw", "before=wrong")
+                    else:
+                        url = url.replace("graph.facebook.com", "example.test")
+                    body["paging"]["previous"] = url
+                self.rewrite_native_page(3, mutate)
+                self.assertFalse(self.verify()["passed"])
+
+    def test_paging_chain_cannot_repeat_cursor_or_upgrade_actual_request(self):
+        for change in ("cursor", "path", "request-after"):
+            with self.subTest(change=change):
+                self.meta = meta_fixture(self.folder, paging_version="v24.0")
+                if change == "cursor":
+                    first = json.loads((self.folder / "0002-response.json").read_bytes())
+                    self.rewrite_native_page(3, lambda body: body.update(paging=first["paging"]))
+                else:
+                    def mutate_record(record):
+                        if change == "path":
+                            record["path"] = record["path"].replace("/v21.0/", "/v24.0/")
+                        else:
+                            record["public_params"]["after"] = "wrong"
+                    self.rewrite_native_page(3, mutate_record=mutate_record)
+                self.assertFalse(self.verify()["passed"])
 
     def test_embedded_html_and_duplicate_json_keys_are_handled_independently(self):
         target = self.folder / "report.html"
