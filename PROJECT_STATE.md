@@ -1,3 +1,13 @@
+## 2026-10-27 — Meta pagination fixed; fresh release stopped on AWS status-read timeout
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-meta-pagination-runtime-stop-20261027
+What changed: PR653 merged as `7c9e85d926f65a9c5b181b5dd20fd33372ce191b`. The recorder and independent verifier now accept the observed v24 pagination metadata while actual Meta requests remain v21; account, query, cursor and credential checks remain strict. Financial formulas are unchanged.
+What is verified: All six PR checks, 179 focused local tests and the exact-source image build passed. A fresh read-only Meta check accepted both native pages (500 + 101 rows). The new controlled release `68ec84cb1ca1456db1876444f128f192` passed the probe's host/localhost gate on Fargate, IP `172.31.22.81`, service `vevo-daily-report-email`, path `/app`, candidate task definition 57. It did not reach LIVE publication, report regeneration or email.
+Known issue: At 05:15:35 UTC the local controller ended with `ConnectTimeoutError` while polling ECS `DescribeTasks` through `wait_probe`. This is a new AWS transport failure, distinct from the repaired Meta admission bug. Fresh direct-SDK proof confirms original 55 ENABLED, candidate 57 INACTIVE, unchanged published report and all protected schedules/ROY outputs, released lease and no running report tasks. The 55-file private archive is sealed and read back; see VEVO state for hashes. Local finite processes ended; no dev service or UI action was started. Work stopped under the owner's error-stop instruction, without another deployment retry or email.
+Next exact step: On continuation, narrowly add bounded handling for transient read-only task-status transport failures, preserving failure gates and never retrying uncertain dispatches or sends. After PR/CI and exact-source build, use a fresh release ID, complete probe/LIVE, verify all country sources/cards/HTTP/UI, then send the authorized report once. See [VEVO state](projects/vevo/PROJECT_STATE.md) and [rollout record](docs/vevo-country-kpis-rollout.md).
+
 ## 2026-10-27 — Meta pagination repair authorized; fresh release preparation
 
 Date: 2026-10-27
