@@ -7106,6 +7106,13 @@ class BizniWebExporter:
             "creditnote_fulfillment_cost",
         ]
         settings = self._creditnote_fulfillment_cost_settings()
+        # Retain the same selected fulfillment events for additive market decks.
+        # The existing company aggregation below is intentionally unchanged.
+        self._country_creditnote_fulfillment = {
+            "date_from": date_from.date().isoformat(),
+            "date_to": date_to.date().isoformat(),
+            "rows": [],
+        }
         if not settings["enabled"]:
             return pd.DataFrame(columns=columns)
 
@@ -7144,6 +7151,10 @@ class BizniWebExporter:
                     "creditnote_fulfillment_cost": packaging_cost + shipping_cost,
                 }
             )
+            delivery = (order.get("delivery_address") or {}).get("country")
+            invoice = (order.get("invoice_address") or {}).get("country")
+            country, _label = self._normalize_country_key_label(delivery or invoice)
+            self._country_creditnote_fulfillment["rows"].append({**rows[-1], "country": country})
 
         if not rows:
             return pd.DataFrame(columns=columns)
@@ -8608,6 +8619,10 @@ class BizniWebExporter:
             export_df=analytics_df,
             fixed_daily_cost_eur=float(self.get_daily_fixed_cost(pd.Timestamp(date_agg["date"].max())) if not date_agg.empty else 0.0),
         )
+        if self.project_name == "vevo" and (self.project_settings or {}).get("measured_country_ads_enabled", False):
+            cfo_kpi_payload.update(self._build_country_cfo_decks(
+                analytics_df, date_agg, date_from, date_to, country_ads,
+            ))
 
         # Cost Per Order analysis with campaign attribution
         # Use the same revenue source as financial summary to keep ROAS definitions aligned.
@@ -13685,6 +13700,34 @@ class BizniWebExporter:
             except Exception as exc:
                 result[key] = {'status': 'unavailable', 'error_code': type(exc).__name__}
         return result
+
+    def _build_country_cfo_decks(self, df, date_agg, date_from, date_to, period_country_ads):
+        """Add exact market views without changing company or legacy geo math."""
+        from reporting_core.country_cfo_kpis import build_country_cfo_payload
+
+        daily_ads = {}
+        for key, client in (("facebook_ads", self.fb_client), ("google_ads", self.google_ads_client)):
+            try:
+                daily_ads[key] = client.get_country_daily_spend(date_from, date_to)
+            except Exception as exc:
+                # Neither exception text nor request URLs may enter the report.
+                daily_ads[key] = {"status": "unavailable", "error_code": type(exc).__name__}
+        order_frame, _items, _revenue = self._build_growth_order_item_frames(df, require_customer_email=False)
+        order_frame = self._build_order_geo_frame(df, order_frame).rename(columns={"geo_country": "country"})
+        order_frame["country"] = order_frame["country"].apply(lambda value: self._normalize_country_key_label(value)[0])
+        if "order_revenue_net" not in order_frame:
+            order_frame["order_revenue_net"] = order_frame[_revenue]
+        if "order_credit_net_adjustment" in df:
+            credits = df.drop_duplicates("order_num").set_index("order_num")["order_credit_net_adjustment"]
+            order_frame["order_credit_net_adjustment"] = order_frame["order_num"].map(credits).fillna(0.0)
+        fulfillment = getattr(self, "_country_creditnote_fulfillment", {})
+        matching_fulfillment = (fulfillment.get("date_from") == date_from.date().isoformat()
+                                and fulfillment.get("date_to") == date_to.date().isoformat())
+        return build_country_cfo_payload(
+            date_agg, order_frame, daily_ads,
+            fulfillment_rows=pd.DataFrame(fulfillment.get("rows") or []) if matching_fulfillment else None,
+            period_country_ads=period_country_ads,
+        )
 
     @staticmethod
     def _validate_google_country_coverage(source, expected_account_id):
