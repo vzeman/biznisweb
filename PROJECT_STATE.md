@@ -1,3 +1,13 @@
+## 2026-10-27 — Country KPI code and native-source feasibility verified
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-country-kpi-20261027
+What changed: DraftPR651 contains additive native daily-country providers/Meta receipts, country CFO builder, three modern nine-card decks with shared four-window controls, bounded provenance/N/A notices and matching-cohort email wording. Original global/ROY financial logic and30 provider methods remain unchanged. Code commits througha98cba9 are pushed.
+What is verified: Root315 integration tests, final34 frontend/email tests, independent130-test provider/source review, reporting smoke, critical lint/YAML and six PR checks pass; counts overlap. Actual542-day read-only Meta/Google sources are complete/OK. Native Meta daily/period per-country cent differences are retained, not rescaled; Google deltas0. Baseline20261027T003047Z eleven-object capture/hash/encryption/owner/latest invariance verified. Monthly66 actual OCI path/app/image8203526c confirmed with no active task/IP. Details and proof hashes in [rollout contract](docs/vevo-country-kpis-rollout.md).
+Known issues: No new production release/email yet. The initial monthly image reader failed on two legitimate tags for one immutable digest; corrected read-only V2 checks identical manifests/config and is verified, with original failure retained. Actual new release approval must require four country_daily ranges and usable decks, not merely legacy-compatible recorder completion.
+Next exact step: Finish pure publication verifier and portable once-only resend CLI/tests; final review/CI/merge, exact-source build and monthly terminal smoke; freeze source for normal isolated probe/LIVE, actual native/card/CSV/HTTP/browser verification, then one conditional SES resend. All local finite tests/readers ended; no dev service/tunnel started. Original production remains55 ENABLED and AppRunner4fec unchanged.
+
 ## 2026-10-27 — VEVO country executive cards implementation
 
 Date: 2026-10-27

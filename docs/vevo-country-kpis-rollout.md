@@ -74,11 +74,46 @@ one SES attempt. Record MessageId and distinguish acceptance from delivery.
 
 ## Current state and next exact step
 
-Implementation in progress. Backend, provider and modern-renderer ownership is
-separate; root owns Meta capture admission, Git, runtime, publication verification
-and email. No production mutation or email has occurred in this task. No local
-dev server, watcher, worker or tunnel has been started.
+Implementation is committed and pushed in draft PR651. The original provider
+methods are AST-identical to base05ce88; country sources, country CFO calculation
+and modern rendering are additive. Only the email creditnote summary display
+changes its pre-existing mismatched cohort denominator; financial rates and
+sender/recipient behavior are unchanged. Metadata is bounded and sanitized;
+unavailable sources show N/A with a short country notice.
 
-Next: complete additive country data/rendering tests, inspect the actual native
-daily-country source and any residuals, review all changes, then the Git/image/
-probe/LIVE/verification/once-only email workflow above.
+Root integration315 tests passed; final frontend/email34 tests passed after the
+metadata follow-up. Independent provider/Meta/backend130-test review passed.
+Reporting smoke, critical Ruff and workflow YAML checks passed. All six current
+PR checks pass, including Windows/Linux regression. New country/source/email
+tests are wired into PR and image gates. Do not add these overlapping counts.
+
+Actual read-only provider feasibility through2026-10-26 succeeded for542 days,
+both daily and original period sources. Proofd4de80727f1dc46b1fdfca9ff5cac7a8168acacd01aa2b6c89d02f71491e138b.
+Native Meta daily-minus-period amounts are SK+0.120205EUR, CZ−0.044675EUR,
+HU−0.075525EUR, unknown−0.000002EUR; Google deltas are zero. These distinct native
+query granularities are preserved in metadata, never rescaled or used to expand
+the existing reconciliation tolerance. This preflight does not approve any later
+probe or LIVE source snapshot. Actual release review must require all four
+country_daily ranges and usable country decks; legacy recorder compatibility
+alone is insufficient.
+
+The pre-existing baseline generation20261027T003047Z was captured with eight
+manifest artifacts plus original CSV, global daily aggregate and QA (eleven
+objects); full hash/size/encryption/owner checks pass and latest stayed unchanged.
+CSV retains customer_first_purchase_date for independent country CAC checking.
+
+Monthly dependency hard-gate is also confirmed: monthly-creditnote-export:66,
+image8203526ce14b04ff955aea058ff9bb14f0dff24e011c192427615516d3fc56bb,
+FargateN/A/no active IP, actual immutable OCI configuration /app. Proofb3f2c04a5750fb5cc7d35466fddc551f43f305e8bcb6272ec33cd238796d3060.
+The first read-only helper wrongly required one ECR image entry; AWS returned two
+tags for the same byte-identical digest. Narrow V2 verifies every entry/digest and
+the unique OCI manifest/config hash. Original failed helper is preserved; no
+runtime or financial change occurred.
+
+No production mutation or email has occurred in this task. No local dev server,
+watcher, worker or tunnel has been started; finite tests/readers ended naturally.
+
+Next: complete the independent publication verifier and portable once-only mail
+CLI/tests, then final PR checks/review/merge. Wait for exact-source image build
+and monthly terminal smoke, freeze the normal release source, run isolated
+probe/LIVE with actual source/card verification, then HTTP/browser and one email.

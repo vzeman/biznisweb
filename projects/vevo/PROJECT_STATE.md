@@ -1,3 +1,12 @@
+## 2026-10-27 — Country cards committed; production release pending
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-country-kpi-20261027
+What changed: DraftPR651 now has SK/CZ/HU nine-card decks directly below overall, shared four windows/trends/comparisons, genuine daily-country ad inputs, same CFO logic/global-first CAC and single shared fixed allocation/fallback0, credited fulfillment reuse, bounded provenance and honest N/A. Global/ROY calculations and original provider methods are unchanged; pre-existing email cohort-denominator wording is corrected without changing amounts/rates/send behavior. Commits througha98cba9 pushed.
+What is verified:315 root integration tests,34 final frontend/email tests,130 independent source/backend tests (overlapping), reporting smoke/lint/YAML and current six PR gates pass. Actual Meta/Google542-day source feasibility OK; native Meta daily-vs-period country differences are preserved, Google deltas0. Baselinegeneration20261027T003047Z eleven objects captured with full validation. Monthly dependency66/image8203526c has actual immutable OCI/app proofb3f2c04a; original55/app/Fargate idle/dynamic enabled and UI4fec are unchanged. See [rollout contract](../../docs/vevo-country-kpis-rollout.md) for exact source/proof identities.
+Next exact step: Finish independent publication verifier and portable once-only resend CLI/tests, then final PR651 checks/merge/build and monthly terminal verification before report baseline. Run one normal isolated probe/LIVE through26October; require actual four country_daily source ranges and usable decks, financial/CSV/card/HTTP/browser checks, then one SES resend with conditional intent/current configured recipients/MessageId. Do not repeat old one-day replacement or change order eligibility. No production mutation/email or local persistent process yet.
+
 ## 2026-10-27 — Country executive cards requested; implementation underway
 
 Date: 2026-10-27
