@@ -1,3 +1,12 @@
+## 2026-10-27 — Country KPI final release gate; Windows fixture normalized
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-country-kpi-20261027
+What changed: Complete implementation plus pure publication verifier and once-only SES prepare/send CLI committed through3bf9303 in PR651. VEVO activation is an explicit client setting; reusable export code has no merchant-name branch. Root final215-test release pack and43-test verifier/email pack pass; critical lint is clean after removing three genuinely unused legacy imports. Existing economic functions/provider methods remain unchanged.
+Known CI issue/fix: Windows40441785685 rejected the email test fixture's noncanonical TemporaryDirectory root at the strict local-path guard. Production ROOT already uses resolve(); only the fixture is now canonicalized to match it. No relaxation of traversal/reparse/send guards, no production/financial change. Original failure log retained. Linux and the other gates passed, but final Windows success is still required.
+Next exact step: Require fresh complete PR651 CI/review, merge via PR, wait exact-source image build and monthly dependency terminal smoke, freeze merged source for one normal isolated probe/LIVE through26October, verify actual native four-country-daily ranges/CSV/card arithmetic/fixed/CAC/HTTP/browser, then one authorized SES resend. Original55 enabled/UI4fec remain untouched; no production mutation/email or persistent local process yet. See [rollout contract](docs/vevo-country-kpis-rollout.md).
+
 ## 2026-10-27 — Country KPI code and native-source feasibility verified
 
 Date: 2026-10-27

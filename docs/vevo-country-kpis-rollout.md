@@ -121,3 +121,12 @@ Next: complete the independent publication verifier and portable once-only mail
 CLI/tests, then final PR checks/review/merge. Wait for exact-source image build
 and monthly terminal smoke, freeze the normal release source, run isolated
 probe/LIVE with actual source/card verification, then HTTP/browser and one email.
+
+The verifier and resend CLI are now committed at3bf9303. Root final release pack
+passed215 tests; the independent verifier/email helper pack passed43 tests.
+Windows CI40441785685 rejected the resend test fixture's noncanonical temporary
+root; production ROOT is already resolved and the actual path guard correctly
+refused that alias. The fixture now resolves its root exactly as production does.
+Traversal/reparse checks and all send guards are unchanged. The failed CI log is
+retained. Require new Windows and Linux CI success before merge; no runtime or
+email action occurred while investigating this test-only mismatch.

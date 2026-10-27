@@ -1,3 +1,12 @@
+## 2026-10-27 — Final country-card release checks; no production change yet
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-country-kpi-20261027
+What changed: PR651 implementation is complete through3bf9303, including explicit VEVO client opt-in, pure source/card verifier and conditional once-only mail preparation/send. Root215-test final release pack and43-test helper pack pass; source/global/ROY financial rules preserved. New helper tests are in both CI gates.
+CI diagnosis: Windows40441785685 failed because its mocked temporary ROOT was not canonical while production ROOT is resolved. The actual strict private-data guard correctly rejected it; fixture normalization now matches production, with no policy weakening or live change. Retain the failed CI log and require replacement Windows/Linux success.
+Next exact step: Final CI/merge/build plus monthly terminal smoke, then hold exact merged source for one normal probe/LIVE through26October. Require actual four country_daily ranges, complete usable country decks, CSV/fixed/CAC/source math and HTTP/browser, then one SES resend to existing runtime recipients under immutable intent/accepted receipt. Original55 schedule/UI4fec unchanged; no production mutation/email or persistent local process. [Rollout contract](../../docs/vevo-country-kpis-rollout.md).
+
 ## 2026-10-27 — Country cards committed; production release pending
 
 Date: 2026-10-27

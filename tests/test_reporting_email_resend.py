@@ -113,7 +113,9 @@ class Fixture:
 class ReportingEmailResendTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.root = Path(self.temp.name)
+        # Production ROOT is canonical; Windows runner temporary paths may use
+        # short aliases. Keep the fixture under the same strict path boundary.
+        self.root = Path(self.temp.name).resolve()
         (self.root / "projects/vevo").mkdir(parents=True)
         (self.root / "projects/vevo/settings.json").write_text('{"ses_configuration_set":"vevo-reporting"}')
         self.root_patch = patch.object(mail, "ROOT", self.root)
