@@ -2,10 +2,38 @@
 
 Date: 2026-10-27
 Repo: vzeman/biznisweb
-Branch: codex/vevo-ecs-read-timeout-20261027
+Branch: codex/vevo-country-cards-live-handoff
 Base: 05ce88a21533f1f3bbae74188de0327040d79ee2
 
-## Current continuation: ECS read-timeout repair ready for CI
+## Current outcome: production complete; UI/email pending after user stop
+
+PR655/source `c051605412116425fbea920b0b5fdc1770c8e5bc` passed six PR checks,
+241 integration tests and exact-source build40456264857. Normal release
+`cf3524474f5b49518adba9206fc331a1` completed probe/LIVE at06:51:48UTC.
+Production is VEVO58/image5ef3 with the original dynamic daily schedule enabled.
+Generation `20261027T065056Z` through26October has manifest SHA
+`27b75ade3136a3328f50bea69d85df817816a308f2691a44cf032d4fe9dd2f2a`.
+
+All8 actual JSON/HTML source/CSV/country checks and8 authenticated HTTP checks
+pass. Actual native Meta covers all four requested ranges; fresh Google covers
+542 days. Shared fixed costs remain allocated once. Both actual hosts/localhost
+markers and terminal exit0 records are bound to source/image/RID. Fresh runtime
+checks confirm no protected ROY/schedule drift, no active owned report task and
+no temporary probe role. The supplemental checker's initial ARN comparison was
+a private helper defect, diagnosed and corrected without runtime modification.
+
+Native UI verification is **incomplete**. Two native window captures timed out;
+the fallback IAB is unavailable. Computer Use then reported physical Escape
+from the user, and no further Computer Use was performed. Task-owned Comet
+window8129208 was not closed after that stop. No email was prepared or sent.
+This is not full completion of the user's deployment-and-resend request.
+
+On continuation, finish UI and fresh delivery/runtime checks, then perform the
+authorized once-only SES send. Do not repeat the successful release/regeneration.
+See [VEVO state](../projects/vevo/PROJECT_STATE.md) for exact proof hashes,
+verification limits, cleanup and source-bound helper/resend instructions.
+
+## Historical preparation: ECS read-timeout repair ready for CI
 
 The owner authorized repairing the AWS timeout and completing the existing
 country-card deployment/report/email goal. Branch

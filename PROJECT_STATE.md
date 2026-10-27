@@ -1,3 +1,13 @@
+## 2026-10-27 — VEVO country cards LIVE; email pending after user stopped Computer Use
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-country-cards-live-handoff
+What changed: PR655/source `c051605412116425fbea920b0b5fdc1770c8e5bc` repaired bounded ECS status-read timeouts. It includes the earlier Meta pagination repair and SK/CZ/HU nine-card decks. Normal release `cf3524474f5b49518adba9206fc331a1` completed probe, LIVE regeneration and scheduler restoration; no financial formula changed in this repair.
+What is verified: Six PR checks, 241 integration tests and exact-source build40456264857 passed. Production now selects VEVO definition58/image5ef3; generation `20261027T065056Z` covers through26October. All eight actual JSON/HTML source/CSV/country checks and eight authenticated HTTP checks pass. Shared fixed costs are allocated once. Dynamic daily schedule is ENABLED; both owned tasks stopped with exit0, temporary role removed, ROY/protected schedules unchanged. See [VEVO state](projects/vevo/PROJECT_STATE.md) for hashes and evidence.
+Known issues: Native UI capture failed twice; then Computer Use explicitly reported that the user stopped it with physical Escape. No further Computer Use occurred. Native UI verification remains incomplete and the requested resend was NOT prepared or sent. Do not describe the entire request as complete. Local finite calculation/verification processes ended; the task-created browser window was not closed after the user stop.
+Next exact step: On user continuation, finish the UI check, freshly reconcile the current manifest/runtime and existing delivery state, then perform the authorized once-only SES resend. Do not deploy, regenerate, or re-dispatch this successful RID. Source-bound helpers require the recorded c051605 source; use a separate append-only follow-up evidence prefix. Preserve the stopped UI state and explicit unsent status.
+
 ## 2026-10-27 — ECS status-read timeout repair authorized
 
 Date: 2026-10-27
