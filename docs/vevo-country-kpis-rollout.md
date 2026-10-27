@@ -2,8 +2,87 @@
 
 Date: 2026-10-27
 Repo: vzeman/biznisweb
-Branch: codex/vevo-country-kpi-20261027
+Branch: codex/vevo-country-kpi-probe-stop-20261027
 Base: 05ce88a21533f1f3bbae74188de0327040d79ee2
+
+## Current outcome: stopped before LIVE, production update and email incomplete
+
+PR651 merged as2820e2679b35f0e27ae52e42f2f688910d236e88 and its exact-source
+reporting image built successfully. A real controlled release was attempted:
+8f1ad088f28845d2b8462b1776736538 registered candidate56/imagee322 and dispatched
+one probe720d30756ba740559c6ad5183657ec9a. Its host and localhost identity gates
+passed before provider reads: instanceN/A:Fargate, privateIP172.31.4.66,
+servicevevo-daily-report-email,path/app. Restoration finished at04:07:38UTC after the probe stopped with exit1.
+No LIVE run, new production country-card generation or requested SES resend
+occurred. HTTP and native browser verification of a new generation did not run.
+The owner was informed and work stopped under the error-stop instruction. No
+code repair, automatic retry, UI attempt or email followed this failure.
+
+Fresh direct-SDK restoration proof
+4aabaf92b270184ae5feb79f03c3b6f81f2fb210719c714a311975edb100cae1 verifies
+original55/imagec3ccd24c and its ENABLED dynamic schedule exactly match release
+preflight, candidate56 is INACTIVE, all13 schedules including12 protected are
+unchanged, and ROY lease/outputs remain exact. VEVO generation20261027T003047Z is
+byte-identical to baseline. The temporary probe role is removed, own lease is
+released under8f, no ROY/VEVO tasks are active and AppRunner4fec is RUNNING with
+unchanged configuration. Cleanupfd4dfef56f7df672aff9a1e74700afc03496290e4c8184c48cea646e72bca909
+confirms exact controller Python28280/wrapper23720/diagnosis shell29228 absent, zero process kills,
+dev services or native UI actions. Private failure archive sealing is complete, as recorded below.
+The implementation is in Git but must not be described as deployed reporting.
+
+The original probe failed with probe-meta-source-incomplete-or-rejected. Its
+specific inner predicate and original rejected full page were not retained.
+Root's fresh local, read-only
+two-GET diagnosis specifically rejects probe-meta-source-account-version-path
+and reproduces this current concrete blocker: the full-range
+country_daily request targets Graphv21.0, while the returned native paging.next
+uses HTTPS graph.facebook.com, the same act_1131531703632101 account and insights
+endpoint, but names/v24.0/. In this fresh reproduction, the recorder admits
+onlyv21 endpoints and rejects the first500-row full-range page before its source
+PUT. The provider uses its
+cursor instead of following the supplied next URL. Diagnosis SHA256
+1cddf74662815c2d640b679b9deaa91c56d7299ec19aa7375b512a97685986c0 is explicitly
+a fresh local admission reproduction consistent with the original trace, not
+original-probe raw-response or same-host proof. Short7d/30d/90d country_daily
+ranges were retained; full history is incomplete. All four original global QA
+records have warning status with zero failures. New country/source/CSV/HTTP/native
+UI verification did not run or pass. Global QA and offline helper tests cannot
+replace the missing complete native source and do not authorize publication.
+
+The monthly dependency is separate: CI40442777562 deployed67/image64c3 and its
+actual task543a/IP172.31.3.197/path/app dryrun stopped0 with no actual mail,
+retaining proofa0eab98. That successful smoke does not establish VEVO LIVE success.
+All country publication/email/HTTP helper tests remain offline preparation; no
+actual LIVE, HTTP, native UI or email acceptance is inferred from them. No local
+dev server, watcher, worker or tunnel was started.
+
+Private evidence: owner/account919341186960, eu-central-1, bucket
+biznisweb-reporting-artifacts-919341186960-eu-central-1. Encrypted archive key:
+`data/vevo/reporting/country-kpi-20261027/8f1ad088f28845d2b8462b1776736538/evidence.zip`
+SHA256 `9db2df57723ae89349b269bb5afdd5257ba8c406840efe3f6603f21b80e1fc2e`,
+3,943,768bytes,213members. Same-prefix `receipt.json` SHA256
+`a6f2751a2faff764f61a22af1c4f98ca3691db4995b2accfb173dafcbd54352e`.
+Conditional owner-bound AES256 PUTs, full GET/readback and each ZIP member hash
+were verified. No new source approval, publication or email acceptance is implied.
+The finite uploader shell38144/Python6728 exited0 naturally; fresh checks confirm
+both absent. No kill, persistent local service or UI input action occurred.
+
+Next exact step on a future continuation: narrowly repair admission of the
+observed pagination-source metadata while retaining the original v21 request,
+exact HTTPS Graph origin/account/insights path, query scope, native cursor chain
+and credential protections. Do not follow paging.next, accept arbitrary API
+versions/hosts, change economic provider queries, rescale amounts, or widen the
+existing five-cent reconciliation tolerance. Add actual sanitized pagination
+fixtures and malicious-origin/account/query/version regression cases, review
+through PR/CI and an exact-source image build, then use a fresh normal release ID
+for an isolated probe and LIVE. Require all four actual country_daily ranges,
+source/CSV/fixed/CAC/card checks, authenticated HTTP and native UI, then exactly
+one conditional email resend to existing recipients. Preserve the failed RID and
+baseline; do not blindly re-dispatch it. The preceding approved implementation
+and feasibility work are retained below as historical preparation, not the
+current production outcome. Private HTTP preparations bound to source2820 and
+failed RID8f are historical helpers, not authorization or source evidence for a
+future fresh release; rebind and review the new source/identity inputs explicitly.
 
 ## Requested outcome
 
@@ -76,9 +155,9 @@ the exact generation email, verify the known creditnote denominator wording,
 retain existing sender/recipients privately and use one conditional intent plus
 one SES attempt. Record MessageId and distinguish acceptance from delivery.
 
-## Current state and next exact step
+## Implementation and pre-attempt evidence (superseded status)
 
-Implementation is committed and pushed in draft PR651. The original provider
+Before the failed attempt, implementation was committed and pushed in PR651. The original provider
 methods are AST-identical to base05ce88; country sources, country CFO calculation
 and modern rendering are additive. Only the email creditnote summary display
 changes its pre-existing mismatched cohort denominator; financial rates and
@@ -114,13 +193,14 @@ tags for the same byte-identical digest. Narrow V2 verifies every entry/digest a
 the unique OCI manifest/config hash. Original failed helper is preserved; no
 runtime or financial change occurred.
 
-No production mutation or email has occurred in this task. No local dev server,
-watcher, worker or tunnel has been started; finite tests/readers ended naturally.
+At that pre-attempt checkpoint no production mutation or email had occurred.
+The controlled probe attempt and rollback above supersede that earlier runtime
+status. No local dev server, watcher, worker or tunnel was started.
 
-Next: complete the independent publication verifier and portable once-only mail
-CLI/tests, then final PR checks/review/merge. Wait for exact-source image build
-and monthly terminal smoke, freeze the normal release source, run isolated
-probe/LIVE with actual source/card verification, then HTTP/browser and one email.
+The pre-attempt plan was to finish the verifier/resend tests, CI/merge/build and
+monthly smoke, then run isolated probe/LIVE followed by HTTP/browser and email.
+CI/merge/build and monthly smoke subsequently passed; the isolated probe failed.
+The current next step is the narrow source-admission repair specified above.
 
 The verifier and resend CLI are now committed at3bf9303. Root final release pack
 passed215 tests; the independent verifier/email helper pack passed43 tests.
@@ -128,5 +208,6 @@ Windows CI40441785685 rejected the resend test fixture's noncanonical temporary
 root; production ROOT is already resolved and the actual path guard correctly
 refused that alias. The fixture now resolves its root exactly as production does.
 Traversal/reparse checks and all send guards are unchanged. The failed CI log is
-retained. Require new Windows and Linux CI success before merge; no runtime or
-email action occurred while investigating this test-only mismatch.
+retained. Replacement Windows and Linux CI later passed before merge. No runtime
+or email action occurred while investigating that test-only mismatch; it is not
+the cause of the subsequent probe failure.
