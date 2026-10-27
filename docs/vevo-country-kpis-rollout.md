@@ -2,10 +2,30 @@
 
 Date: 2026-10-27
 Repo: vzeman/biznisweb
-Branch: codex/vevo-meta-pagination-runtime-stop-20261027
+Branch: codex/vevo-ecs-read-timeout-20261027
 Base: 05ce88a21533f1f3bbae74188de0327040d79ee2
 
-## Current outcome: Meta fixed; new release stopped before LIVE on AWS transport
+## Current continuation: ECS read-timeout repair ready for CI
+
+The owner authorized repairing the AWS timeout and completing the existing
+country-card deployment/report/email goal. Branch
+`codex/vevo-ecs-read-timeout-20261027` starts from synchronized main587e18c.
+A dedicated polling reader now permits bounded retries only for `ListTasks` and
+`DescribeTasks` connection/read timeouts, including checkpoint inventory reads.
+Five attempts with2/5/10/15-second backoff fit a180-second per-operation cap and
+the original report deadline. SDK retries on those dedicated read clients are
+one; mutation clients and all task, source, ownership and uncertainty gates are
+unchanged. The checkpoint itself is not replayed because it renews a CAS lease.
+
+241 integration tests pass, along with independent review and critical lint.
+Fresh05:27UTC AWS preflight confirms original55 ENABLED, no task/IP, /app,
+FargateN/A; ROY83/monthly67 and AppRunner4fec unchanged; old generation unchanged.
+No new deployment or email has happened in this continuation yet. Next: PR/CI,
+exact-source image build and a fresh release ID, then actual probe/LIVE and
+source/CSV/card/HTTP/UI verification before one conditional SES resend. Previous
+failed release IDs and archives below remain historical and must not be reused.
+
+## Previous attempt: Meta fixed; release stopped before LIVE on AWS transport
 
 PR653 merged as `7c9e85d926f65a9c5b181b5dd20fd33372ce191b`. All six PR checks,
 179 focused tests and exact-source image build 40451741688 passed. The narrow

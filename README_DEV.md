@@ -140,6 +140,13 @@ every settings-triggered monthly accounting deployment to finish before starting
 this controller, because all other schedules become protected baseline state.
 `--timeout-seconds` bounds each report task and the independent-review wait
 (default 7200; allowed 300–14400).
+During probe/live polling, only ECS `ListTasks` and `DescribeTasks` retry
+`ConnectTimeoutError` or `ReadTimeoutError`: up to five attempts, with bounded
+backoff and a180-second operation limit inside the original report deadline.
+Dedicated read clients use one SDK attempt. A late response, service/permission
+error, identity mismatch or failed task still rejects the release. Checkpoints,
+lease writes, task dispatches and other mutations are never replayed by this
+reader; their existing retry and uncertainty rules remain unchanged.
 An optional fresh `--release-id` binds dispatch idempotency and private evidence;
 never reuse an ID to retry an uncertain run. `status` is read-only. It shows the
 last retained phase and exact owned task ARNs, without financial data or secrets.

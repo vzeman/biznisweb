@@ -343,7 +343,8 @@ class Deployment:
                 "report-current-host-proof-drift")
         self.event("current-host-identity-verified", host=proof)
 
-    def tasks(self, family="vevo-reporting-daily"):
+    def tasks(self, family="vevo-reporting-daily", *, read_client=None):
+        client = self.ecs if read_client is None else read_client
         ids = set()
         for desired in ("RUNNING", "STOPPED"):
             token, seen = None, set()
@@ -351,7 +352,7 @@ class Deployment:
                 request = {"cluster": CLUSTER, "family": family, "desiredStatus": desired, "maxResults": 100}
                 if token:
                     request["nextToken"] = token
-                page = self.ecs.list_tasks(**request)
+                page = client.list_tasks(**request)
                 ids.update(page.get("taskArns", []))
                 token = page.get("nextToken")
                 if not token:
@@ -364,7 +365,7 @@ class Deployment:
         values = sorted(ids)
         for start in range(0, len(values), 100):
             requested = values[start:start + 100]
-            result = self.ecs.describe_tasks(cluster=CLUSTER, tasks=requested)
+            result = client.describe_tasks(cluster=CLUSTER, tasks=requested)
             require(not result.get("failures") and {r["taskArn"] for r in result["tasks"]} == set(requested),
                     "report-task-readback-incomplete")
             rows.extend(result["tasks"])
@@ -498,8 +499,9 @@ class Deployment:
         # A retained unknown create must never be released as a clean rollback.
         raise RuntimeError("report-probe-role-create-unconfirmed")
 
-    def task(self):
-        result = self.ecs.describe_tasks(cluster=CLUSTER, tasks=[self.owned_task])
+    def task(self, *, read_client=None):
+        client = self.ecs if read_client is None else read_client
+        result = client.describe_tasks(cluster=CLUSTER, tasks=[self.owned_task])
         require(not result.get("failures") and len(result["tasks"]) == 1, "report-probe-task-missing")
         task = result["tasks"][0]
         require(task["taskArn"] == self.owned_task and task["clusterArn"] == CLUSTER
