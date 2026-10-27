@@ -4,6 +4,7 @@
   "reporting_system_name": "Vevo reporting",
   "ses_configuration_set": "vevo-reporting",
   "enable_email_strategy_report": true,
+  "country_executive_kpis_enabled": true,
   "report_from_date": "2025-05-03",
   "live_dashboard_artifacts": {
     "s3_bucket": "biznisweb-reporting-artifacts-919341186960-eu-central-1",

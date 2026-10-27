@@ -124,7 +124,7 @@ jobs:
 
       - name: Invoice automation regression test
         run: |
-          python -m unittest tests.test_country_daily_ads tests.test_country_cfo_kpis tests.test_dashboard_country_kpis tests.test_reporting_meta_country_daily_snapshot tests.test_daily_report_creditnote_cohort
+          python -m unittest tests.test_country_daily_ads tests.test_country_cfo_kpis tests.test_dashboard_country_kpis tests.test_reporting_meta_country_daily_snapshot tests.test_daily_report_creditnote_cohort tests.test_country_cfo_verification tests.test_reporting_email_resend
           python -m unittest tests.test_seeded_invoice_retry tests.test_reviewed_invoice_reconciliation
           python -m unittest tests.test_creditnote_storno_runner tests.test_creditnote_automation_deployment
           python -m unittest tests.test_api_read_backoff

@@ -38,6 +38,10 @@ Reuse the CFO window/metric calculation over explicit daily country frames and
 the same complete calendar as the overall report. Attach countries and
 country_order to the CFO payload; serialize only the bounded country payloads
 and reuse one card renderer and one period control for all four grids.
+Activation is client-owned configuration: country_executive_kpis_enabled is true
+only in VEVO settings and additionally requires measured-country advertising.
+The reusable exporter has no hardcoded merchant-name branch for this feature;
+ROY and other clients remain opted out.
 
 Current country advertising contains period totals only. Add separate native
 daily-country provider reads and a distinct Meta source-capture query kind;

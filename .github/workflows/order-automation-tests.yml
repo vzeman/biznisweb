@@ -123,3 +123,5 @@ jobs:
           tests.test_dashboard_country_kpis
           tests.test_reporting_meta_country_daily_snapshot
           tests.test_daily_report_creditnote_cohort
+          tests.test_country_cfo_verification
+          tests.test_reporting_email_resend

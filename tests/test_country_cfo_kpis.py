@@ -1,6 +1,8 @@
 import copy
+import json
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -9,6 +11,16 @@ import pandas as pd
 
 from reporting_core.cfo_kpis import build_cfo_kpi_payload
 from reporting_core.country_cfo_kpis import build_country_cfo_payload
+
+
+class CountryFeatureConfigurationTests(unittest.TestCase):
+    def test_country_executive_feature_is_explicitly_enabled_for_vevo_only(self):
+        projects = Path(__file__).resolve().parents[1] / "projects"
+        vevo = json.loads((projects / "vevo/settings.json").read_text(encoding="utf-8"))
+        roy = json.loads((projects / "roy/settings.json").read_text(encoding="utf-8"))
+        self.assertIs(vevo.get("country_executive_kpis_enabled"), True)
+        self.assertIs(vevo.get("measured_country_ads_enabled"), True)
+        self.assertFalse(roy.get("country_executive_kpis_enabled", False))
 
 
 def source(provider, daily, date_to="2026-10-03"):

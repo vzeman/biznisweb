@@ -4,7 +4,6 @@ Export orders from BizniWeb GraphQL API to CSV
 """
 
 import os
-import csv
 import argparse
 import time
 import json
@@ -43,7 +42,6 @@ from reporting_core import (
     load_project_runtime,
     load_project_settings,
     project_dir,
-    resolve_biznisweb_api_url,
     resolve_reporting_defaults,
     sanitize_output_tag,
 )
@@ -8619,7 +8617,8 @@ class BizniWebExporter:
             export_df=analytics_df,
             fixed_daily_cost_eur=float(self.get_daily_fixed_cost(pd.Timestamp(date_agg["date"].max())) if not date_agg.empty else 0.0),
         )
-        if self.project_name == "vevo" and (self.project_settings or {}).get("measured_country_ads_enabled", False):
+        if ((self.project_settings or {}).get("country_executive_kpis_enabled") is True
+                and (self.project_settings or {}).get("measured_country_ads_enabled") is True):
             cfo_kpi_payload.update(self._build_country_cfo_decks(
                 analytics_df, date_agg, date_from, date_to, country_ads,
             ))
