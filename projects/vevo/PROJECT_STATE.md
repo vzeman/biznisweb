@@ -1,3 +1,12 @@
+## 2026-10-27 — Country executive cards requested; implementation underway
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-country-kpi-20261027
+What changed: Add SK/CZ/HU copies of the nine executive metrics immediately below overall, sharing its four windows and comparisons/trends. Owner explicitly authorizes production, Git and one new email. The current normal regeneration request is distinct from prior unsupported one-day replacement; do not change9513/order eligibility or approved purchase/service/fixed policies.
+What is verified: Fresh AWS account919341186960/eu-central-1, servicevevo-daily-report-email/clustervevo-reporting-cluster, TD55 ACTIVE/imagec3ccd24c, /app/FargateN/A, no active task/IP, ENABLED dynamic daily schedule01:00 Europe/Bratislava. AppRunner4fec remains RUNNING. Screenshot targets dashboard_modern generated HTML, so no AppRunner promotion is needed. Fresh GitHub base05ce88/feature branch verified; shared old Git checkpoint corruption preserved, not repaired blindly.
+Known needs/next exact step: Native daily-country ad data is missing today and must be added with a distinct captured Meta query kind, not derived from period totals/order shares. Reuse CFO math with a complete shared calendar, global-first-purchase CAC and shared fixed allocation/fallback0; attribute credited fulfillment and preserve residual/unavailable semantics. Finish tests/review and the documented Git/image/probe/LIVE/HTTP/browser/once-only email workflow in [rollout contract](../../docs/vevo-country-kpis-rollout.md). Keep monthly auto-deploy and ROY protected. Review known email creditnote cohort wording before resend. No production mutation/email or local persistent process yet.
+
 ## 2026-10-22 — Single-day update requested; stopped before unsupported publication
 
 Date: 2026-10-22

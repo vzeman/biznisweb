@@ -1,3 +1,13 @@
+## 2026-10-27 — VEVO country executive cards implementation
+
+Date: 2026-10-27
+Repo: vzeman/biznisweb
+Branch: codex/vevo-country-kpi-20261027
+What changed: Owner requests identical nine executive cards for SK/CZ/HU directly below overall, shared daily/weekly/monthly/all-time controls, live publication and once-only email. Current request authorizes normal complete regeneration through26October; no prior single-day replacement is forced. Fresh clean GitHub clone avoids a broken internal checkpoint ref in the shared old checkout; original data/refs are preserved.
+What is verified: Actual AWS account919341186960/eu-central-1, vevo-daily-report-email TD55/imagec3ccd24c, /app/FargateN/A, no active report task/IP, original dynamic schedule ENABLED at01:00 Europe/Bratislava. Existing AppRunner image4fec remains RUNNING; pictured report is generated modern HTML served from S3. No runtime mutation or email yet.
+Known implementation needs: Existing country ads are period totals only. Add genuine daily-country sources and additive Meta snapshot admission; reuse CFO calculation on the global calendar, global-first-purchase CAC, single shared fixed allocation with country fallback0, credit adjustments and credited fulfillment attribution. Preserve unknown/unallocated and unavailable source semantics. See [rollout contract](docs/vevo-country-kpis-rollout.md).
+Next exact step: Complete independently owned backend/provider/renderer changes and tests, root source admission/review, PR/main exact image build, normal isolated probe/LIVE, all-period/CSV/country/HTTP/browser verification, then conditional once-only resend to existing recipients. Confirm/wait triggered monthly deployment before report runtime capture. No local dev service/tunnel started.
+
 ## 2026-10-22 — Requested single-day update blocked before execution
 
 Date: 2026-10-22
