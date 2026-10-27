@@ -2,8 +2,47 @@
 
 Date: 2026-10-27
 Repo: vzeman/biznisweb
-Branch: codex/vevo-country-kpi-probe-stop-20261027
+Branch: codex/vevo-meta-pagination-runtime-stop-20261027
 Base: 05ce88a21533f1f3bbae74188de0327040d79ee2
+
+## Current outcome: Meta fixed; new release stopped before LIVE on AWS transport
+
+PR653 merged as `7c9e85d926f65a9c5b181b5dd20fd33372ce191b`. All six PR checks,
+179 focused tests and exact-source image build 40451741688 passed. The narrow
+repair separates v21 request admission from native v21/v24 pagination metadata,
+retaining exact Graph/account/insights scope, directional cursor checks and
+credential protection. A fresh read-only check accepted 500 + 101 native rows.
+No provider query, financial formula or tolerance changed.
+
+Fresh release `68ec84cb1ca1456db1876444f128f192` registered candidate 57 and started
+probe `e26dcab798ce456bb62bbabf9f7adb7d`. Its actual host and localhost gate passed
+before provider reads: instance `N/A:Fargate`, IP `172.31.22.81`, service
+`vevo-daily-report-email`, path `/app`. At 05:15:35 UTC on 27 October the local
+controller ended with `ConnectTimeoutError` while reading ECS task status through
+`wait_probe` → `task` → `deploy_vevo_report.task` (`DescribeTasks`). This is a new
+AWS transport failure, not another observed rejection of Meta paging metadata.
+
+No LIVE task or new country-card publication occurred; the report was not
+regenerated and no email was sent. The controller recorded
+`0011-release-failed-inspection-required.json`, then
+`0012-failed-before-live-restored.json`, under
+`data/vevo/reporting/image-releases/68ec84cb1ca1456db1876444f128f192/`.
+Fresh verification: direct-SDK recovery proof `e51a099075bcb4da97879cfca4e0491e573a6024e5d4fb1f75993a2d25253d3d` confirms original 55 ACTIVE and ENABLED with exact original schedule, candidate 57 INACTIVE, all 12 protected schedules and ROY lease/outputs unchanged, VEVO generation `20261027T003047Z` and its nine latest heads unchanged, temporary probe role absent, owned lease released and no active VEVO/ROY tasks. AppRunner remains RUNNING on image4fec. Probe exit137 is the controller's explicit "Owned finite VEVO report probe cleanup", not a completed data-validation result. Cleanup proof `047fa050a02727ae1a58fe7c774a2043c23435ef77a01bdbb433488640ac0897` confirms local controller28452/wrapper40924 and read-only preflight18220/wrapper24304 absent, zero local kills/dev services/ports/UI actions.
+
+Private evidence: encrypted bucket `biznisweb-reporting-artifacts-919341186960-eu-central-1`, key `data/vevo/reporting/meta-pagination-20261027/68ec84cb1ca1456db1876444f128f192/evidence.zip`; SHA256 `ae7b0e2711df2bf1d9aeaadea124b313737b1a52284590ece68a0ba2a8c5f6c9`, 73,605 bytes, 55 members. Same-prefix receipt.json SHA256 `cbce6bd5616a36cd727cf6ba25b0a01aecd63bd22d68547cca533d17a7dac0f8`. Owner-bound conditional AES256 writes and full ZIP/member readback passed. The archive contains the repair/preflight/test and failed-release evidence, not a successful LIVE report or email receipt. Historical successful-capture/HTTP/email helpers rebound to this failed RID were not executed and must not be used to approve a future release.
+
+The owner was informed and work stopped under the error-stop rule. No second
+deployment attempt, UI test or resend followed the failure. The next code change
+should narrowly handle classified transient failures of read-only task-status
+polling with bounded retries limited to ConnectTimeoutError/ReadTimeoutError. Keep the original deadline, exact ARN and cluster, and reject permission/identity/response failures immediately. Tests must cover transient recovery, exhausted retries and deadline expiry.
+Do not retry an uncertain dispatch, email or other mutation. Preserve release
+deadlines, lease ownership, host gates and failure recovery. After PR/CI and an
+exact-source build, a fresh release ID is required for probe/LIVE, actual
+four-period source/CSV/card verification, HTTP/UI and the once-only authorized
+resend. The failed release IDs remain historical evidence and must not be reused.
+
+The sections below record preceding attempts and preparation; they do not
+override this current incomplete production outcome.
 
 ## 2026-10-27 continuation: pagination repair ready for release
 
