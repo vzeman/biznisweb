@@ -1,3 +1,13 @@
+## 2026-10-29 — VEVO business review; currency inconsistency blocks follow-up
+
+Date: 2026-10-29
+Repo: vzeman/biznisweb
+Branch: codex/vevo-business-review-20261029
+What changed: Read-only VEVO business review completed with a material data limitation. Detailed sanitized scope is recorded in [VEVO state](projects/vevo/PROJECT_STATE.md); no runtime, pricing or campaign changes were made.
+What is verified: All four captured JSON payloads match production manifest generation `20261029T003132Z` by size and SHA256 and cover through 2026-10-28. This public handoff adds no private financial figures, customer information or raw payloads.
+Known issues: The review found an HUF credit-note gross/net currency inconsistency. The owner was informed, and further investigation and implementation stopped under the error-stop rule. Separately, the original checkout could not synchronize because an internal `refs/codex/turn-diffs` reference was corrupt; it remains untouched. This documentation uses a separate fresh GitHub clone after clean-status, fetch/prune and pull --rebase checks. Earlier deployment/UI/email work was neither resumed nor reverified.
+Next exact step: Reconcile credit-note currency consistency in a separately authorized task before selecting a commercial experiment. The business review authorizes no production implementation. No local service, worker or tunnel was started and no process was killed.
+
 ## 2026-10-27 — VEVO country cards LIVE; email pending after user stopped Computer Use
 
 Date: 2026-10-27
