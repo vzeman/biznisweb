@@ -1,3 +1,14 @@
+## 2026-10-29 — Business review completed with a credit-note currency blocker
+
+Date: 2026-10-29
+Repo: vzeman/biznisweb
+Branch: codex/vevo-business-review-20261029
+What changed: Read-only business analysis compared recent periods, country contribution, acquisition economics and repeat purchases. It completed with a material currency-consistency limitation. No runtime, pricing, product or campaign change was made or authorized by this review.
+What is verified: The four current JSON payloads match generation `20261029T003132Z` by manifest size and SHA256 and cover through 2026-10-28. The authenticated [VEVO reporting source](https://2mhmsmgq3m.eu-central-1.awsapprunner.com/report/vevo) remains the place to inspect business figures. Private report handoff logical artifact key: `data/vevo/analyses/business-review-20261029/BUSINESS_REVIEW.md`. This public handoff adds no private financial/customer values, raw datasets, credentials or cloud account identifiers.
+Interpretation: Profitability includes modeled fixed and fulfillment costs; payment fees are not separately ingested. Advertising comparisons are observational, not causal effects or automatic budget instructions. Repeat-purchase horizons require mature cohorts and full customer history; a rolling-window repeat share is not customer retention.
+Known issues: An HUF credit-note gross/net currency inconsistency was found during the review. The owner was informed, and further investigation and implementation stopped under the error-stop rule. The detailed private report retains the limitation; the affected figures must not be treated as reconciled. Separately, the original checkout could not synchronize because an internal `refs/codex/turn-diffs` reference was corrupt and was left untouched. This documentation uses a separate fresh GitHub clone after clean-status, fetch/prune and pull --rebase checks. Earlier UI/email delivery work was not resumed or verified.
+Next exact step: First reconcile credit-note currency consistency in a separately authorized task, then select the proposed commercial experiment to develop next. No production implementation follows automatically from this review. Analysis used finite commands only; no local service, worker or tunnel was started and no process was killed.
+
 ## 2026-10-27 — Country cards deployed and regenerated; resend still pending
 
 Date: 2026-10-27
