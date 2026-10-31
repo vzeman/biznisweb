@@ -1,3 +1,13 @@
+## 2026-10-31 — VEVO read-only unit-fee analysis
+
+Date: 2026-10-31
+Repo: vzeman/biznisweb
+Branch: codex/vevo-production-fee-analysis-20261031
+What changed: Added a generic offline unit-production-fee analysis helper and methodology. The owner requested actual reporting data; commercial inputs/results remain private. See the VEVO project state for the source generation and private evidence reference.
+What is verified: Clean clone, fetch and pull --rebase before the task branch; dashboard manifest SHA256, aggregate merchandise-quantity reconciliation, independent calculation review and diff check. No production configuration, campaigns or financial reporting formula changed. Only finite readers/calculators ran; no local dev services or tunnels were started.
+Known issues: Source overhead is a management estimate. Product row counts differ from quantities; service products must be excluded from a goods production fee. Observed-period and full-calendar-month comparisons differ.
+Next exact step: Use the privately archived calculation for the owner's business decision. Refresh from a new immutable generation if assumptions or the observation window change.
+
 ## 2026-10-27 — VEVO country cards LIVE; email pending after user stopped Computer Use
 
 Date: 2026-10-27
