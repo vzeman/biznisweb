@@ -1,3 +1,14 @@
+## 2026-10-31 — Actual reporting unit-fee analysis, private results
+
+Date: 2026-10-31
+Repo: vzeman/biznisweb
+Branch: codex/vevo-production-fee-analysis-20261031
+What changed: Completed a read-only comparison from immutable generation `20261031T003150Z`, through 30 October. The owner confirmed that a whole sold set is one fee unit and that the avoided cost is already included in fixed overhead. Generic reproducible method: [unit-production-fee-analysis](../../docs/unit-production-fee-analysis.md); helper: `scripts/analyze_unit_production_fee.py`. No private commercial amounts are committed.
+What is verified: All four downloaded JSON payload hashes match the production generation manifest. Primary calculation consistently uses the 30-day payload; historical merchandise units/revenue are independently reconciled to same-generation product/month CSVs. Reviewed exact service SKU and label pairs exclude tips/insurance. Independent reviewers verified the fixed-ad-budget and proportional-ad-spend scenarios. Helper requires unique CSV selection, matching ending dates and matching merchandise quantity. No runtime or reporting formula changes.
+Private evidence: Existing private reporting bucket `biznisweb-reporting-artifacts-919341186960-eu-central-1`, key `data/vevo/analyses/unit-production-fee-20261031/analysis.json`, SHA256 `98b7d8fd9402e1e1fa751d3cb065f990c72b398ae7b0625ae2bd9f1da15ceada`. Owner-bound conditional AES256 write and full byte readback verified. Source CSVs remain under the immutable generation prefix; output records source hashes and assumptions.
+Known issues: `series.items` counts rows, not quantities. QA total units also includes service products. Fixed overhead and some product costs are estimates, not accounting actuals. Full-history and 30-day ad rounding differ by one cent; the primary scenario does not mix them. October is incomplete, so run-rate extrapolation is a forecast. Existing reporting warnings remain; this task does not resolve or alter them.
+Next exact step: Owner evaluates the private results; refresh the same calculation after a completed month or a changed fee scope. No staffing, campaign or production changes were requested or made. No dev service/tunnel was started; finite readers/calculators ended naturally.
+
 ## 2026-10-27 — Country cards deployed and regenerated; resend still pending
 
 Date: 2026-10-27
