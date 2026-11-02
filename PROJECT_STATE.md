@@ -11227,3 +11227,4 @@ Next exact step:
 - Extended the existing read-only ECS diagnostic to accept `task_id=latest`, selecting the most recently started stopped task in the project's exact task family. This does not run a report or send mail.
 - Current status: diagnostic has not yet run; root cause and remediation are unverified.
 - Next exact step: push this branch, dispatch `diagnose-reporting-task.yml` for `project=vevo`, `task_id=latest`, inspect the task and CloudWatch log, then apply the smallest verified fix through branch/PR and host gate.
+- Diagnostic run `41406502084` authenticated to AWS, but ECS returned no retained stopped tasks in `vevo-reporting-daily`; the `latest` lookup cannot use ECS task history. CloudWatch streams and Scheduler state are the next read-only source.
