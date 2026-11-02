@@ -76,9 +76,13 @@ jobs:
           import json
           from datetime import datetime, timezone
           events = json.load(open("latest-events.json", encoding="utf-8")).get("events") or []
-          for event in events[-400:]:
+          terms = ("quality", "partial", "warning", "failed", "error", "source", "status", "email", "report")
+          for event in events:
+              message = str(event.get("message") or "")
+              if not any(term in message.lower() for term in terms):
+                  continue
               stamp = datetime.fromtimestamp(event["timestamp"] / 1000, timezone.utc).isoformat()
-              print(stamp, str(event.get("message") or "").replace("\x00", ""))
+              print(stamp, message.replace("\x00", ""))
           PY
             done < selected-streams.txt
             exit 0
