@@ -11,7 +11,7 @@ on:
           - vevo
           - roy
       task_id:
-        description: Exact ECS task ID or ARN to inspect
+        description: Exact ECS task ID or ARN, or latest stopped task for this project
         required: true
         type: string
 
@@ -46,6 +46,47 @@ jobs:
         run: |
           set -euo pipefail
           EXPECTED_FAMILY="${PROJECT}-reporting-daily"
+          if [[ "${TASK_ID}" == "latest" ]]; then
+            aws scheduler get-schedule --name "${PROJECT}-daily-report-email" --region "${AWS_REGION}" > schedule.json
+            aws logs describe-log-streams --log-group-name "/ecs/${EXPECTED_FAMILY}" \
+              --order-by LastEventTime --descending --max-items 10 --region "${AWS_REGION}" > streams.json
+            python - <<'PY'
+          import json
+          schedule = json.load(open("schedule.json", encoding="utf-8"))
+          target = schedule.get("Target") or {}
+          print("SCHEDULE", schedule.get("State"), schedule.get("ScheduleExpression"),
+                schedule.get("ScheduleExpressionTimezone"),
+                (target.get("EcsParameters") or {}).get("TaskDefinitionArn"))
+          streams = json.load(open("streams.json", encoding="utf-8")).get("logStreams") or []
+          for stream in streams:
+              print("STREAM", stream.get("logStreamName"), stream.get("lastEventTimestamp"))
+          PY
+            python - <<'PY' > selected-streams.txt
+          import json
+          streams = json.load(open("streams.json", encoding="utf-8")).get("logStreams") or []
+          for stream in streams[:3]:
+              print(stream["logStreamName"])
+          PY
+            while IFS= read -r stream; do
+              echo "LOG_STREAM ${stream}"
+              aws logs get-log-events --log-group-name "/ecs/${EXPECTED_FAMILY}" \
+                --log-stream-name "${stream}" --limit 10000 \
+                --region "${AWS_REGION}" > latest-events.json
+              python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          events = json.load(open("latest-events.json", encoding="utf-8")).get("events") or []
+          terms = ("quality", "partial", "warning", "failed", "error", "source", "status", "email", "report")
+          for event in events:
+              message = str(event.get("message") or "")
+              if not any(term in message.lower() for term in terms):
+                  continue
+              stamp = datetime.fromtimestamp(event["timestamp"] / 1000, timezone.utc).isoformat()
+              print(stamp, message.replace("\x00", ""))
+          PY
+            done < selected-streams.txt
+            exit 0
+          fi
           aws ecs describe-tasks \
             --cluster "${ECS_CLUSTER}" \
             --tasks "${TASK_ID}" \
