@@ -11228,3 +11228,4 @@ Next exact step:
 - Current status: diagnostic has not yet run; root cause and remediation are unverified.
 - Next exact step: push this branch, dispatch `diagnose-reporting-task.yml` for `project=vevo`, `task_id=latest`, inspect the task and CloudWatch log, then apply the smallest verified fix through branch/PR and host gate.
 - Diagnostic run `41406502084` authenticated to AWS, but ECS returned no retained stopped tasks in `vevo-reporting-daily`; the `latest` lookup cannot use ECS task history. CloudWatch streams and Scheduler state are the next read-only source.
+- Read-only run `41406624363` confirms schedule ENABLED at `cron(0 1 * * ? *)` Europe/Bratislava, task definition `vevo-reporting-daily:58`. The newest stream is a separate GrowthBook reconciliation failure (`raw event object limit exceeded` at 03:20 UTC); it is not yet proven to explain the email. Inspect the second recent stream before any report intervention.

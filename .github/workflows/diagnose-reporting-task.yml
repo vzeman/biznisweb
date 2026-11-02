@@ -61,17 +61,18 @@ jobs:
           for stream in streams:
               print("STREAM", stream.get("logStreamName"), stream.get("lastEventTimestamp"))
           PY
-            python - <<'PY' > selected-stream.txt
+            python - <<'PY' > selected-streams.txt
           import json
           streams = json.load(open("streams.json", encoding="utf-8")).get("logStreams") or []
-          if not streams:
-              raise SystemExit("No reporting log streams found")
-          print(streams[0]["logStreamName"])
+          for stream in streams[:3]:
+              print(stream["logStreamName"])
           PY
-            aws logs get-log-events --log-group-name "/ecs/${EXPECTED_FAMILY}" \
-              --log-stream-name "$(cat selected-stream.txt)" --limit 10000 \
-              --region "${AWS_REGION}" > latest-events.json
-            python - <<'PY'
+            while IFS= read -r stream; do
+              echo "LOG_STREAM ${stream}"
+              aws logs get-log-events --log-group-name "/ecs/${EXPECTED_FAMILY}" \
+                --log-stream-name "${stream}" --limit 10000 \
+                --region "${AWS_REGION}" > latest-events.json
+              python - <<'PY'
           import json
           from datetime import datetime, timezone
           events = json.load(open("latest-events.json", encoding="utf-8")).get("events") or []
@@ -79,6 +80,7 @@ jobs:
               stamp = datetime.fromtimestamp(event["timestamp"] / 1000, timezone.utc).isoformat()
               print(stamp, str(event.get("message") or "").replace("\x00", ""))
           PY
+            done < selected-streams.txt
             exit 0
           fi
           aws ecs describe-tasks \
