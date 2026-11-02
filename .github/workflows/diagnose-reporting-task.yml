@@ -11,7 +11,7 @@ on:
           - vevo
           - roy
       task_id:
-        description: Exact ECS task ID or ARN to inspect
+        description: Exact ECS task ID or ARN, or latest stopped task for this project
         required: true
         type: string
 
@@ -46,6 +46,37 @@ jobs:
         run: |
           set -euo pipefail
           EXPECTED_FAMILY="${PROJECT}-reporting-daily"
+          if [[ "${TASK_ID}" == "latest" ]]; then
+            aws ecs list-tasks \
+              --cluster "${ECS_CLUSTER}" \
+              --family "${EXPECTED_FAMILY}" \
+              --desired-status STOPPED \
+              --region "${AWS_REGION}" > task-list.json
+            python - <<'PY' > selected-task-id.txt
+          import json
+          import os
+          import subprocess
+
+          arns = json.load(open("task-list.json", encoding="utf-8")).get("taskArns") or []
+          if not arns:
+              raise SystemExit("No stopped reporting tasks found")
+          tasks = []
+          for offset in range(0, len(arns), 100):
+              result = subprocess.run(
+                  ["aws", "ecs", "describe-tasks", "--cluster", os.environ["ECS_CLUSTER"],
+                   "--tasks", *arns[offset:offset + 100], "--region", os.environ["AWS_REGION"]],
+                  check=True, capture_output=True, text=True,
+              )
+              tasks.extend(json.loads(result.stdout).get("tasks") or [])
+          tasks = [task for task in tasks if task.get("startedAt")]
+          if not tasks:
+              raise SystemExit("No started reporting task found")
+          latest = max(tasks, key=lambda task: task["startedAt"])
+          print(latest["taskArn"])
+          PY
+            TASK_ID="$(cat selected-task-id.txt)"
+            echo "Selected latest stopped ${EXPECTED_FAMILY} task: ${TASK_ID}"
+          fi
           aws ecs describe-tasks \
             --cluster "${ECS_CLUSTER}" \
             --tasks "${TASK_ID}" \
