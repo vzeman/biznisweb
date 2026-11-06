@@ -2,13 +2,13 @@
 
 Date: 2026-11-06
 Repo: `vzeman/biznisweb`
-Branch: `codex/roy-report-release-handoff-20261106` (final documentation handoff)
+Branch: `main` (PR #661 merged as `59c79c3820c371667287fcc818a3a2b4ac42eef3`)
 What changed: Narrow Meta response-shape repair PR #660 is deployed from exact source `9eb90f9c1530a7c0199e627325010dfd684c4a8e` and immutable image `sha256:84b4eaa12dba2edc8951d523bff315a762ac1c03cbf839b2ec1798fb027af1fa`. Controlled release `93ae12aa2ee74d77a1db7c2255de4287` promoted ROY to definition :84 and atomically published generation `20261106T082928Z` at `2026-11-06T08:29:31Z`. The live full-history report covers `2025-09-24` through `2026-11-05`; the rolling windows cover `2026-10-30` (7d), `2026-10-07` (30d) and `2026-08-08` (90d) through `2026-11-05`.
 What is verified: Candidate task `fa8a474fe41847a48760fa6d0da79327`, Fargate instance `N/A`, IP `172.31.15.227`, service `roy-daily-report-email`, `/app`, definition :84 and exact image passed the required localhost marker before provider access. Live task `83e9889bae3f4c4791adf543eb1026ec`, IP `172.31.23.29`, passed the same identity/image/path contract and completed all four periods. Both exact tasks stopped with exit 0 and no ROY task remains active. The eight JSON/HTML artifact hashes are recorded in generation manifest `20261106T082928Z`; all payloads are non-partial with zero QA failures/errors. The warning QA label remains non-blocking. Scheduler is ENABLED with unchanged daily cadence/timezone and target :84; the lease is released. Authenticated live checks returned 200 and correct markers/data on the dashboard shell, latest full API and full report/chart routes.
 UI limitation: Browser rendering was attempted only after the host, marker, publication, cleanup and authenticated HTTP gates. The Windows UI helper failed twice before opening the tab with `setup refresh had errors`. No rendered screenshot is claimed, and no authentication dialog or browser safety barrier was automated. This does not change the verified live API/HTML publication result.
 Process cleanup: Local release controller PID `29252` and wrapper PID `60016` ended naturally; both are absent and have no listeners. No dev server/tunnel was started. Production App Runner and the recurring scheduler intentionally remain active.
 Known issue: No production/data blocker remains. Only optional rendered-browser evidence is missing because the local UI helper could not initialize.
-Next exact step: Merge documentation PR #661 and do not rerun this release. Confirm the next scheduled :84 run advances the generation; if a future UI-only proof is desired, repeat just the read-only browser check when the Windows helper is healthy.
+Next exact step: Do not rerun this release. Confirm the next scheduled :84 run advances the generation; if a future UI-only proof is desired, repeat just the read-only browser check when the Windows helper is healthy.
 
 ## 2026-11-06 — Parser repair merged; production source frozen for release
 

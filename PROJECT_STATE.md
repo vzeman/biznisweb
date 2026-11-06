@@ -2,12 +2,12 @@
 
 Date: 2026-11-06
 Repo: `vzeman/biznisweb`
-Branch: `codex/roy-report-release-handoff-20261106` (final documentation handoff)
+Branch: `main` (PR #661 merged as `59c79c3820c371667287fcc818a3a2b4ac42eef3`)
 What changed: PR #660 merged the narrowly bound Meta parser repair as source `9eb90f9c1530a7c0199e627325010dfd684c4a8e`; exact build `42180806559` published image `sha256:84b4eaa12dba2edc8951d523bff315a762ac1c03cbf839b2ec1798fb027af1fa`. Ordinary release `93ae12aa2ee74d77a1db7c2255de4287` promoted definition `roy-reporting-daily:84` and published generation `20261106T082928Z`, generated at `2026-11-06T08:29:31Z`, covering sales through `2026-11-05`. The recurring ROY schedule is ENABLED on its unchanged `cron(30 1 * * ? *)` / `Europe/Bratislava` cadence and the release lease is released.
 What is verified: Candidate Fargate task `fa8a474fe41847a48760fa6d0da79327` (instance `N/A`, private IP `172.31.15.227`, service `roy-daily-report-email`, path `/app`, definition :84, exact image) passed its localhost marker before provider processing. Live task `83e9889bae3f4c4791adf543eb1026ec` (instance `N/A`, private IP `172.31.23.29`, same service/path/definition/image) completed full, 7-day, 30-day and 90-day Meta/report generation. Both tasks are STOPPED with exit code 0; no ROY task remains running. All eight live JSON/HTML artifacts are present. Their payloads end on `2026-11-05`, are not partial, and report zero QA failures/errors; warning status is retained as non-blocking source context. Authenticated App Runner checks returned 200 for `/dashboard/roy`, `/api/roy/latest?period=full` and `/report/roy?period=full`, with the expected dashboard and chart markers. The native visual helper failed twice during initialization with `setup refresh had errors`, so no rendered-browser screenshot is claimed; no authentication dialog or safety barrier was automated.
 Process cleanup: The finite release controller Python PID `29252` and wrapper PowerShell PID `60016` ended normally and are independently absent with zero listeners. No local dev server, watcher or tunnel was started. Production App Runner and the recurring schedule intentionally remain active.
 Known issue: No production blocker remains. A rendered browser-only check is still unavailable because of the local Windows automation helper failure; authenticated live HTML, API data and report markers are verified independently.
-Next exact step: Merge this documentation-only handoff through PR #661, then leave the successful release untouched. On the next automatic run, monitor that definition :84 advances the generation normally; do not replay release `93ae12aa2ee74d77a1db7c2255de4287`.
+Next exact step: Leave the successful release untouched. On the next automatic run, monitor that definition :84 advances the generation normally; do not replay release `93ae12aa2ee74d77a1db7c2255de4287`.
 
 ## 2026-11-06 — ROY Meta repair merged; exact image build in progress
 
