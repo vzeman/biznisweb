@@ -109,3 +109,5 @@ Odporúčaný ďalší analytický krok je rozložiť septembrovú a júnovú ko
 - Reprodukcia: `python scripts/analyze_customer_retention.py --csv <private-export.csv> --payload <private-payload.json> --output <aggregate-result.json>`. Súkromné vstupy načítať z presných kľúčov vyššie a overiť ich hashe. Surové objednávky ani e-maily necommitovať.
 
 Všetky vzdialené operácie v tejto analýze boli čítacie. Žiadny deploy, prepočet produkčného reportu, odoslanie e-mailu alebo zmena infraštruktúry. Žiadny lokálny server, worker ani tunel nebol spustený.
+
+Chart validation: all19 plotted values were independently matched to the aggregate JSON, and fragment JSON/DOM references were inspected. The bundled offline checker could not execute its python3 helper on this Windows host (first EACCES, then missing Python launcher); no browser rendering claim is made. No server or persistent process was started for validation.
