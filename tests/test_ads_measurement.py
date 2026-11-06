@@ -89,6 +89,32 @@ class MetaMeasurementTests(unittest.TestCase):
         self.assertEqual(FacebookAdsClient._action_count(
             [dict(action_type=PURCHASE_ACTION, **{'7d_click': '2.5'})], PURCHASE_ACTION), 2.5)
 
+    def test_single_requested_window_binds_generic_value_without_weakening_fail_closed(self):
+        exact_context = dict(requested_windows=['7d_click'], action_report_time='impression')
+        generic = [dict(action_type=PURCHASE_ACTION, value='9')]
+        self.assertEqual(FacebookAdsClient._action_count(
+            generic, PURCHASE_ACTION, **exact_context), 9)
+        invalid_contexts = [
+            {},
+            dict(requested_windows=['7d_click', '1d_view'], action_report_time='impression'),
+            dict(requested_windows=['7d_click'], action_report_time='conversion'),
+        ]
+        for context in invalid_contexts:
+            with self.subTest(context=context), self.assertRaises(ValueError):
+                FacebookAdsClient._action_count(generic, PURCHASE_ACTION, **context)
+        with self.assertRaises(ValueError):
+            FacebookAdsClient._action_count(
+                [dict(action_type=PURCHASE_ACTION, value='9', **{'1d_view': '1'})],
+                PURCHASE_ACTION,
+                **exact_context,
+            )
+        with self.assertRaises(ValueError):
+            FacebookAdsClient._action_count(
+                [dict(action_type=PURCHASE_ACTION, value='9', **{'14d_click': '1'})],
+                PURCHASE_ACTION,
+                **exact_context,
+            )
+
     def test_campaign_request_definition_and_zero_purchase_cpa(self):
         client = self.client()
         client._get_json.side_effect = [
@@ -103,11 +129,29 @@ class MetaMeasurementTests(unittest.TestCase):
         self.assertIsNone(row['cost_per_platform_conversion'])
         self.assertEqual(client.campaign_measurement_status['status'], 'ok')
 
+    def test_campaign_request_accepts_generic_value_only_as_singleton_7d_click_projection(self):
+        client = self.client()
+        client._get_json.side_effect = [
+            {'data': [{'id': 'one', 'name': 'Synthetic'}]},
+            {'data': [{
+                'spend': '45',
+                'clicks': '10',
+                'actions': [dict(action_type=PURCHASE_ACTION, value='9')],
+                'cost_per_action_type': [dict(action_type=PURCHASE_ACTION, value='5')],
+            }]},
+        ]
+        row = client.get_campaign_spend(START, END)[0]
+        self.assertEqual(row['platform_purchases'], 9)
+        self.assertEqual(row['cost_per_platform_conversion'], 5)
+        self.assertEqual(row['reported_cost_per_purchase'], 5)
+        self.assertEqual(client.campaign_measurement_status['status'], 'ok')
+
     def test_campaign_measurement_failure_has_critical_qa(self):
         client = self.client()
         client._get_json.side_effect = [
             {'data': [{'id': 'one', 'name': 'Synthetic'}]},
-            {'data': [{'spend': '50', 'actions': [dict(action_type=PURCHASE_ACTION, value='9')]}]},
+            {'data': [{'spend': '50', 'actions': [dict(
+                action_type=PURCHASE_ACTION, value='9', **{'1d_view': '1'})]}]},
         ]
         self.assertEqual(client.get_campaign_spend(START, END), [])
         qa = BizniWebExporter._build_attribution_qa(
