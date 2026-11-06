@@ -1,0 +1,47 @@
+<section id="vevo-repeat-orders-20261106" data-viz-composition>
+  <div data-viz-container></div>
+  <script type="application/json" data-viz-chart>
+    {
+      "id": "vevo-repeat-orders-20261106",
+      "title": "Podiel opakovaných objednávok v čase",
+      "description": "Druhá a každá ďalšia objednávka zákazníka / všetky objednávky v mesiaci. Máj 2025 od 3. 5.; november 2026 iba 1.–5. 11.",
+      "height": 290,
+      "spec": {
+        "type": "line",
+        "x": "Mesiac",
+        "y": "Opakované objednávky",
+        "yLabel": "Podiel objednávok",
+        "yDomain": [0, 0.8],
+        "valueFormat": {"style": "percent", "minimumFractionDigits": 1, "maximumFractionDigits": 2}
+      },
+      "columns": ["Mesiac", "Opakované objednávky"],
+      "rows": [
+        ["2025-05", 0.01056338028169014],
+        ["2025-06", 0.15555555555555556],
+        ["2025-07", 0.07151819322459223],
+        ["2025-08", 0.1868421052631579],
+        ["2025-09", 0.21122112211221122],
+        ["2025-10", 0.30296127562642367],
+        ["2025-11", 0.2708860759493671],
+        ["2025-12", 0.3373860182370821],
+        ["2026-01", 0.22005988023952097],
+        ["2026-02", 0.3617021276595745],
+        ["2026-03", 0.3425287356321839],
+        ["2026-04", 0.33766233766233766],
+        ["2026-05", 0.3120879120879121],
+        ["2026-06", 0.4201474201474201],
+        ["2026-07", 0.6944444444444444],
+        ["2026-08", 0.5022026431718062],
+        ["2026-09", 0.26744186046511625],
+        ["2026-10", 0.23307086614173228],
+        ["2026-11", 0.1810344827586207]
+      ]
+    }
+  </script>
+</section>
+<script type="module">
+  import { mountChart } from "https://persistent.oaistatic.com/plugins/visualize/charts/1.2.3/element.js";
+  const root = document.getElementById("vevo-repeat-orders-20261106");
+  const config = JSON.parse(root.querySelector("[data-viz-chart]").textContent);
+  mountChart(root.querySelector("[data-viz-container]"), config);
+</script>

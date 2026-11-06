@@ -1,0 +1,1219 @@
+{
+  "date_from": "2025-05-03",
+  "date_to": "2026-11-05",
+  "generated_at": "2026-11-06T00:30:47Z",
+  "source_sha256": "ffbfbff7996914de408d9c5780b995872a69d4e232f359e699c1e2c8363f8485",
+  "payload_sha256": "8fd24787e748418fb7824bc70774a956aef3ae53403c0fbc1f753a42a1d4ef98",
+  "published_summary": {
+    "total_customers": 6509,
+    "repeat_customers": 1252,
+    "repeat_rate_pct": 19.2,
+    "one_time_customers": 5257,
+    "avg_orders_per_customer": 1.33,
+    "avg_days_to_2nd_order": 88.6,
+    "median_days_to_2nd_order": 52.0,
+    "avg_days_between_orders": 86.8,
+    "median_days_between_orders": 59.0,
+    "max_orders_by_customer": 19,
+    "customers_with_5plus_orders": 106,
+    "true_retention_2nd_pct": 22.0,
+    "true_retention_3rd_pct": 8.6,
+    "mature_cohorts_count": 15
+  },
+  "summary": {
+    "customers": 6498,
+    "repeat_customers": 1260,
+    "repeat_customer_pct": 19.390581717451525,
+    "orders": 8688,
+    "repeat_orders": 2190,
+    "repeat_order_pct": 25.20718232044199,
+    "net_revenue": 146717.31,
+    "repeat_order_net_revenue": 64228.35,
+    "repeat_order_revenue_pct": 43.776940839496035,
+    "median_days_to_second_among_repeaters": 52.913466435185185,
+    "mean_days_to_second_among_repeaters": 88.76767203115813,
+    "recent_30d_orders": 658,
+    "recent_30d_repeat_orders": 155,
+    "recent_30d_repeat_order_pct": 23.556231003039514,
+    "customers_3plus": 469,
+    "customers_5plus": 106,
+    "within_24h_second_orders": 7,
+    "fixed_windows": {
+      "30": {
+        "eligible": 5995,
+        "repeat": 388,
+        "pct": 6.472060050041701
+      },
+      "60": {
+        "eligible": 5577,
+        "repeat": 649,
+        "pct": 11.637080867850099
+      },
+      "90": {
+        "eligible": 5427,
+        "repeat": 790,
+        "pct": 14.556845402616547
+      },
+      "180": {
+        "eligible": 4908,
+        "repeat": 930,
+        "pct": 18.94865525672372
+      },
+      "365": {
+        "eligible": 2993,
+        "repeat": 686,
+        "pct": 22.920147009689277
+      }
+    }
+  },
+  "cohorts": [
+    {
+      "cohort": "2025-05",
+      "customers": 562,
+      "repeat_customers": 130,
+      "repeat_pct": 23.131672597864767,
+      "third_order_pct": 9.9644128113879,
+      "eligible_30d": 562,
+      "repeat_30d": 29,
+      "pct_30d": 5.160142348754448,
+      "eligible_60d": 562,
+      "repeat_60d": 55,
+      "pct_60d": 9.786476868327403,
+      "eligible_90d": 562,
+      "repeat_90d": 72,
+      "pct_90d": 12.811387900355871,
+      "eligible_180d": 562,
+      "repeat_180d": 93,
+      "pct_180d": 16.548042704626333,
+      "eligible_365d": 562,
+      "repeat_365d": 117,
+      "pct_365d": 20.818505338078293
+    },
+    {
+      "cohort": "2025-06",
+      "customers": 228,
+      "repeat_customers": 77,
+      "repeat_pct": 33.771929824561404,
+      "third_order_pct": 12.719298245614036,
+      "eligible_30d": 228,
+      "repeat_30d": 15,
+      "pct_30d": 6.578947368421052,
+      "eligible_60d": 228,
+      "repeat_60d": 29,
+      "pct_60d": 12.719298245614036,
+      "eligible_90d": 228,
+      "repeat_90d": 42,
+      "pct_90d": 18.421052631578945,
+      "eligible_180d": 228,
+      "repeat_180d": 56,
+      "pct_180d": 24.561403508771928,
+      "eligible_365d": 228,
+      "repeat_365d": 70,
+      "pct_365d": 30.701754385964914
+    },
+    {
+      "cohort": "2025-07",
+      "customers": 740,
+      "repeat_customers": 189,
+      "repeat_pct": 25.54054054054054,
+      "third_order_pct": 11.081081081081082,
+      "eligible_30d": 740,
+      "repeat_30d": 65,
+      "pct_30d": 8.783783783783784,
+      "eligible_60d": 740,
+      "repeat_60d": 105,
+      "pct_60d": 14.18918918918919,
+      "eligible_90d": 740,
+      "repeat_90d": 131,
+      "pct_90d": 17.7027027027027,
+      "eligible_180d": 740,
+      "repeat_180d": 164,
+      "pct_180d": 22.162162162162165,
+      "eligible_365d": 740,
+      "repeat_365d": 183,
+      "pct_365d": 24.72972972972973
+    },
+    {
+      "cohort": "2025-08",
+      "customers": 618,
+      "repeat_customers": 142,
+      "repeat_pct": 22.97734627831715,
+      "third_order_pct": 7.9288025889967635,
+      "eligible_30d": 618,
+      "repeat_30d": 39,
+      "pct_30d": 6.310679611650485,
+      "eligible_60d": 618,
+      "repeat_60d": 68,
+      "pct_60d": 11.003236245954692,
+      "eligible_90d": 618,
+      "repeat_90d": 85,
+      "pct_90d": 13.754045307443366,
+      "eligible_180d": 618,
+      "repeat_180d": 117,
+      "pct_180d": 18.932038834951456,
+      "eligible_365d": 618,
+      "repeat_365d": 137,
+      "pct_365d": 22.168284789644012
+    },
+    {
+      "cohort": "2025-09",
+      "customers": 478,
+      "repeat_customers": 109,
+      "repeat_pct": 22.80334728033473,
+      "third_order_pct": 10.0418410041841,
+      "eligible_30d": 478,
+      "repeat_30d": 32,
+      "pct_30d": 6.694560669456067,
+      "eligible_60d": 478,
+      "repeat_60d": 61,
+      "pct_60d": 12.761506276150628,
+      "eligible_90d": 478,
+      "repeat_90d": 72,
+      "pct_90d": 15.062761506276152,
+      "eligible_180d": 478,
+      "repeat_180d": 94,
+      "pct_180d": 19.665271966527197,
+      "eligible_365d": 478,
+      "repeat_365d": 107,
+      "pct_365d": 22.384937238493723
+    },
+    {
+      "cohort": "2025-10",
+      "customers": 306,
+      "repeat_customers": 55,
+      "repeat_pct": 17.973856209150327,
+      "third_order_pct": 7.8431372549019605,
+      "eligible_30d": 306,
+      "repeat_30d": 12,
+      "pct_30d": 3.9215686274509802,
+      "eligible_60d": 306,
+      "repeat_60d": 24,
+      "pct_60d": 7.8431372549019605,
+      "eligible_90d": 306,
+      "repeat_90d": 27,
+      "pct_90d": 8.823529411764707,
+      "eligible_180d": 306,
+      "repeat_180d": 40,
+      "pct_180d": 13.071895424836603,
+      "eligible_365d": 306,
+      "repeat_365d": 54,
+      "pct_365d": 17.647058823529413
+    },
+    {
+      "cohort": "2025-11",
+      "customers": 288,
+      "repeat_customers": 56,
+      "repeat_pct": 19.444444444444446,
+      "third_order_pct": 7.986111111111111,
+      "eligible_30d": 288,
+      "repeat_30d": 16,
+      "pct_30d": 5.555555555555555,
+      "eligible_60d": 288,
+      "repeat_60d": 28,
+      "pct_60d": 9.722222222222223,
+      "eligible_90d": 288,
+      "repeat_90d": 35,
+      "pct_90d": 12.152777777777777,
+      "eligible_180d": 288,
+      "repeat_180d": 49,
+      "pct_180d": 17.01388888888889,
+      "eligible_365d": 61,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2025-12",
+      "customers": 218,
+      "repeat_customers": 42,
+      "repeat_pct": 19.26605504587156,
+      "third_order_pct": 6.422018348623854,
+      "eligible_30d": 218,
+      "repeat_30d": 10,
+      "pct_30d": 4.587155963302752,
+      "eligible_60d": 218,
+      "repeat_60d": 23,
+      "pct_60d": 10.550458715596331,
+      "eligible_90d": 218,
+      "repeat_90d": 27,
+      "pct_90d": 12.385321100917432,
+      "eligible_180d": 218,
+      "repeat_180d": 33,
+      "pct_180d": 15.137614678899084,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2026-01",
+      "customers": 521,
+      "repeat_customers": 117,
+      "repeat_pct": 22.456813819577732,
+      "third_order_pct": 9.788867562380037,
+      "eligible_30d": 521,
+      "repeat_30d": 44,
+      "pct_30d": 8.445297504798464,
+      "eligible_60d": 521,
+      "repeat_60d": 67,
+      "pct_60d": 12.859884836852206,
+      "eligible_90d": 521,
+      "repeat_90d": 80,
+      "pct_90d": 15.355086372360843,
+      "eligible_180d": 521,
+      "repeat_180d": 102,
+      "pct_180d": 19.577735124760075,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2026-02",
+      "customers": 270,
+      "repeat_customers": 61,
+      "repeat_pct": 22.59259259259259,
+      "third_order_pct": 7.4074074074074066,
+      "eligible_30d": 270,
+      "repeat_30d": 17,
+      "pct_30d": 6.296296296296296,
+      "eligible_60d": 270,
+      "repeat_60d": 34,
+      "pct_60d": 12.592592592592592,
+      "eligible_90d": 270,
+      "repeat_90d": 48,
+      "pct_90d": 17.77777777777778,
+      "eligible_180d": 270,
+      "repeat_180d": 55,
+      "pct_180d": 20.37037037037037,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2026-03",
+      "customers": 286,
+      "repeat_customers": 64,
+      "repeat_pct": 22.377622377622377,
+      "third_order_pct": 8.391608391608392,
+      "eligible_30d": 286,
+      "repeat_30d": 22,
+      "pct_30d": 7.6923076923076925,
+      "eligible_60d": 286,
+      "repeat_60d": 39,
+      "pct_60d": 13.636363636363635,
+      "eligible_90d": 286,
+      "repeat_90d": 48,
+      "pct_90d": 16.783216783216783,
+      "eligible_180d": 286,
+      "repeat_180d": 60,
+      "pct_180d": 20.97902097902098,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2026-04",
+      "customers": 306,
+      "repeat_customers": 57,
+      "repeat_pct": 18.627450980392158,
+      "third_order_pct": 6.862745098039216,
+      "eligible_30d": 306,
+      "repeat_30d": 18,
+      "pct_30d": 5.88235294117647,
+      "eligible_60d": 306,
+      "repeat_60d": 30,
+      "pct_60d": 9.803921568627452,
+      "eligible_90d": 306,
+      "repeat_90d": 41,
+      "pct_90d": 13.398692810457517,
+      "eligible_180d": 306,
+      "repeat_180d": 55,
+      "pct_180d": 17.973856209150327,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2026-05",
+      "customers": 313,
+      "repeat_customers": 55,
+      "repeat_pct": 17.57188498402556,
+      "third_order_pct": 5.111821086261981,
+      "eligible_30d": 313,
+      "repeat_30d": 26,
+      "pct_30d": 8.30670926517572,
+      "eligible_60d": 313,
+      "repeat_60d": 40,
+      "pct_60d": 12.779552715654951,
+      "eligible_90d": 313,
+      "repeat_90d": 44,
+      "pct_90d": 14.057507987220447,
+      "eligible_180d": 87,
+      "repeat_180d": null,
+      "pct_180d": null,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2026-06",
+      "customers": 236,
+      "repeat_customers": 40,
+      "repeat_pct": 16.94915254237288,
+      "third_order_pct": 3.389830508474576,
+      "eligible_30d": 236,
+      "repeat_30d": 8,
+      "pct_30d": 3.389830508474576,
+      "eligible_60d": 236,
+      "repeat_60d": 21,
+      "pct_60d": 8.898305084745763,
+      "eligible_90d": 236,
+      "repeat_90d": 30,
+      "pct_90d": 12.711864406779661,
+      "eligible_180d": 0,
+      "repeat_180d": null,
+      "pct_180d": null,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2026-07",
+      "customers": 55,
+      "repeat_customers": 9,
+      "repeat_pct": 16.363636363636363,
+      "third_order_pct": 3.6363636363636362,
+      "eligible_30d": 55,
+      "repeat_30d": 5,
+      "pct_30d": 9.090909090909092,
+      "eligible_60d": 55,
+      "repeat_60d": 8,
+      "pct_60d": 14.545454545454545,
+      "eligible_90d": 55,
+      "repeat_90d": 8,
+      "pct_90d": 14.545454545454545,
+      "eligible_180d": 0,
+      "repeat_180d": null,
+      "pct_180d": null,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2026-08",
+      "customers": 113,
+      "repeat_customers": 12,
+      "repeat_pct": 10.619469026548673,
+      "third_order_pct": 0.0,
+      "eligible_30d": 113,
+      "repeat_30d": 8,
+      "pct_30d": 7.079646017699115,
+      "eligible_60d": 113,
+      "repeat_60d": 11,
+      "pct_60d": 9.734513274336283,
+      "eligible_90d": 2,
+      "repeat_90d": null,
+      "pct_90d": null,
+      "eligible_180d": 0,
+      "repeat_180d": null,
+      "pct_180d": null,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2026-09",
+      "customers": 378,
+      "repeat_customers": 20,
+      "repeat_pct": 5.291005291005291,
+      "third_order_pct": 0.26455026455026454,
+      "eligible_30d": 378,
+      "repeat_30d": 13,
+      "pct_30d": 3.439153439153439,
+      "eligible_60d": 39,
+      "repeat_60d": null,
+      "pct_60d": null,
+      "eligible_90d": 0,
+      "repeat_90d": null,
+      "pct_90d": null,
+      "eligible_180d": 0,
+      "repeat_180d": null,
+      "pct_180d": null,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2026-10",
+      "customers": 487,
+      "repeat_customers": 25,
+      "repeat_pct": 5.133470225872689,
+      "third_order_pct": 0.20533880903490762,
+      "eligible_30d": 79,
+      "repeat_30d": null,
+      "pct_30d": null,
+      "eligible_60d": 0,
+      "repeat_60d": null,
+      "pct_60d": null,
+      "eligible_90d": 0,
+      "repeat_90d": null,
+      "pct_90d": null,
+      "eligible_180d": 0,
+      "repeat_180d": null,
+      "pct_180d": null,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    },
+    {
+      "cohort": "2026-11",
+      "customers": 95,
+      "repeat_customers": 0,
+      "repeat_pct": 0.0,
+      "third_order_pct": 0.0,
+      "eligible_30d": 0,
+      "repeat_30d": null,
+      "pct_30d": null,
+      "eligible_60d": 0,
+      "repeat_60d": null,
+      "pct_60d": null,
+      "eligible_90d": 0,
+      "repeat_90d": null,
+      "pct_90d": null,
+      "eligible_180d": 0,
+      "repeat_180d": null,
+      "pct_180d": null,
+      "eligible_365d": 0,
+      "repeat_365d": null,
+      "pct_365d": null
+    }
+  ],
+  "monthly": [
+    {
+      "month": "2025-05",
+      "complete_month": false,
+      "orders": 568,
+      "customers": 562,
+      "new_customers": 562,
+      "prior_month_customers": 0,
+      "prior_month_customer_pct": 0.0,
+      "customers_with_repeat_order": 6,
+      "customers_with_repeat_order_pct": 1.0676156583629894,
+      "repeat_orders": 6,
+      "repeat_order_pct": 1.056338028169014,
+      "revenue": 5319.15,
+      "repeat_revenue_pct": 2.087927582414484
+    },
+    {
+      "month": "2025-06",
+      "complete_month": true,
+      "orders": 270,
+      "customers": 263,
+      "new_customers": 228,
+      "prior_month_customers": 35,
+      "prior_month_customer_pct": 13.307984790874524,
+      "customers_with_repeat_order": 41,
+      "customers_with_repeat_order_pct": 15.5893536121673,
+      "repeat_orders": 42,
+      "repeat_order_pct": 15.555555555555555,
+      "revenue": 3730.87,
+      "repeat_revenue_pct": 31.740585975925185
+    },
+    {
+      "month": "2025-07",
+      "complete_month": true,
+      "orders": 797,
+      "customers": 781,
+      "new_customers": 740,
+      "prior_month_customers": 41,
+      "prior_month_customer_pct": 5.249679897567221,
+      "customers_with_repeat_order": 56,
+      "customers_with_repeat_order_pct": 7.170294494238156,
+      "repeat_orders": 57,
+      "repeat_order_pct": 7.151819322459223,
+      "revenue": 9215.119999999999,
+      "repeat_revenue_pct": 15.23029542751478
+    },
+    {
+      "month": "2025-08",
+      "complete_month": true,
+      "orders": 760,
+      "customers": 729,
+      "new_customers": 618,
+      "prior_month_customers": 111,
+      "prior_month_customer_pct": 15.22633744855967,
+      "customers_with_repeat_order": 134,
+      "customers_with_repeat_order_pct": 18.381344307270233,
+      "repeat_orders": 142,
+      "repeat_order_pct": 18.684210526315788,
+      "revenue": 11772.43,
+      "repeat_revenue_pct": 31.255739044530305
+    },
+    {
+      "month": "2025-09",
+      "complete_month": true,
+      "orders": 606,
+      "customers": 589,
+      "new_customers": 478,
+      "prior_month_customers": 111,
+      "prior_month_customer_pct": 18.845500848896435,
+      "customers_with_repeat_order": 125,
+      "customers_with_repeat_order_pct": 21.222410865874362,
+      "repeat_orders": 128,
+      "repeat_order_pct": 21.122112211221122,
+      "revenue": 9985.29,
+      "repeat_revenue_pct": 35.939366808575414
+    },
+    {
+      "month": "2025-10",
+      "complete_month": true,
+      "orders": 439,
+      "customers": 433,
+      "new_customers": 306,
+      "prior_month_customers": 127,
+      "prior_month_customer_pct": 29.330254041570434,
+      "customers_with_repeat_order": 130,
+      "customers_with_repeat_order_pct": 30.023094688221708,
+      "repeat_orders": 133,
+      "repeat_order_pct": 30.296127562642365,
+      "revenue": 7715.99,
+      "repeat_revenue_pct": 49.24241736964407
+    },
+    {
+      "month": "2025-11",
+      "complete_month": true,
+      "orders": 395,
+      "customers": 386,
+      "new_customers": 288,
+      "prior_month_customers": 98,
+      "prior_month_customer_pct": 25.38860103626943,
+      "customers_with_repeat_order": 107,
+      "customers_with_repeat_order_pct": 27.72020725388601,
+      "repeat_orders": 107,
+      "repeat_order_pct": 27.088607594936708,
+      "revenue": 6924.75,
+      "repeat_revenue_pct": 41.81291743384238
+    },
+    {
+      "month": "2025-12",
+      "complete_month": true,
+      "orders": 329,
+      "customers": 323,
+      "new_customers": 218,
+      "prior_month_customers": 105,
+      "prior_month_customer_pct": 32.50773993808049,
+      "customers_with_repeat_order": 108,
+      "customers_with_repeat_order_pct": 33.43653250773993,
+      "repeat_orders": 111,
+      "repeat_order_pct": 33.73860182370821,
+      "revenue": 6961.62,
+      "repeat_revenue_pct": 52.74318333951006
+    },
+    {
+      "month": "2026-01",
+      "complete_month": true,
+      "orders": 668,
+      "customers": 646,
+      "new_customers": 521,
+      "prior_month_customers": 125,
+      "prior_month_customer_pct": 19.34984520123839,
+      "customers_with_repeat_order": 142,
+      "customers_with_repeat_order_pct": 21.981424148606813,
+      "repeat_orders": 147,
+      "repeat_order_pct": 22.005988023952096,
+      "revenue": 10129.58,
+      "repeat_revenue_pct": 44.71221906535118
+    },
+    {
+      "month": "2026-02",
+      "complete_month": true,
+      "orders": 423,
+      "customers": 405,
+      "new_customers": 270,
+      "prior_month_customers": 135,
+      "prior_month_customer_pct": 33.33333333333333,
+      "customers_with_repeat_order": 146,
+      "customers_with_repeat_order_pct": 36.04938271604938,
+      "repeat_orders": 153,
+      "repeat_order_pct": 36.17021276595745,
+      "revenue": 8325.41,
+      "repeat_revenue_pct": 53.15101598599947
+    },
+    {
+      "month": "2026-03",
+      "complete_month": true,
+      "orders": 435,
+      "customers": 410,
+      "new_customers": 286,
+      "prior_month_customers": 124,
+      "prior_month_customer_pct": 30.24390243902439,
+      "customers_with_repeat_order": 140,
+      "customers_with_repeat_order_pct": 34.146341463414636,
+      "repeat_orders": 149,
+      "repeat_order_pct": 34.25287356321839,
+      "revenue": 8987.28,
+      "repeat_revenue_pct": 50.490248440017446
+    },
+    {
+      "month": "2026-04",
+      "complete_month": true,
+      "orders": 462,
+      "customers": 452,
+      "new_customers": 306,
+      "prior_month_customers": 146,
+      "prior_month_customer_pct": 32.30088495575221,
+      "customers_with_repeat_order": 152,
+      "customers_with_repeat_order_pct": 33.6283185840708,
+      "repeat_orders": 156,
+      "repeat_order_pct": 33.76623376623377,
+      "revenue": 9232.72,
+      "repeat_revenue_pct": 49.36237641778371
+    },
+    {
+      "month": "2026-05",
+      "complete_month": true,
+      "orders": 455,
+      "customers": 438,
+      "new_customers": 313,
+      "prior_month_customers": 125,
+      "prior_month_customer_pct": 28.538812785388128,
+      "customers_with_repeat_order": 138,
+      "customers_with_repeat_order_pct": 31.506849315068493,
+      "repeat_orders": 142,
+      "repeat_order_pct": 31.208791208791208,
+      "revenue": 8494.75,
+      "repeat_revenue_pct": 47.222696371288144
+    },
+    {
+      "month": "2026-06",
+      "complete_month": true,
+      "orders": 407,
+      "customers": 402,
+      "new_customers": 236,
+      "prior_month_customers": 166,
+      "prior_month_customer_pct": 41.29353233830846,
+      "customers_with_repeat_order": 168,
+      "customers_with_repeat_order_pct": 41.7910447761194,
+      "repeat_orders": 171,
+      "repeat_order_pct": 42.01474201474201,
+      "revenue": 8595.94,
+      "repeat_revenue_pct": 58.40815547805126
+    },
+    {
+      "month": "2026-07",
+      "complete_month": true,
+      "orders": 180,
+      "customers": 175,
+      "new_customers": 55,
+      "prior_month_customers": 120,
+      "prior_month_customer_pct": 68.57142857142857,
+      "customers_with_repeat_order": 123,
+      "customers_with_repeat_order_pct": 70.28571428571428,
+      "repeat_orders": 125,
+      "repeat_order_pct": 69.44444444444444,
+      "revenue": 4720.950000000001,
+      "repeat_revenue_pct": 81.96274055010113
+    },
+    {
+      "month": "2026-08",
+      "complete_month": true,
+      "orders": 227,
+      "customers": 220,
+      "new_customers": 113,
+      "prior_month_customers": 107,
+      "prior_month_customer_pct": 48.63636363636364,
+      "customers_with_repeat_order": 111,
+      "customers_with_repeat_order_pct": 50.45454545454545,
+      "repeat_orders": 114,
+      "repeat_order_pct": 50.22026431718062,
+      "revenue": 5300.94,
+      "repeat_revenue_pct": 68.0534018494833
+    },
+    {
+      "month": "2026-09",
+      "complete_month": true,
+      "orders": 516,
+      "customers": 504,
+      "new_customers": 378,
+      "prior_month_customers": 126,
+      "prior_month_customer_pct": 25.0,
+      "customers_with_repeat_order": 133,
+      "customers_with_repeat_order_pct": 26.38888888888889,
+      "repeat_orders": 138,
+      "repeat_order_pct": 26.744186046511626,
+      "revenue": 8872.85,
+      "repeat_revenue_pct": 43.67976467538615
+    },
+    {
+      "month": "2026-10",
+      "complete_month": true,
+      "orders": 635,
+      "customers": 613,
+      "new_customers": 487,
+      "prior_month_customers": 126,
+      "prior_month_customer_pct": 20.554649265905383,
+      "customers_with_repeat_order": 144,
+      "customers_with_repeat_order_pct": 23.491027732463294,
+      "repeat_orders": 148,
+      "repeat_order_pct": 23.30708661417323,
+      "revenue": 10750.82,
+      "repeat_revenue_pct": 43.75815054107501
+    },
+    {
+      "month": "2026-11",
+      "complete_month": false,
+      "orders": 116,
+      "customers": 116,
+      "new_customers": 95,
+      "prior_month_customers": 21,
+      "prior_month_customer_pct": 18.103448275862068,
+      "customers_with_repeat_order": 21,
+      "customers_with_repeat_order_pct": 18.103448275862068,
+      "repeat_orders": 21,
+      "repeat_order_pct": 18.103448275862068,
+      "revenue": 1680.85,
+      "repeat_revenue_pct": 44.9873575869352
+    }
+  ],
+  "markets_by_first_order": [
+    {
+      "first_order_market": "cz",
+      "customers": 141,
+      "repeat_customers": 4,
+      "repeat_pct": 2.8368794326241136,
+      "window_90d": {
+        "eligible": 24,
+        "repeat": 0,
+        "pct": 0.0
+      }
+    },
+    {
+      "first_order_market": "hu",
+      "customers": 135,
+      "repeat_customers": 7,
+      "repeat_pct": 5.185185185185185,
+      "window_90d": {
+        "eligible": 0,
+        "repeat": 0,
+        "pct": null
+      }
+    },
+    {
+      "first_order_market": "sk",
+      "customers": 6213,
+      "repeat_customers": 1245,
+      "repeat_pct": 20.038628681796233,
+      "window_90d": {
+        "eligible": 5394,
+        "repeat": 789,
+        "pct": 14.627363737486096
+      }
+    },
+    {
+      "first_order_market": "unknown",
+      "customers": 9,
+      "repeat_customers": 4,
+      "repeat_pct": 44.44444444444444,
+      "window_90d": {
+        "eligible": 9,
+        "repeat": 1,
+        "pct": 11.11111111111111
+      }
+    }
+  ],
+  "cohort_markets": [
+    {
+      "cohort": "2025-05",
+      "first_order_market": "sk",
+      "customers": 561,
+      "window_30d": {
+        "eligible": 561,
+        "repeat": 28,
+        "pct": 4.991087344028521
+      }
+    },
+    {
+      "cohort": "2025-05",
+      "first_order_market": "unknown",
+      "customers": 1,
+      "window_30d": {
+        "eligible": 1,
+        "repeat": 1,
+        "pct": 100.0
+      }
+    },
+    {
+      "cohort": "2025-06",
+      "first_order_market": "cz",
+      "customers": 1,
+      "window_30d": {
+        "eligible": 1,
+        "repeat": 0,
+        "pct": 0.0
+      }
+    },
+    {
+      "cohort": "2025-06",
+      "first_order_market": "sk",
+      "customers": 227,
+      "window_30d": {
+        "eligible": 227,
+        "repeat": 15,
+        "pct": 6.607929515418502
+      }
+    },
+    {
+      "cohort": "2025-07",
+      "first_order_market": "sk",
+      "customers": 740,
+      "window_30d": {
+        "eligible": 740,
+        "repeat": 65,
+        "pct": 8.783783783783784
+      }
+    },
+    {
+      "cohort": "2025-08",
+      "first_order_market": "cz",
+      "customers": 7,
+      "window_30d": {
+        "eligible": 7,
+        "repeat": 0,
+        "pct": 0.0
+      }
+    },
+    {
+      "cohort": "2025-08",
+      "first_order_market": "sk",
+      "customers": 607,
+      "window_30d": {
+        "eligible": 607,
+        "repeat": 39,
+        "pct": 6.425041186161449
+      }
+    },
+    {
+      "cohort": "2025-08",
+      "first_order_market": "unknown",
+      "customers": 4,
+      "window_30d": {
+        "eligible": 4,
+        "repeat": 0,
+        "pct": 0.0
+      }
+    },
+    {
+      "cohort": "2025-09",
+      "first_order_market": "cz",
+      "customers": 12,
+      "window_30d": {
+        "eligible": 12,
+        "repeat": 0,
+        "pct": 0.0
+      }
+    },
+    {
+      "cohort": "2025-09",
+      "first_order_market": "sk",
+      "customers": 462,
+      "window_30d": {
+        "eligible": 462,
+        "repeat": 32,
+        "pct": 6.926406926406926
+      }
+    },
+    {
+      "cohort": "2025-09",
+      "first_order_market": "unknown",
+      "customers": 4,
+      "window_30d": {
+        "eligible": 4,
+        "repeat": 0,
+        "pct": 0.0
+      }
+    },
+    {
+      "cohort": "2025-10",
+      "first_order_market": "sk",
+      "customers": 306,
+      "window_30d": {
+        "eligible": 306,
+        "repeat": 12,
+        "pct": 3.9215686274509802
+      }
+    },
+    {
+      "cohort": "2025-11",
+      "first_order_market": "sk",
+      "customers": 288,
+      "window_30d": {
+        "eligible": 288,
+        "repeat": 16,
+        "pct": 5.555555555555555
+      }
+    },
+    {
+      "cohort": "2025-12",
+      "first_order_market": "sk",
+      "customers": 218,
+      "window_30d": {
+        "eligible": 218,
+        "repeat": 10,
+        "pct": 4.587155963302752
+      }
+    },
+    {
+      "cohort": "2026-01",
+      "first_order_market": "sk",
+      "customers": 521,
+      "window_30d": {
+        "eligible": 521,
+        "repeat": 44,
+        "pct": 8.445297504798464
+      }
+    },
+    {
+      "cohort": "2026-02",
+      "first_order_market": "sk",
+      "customers": 270,
+      "window_30d": {
+        "eligible": 270,
+        "repeat": 17,
+        "pct": 6.296296296296296
+      }
+    },
+    {
+      "cohort": "2026-03",
+      "first_order_market": "cz",
+      "customers": 1,
+      "window_30d": {
+        "eligible": 1,
+        "repeat": 0,
+        "pct": 0.0
+      }
+    },
+    {
+      "cohort": "2026-03",
+      "first_order_market": "sk",
+      "customers": 285,
+      "window_30d": {
+        "eligible": 285,
+        "repeat": 22,
+        "pct": 7.719298245614035
+      }
+    },
+    {
+      "cohort": "2026-04",
+      "first_order_market": "cz",
+      "customers": 1,
+      "window_30d": {
+        "eligible": 1,
+        "repeat": 0,
+        "pct": 0.0
+      }
+    },
+    {
+      "cohort": "2026-04",
+      "first_order_market": "sk",
+      "customers": 305,
+      "window_30d": {
+        "eligible": 305,
+        "repeat": 18,
+        "pct": 5.901639344262295
+      }
+    },
+    {
+      "cohort": "2026-05",
+      "first_order_market": "sk",
+      "customers": 313,
+      "window_30d": {
+        "eligible": 313,
+        "repeat": 26,
+        "pct": 8.30670926517572
+      }
+    },
+    {
+      "cohort": "2026-06",
+      "first_order_market": "sk",
+      "customers": 236,
+      "window_30d": {
+        "eligible": 236,
+        "repeat": 8,
+        "pct": 3.389830508474576
+      }
+    },
+    {
+      "cohort": "2026-07",
+      "first_order_market": "cz",
+      "customers": 2,
+      "window_30d": {
+        "eligible": 2,
+        "repeat": 0,
+        "pct": 0.0
+      }
+    },
+    {
+      "cohort": "2026-07",
+      "first_order_market": "sk",
+      "customers": 53,
+      "window_30d": {
+        "eligible": 53,
+        "repeat": 5,
+        "pct": 9.433962264150944
+      }
+    },
+    {
+      "cohort": "2026-08",
+      "first_order_market": "sk",
+      "customers": 113,
+      "window_30d": {
+        "eligible": 113,
+        "repeat": 8,
+        "pct": 7.079646017699115
+      }
+    },
+    {
+      "cohort": "2026-09",
+      "first_order_market": "cz",
+      "customers": 50,
+      "window_30d": {
+        "eligible": 50,
+        "repeat": 2,
+        "pct": 4.0
+      }
+    },
+    {
+      "cohort": "2026-09",
+      "first_order_market": "hu",
+      "customers": 67,
+      "window_30d": {
+        "eligible": 67,
+        "repeat": 3,
+        "pct": 4.477611940298507
+      }
+    },
+    {
+      "cohort": "2026-09",
+      "first_order_market": "sk",
+      "customers": 261,
+      "window_30d": {
+        "eligible": 261,
+        "repeat": 8,
+        "pct": 3.065134099616858
+      }
+    },
+    {
+      "cohort": "2026-10",
+      "first_order_market": "cz",
+      "customers": 63,
+      "window_30d": {
+        "eligible": 14,
+        "repeat": 1,
+        "pct": 7.142857142857142
+      }
+    },
+    {
+      "cohort": "2026-10",
+      "first_order_market": "hu",
+      "customers": 62,
+      "window_30d": {
+        "eligible": 15,
+        "repeat": 0,
+        "pct": 0.0
+      }
+    },
+    {
+      "cohort": "2026-10",
+      "first_order_market": "sk",
+      "customers": 362,
+      "window_30d": {
+        "eligible": 50,
+        "repeat": 8,
+        "pct": 16.0
+      }
+    },
+    {
+      "cohort": "2026-11",
+      "first_order_market": "cz",
+      "customers": 4,
+      "window_30d": {
+        "eligible": 0,
+        "repeat": 0,
+        "pct": null
+      }
+    },
+    {
+      "cohort": "2026-11",
+      "first_order_market": "hu",
+      "customers": 6,
+      "window_30d": {
+        "eligible": 0,
+        "repeat": 0,
+        "pct": null
+      }
+    },
+    {
+      "cohort": "2026-11",
+      "first_order_market": "sk",
+      "customers": 85,
+      "window_30d": {
+        "eligible": 0,
+        "repeat": 0,
+        "pct": null
+      }
+    }
+  ],
+  "quarter_comparison": [
+    {
+      "quarter": "2025Q2",
+      "customers": 790,
+      "repeat_90d": 114,
+      "pct_90d": 14.430379746835442
+    },
+    {
+      "quarter": "2025Q3",
+      "customers": 1836,
+      "repeat_90d": 288,
+      "pct_90d": 15.686274509803921
+    },
+    {
+      "quarter": "2025Q4",
+      "customers": 812,
+      "repeat_90d": 89,
+      "pct_90d": 10.960591133004927
+    },
+    {
+      "quarter": "2026Q1",
+      "customers": 1077,
+      "repeat_90d": 176,
+      "pct_90d": 16.341689879294336
+    },
+    {
+      "quarter": "2026Q2",
+      "customers": 855,
+      "repeat_90d": 115,
+      "pct_90d": 13.450292397660817
+    },
+    {
+      "quarter": "2026Q3",
+      "customers": 546,
+      "repeat_90d": null,
+      "pct_90d": null
+    },
+    {
+      "quarter": "2026Q4",
+      "customers": 582,
+      "repeat_90d": null,
+      "pct_90d": null
+    }
+  ],
+  "data_quality": {
+    "is_partial": false,
+    "qa_failure_count": 0,
+    "qa_warning_count": 6,
+    "summary": "Data sources loaded, but QA warnings were raised for Geo confidence, Product cost coverage, Margin stability. Treat attribution-style metrics with caution."
+  },
+  "identity_audit": {
+    "raw_unique_emails": 6509,
+    "normalized_unique_emails": 6498,
+    "merged_email_groups": 11
+  }
+}

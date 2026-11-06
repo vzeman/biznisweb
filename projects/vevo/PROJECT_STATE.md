@@ -1,3 +1,13 @@
+## 2026-11-06 — Read-only VEVO customer retention analysis
+
+Date: 2026-11-06
+Repo: vzeman/biznisweb
+Branch: codex/vevo-retention-analysis-20261106
+What changed: Added reproducible offline analysis, aggregate-only evidence and a monthly chart. No production calculation, publication, email or infrastructure change. See [analysis](../../docs/vevo-retention-analysis-20261106.md).
+What is verified: Publication 20261106T003048Z covers 2025-05-03..2026-11-05. Manifest hash checks, 8688 deduplicated orders and EUR146717.31 revenue reconcile. After trim/lower email normalization, 1260/6498 customers repeat (19.3906%); 2190/8688 orders repeat (25.2072%). Fixed 90-day repeat is 790/5427 eligible customers (14.5568%). Standard-library reconstruction confirms all five windows. One synthetic boundary test, Ruff and diff checks pass. No persistent local process was started.
+Known issues: Existing cohort summary does not normalize email case, producing1252/6509 (19.2%);11 email groups merge and8 extra repeaters appear under the history-column policy. Existing true_retention_2nd_pct22.0 is lifetime retention among older cohorts, not return within90days. Production untouched; these findings are documented only. Latest cohorts are right-censored; unavailable windows remain null. Input exports stay private in the existing S3 generation and outside Git; aggregate results and method are committed.
+Next exact step: Review the September30-day weakness (13/378; SK8/261) by first product/sample entry and available acquisition source. Any production identity/window-label fix requires its own scoped implementation and normal infra gates; it was not performed here. Existing delivery/UI and other-product work remain separate.
+
 ## 2026-10-27 — Country cards deployed and regenerated; resend still pending
 
 Date: 2026-10-27
