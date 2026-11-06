@@ -26,6 +26,10 @@ logger = get_logger('facebook_ads')
 ADS_MEASUREMENT_SCHEMA_VERSION = 2
 PURCHASE_ACTION = 'offsite_conversion.fb_pixel_purchase'
 PURCHASE_WINDOW = '7d_click'
+META_ATTRIBUTION_WINDOW_FIELDS = frozenset({
+    '1d_click', '1d_view', '7d_click', '7d_view', '28d_click', '28d_view',
+    'dda', 'default', 'skan_click', 'skan_view',
+})
 
 class FacebookTokenError(RuntimeError):
     """Raised when Facebook OAuth token is invalid or expired."""
@@ -159,13 +163,42 @@ class FacebookAdsClient:
         raise ValueError('Meta pagination exceeded page limit')
 
     @staticmethod
-    def _action_count(actions: List[Dict[str, Any]], action_type: str) -> float:
+    def _action_count(
+        actions: List[Dict[str, Any]],
+        action_type: str,
+        *,
+        requested_windows: Optional[List[str]] = None,
+        action_report_time: Optional[str] = None,
+    ) -> float:
         matches = [action for action in actions if action.get('action_type') == action_type]
         if len(matches) > 1:
             raise ValueError('Duplicate canonical Meta action')
-        if matches and PURCHASE_WINDOW not in matches[0]:
-            raise ValueError('Canonical Meta action missing requested attribution window')
-        value = float(matches[0].get(PURCHASE_WINDOW, 0)) if matches else 0.0
+        if not matches:
+            return 0.0
+
+        action = matches[0]
+        if PURCHASE_WINDOW in action:
+            raw_value = action[PURCHASE_WINDOW]
+        else:
+            request_is_exact = (
+                tuple(requested_windows or ()) == (PURCHASE_WINDOW,)
+                and action_report_time == 'impression'
+            )
+            conflicting_windows = sorted(
+                field for field in action
+                if field != PURCHASE_WINDOW and (
+                    field in META_ATTRIBUTION_WINDOW_FIELDS
+                    or re.fullmatch(r'[0-9]+d_(?:click|view)', field)
+                )
+            )
+            if not request_is_exact or 'value' not in action or conflicting_windows:
+                raise ValueError('Canonical Meta action missing requested attribution window')
+            # Meta may project a singleton requested attribution window as the
+            # generic `value` field. It is exact only because the request above is
+            # bound to one 7d_click window and impression-time reporting.
+            raw_value = action['value']
+
+        value = float(raw_value)
         if not math.isfinite(value) or value < 0:
             raise ValueError('Invalid Meta action count')
         return value
@@ -530,6 +563,8 @@ class FacebookAdsClient:
                         'action_attribution_windows': json.dumps([PURCHASE_WINDOW]),
                         'action_report_time': 'impression',
                     }
+                    requested_windows = json.loads(insights_params['action_attribution_windows'])
+                    action_report_time = insights_params['action_report_time']
 
                     insights_data = self._get_json(insights_url, insights_params, "Error fetching campaign insights")
                     if 'error' in insights_data or not isinstance(insights_data.get('data'), list):
@@ -546,22 +581,33 @@ class FacebookAdsClient:
 
                         # Extract conversion data
                         actions = data.get('actions', [])
-                        purchases_count = self._action_count(actions, PURCHASE_ACTION)
+                        purchases_count = self._action_count(
+                            actions,
+                            PURCHASE_ACTION,
+                            requested_windows=requested_windows,
+                            action_report_time=action_report_time,
+                        )
                         conversions_count = purchases_count  # Backward-compatible field, same exact definition.
-                        add_to_cart_count = self._action_count(actions, 'offsite_conversion.fb_pixel_add_to_cart')
+                        add_to_cart_count = self._action_count(
+                            actions,
+                            'offsite_conversion.fb_pixel_add_to_cart',
+                            requested_windows=requested_windows,
+                            action_report_time=action_report_time,
+                        )
 
                         # Extract cost per action
                         cost_per_action_types = data.get('cost_per_action_type', [])
                         reported_cost_per_conversion = None
                         reported_cost_per_purchase = None
 
-                        for cpa in cost_per_action_types:
-                            action_type = cpa.get('action_type', '')
-                            value = cpa.get(PURCHASE_WINDOW)
-
-                            if action_type == 'offsite_conversion.fb_pixel_purchase':
-                                reported_cost_per_purchase = float(value) if value is not None else None
-                                reported_cost_per_conversion = reported_cost_per_purchase
+                        if any(cpa.get('action_type') == PURCHASE_ACTION for cpa in cost_per_action_types):
+                            reported_cost_per_purchase = self._action_count(
+                                cost_per_action_types,
+                                PURCHASE_ACTION,
+                                requested_windows=requested_windows,
+                                action_report_time=action_report_time,
+                            )
+                            reported_cost_per_conversion = reported_cost_per_purchase
 
                         cost_per_conversion = (spend / conversions_count) if conversions_count > 0 else None
                         cost_per_purchase = (spend / purchases_count) if purchases_count > 0 else None

@@ -1,3 +1,24 @@
+## 2026-11-06 — Fresh Fargate identity and reproducible seven-day rejection
+
+Date: 2026-11-06
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-report-stale-20261106`
+What changed: GitHub run `42176029264` started exactly one output-tagged, no-email/no-invoice production-equivalent probe on the existing ROY definition. It did not publish or change the scheduler. Task `1f3d79ecb8da403e9f72afb80929025e` stopped with exit code 1 after `dashboard_payload_7d.json` failed strict publication quality. Sanitized run `42179964740` proved the precise response shape, and the narrow parser repair now treats generic `value` as the requested metric only when the actual request contains exactly `7d_click` and impression-time reporting. Explicit window values remain preferred; every ambiguous or conflicting context still fails closed.
+What is verified: The required pre-code hard gate is Fargate instance `N/A`, private IP `172.31.5.142`, service `roy-daily-report-email`, task definition `roy-reporting-daily:83`, runtime path `/app`, and immutable image digest `d6797213e2babf66fd31b0254dc41c3b99894b5b1bb8387ebcc3f6bb48933bb7`. The exact task is stopped and the live S3 generation remains `20261104T005630Z`. Contract SHA `41b68e60756929a72b7769daf5d2a85e19f8ce864b11b22fd671fe445f4ca47d` binds the exact request; shape SHA `4fcb0f512b3ee0de405610128251c973c2b5faab7e8bd354b3f7cf0ec9f3a735` proves purchase fields `action_type,value` and add-to-cart fields `7d_click,action_type,value`, with no retained metrics or provider identity. The diagnostic plus ads suite passes 33 tests and the expanded measurement/publication/ROY-release suite passes 117; syntax, whitespace and critical security checks pass. The failed probe never reached localhost marker startup, so no marker success is claimed; a repaired candidate must supply that proof before UI verification.
+Known issue: The parser repair is not yet merged, built or deployed. Whole-file Ruff still reports the unrelated pre-existing unused local at `facebook_ads.py:421`; this change does not widen into that code path. Live data remain stale and protected.
+Next exact step: Push this verified state checkpoint, pass PR checks, merge and build the exact main image. Run the ordinary ROY release and publish only after candidate localhost marker, full/7d/30d/90d quality, terminal cleanup and live HTTP pass, with UI last.
+
+## 2026-11-06 — Scheduled ROY runs failed closed on Meta purchase attribution
+
+Date: 2026-11-06
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-report-stale-20261106`
+What happened: ROY's daily schedule remains enabled at `01:30 Europe/Bratislava` on `roy-reporting-daily:83`. The 5 and 6 November tasks ran and generated local report artifacts through 4 and 5 November respectively, but neither was published. The live dashboard therefore still shows the last verified generation from `2026-11-04T00:56:28Z`, covering through 3 November.
+Root cause: Both failed streams contain `facebook_ads - ERROR - Unexpected error fetching campaign data: Canonical Meta action missing requested attribution window`. The code requests and strictly requires the exact `offsite_conversion.fb_pixel_purchase` / `7d_click` measurement. At least one canonical action returned without `7d_click`, so campaign measurement stayed unavailable, attribution QA became critical, and the publication guard rejected `dashboard_payload_7d.json`. This is intentional fail-closed behavior; no partial advertising data replaced the previous dashboard. Retried BiznisWeb GraphQL source errors are present but are not the terminal publication failure.
+What is verified: Read-only diagnostic run `42174866250` confirmed the enabled schedule and streams `5c0d828d1d914e508f6398d31b12d031` (6 November), `82817f89f25542fe82e8fa89ff4ac931` (5 November) and last-successful `99b6451e44344fef9e3afd77a1ed4147` (4 November). Account is `919341186960`, region `eu-central-1`, service `roy-daily-report-email`, Fargate instance `N/A`, immutable path previously `/app`. Exact stopped-task readback at `06:31Z` was already outside ECS retention, so its IP/localhost marker cannot be freshly claimed. No AWS runtime, schedule, report object or UI was changed.
+Known issue: The retained log records the failed predicate, not the sanitized response row or attribution-key set. Do not silently fall back to Meta's generic `value`, remove exact 7-day-click semantics, or relax QA.
+Next exact step: Perform a bounded sanitized read of the same Meta campaign Insights shape, prove the returned attribution keys, then prepare the narrowest source-contract repair and tests. A future production repair must first re-confirm a fresh task's definition, private IP, service, `/app` and localhost marker, then pass all source/financial/publication checks before UI verification.
+
 ## 2026-10-09 — Foreign coverage deployed and actual publication verified
 
 Date: 2026-10-09

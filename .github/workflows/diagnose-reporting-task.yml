@@ -3,6 +3,14 @@ name: Diagnose Reporting ECS Task
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: Inspect one exact ECS task, or read only the sanitized Meta attribution response shape
+        required: true
+        default: ecs_task
+        type: choice
+        options:
+          - ecs_task
+          - meta_attribution_shape
       project:
         description: Reporting project owning the task
         required: true
@@ -11,8 +19,16 @@ on:
           - vevo
           - roy
       task_id:
-        description: Exact ECS task ID or ARN to inspect
-        required: true
+        description: ECS task mode only - exact task ID or ARN to inspect
+        required: false
+        type: string
+      date_from:
+        description: Meta shape mode only - inclusive ISO date (maximum 31-day window)
+        required: false
+        type: string
+      date_to:
+        description: Meta shape mode only - inclusive ISO date (maximum 31-day window)
+        required: false
         type: string
 
 permissions:
@@ -39,6 +55,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Read task state and CloudWatch tail
+        if: inputs.mode == 'ecs_task'
         shell: bash
         env:
           PROJECT: ${{ inputs.project }}
@@ -202,5 +219,38 @@ jobs:
             echo '## Reporting ECS task diagnostic'
             echo '```text'
             cat diagnostic.txt
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Read sanitized Meta attribution response shape
+        if: inputs.mode == 'meta_attribution_shape'
+        shell: bash
+        env:
+          PROJECT: ${{ inputs.project }}
+          DATE_FROM: ${{ inputs.date_from }}
+          DATE_TO: ${{ inputs.date_to }}
+        run: |
+          set -euo pipefail
+          SECRET_FILE="$(mktemp)"
+          cleanup() {
+            rm -f -- "${SECRET_FILE}"
+          }
+          trap cleanup EXIT
+          chmod 600 "${SECRET_FILE}"
+          aws secretsmanager get-secret-value \
+            --secret-id "${PROJECT}/reporting/runtime-env" \
+            --query SecretString \
+            --output text \
+            --region "${AWS_REGION}" > "${SECRET_FILE}"
+          python scripts/diagnose_meta_attribution_shape.py \
+            --project "${PROJECT}" \
+            --secret-file "${SECRET_FILE}" \
+            --date-from "${DATE_FROM}" \
+            --date-to "${DATE_TO}" | tee meta-attribution-shape.txt
+          {
+            echo '## Sanitized Meta attribution response shape'
+            echo 'No token, account ID, campaign ID/name, metric value, or raw provider response is emitted.'
+            echo '```text'
+            cat meta-attribution-shape.txt
             echo '```'
           } >> "${GITHUB_STEP_SUMMARY}"
