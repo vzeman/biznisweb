@@ -1,3 +1,24 @@
+## 2026-11-06 — ROY report repaired, released and republished through 5 November
+
+Date: 2026-11-06
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-report-release-handoff-20261106` (final documentation handoff)
+What changed: PR #660 merged the narrowly bound Meta parser repair as source `9eb90f9c1530a7c0199e627325010dfd684c4a8e`; exact build `42180806559` published image `sha256:84b4eaa12dba2edc8951d523bff315a762ac1c03cbf839b2ec1798fb027af1fa`. Ordinary release `93ae12aa2ee74d77a1db7c2255de4287` promoted definition `roy-reporting-daily:84` and published generation `20261106T082928Z`, generated at `2026-11-06T08:29:31Z`, covering sales through `2026-11-05`. The recurring ROY schedule is ENABLED on its unchanged `cron(30 1 * * ? *)` / `Europe/Bratislava` cadence and the release lease is released.
+What is verified: Candidate Fargate task `fa8a474fe41847a48760fa6d0da79327` (instance `N/A`, private IP `172.31.15.227`, service `roy-daily-report-email`, path `/app`, definition :84, exact image) passed its localhost marker before provider processing. Live task `83e9889bae3f4c4791adf543eb1026ec` (instance `N/A`, private IP `172.31.23.29`, same service/path/definition/image) completed full, 7-day, 30-day and 90-day Meta/report generation. Both tasks are STOPPED with exit code 0; no ROY task remains running. All eight live JSON/HTML artifacts are present. Their payloads end on `2026-11-05`, are not partial, and report zero QA failures/errors; warning status is retained as non-blocking source context. Authenticated App Runner checks returned 200 for `/dashboard/roy`, `/api/roy/latest?period=full` and `/report/roy?period=full`, with the expected dashboard and chart markers. The native visual helper failed twice during initialization with `setup refresh had errors`, so no rendered-browser screenshot is claimed; no authentication dialog or safety barrier was automated.
+Process cleanup: The finite release controller Python PID `29252` and wrapper PowerShell PID `60016` ended normally and are independently absent with zero listeners. No local dev server, watcher or tunnel was started. Production App Runner and the recurring schedule intentionally remain active.
+Known issue: No production blocker remains. A rendered browser-only check is still unavailable because of the local Windows automation helper failure; authenticated live HTML, API data and report markers are verified independently.
+Next exact step: Merge this documentation-only handoff through PR #661, then leave the successful release untouched. On the next automatic run, monitor that definition :84 advances the generation normally; do not replay release `93ae12aa2ee74d77a1db7c2255de4287`.
+
+## 2026-11-06 — ROY Meta repair merged; exact image build in progress
+
+Date: 2026-11-06
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-report-release-handoff-20261106` (documentation-only handoff; keep unmerged while production source is frozen)
+What changed: PR #660 merged through six green checks as exact main commit `9eb90f9c1530a7c0199e627325010dfd684c4a8e`. The merged parser accepts Meta's generic action `value` only when the actual request is the independently observed singleton `7d_click` plus impression-time contract; every ambiguous or conflicting response remains fail-closed. Automatic exact-source ECR build `42180806559` started from the merge commit. This handoff branch exists so release evidence can stay current without advancing main to a documentation-only commit that has no matching image.
+What is verified: PR checks passed Linux and Windows regressions, env, observability, secret scan and security baseline. Local focused measurement/publication/release tests passed 117 cases. Exact-source build `42180806559` completed successfully for commit `9eb90f9c1530a7c0199e627325010dfd684c4a8e`, publishing immutable digest `sha256:84b4eaa12dba2edc8951d523bff315a762ac1c03cbf839b2ec1798fb027af1fa`. Fresh read-only pre-deploy checks reconfirmed AWS account `919341186960`, ENABLED service `roy-daily-report-email`, Fargate definition :83, runtime path `/app` from the image default/current stack, and no active ROY task/IP. Sanitized production probe `42179964740` remains the source-shape evidence; live generation is still `20261104T005630Z`.
+Known issue: The exact image is built but not deployed; no candidate localhost marker or repaired live publication exists yet. The ordinary release must preserve the schedule and reject any new concurrent task or lease.
+Next exact step: Return to a clean exact-main checkout and run the ordinary ROY image release through `2026-11-05` once. Require candidate localhost marker, full/7d/30d/90d source quality, terminal cleanup, enabled dynamic schedule and live HTTP before UI verification. Record all results here before merging this handoff.
+
 ## 2026-11-06 — Fresh ROY hard gate complete; sanitized Meta shape probe prepared
 
 Date: 2026-11-06
