@@ -1,3 +1,13 @@
+## 2026-11-06 — Fresh Fargate identity and reproducible seven-day rejection
+
+Date: 2026-11-06
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-report-stale-20261106`
+What changed: GitHub run `42176029264` started exactly one output-tagged, no-email/no-invoice production-equivalent probe on the existing ROY definition. It did not publish or change the scheduler. Task `1f3d79ecb8da403e9f72afb80929025e` stopped with exit code 1 after `dashboard_payload_7d.json` failed strict publication quality. A new bounded diagnostic mode can now read the exact Meta request shape while emitting only field names, a SHA-256 campaign prefix and contract hashes; it never emits credentials, provider IDs/names, metrics or a raw response.
+What is verified: The required pre-code hard gate is Fargate instance `N/A`, private IP `172.31.5.142`, service `roy-daily-report-email`, task definition `roy-reporting-daily:83`, runtime path `/app`, and immutable image digest `d6797213e2babf66fd31b0254dc41c3b99894b5b1bb8387ebcc3f6bb48933bb7`. The exact task is stopped and the live S3 generation remains `20261104T005630Z`. The diagnostic plus ads regression suite passes 31 tests; syntax, Ruff and whitespace checks pass. The failed probe never reached localhost marker startup, so no marker success is claimed; a repaired candidate must supply that proof before UI verification.
+Known issue: The missing attribution field remains reproduced but its safe field set has not yet been collected. The parser must continue to fail closed until the singleton `7d_click` request is cryptographically bound to the observed sanitized response shape.
+Next exact step: Push the diagnostic change, collect the read-only field shape for `2026-10-30` through `2026-11-05`, and use that evidence to implement and test only the necessary Meta parser contract. Then use PR/CI, an exact-source image and the ordinary ROY release; publish only after candidate localhost marker, full/7d/30d/90d quality, terminal cleanup and live HTTP pass, with UI last.
+
 ## 2026-11-06 — Scheduled ROY runs failed closed on Meta purchase attribution
 
 Date: 2026-11-06

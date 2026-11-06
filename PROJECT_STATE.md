@@ -1,3 +1,13 @@
+## 2026-11-06 — Fresh ROY hard gate complete; sanitized Meta shape probe prepared
+
+Date: 2026-11-06
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-report-stale-20261106`
+What changed: A production-equivalent, output-tagged, no-email/no-invoice probe was dispatched once in GitHub run `42176029264`. It used the existing scheduled definition and did not update its image, schedule or live aliases. The exact owned task `1f3d79ecb8da403e9f72afb80929025e` stopped with exit code 1 after the strict quality gate again rejected `dashboard_payload_7d.json`; the latest live generation remains `20261104T005630Z`. A bounded diagnostic mode and stdlib-only helper now prepare a read-only Meta campaign Insights request and emit only response field names, a hashed campaign identity and contract hashes. Tokens, account/campaign IDs and names, metric values and raw responses are excluded.
+What is verified: Fresh pre-code hard-gate identity is AWS account `919341186960`, region `eu-central-1`, Fargate instance `N/A`, private IP `172.31.5.142`, service `roy-daily-report-email`, task definition `roy-reporting-daily:83`, task path `/app`, and immutable task image `sha256:d6797213e2babf66fd31b0254dc41c3b99894b5b1bb8387ebcc3f6bb48933bb7`. The workflow protected that image and the task is terminal. CloudWatch diagnostic runs `42176211156`, `42177195806`, `42177736710`, `42178170746`, `42178668177` and `42179312491` were read-only. The new diagnostic and existing ads tests pass 31 cases; Python compilation, Ruff and `git diff --check` pass. Because report validation failed before the marker server started, no localhost success marker is claimed; that marker remains mandatory after a repaired candidate succeeds and before UI testing.
+Known issue: The fresh run reproduced the same fail-closed seven-day payload rejection but the existing runtime still does not retain the offending Meta action field set. Do not infer that generic `value` is equivalent to `7d_click` until the new sanitized probe proves the exact response shape under the singleton `7d_click` / impression-time request.
+Next exact step: Commit and push the diagnostic helper/workflow, run the sanitized probe for `2026-10-30` through `2026-11-05`, record only its allowlisted field-shape evidence, then implement the narrowest proven parser repair with regression tests. Merge through PR/CI, build the exact main image, run the ordinary ROY release, require candidate localhost marker and all four periods before publication, then verify live HTTP and UI. No duplicate task or blind rerun is allowed.
+
 ## 2026-11-06 — ROY dashboard publication blocked by Meta attribution-window drift
 
 Date: 2026-11-06
