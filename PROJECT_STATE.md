@@ -1,3 +1,13 @@
+## 2026-11-06 — ROY Meta repair merged; exact image build in progress
+
+Date: 2026-11-06
+Repo: `vzeman/biznisweb`
+Branch: `codex/roy-report-release-handoff-20261106` (documentation-only handoff; keep unmerged while production source is frozen)
+What changed: PR #660 merged through six green checks as exact main commit `9eb90f9c1530a7c0199e627325010dfd684c4a8e`. The merged parser accepts Meta's generic action `value` only when the actual request is the independently observed singleton `7d_click` plus impression-time contract; every ambiguous or conflicting response remains fail-closed. Automatic exact-source ECR build `42180806559` started from the merge commit. This handoff branch exists so release evidence can stay current without advancing main to a documentation-only commit that has no matching image.
+What is verified: PR checks passed Linux and Windows regressions, env, observability, secret scan and security baseline. Local focused measurement/publication/release tests passed 117 cases. Sanitized production probe `42179964740` remains the source-shape evidence; pre-code task `1f3d79ecb8da403e9f72afb80929025e` is stopped and live generation is still `20261104T005630Z`. No new image, definition, scheduler target or live artifact is claimed until build and release finish.
+Known issue: Build `42180806559` is still in progress. Do not dispatch the ROY release until it proves the exact commit image and all concurrent reporting schedules/tasks are settled. The prior failed probe did not reach localhost marker startup, so candidate marker/localhost proof is still mandatory.
+Next exact step: Wait for build `42180806559` to complete successfully, return to a clean exact-main checkout, re-confirm task/IP/service/path and quiet runtime, then run the ordinary ROY image release through `2026-11-05`. Require candidate localhost marker, full/7d/30d/90d source quality, terminal cleanup, enabled dynamic schedule and live HTTP before UI verification. Record all results here before merging this handoff.
+
 ## 2026-11-06 — Fresh ROY hard gate complete; sanitized Meta shape probe prepared
 
 Date: 2026-11-06
