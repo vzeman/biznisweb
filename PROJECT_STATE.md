@@ -1,3 +1,13 @@
+## 2026-11-06 — Proposed primary business metric, no implementation
+
+Date: 2026-11-06
+Repo: vzeman/biznisweb
+Branch: codex/vevo-retention-analysis-20261106
+What changed: Documented the response to the owner's strategic question. Proposed operational focus: second realized purchase within90days among newly acquired customers, baseline790/5427=14.5568%. A20% ambition is illustrative and not an approved target or forecast. Prioritize investigating sample-to-full-size transition because4694/6498 customers enter through samples only. See [analysis and proposal](docs/vevo-retention-analysis-20261106.md).
+What is verified: Same immutable source publication as the completed analysis. Normalized first/second order net AOV is EUR12.6945/EUR27.3561. A scenario with1000 new customers and90-day repeat increasing to20% implies54.43 extra second purchases and aboutEUR1489 net revenue, before costs and possible purchase acceleration. Git branch was clean, fetched and pulled with rebase before this documentation change. No code, runtime or campaign changes and no persistent process started.
+Known issues: Relative ROI versus CAC/AOV improvements is unproven without intervention cost, achievable lift and a control group. Preserve acquisition volume, margin and customer quality. Existing identity/label and chart-validation findings remain unchanged. Initial default shell helper failed; an authorized elevated finite shell succeeded without changing project/runtime state.
+Next exact step: Discuss the proposed90-day KPI and, if action is requested, design a measured sample-to-full-size intervention with a control group and contribution after discounts/variable/marketing costs. Do not treat this recommendation as authorization to send customer messages or launch campaigns.
+
 ## 2026-11-06 — Read-only VEVO customer retention analysis
 
 Date: 2026-11-06

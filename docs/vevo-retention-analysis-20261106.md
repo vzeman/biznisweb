@@ -111,3 +111,29 @@ Odporúčaný ďalší analytický krok je rozložiť septembrovú a júnovú ko
 Všetky vzdialené operácie v tejto analýze boli čítacie. Žiadny deploy, prepočet produkčného reportu, odoslanie e-mailu alebo zmena infraštruktúry. Žiadny lokálny server, worker ani tunel nebol spustený.
 
 Chart validation: all19 plotted values were independently matched to the aggregate JSON, and fragment JSON/DOM references were inspected. The bundled offline checker could not execute its python3 helper on this Windows host (first EACCES, then missing Python launcher); no browser rendering claim is made. No server or persistent process was started for validation.
+
+## Odporúčaná jedna prevádzková metrika — diskusia 6. 11. 2026
+
+Na otázku, zlepšenie ktorej jednej metriky by malo najväčší prínos, odporúčam ako pracovnú prioritu **podiel nových zákazníkov s druhým realizovaným nákupom do 90 dní od prvého**. Toto je odporúčanie, nie používateľom schválený cieľ ani dokázaná najvyššia návratnosť investície.
+
+Východisková hodnota je **790 / 5 427 = 14,5568 %**, pričom každý zákazník v menovateli má celé 90-dňové sledovanie. Pracovná ambícia **20 %** je interný návrh pre experiment, nie odvetvový benchmark ani prognóza. Kohorty treba naďalej oddeľovať podľa mesiaca prvého nákupu a krajiny. Štandardný princíp kohorty podľa prvého nákupu a sledovania ďalších nákupov potvrdzuje aj [Shopify Help: Customer cohort analysis](https://help.shopify.com/en/manual/reports-and-analytics/shopify-reports/report-types/default-reports/customers-reports#customer-cohort-analysis).
+
+Dôvody vyplývajúce z rovnakého exportu po normalizácii e-mailov:
+
+| Nákup | Počet | Priemerné netto tržby | Priemerné náklady na produkty | Rozdiel pred ostatnými nákladmi |
+| --- | ---: | ---: | ---: | ---: |
+| Prvý | 6 498 | 12,6945 EUR | 3,1120 EUR | 9,5826 EUR |
+| Druhý | 1 260 | 27,3561 EUR | 6,2156 EUR | 21,1405 EUR |
+| Druhý do 90 dní, aj v ešte nedozretých kohortách | 847 | 27,5330 EUR | 6,2698 EUR | 21,2633 EUR |
+
+Metóda: deduplikovať položky podľa order_num, normalizovať customer_email cez strip/lower, zoradiť objednávky podľa dátumu v rámci zákazníka, prideliť poradie a priemerovať order_revenue_net. Produktový náklad objednávky je súčet total_expense jej položiek. Tretí riadok je iba opis hodnoty už pozorovaných druhých objednávok; jeho 847 zákazníkov nenahrádza 790 úspechov v plne sledovanej populácii hlavnej metriky. Rozdiel po produktových nákladoch nie je čistý zisk: chýbajú ďalšie náklady na doručenie, platby, balenie, marketing a prevádzku; náklady na produkty zároveň obsahujú existujúce reportingové odhady.
+
+Publikovaný sample_funnel.summary uvádza **4 694 zákazníkov so vstupnou objednávkou iba vzoriek**, teda **72,2 %**, s priemernou vstupnou hodnotou **7,12 EUR netto**. Hlavná oblasť na skúmanie je preto prechod zo vzoriek na plné balenie. Z publikovaných percent sample-funnel tu neodvodzujem nový časovo očistený benchmark.
+
+Ilustrácia pri nezmenenom počte 1 000 nových zákazníkov: rast z 14,5568 % na 20 % znamená približne **54 dodatočných zákazníkov s druhým nákupom do 90 dní**. Ak by ich druhé nákupy mali historickú priemernú hodnotu 27,3561 EUR, priniesli by asi **1 489 EUR netto tržieb** v tomto okne. Nezahŕňa to ďalšie nákupy, náklady na vyvolanie návratu ani možné presunutie nákupov z neskoršieho obdobia. Je to scenár, nie predikcia dodatočného celoživotného obratu alebo zisku.
+
+Ekonomické podmienky: rast návratnosti musí priniesť dodatočný príspevok po zľavách, produktoch, variabilných nákladoch a nákladoch na komunikáciu/reklamu. Nesmie byť dosiahnutý obmedzením získavania nových zákazníkov alebo účelovým rozdelením jednej objednávky na dve. Všeobecný mesačný podiel opakovaných objednávok je na tento účel slabší, pretože rastie aj pri poklese akvizície, ako ukázal júl.
+
+Limity voči alternatívam: nepoznáme cenu a dosiahnuteľnosť zmeny retencie oproti zníženiu CAC alebo zvýšeniu hodnoty prvého košíka. Pri rovnakých 1 000 nových zákazníkoch by napríklad skutočné zníženie akvizičného nákladu o 1 EUR ušetrilo 1 000 EUR, ak by zostal objem a kvalita zákazníkov rovnaká. Preto nemožno iba z historickej korelácie dokázať, že retencia má najvyššiu návratnosť realizačného úsilia. Odporúčanie treba overiť kontrolovaným experimentom s nezmenenými definičnými pravidlami a finančným vyhodnotením.
+
+Žiadny experiment, kampaň, oslovenie zákazníkov, rozpočtová zmena ani produkčná úprava neboli vykonané. Odporúčanie je uložené pre ďalšiu diskusiu.
