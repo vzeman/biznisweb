@@ -1,3 +1,14 @@
+## 2026-11-07 — VEVO daily email not sent; 90-day publication gate failed closed
+
+Date: 2026-11-07
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-email-failure-20261107` (diagnostic documentation only)
+What happened: The ENABLED `vevo-daily-report-email` schedule ran at `01:00 Europe/Bratislava` on definition `vevo-reporting-daily:58`. CloudWatch stream `ecs/reporting/15c2b68411f94f3f9d5de4bcf1f5225d` shows the task generated local full/7d/30d/90d artifacts through `2026-11-06`, then `daily_report_runner.validate_publish_quality` rejected `dashboard_payload_90d.json`. Validation occurs before S3 publication and before `send_email_ses`, so no VEVO report email was attempted today. This is not an SES delivery/spam-folder failure.
+What is verified: AWS account `919341186960`, region `eu-central-1`, scheduler state `ENABLED`, cadence `cron(0 1 * * ? *)`, target definition :58, Fargate instance `N/A`, service `vevo-daily-report-email`, runtime path `/app`, immutable image `sha256:5ef3bfbcbff2f5254e52f1a50ba28b4529dd2d1a75989331c07bb4d68fae4325`. No VEVO task is active. The stopped ECS record has already expired (`MISSING`), so its private IP and exit code cannot be freshly claimed. The schedule has no skip-email override and VEVO defaults email sending to enabled; yesterday's stream `ecs/reporting/67c6b42d3f224d9687af7345e7aa6823` reached SES successfully. The live generation remains `20261106T003048Z`, generated `2026-11-06T00:30:50Z`, covering through `2026-11-05`. A later stream `ecs/reporting/6e68fa6cb252497ba5781e424009de93` is the separate GrowthBook reconciliation command and failed on its raw-event limit; it is not the daily-email cause.
+Known issue: The scheduled entry point retained only the rejected period name, not the allowlisted `source_health` subpredicate. Do not weaken QA, resend yesterday's report, or blindly rerun today's task. A fresh task must first re-establish task/IP/service/path and localhost marker before provider reads; then retain only bounded sanitized all-period QA evidence.
+Next exact step: Add or use a reviewed bounded diagnostic path that preserves the existing fail-closed gate while retaining allowlisted publication diagnostics for an isolated no-email/no-invoice VEVO run through `2026-11-06`. Identify the exact 90d QA check, then decide whether the repair belongs to source data, provider parsing or validation. Only after a passing generation may it be published and emailed once with an immutable SES intent/acceptance receipt.
+Process state: This diagnosis started no local server, worker, watcher, tunnel or ECS task and changed no AWS resource.
+
 ## 2026-11-06 — ROY report repaired, released and republished through 5 November
 
 Date: 2026-11-06

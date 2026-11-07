@@ -1,3 +1,15 @@
+## 2026-11-07 — Scheduled report rejected before publication and email
+
+Date: 2026-11-07
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-email-failure-20261107` (read-only incident handoff)
+What happened: The regular `01:00 Europe/Bratislava` task started from `vevo-reporting-daily:58` and generated its local report set through `2026-11-06`. The strict publication validator then raised `Refusing to publish unverified or incomplete reporting data: dashboard_payload_90d.json`. `s3_upload_outputs` and `send_email_ses` are later steps, so neither a new live generation nor an SES call occurred. The missing email is therefore caused by the rejected 90-day QA result, not by mailbox delivery.
+Runtime / hard-gate status: Account `919341186960`, `eu-central-1`; schedule `vevo-daily-report-email` remains ENABLED on `cron(0 1 * * ? *)` / `Europe/Bratislava`; task definition :58 is ACTIVE on image `sha256:5ef3bfbcbff2f5254e52f1a50ba28b4529dd2d1a75989331c07bb4d68fae4325`, working directory `/app`, Fargate instance `N/A`. Exact log stream is `ecs/reporting/15c2b68411f94f3f9d5de4bcf1f5225d`. The stopped ECS record is already `MISSING`, so no private IP/exit code or localhost marker is claimed. There are no active VEVO tasks. No runtime mutation was performed.
+Publication / delivery state: Latest live generation is still `20261106T003048Z` (`2026-11-06T00:30:50Z`), through `2026-11-05`. The preceding scheduled stream `ecs/reporting/67c6b42d3f224d9687af7345e7aa6823` completed publication and logged an SES MessageId. Today's schedule has no skip-email override and project configuration resolves `send_daily_report_email=true`; the quality gate alone prevented the send. Separate stream `ecs/reporting/6e68fa6cb252497ba5781e424009de93` belongs to GrowthBook reconciliation and its raw-event-limit failure is unrelated to report email delivery.
+Known issue: The failing task did not durably retain the safe per-QA projection attached to the exception, so the exact 90d subcheck is not proven. Yesterday's 90d payload was non-partial with zero QA failures; its warning-only checks cannot identify today's failure. Never infer a specific provider/data cause from the period name alone.
+Next exact step: Run one reviewed isolated diagnostic with email/invoices disabled and bounded allowlisted publication diagnostics after a fresh task/IP/service/path/localhost gate. Preserve the existing quality threshold. After the exact check is proven, repair through branch/PR/CI and an exact image if required; publish a passing generation first, then send it once under immutable intent and accepted receipt. Do not replay the failed task or send the previous generation as today's report.
+Process state: No local runtime or diagnostic ECS task was started; no process cleanup was required. Production scheduler intentionally remains enabled.
+
 ## 2026-10-27 — Country cards deployed and regenerated; resend still pending
 
 Date: 2026-10-27
