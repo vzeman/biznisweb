@@ -1,0 +1,942 @@
+{
+  "all": {
+    "week": [
+      {
+        "week": 1,
+        "customers": 1361,
+        "repeat": 204,
+        "cm1": 17975.54,
+        "orders": 1614,
+        "ads": 6905.12,
+        "cm1_per_customer": 13.2075973549,
+        "repeat_pct": 14.9889786921,
+        "cm1_per_acqdayad": 2.6032190606,
+        "blendedcac": 5.0735635562
+      },
+      {
+        "week": 2,
+        "customers": 1048,
+        "repeat": 145,
+        "cm1": 14530.9,
+        "orders": 1227,
+        "ads": 5330.58,
+        "cm1_per_customer": 13.8653625954,
+        "repeat_pct": 13.8358778626,
+        "cm1_per_acqdayad": 2.7259510222,
+        "blendedcac": 5.0864312977
+      },
+      {
+        "week": 3,
+        "customers": 1196,
+        "repeat": 172,
+        "cm1": 15035.63,
+        "orders": 1407,
+        "ads": 7031.74,
+        "cm1_per_customer": 12.57159699,
+        "repeat_pct": 14.381270903,
+        "cm1_per_acqdayad": 2.1382516987,
+        "blendedcac": 5.8793812709
+      },
+      {
+        "week": 4,
+        "customers": 1286,
+        "repeat": 195,
+        "cm1": 15730.33,
+        "orders": 1512,
+        "ads": 6697.33,
+        "cm1_per_customer": 12.2319828927,
+        "repeat_pct": 15.1632970451,
+        "cm1_per_acqdayad": 2.3487464407,
+        "blendedcac": 5.2078771384
+      },
+      {
+        "week": 5,
+        "customers": 538,
+        "repeat": 74,
+        "cm1": 6271.85,
+        "orders": 624,
+        "ads": 2681.08,
+        "cm1_per_customer": 11.6577137546,
+        "repeat_pct": 13.7546468401,
+        "cm1_per_acqdayad": 2.3392998344,
+        "blendedcac": 4.9834200743
+      }
+    ],
+    "dow": [
+      {
+        "dow": 0,
+        "customers": 792,
+        "repeat": 108,
+        "cm1": 10018.68,
+        "orders": 921,
+        "ads": 4077.0,
+        "cm1_per_customer": 12.6498484848,
+        "repeat_pct": 13.6363636364,
+        "cm1_per_acqdayad": 2.4573657101,
+        "blendedcac": 5.1477272727
+      },
+      {
+        "dow": 1,
+        "customers": 727,
+        "repeat": 113,
+        "cm1": 9916.16,
+        "orders": 855,
+        "ads": 4005.61,
+        "cm1_per_customer": 13.6398349381,
+        "repeat_pct": 15.5433287483,
+        "cm1_per_acqdayad": 2.4755680159,
+        "blendedcac": 5.5097799175
+      },
+      {
+        "dow": 2,
+        "customers": 805,
+        "repeat": 99,
+        "cm1": 9886.55,
+        "orders": 924,
+        "ads": 4125.7,
+        "cm1_per_customer": 12.2814285714,
+        "repeat_pct": 12.298136646,
+        "cm1_per_acqdayad": 2.3963327435,
+        "blendedcac": 5.1250931677
+      },
+      {
+        "dow": 3,
+        "customers": 770,
+        "repeat": 124,
+        "cm1": 11066.03,
+        "orders": 935,
+        "ads": 4003.36,
+        "cm1_per_customer": 14.3714675325,
+        "repeat_pct": 16.1038961039,
+        "cm1_per_acqdayad": 2.7641855841,
+        "blendedcac": 5.1991688312
+      },
+      {
+        "dow": 4,
+        "customers": 709,
+        "repeat": 93,
+        "cm1": 8687.86,
+        "orders": 825,
+        "ads": 3881.73,
+        "cm1_per_customer": 12.2536812412,
+        "repeat_pct": 13.1170662906,
+        "cm1_per_acqdayad": 2.2381412411,
+        "blendedcac": 5.4749365303
+      },
+      {
+        "dow": 5,
+        "customers": 769,
+        "repeat": 108,
+        "cm1": 9377.22,
+        "orders": 893,
+        "ads": 4021.3,
+        "cm1_per_customer": 12.1940442133,
+        "repeat_pct": 14.044213264,
+        "cm1_per_acqdayad": 2.331887698,
+        "blendedcac": 5.2292587776
+      },
+      {
+        "dow": 6,
+        "customers": 857,
+        "repeat": 145,
+        "cm1": 10591.75,
+        "orders": 1031,
+        "ads": 4531.15,
+        "cm1_per_customer": 12.3591015169,
+        "repeat_pct": 16.9194865811,
+        "cm1_per_acqdayad": 2.3375412423,
+        "blendedcac": 5.2872228705
+      }
+    ],
+    "phase": [
+      {
+        "phase": "01-10",
+        "customers": 1715,
+        "repeat": 248,
+        "cm1": 23608.3,
+        "orders": 2027,
+        "ads": 8952.04,
+        "cm1_per_customer": 13.7657725948,
+        "repeat_pct": 14.4606413994,
+        "cm1_per_acqdayad": 2.6371977784,
+        "blendedcac": 5.2198483965
+      },
+      {
+        "phase": "11-20",
+        "customers": 1736,
+        "repeat": 249,
+        "cm1": 21991.82,
+        "orders": 2037,
+        "ads": 9394.9,
+        "cm1_per_customer": 12.6680990783,
+        "repeat_pct": 14.3433179724,
+        "cm1_per_acqdayad": 2.3408253414,
+        "blendedcac": 5.4118087558
+      },
+      {
+        "phase": "21-end",
+        "customers": 1978,
+        "repeat": 293,
+        "cm1": 23944.13,
+        "orders": 2320,
+        "ads": 10298.91,
+        "cm1_per_customer": 12.1052224469,
+        "repeat_pct": 14.812942366,
+        "cm1_per_acqdayad": 2.3249188506,
+        "blendedcac": 5.2067290192
+      }
+    ]
+  },
+  "2025": {
+    "week": [
+      {
+        "week": 1,
+        "customers": 969,
+        "repeat": 146,
+        "cm1": 12341.36,
+        "orders": 1145,
+        "ads": 4176.37,
+        "cm1_per_customer": 12.7361816305,
+        "repeat_pct": 15.0670794634,
+        "cm1_per_acqdayad": 2.9550446919,
+        "blendedcac": 4.3099793602
+      },
+      {
+        "week": 2,
+        "customers": 575,
+        "repeat": 77,
+        "cm1": 7716.4,
+        "orders": 668,
+        "ads": 2326.14,
+        "cm1_per_customer": 13.419826087,
+        "repeat_pct": 13.3913043478,
+        "cm1_per_acqdayad": 3.3172551953,
+        "blendedcac": 4.0454608696
+      },
+      {
+        "week": 3,
+        "customers": 599,
+        "repeat": 78,
+        "cm1": 7015.83,
+        "orders": 692,
+        "ads": 2695.82,
+        "cm1_per_customer": 11.7125709516,
+        "repeat_pct": 13.0217028381,
+        "cm1_per_acqdayad": 2.6024845872,
+        "blendedcac": 4.5005342237
+      },
+      {
+        "week": 4,
+        "customers": 871,
+        "repeat": 133,
+        "cm1": 10206.33,
+        "orders": 1022,
+        "ads": 3537.21,
+        "cm1_per_customer": 11.7179448909,
+        "repeat_pct": 15.269804822,
+        "cm1_per_acqdayad": 2.8854181686,
+        "blendedcac": 4.0610907003
+      },
+      {
+        "week": 5,
+        "customers": 424,
+        "repeat": 57,
+        "cm1": 4732.7,
+        "orders": 489,
+        "ads": 1785.39,
+        "cm1_per_customer": 11.1620283019,
+        "repeat_pct": 13.4433962264,
+        "cm1_per_acqdayad": 2.6507933841,
+        "blendedcac": 4.2108254717
+      }
+    ],
+    "dow": [
+      {
+        "dow": 0,
+        "customers": 487,
+        "repeat": 66,
+        "cm1": 5930.69,
+        "orders": 563,
+        "ads": 2107.48,
+        "cm1_per_customer": 12.1780082136,
+        "repeat_pct": 13.5523613963,
+        "cm1_per_acqdayad": 2.8141144874,
+        "blendedcac": 4.3274743326
+      },
+      {
+        "dow": 1,
+        "customers": 454,
+        "repeat": 64,
+        "cm1": 5871.81,
+        "orders": 531,
+        "ads": 1937.22,
+        "cm1_per_customer": 12.9335022026,
+        "repeat_pct": 14.0969162996,
+        "cm1_per_acqdayad": 3.0310496485,
+        "blendedcac": 4.2670044053
+      },
+      {
+        "dow": 2,
+        "customers": 523,
+        "repeat": 63,
+        "cm1": 6097.3,
+        "orders": 597,
+        "ads": 2178.48,
+        "cm1_per_customer": 11.6583173996,
+        "repeat_pct": 12.0458891013,
+        "cm1_per_acqdayad": 2.7988781169,
+        "blendedcac": 4.1653537285
+      },
+      {
+        "dow": 3,
+        "customers": 505,
+        "repeat": 77,
+        "cm1": 6526.47,
+        "orders": 599,
+        "ads": 2078.5,
+        "cm1_per_customer": 12.9237029703,
+        "repeat_pct": 15.2475247525,
+        "cm1_per_acqdayad": 3.1399903777,
+        "blendedcac": 4.1158415842
+      },
+      {
+        "dow": 4,
+        "customers": 445,
+        "repeat": 58,
+        "cm1": 5178.98,
+        "orders": 513,
+        "ads": 1965.14,
+        "cm1_per_customer": 11.6381573034,
+        "repeat_pct": 13.0337078652,
+        "cm1_per_acqdayad": 2.6354254659,
+        "blendedcac": 4.4160449438
+      },
+      {
+        "dow": 5,
+        "customers": 492,
+        "repeat": 66,
+        "cm1": 5841.88,
+        "orders": 570,
+        "ads": 1965.78,
+        "cm1_per_customer": 11.8737398374,
+        "repeat_pct": 13.4146341463,
+        "cm1_per_acqdayad": 2.9717872804,
+        "blendedcac": 3.9954878049
+      },
+      {
+        "dow": 6,
+        "customers": 532,
+        "repeat": 97,
+        "cm1": 6565.49,
+        "orders": 643,
+        "ads": 2288.33,
+        "cm1_per_customer": 12.3411466165,
+        "repeat_pct": 18.2330827068,
+        "cm1_per_acqdayad": 2.8691185275,
+        "blendedcac": 4.3013721805
+      }
+    ],
+    "phase": [
+      {
+        "phase": "01-10",
+        "customers": 1150,
+        "repeat": 166,
+        "cm1": 15027.77,
+        "orders": 1351,
+        "ads": 5061.41,
+        "cm1_per_customer": 13.067626087,
+        "repeat_pct": 14.4347826087,
+        "cm1_per_acqdayad": 2.9690876653,
+        "blendedcac": 4.401226087
+      },
+      {
+        "phase": "11-20",
+        "customers": 917,
+        "repeat": 126,
+        "cm1": 11048.11,
+        "orders": 1064,
+        "ads": 3750.64,
+        "cm1_per_customer": 12.0481025082,
+        "repeat_pct": 13.7404580153,
+        "cm1_per_acqdayad": 2.9456599407,
+        "blendedcac": 4.0901199564
+      },
+      {
+        "phase": "21-end",
+        "customers": 1371,
+        "repeat": 199,
+        "cm1": 15936.74,
+        "orders": 1601,
+        "ads": 5708.88,
+        "cm1_per_customer": 11.6241721371,
+        "repeat_pct": 14.5149525894,
+        "cm1_per_acqdayad": 2.7915703255,
+        "blendedcac": 4.1640262582
+      }
+    ]
+  },
+  "2026": {
+    "week": [
+      {
+        "week": 1,
+        "customers": 392,
+        "repeat": 58,
+        "cm1": 5634.18,
+        "orders": 469,
+        "ads": 2728.75,
+        "cm1_per_customer": 14.3729081633,
+        "repeat_pct": 14.7959183673,
+        "cm1_per_acqdayad": 2.0647475951,
+        "blendedcac": 6.9610969388
+      },
+      {
+        "week": 2,
+        "customers": 473,
+        "repeat": 68,
+        "cm1": 6814.5,
+        "orders": 559,
+        "ads": 3004.44,
+        "cm1_per_customer": 14.4069767442,
+        "repeat_pct": 14.3763213531,
+        "cm1_per_acqdayad": 2.2681431481,
+        "blendedcac": 6.3518816068
+      },
+      {
+        "week": 3,
+        "customers": 597,
+        "repeat": 94,
+        "cm1": 8019.8,
+        "orders": 715,
+        "ads": 4335.92,
+        "cm1_per_customer": 13.4335008375,
+        "repeat_pct": 15.7453936348,
+        "cm1_per_acqdayad": 1.8496189967,
+        "blendedcac": 7.2628475712
+      },
+      {
+        "week": 4,
+        "customers": 415,
+        "repeat": 62,
+        "cm1": 5524.0,
+        "orders": 490,
+        "ads": 3160.12,
+        "cm1_per_customer": 13.3108433735,
+        "repeat_pct": 14.9397590361,
+        "cm1_per_acqdayad": 1.7480348848,
+        "blendedcac": 7.614746988
+      },
+      {
+        "week": 5,
+        "customers": 114,
+        "repeat": 17,
+        "cm1": 1539.15,
+        "orders": 135,
+        "ads": 895.69,
+        "cm1_per_customer": 13.5013157895,
+        "repeat_pct": 14.9122807018,
+        "cm1_per_acqdayad": 1.7183958736,
+        "blendedcac": 7.8569298246
+      }
+    ],
+    "dow": [
+      {
+        "dow": 0,
+        "customers": 305,
+        "repeat": 42,
+        "cm1": 4087.99,
+        "orders": 358,
+        "ads": 1969.52,
+        "cm1_per_customer": 13.4032459016,
+        "repeat_pct": 13.7704918033,
+        "cm1_per_acqdayad": 2.0756275641,
+        "blendedcac": 6.457442623
+      },
+      {
+        "dow": 1,
+        "customers": 273,
+        "repeat": 49,
+        "cm1": 4044.35,
+        "orders": 324,
+        "ads": 2068.39,
+        "cm1_per_customer": 14.8144688645,
+        "repeat_pct": 17.9487179487,
+        "cm1_per_acqdayad": 1.9553130696,
+        "blendedcac": 7.5765201465
+      },
+      {
+        "dow": 2,
+        "customers": 282,
+        "repeat": 36,
+        "cm1": 3789.25,
+        "orders": 327,
+        "ads": 1947.22,
+        "cm1_per_customer": 13.4370567376,
+        "repeat_pct": 12.7659574468,
+        "cm1_per_acqdayad": 1.9459793963,
+        "blendedcac": 6.905035461
+      },
+      {
+        "dow": 3,
+        "customers": 265,
+        "repeat": 47,
+        "cm1": 4539.56,
+        "orders": 336,
+        "ads": 1924.86,
+        "cm1_per_customer": 17.1304150943,
+        "repeat_pct": 17.7358490566,
+        "cm1_per_acqdayad": 2.3583845059,
+        "blendedcac": 7.2636226415
+      },
+      {
+        "dow": 4,
+        "customers": 264,
+        "repeat": 35,
+        "cm1": 3508.88,
+        "orders": 312,
+        "ads": 1916.59,
+        "cm1_per_customer": 13.2912121212,
+        "repeat_pct": 13.2575757576,
+        "cm1_per_acqdayad": 1.8307932317,
+        "blendedcac": 7.2598106061
+      },
+      {
+        "dow": 5,
+        "customers": 277,
+        "repeat": 42,
+        "cm1": 3535.34,
+        "orders": 323,
+        "ads": 2055.52,
+        "cm1_per_customer": 12.7629602888,
+        "repeat_pct": 15.1624548736,
+        "cm1_per_acqdayad": 1.7199248852,
+        "blendedcac": 7.4206498195
+      },
+      {
+        "dow": 6,
+        "customers": 325,
+        "repeat": 48,
+        "cm1": 4026.26,
+        "orders": 388,
+        "ads": 2242.82,
+        "cm1_per_customer": 12.3884923077,
+        "repeat_pct": 14.7692307692,
+        "cm1_per_acqdayad": 1.7951774998,
+        "blendedcac": 6.9009846154
+      }
+    ],
+    "phase": [
+      {
+        "phase": "01-10",
+        "customers": 565,
+        "repeat": 82,
+        "cm1": 8580.53,
+        "orders": 676,
+        "ads": 3890.63,
+        "cm1_per_customer": 15.1867787611,
+        "repeat_pct": 14.5132743363,
+        "cm1_per_acqdayad": 2.2054345954,
+        "blendedcac": 6.8860707965
+      },
+      {
+        "phase": "11-20",
+        "customers": 819,
+        "repeat": 123,
+        "cm1": 10943.71,
+        "orders": 973,
+        "ads": 5644.26,
+        "cm1_per_customer": 13.3622832723,
+        "repeat_pct": 15.0183150183,
+        "cm1_per_acqdayad": 1.9389096179,
+        "blendedcac": 6.8916483516
+      },
+      {
+        "phase": "21-end",
+        "customers": 607,
+        "repeat": 94,
+        "cm1": 8007.39,
+        "orders": 719,
+        "ads": 4590.03,
+        "cm1_per_customer": 13.1917462932,
+        "repeat_pct": 15.4859967051,
+        "cm1_per_acqdayad": 1.7445180097,
+        "blendedcac": 7.5618286656
+      }
+    ]
+  },
+  "excluding_nearoff": {
+    "week": [
+      {
+        "week": 1,
+        "customers": 999,
+        "repeat": 140,
+        "cm1": 13678.34,
+        "orders": 1171,
+        "ads": 5761.64,
+        "cm1_per_customer": 13.692032032,
+        "repeat_pct": 14.014014014,
+        "cm1_per_acqdayad": 2.3740358648,
+        "blendedcac": 5.7674074074
+      },
+      {
+        "week": 2,
+        "customers": 997,
+        "repeat": 138,
+        "cm1": 13664.79,
+        "orders": 1167,
+        "ads": 5307.09,
+        "cm1_per_customer": 13.7059077232,
+        "repeat_pct": 13.8415245737,
+        "cm1_per_acqdayad": 2.574817838,
+        "blendedcac": 5.3230591775
+      },
+      {
+        "week": 3,
+        "customers": 1160,
+        "repeat": 166,
+        "cm1": 14531.56,
+        "orders": 1363,
+        "ads": 6872.38,
+        "cm1_per_customer": 12.5272068966,
+        "repeat_pct": 14.3103448276,
+        "cm1_per_acqdayad": 2.1144872664,
+        "blendedcac": 5.9244655172
+      },
+      {
+        "week": 4,
+        "customers": 911,
+        "repeat": 124,
+        "cm1": 11138.77,
+        "orders": 1052,
+        "ads": 5428.66,
+        "cm1_per_customer": 12.2269703622,
+        "repeat_pct": 13.6114160263,
+        "cm1_per_acqdayad": 2.0518452067,
+        "blendedcac": 5.9590120746
+      },
+      {
+        "week": 5,
+        "customers": 339,
+        "repeat": 41,
+        "cm1": 4023.13,
+        "orders": 386,
+        "ads": 1910.57,
+        "cm1_per_customer": 11.867640118,
+        "repeat_pct": 12.0943952802,
+        "cm1_per_acqdayad": 2.105722376,
+        "blendedcac": 5.635899705
+      }
+    ],
+    "dow": [
+      {
+        "dow": 0,
+        "customers": 643,
+        "repeat": 82,
+        "cm1": 8106.56,
+        "orders": 741,
+        "ads": 3557.58,
+        "cm1_per_customer": 12.6074027994,
+        "repeat_pct": 12.7527216174,
+        "cm1_per_acqdayad": 2.2786725808,
+        "blendedcac": 5.5327838258
+      },
+      {
+        "dow": 1,
+        "customers": 605,
+        "repeat": 92,
+        "cm1": 8454.0,
+        "orders": 709,
+        "ads": 3619.8,
+        "cm1_per_customer": 13.973553719,
+        "repeat_pct": 15.2066115702,
+        "cm1_per_acqdayad": 2.3354881485,
+        "blendedcac": 5.9831404959
+      },
+      {
+        "dow": 2,
+        "customers": 646,
+        "repeat": 71,
+        "cm1": 8020.75,
+        "orders": 733,
+        "ads": 3590.4,
+        "cm1_per_customer": 12.4160216718,
+        "repeat_pct": 10.9907120743,
+        "cm1_per_acqdayad": 2.2339432932,
+        "blendedcac": 5.5578947368
+      },
+      {
+        "dow": 3,
+        "customers": 574,
+        "repeat": 82,
+        "cm1": 8450.96,
+        "orders": 687,
+        "ads": 3395.07,
+        "cm1_per_customer": 14.7229268293,
+        "repeat_pct": 14.2857142857,
+        "cm1_per_acqdayad": 2.48918579,
+        "blendedcac": 5.9147560976
+      },
+      {
+        "dow": 4,
+        "customers": 592,
+        "repeat": 80,
+        "cm1": 7334.17,
+        "orders": 690,
+        "ads": 3495.1,
+        "cm1_per_customer": 12.3888006757,
+        "repeat_pct": 13.5135135135,
+        "cm1_per_acqdayad": 2.0984149238,
+        "blendedcac": 5.9038851351
+      },
+      {
+        "dow": 5,
+        "customers": 643,
+        "repeat": 86,
+        "cm1": 7890.88,
+        "orders": 738,
+        "ads": 3615.12,
+        "cm1_per_customer": 12.2719751166,
+        "repeat_pct": 13.3748055988,
+        "cm1_per_acqdayad": 2.182743588,
+        "blendedcac": 5.6222706065
+      },
+      {
+        "dow": 6,
+        "customers": 703,
+        "repeat": 116,
+        "cm1": 8779.27,
+        "orders": 841,
+        "ads": 4007.27,
+        "cm1_per_customer": 12.4882930299,
+        "repeat_pct": 16.5007112376,
+        "cm1_per_acqdayad": 2.1908356562,
+        "blendedcac": 5.7002418208
+      }
+    ],
+    "phase": [
+      {
+        "phase": "01-10",
+        "customers": 1336,
+        "repeat": 182,
+        "cm1": 19063.68,
+        "orders": 1563,
+        "ads": 7807.73,
+        "cm1_per_customer": 14.2692215569,
+        "repeat_pct": 13.622754491,
+        "cm1_per_acqdayad": 2.4416418088,
+        "blendedcac": 5.8441092814
+      },
+      {
+        "phase": "11-20",
+        "customers": 1672,
+        "repeat": 240,
+        "cm1": 21024.18,
+        "orders": 1962,
+        "ads": 9213.0,
+        "cm1_per_customer": 12.5742703349,
+        "repeat_pct": 14.3540669856,
+        "cm1_per_acqdayad": 2.2820123738,
+        "blendedcac": 5.5101674641
+      },
+      {
+        "phase": "21-end",
+        "customers": 1398,
+        "repeat": 187,
+        "cm1": 16948.73,
+        "orders": 1614,
+        "ads": 8259.61,
+        "cm1_per_customer": 12.1235550787,
+        "repeat_pct": 13.3762517883,
+        "cm1_per_acqdayad": 2.0520012446,
+        "blendedcac": 5.9081616595
+      }
+    ]
+  },
+  "2026_excluding_july": {
+    "week": [
+      {
+        "week": 1,
+        "customers": 385,
+        "repeat": 57,
+        "cm1": 5573.22,
+        "orders": 461,
+        "ads": 2704.63,
+        "cm1_per_customer": 14.4758961039,
+        "repeat_pct": 14.8051948052,
+        "cm1_per_acqdayad": 2.0606219705,
+        "blendedcac": 7.025012987
+      },
+      {
+        "week": 2,
+        "customers": 456,
+        "repeat": 67,
+        "cm1": 6596.14,
+        "orders": 541,
+        "ads": 2981.08,
+        "cm1_per_customer": 14.4652192982,
+        "repeat_pct": 14.6929824561,
+        "cm1_per_acqdayad": 2.2126678922,
+        "blendedcac": 6.5374561404
+      },
+      {
+        "week": 3,
+        "customers": 575,
+        "repeat": 90,
+        "cm1": 7673.26,
+        "orders": 688,
+        "ads": 4176.56,
+        "cm1_per_customer": 13.3448,
+        "repeat_pct": 15.652173913,
+        "cm1_per_acqdayad": 1.8372201046,
+        "blendedcac": 7.2635826087
+      },
+      {
+        "week": 4,
+        "customers": 409,
+        "repeat": 62,
+        "cm1": 5453.33,
+        "orders": 484,
+        "ads": 3159.08,
+        "cm1_per_customer": 13.3333251834,
+        "repeat_pct": 15.1589242054,
+        "cm1_per_acqdayad": 1.726239918,
+        "blendedcac": 7.7239119804
+      },
+      {
+        "week": 5,
+        "customers": 111,
+        "repeat": 15,
+        "cm1": 1495.54,
+        "orders": 129,
+        "ads": 895.33,
+        "cm1_per_customer": 13.4733333333,
+        "repeat_pct": 13.5135135135,
+        "cm1_per_acqdayad": 1.6703785197,
+        "blendedcac": 8.066036036
+      }
+    ],
+    "dow": [
+      {
+        "dow": 0,
+        "customers": 295,
+        "repeat": 41,
+        "cm1": 3932.12,
+        "orders": 347,
+        "ads": 1944.91,
+        "cm1_per_customer": 13.329220339,
+        "repeat_pct": 13.8983050847,
+        "cm1_per_acqdayad": 2.0217490784,
+        "blendedcac": 6.5929152542
+      },
+      {
+        "dow": 1,
+        "customers": 262,
+        "repeat": 47,
+        "cm1": 3844.36,
+        "orders": 311,
+        "ads": 2052.77,
+        "cm1_per_customer": 14.673129771,
+        "repeat_pct": 17.9389312977,
+        "cm1_per_acqdayad": 1.8727670416,
+        "blendedcac": 7.835
+      },
+      {
+        "dow": 2,
+        "customers": 274,
+        "repeat": 35,
+        "cm1": 3690.6,
+        "orders": 318,
+        "ads": 1891.73,
+        "cm1_per_customer": 13.4693430657,
+        "repeat_pct": 12.7737226277,
+        "cm1_per_acqdayad": 1.9509126567,
+        "blendedcac": 6.9041240876
+      },
+      {
+        "dow": 3,
+        "customers": 259,
+        "repeat": 44,
+        "cm1": 4448.39,
+        "orders": 326,
+        "ads": 1893.25,
+        "cm1_per_customer": 17.1752509653,
+        "repeat_pct": 16.9884169884,
+        "cm1_per_acqdayad": 2.3496051763,
+        "blendedcac": 7.3098455598
+      },
+      {
+        "dow": 4,
+        "customers": 258,
+        "repeat": 35,
+        "cm1": 3455.11,
+        "orders": 306,
+        "ads": 1891.97,
+        "cm1_per_customer": 13.3918992248,
+        "repeat_pct": 13.5658914729,
+        "cm1_per_acqdayad": 1.8261970327,
+        "blendedcac": 7.3332170543
+      },
+      {
+        "dow": 5,
+        "customers": 271,
+        "repeat": 41,
+        "cm1": 3462.04,
+        "orders": 315,
+        "ads": 2028.18,
+        "cm1_per_customer": 12.7750553506,
+        "repeat_pct": 15.1291512915,
+        "cm1_per_acqdayad": 1.7069688095,
+        "blendedcac": 7.4840590406
+      },
+      {
+        "dow": 6,
+        "customers": 317,
+        "repeat": 48,
+        "cm1": 3958.87,
+        "orders": 380,
+        "ads": 2213.87,
+        "cm1_per_customer": 12.4885488959,
+        "repeat_pct": 15.141955836,
+        "cm1_per_acqdayad": 1.7882124967,
+        "blendedcac": 6.9838170347
+      }
+    ],
+    "phase": [
+      {
+        "phase": "01-10",
+        "customers": 554,
+        "repeat": 81,
+        "cm1": 8481.88,
+        "orders": 664,
+        "ads": 3865.81,
+        "cm1_per_customer": 15.3102527076,
+        "repeat_pct": 14.6209386282,
+        "cm1_per_acqdayad": 2.1940757564,
+        "blendedcac": 6.9779963899
+      },
+      {
+        "phase": "11-20",
+        "customers": 788,
+        "repeat": 120,
+        "cm1": 10533.05,
+        "orders": 938,
+        "ads": 5462.36,
+        "cm1_per_customer": 13.3668147208,
+        "repeat_pct": 15.2284263959,
+        "cm1_per_acqdayad": 1.9282965605,
+        "blendedcac": 6.931928934
+      },
+      {
+        "phase": "21-end",
+        "customers": 594,
+        "repeat": 90,
+        "cm1": 7776.56,
+        "orders": 701,
+        "ads": 4588.51,
+        "cm1_per_customer": 13.0918518519,
+        "repeat_pct": 15.1515151515,
+        "cm1_per_acqdayad": 1.6947898119,
+        "blendedcac": 7.7247643098
+      }
+    ]
+  }
+}

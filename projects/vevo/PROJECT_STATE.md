@@ -1,3 +1,13 @@
+## 2026-11-09 — Advertising timing patterns analyzed, no campaign changes
+
+Date: 2026-11-09
+Repo: vzeman/biznisweb
+Branch: codex/vevo-ad-timing-20261109
+What changed: Added offline daily/cohort timing analysis and independently verified aggregate evidence. Source publication20261109T003031Z covers2025-05-03..2026-11-08. Findings and interpretation in [report](../../docs/vevo-ad-timing-analysis-20261109.md). Existing retention work remains unchanged.
+What is verified: 555 calendar days,8735 orders,6530 normalized customers,EUR41827.38 advertising/EUR147580.05 net revenue reconcile. Eight zero-order days retainEUR210.98 spend. Same-month8–14day efficiency beats remainingdays in13/14 full months when its spend>=EUR50 andmonthlyspend>=EUR300; exceptionDecember2025. Latest90days ratio1.786 versus1.279 for15–21days. Independent90daycohorts match rootexactly:5429 eligiblecustomers,790returns. ThursdayCM90/customerEUR14.371, phase8–14EUR13.865; complete-acquisition-month and nearoff-month sensitivities preserve directional results. Ruff, compilation anddiff checks passed; no blocking peer-review issue remains.
+Known issues: These are total-shop/purchase-date associations, not incremental advertising ROI or marginal returns. 90daycohortbasis is5396SK,24CZ,9unknown andzeroHU. Futurecustomer-specific ads unavailable; CM90/adproxy uses all acquisition-day spend and doesnot deduct future remarketing. Estimatedcosts/fixedoverhead and6preexistingQA warnings remain. Existing week_of_month/payday outputs were bypassed after methodology review; no production fix. Annual seasonality unproven; July2026 highratio is nearzero-budget artifact. No persistentprocess was started.
+Next exact step: Review a controlled8–14day budget-timing experiment; proposed10–15% reallocation is a testcandidate, not an approved budgetchange or calculated optimum. Separate acquisition/returningcustomer audiences and retain a control, stabletotalbudget andmature90dayevaluation. Do not launch ads or messagecustomers from this analysis alone.
+
 ## 2026-11-06 — Proposed primary business metric, no implementation
 
 Date: 2026-11-06
