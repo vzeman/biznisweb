@@ -1,3 +1,14 @@
+## 2026-11-11 - VEVO repair merged; live inventory audit verified; release pending
+
+Date: 2026-11-11
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-pagination-release-handoff-20261111` (documentation only; do not merge during release)
+What changed: PR #665 merged the reviewed reporting-only repair as source `66a332325d892d3fcaa68c976171c8cd46e649b7`. Its six PR checks passed, including Linux/Windows regressions. Exact-source ECR build is run `42946389886`; source checkout is clean and frozen at the merged commit. Superseded incident draft #664 is closed.
+What is verified: The committed independent diagnostic at source `9cc6f0b9f3c774d588091b50b587637efba936fd` completed722 pages. ASC and reversed DESC sequences match exactly:10459 order identities, SHA256 `604f82fb28be76bf4900d1309ad9c31f6e6e2bddefef76f6bf3d72362fd80518`. Every response declares10460; the only contradictions are the19-row terminal pages at offset10440 in each direction. This confirms a provider count inconsistency without evidence of a missing visible order. It does not authorize publication by itself; normal candidate/live quality gates remain required. Audit PythonPID49432 (parent32232) exited naturally and was independently absent with no listening port. Identity probe task `7db351fa15ea4787bf46178e30b47705` also ended with exit0.
+Private evidence: Eight allowlisted evidence/log files and manifest are encrypted AES256, conditionally created with expected owner and fully read back under `data/vevo/reporting/analyses/2026-11-11-pagination/pre-release-188cebe7f98746b79b7d4b2ba5b40b59/` in the existing reporting bucket. Manifest SHA256 `287ead30650a2f4204aecc09678d9fb4744185351954ca8ef885e526377e6654`. Contains host identity, minimal boundary reads, full private identity audit, process record and prior alarm state. No secret or raw business amounts are in Git.
+Known issues: Production still uses VEVO:58 and generation through2026-11-09. No new production report, release or email is claimed. No local dev server is running.
+Next exact step: Wait for the exact merged-source ECR build, verify clean source and no conflicting workflow/task/lease, then dispatch one new ordinary VEVO controller through isolated candidate and live publication to2026-11-10 with email/invoices disabled. Keep this handoff branch separate until release completion, scheduler/lease/task/HTTP/UI verification and evidence cleanup.
+
 ## 2026-11-11 - VEVO pagination resilience implemented and reviewed; not deployed
 
 Date: 2026-11-11
