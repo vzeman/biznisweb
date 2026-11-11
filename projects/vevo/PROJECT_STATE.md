@@ -1,3 +1,15 @@
+## 2026-11-11 - Authorized VEVO pagination repair: implementation and independent audit
+
+Date: 2026-11-11
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-pagination-resilience-20261111`
+What changed: Owner authorized repairing the confirmed failure, publishing a fresh calculation through 2026-11-10 and improving future resilience. Work uses a clean D: checkout fetched/rebased from main `9b6a314882532cea2787503e855d11336de44f4d`. No application fix or release is claimed yet.
+What is verified: Unchanged VEVO definition :58 / source `c051605412116425fbea920b0b5fdc1770c8e5bc` / image `sha256:5ef3bfbcbff2f5254e52f1a50ba28b4529dd2d1a75989331c07bb4d68fae4325` passed an identity-only Fargate probe. Task `7db351fa15ea4787bf46178e30b47705`, private IP `172.31.25.21`, instance N/A:FARGATE, path `/app`, scheduler `vevo-daily-report-email` / family `vevo-reporting-daily`, verified runner SHA256 `93d4f321af4871778f22ae069efa9fb56c5ab80df9a46f022e9aebde4602d443`, curl localhost marker and terminal exit 0. The probe never started the business runner. Existing report-failed alarm uses the correct BizniswebReporting namespace and is ALARM.
+Confirmed source behavior: Three minimal native API reads at ASC offset 10440 / limit 30 return 19 rows, totalRecords 10460, hasNextPage false and nextCursor null. DESC offset 10440 also returns 19. The ASC tail matches the reverse of the DESC head prefix; adjacent overlap and maximum identity agree. At offset 10459 / limit 1 the API returns an empty page while advertising a next page. This proves inconsistent pagination metadata, not a hidden/deleted order. Retry alone is insufficient for this stable response. A preliminary urllib request stopped on HTTP308 without processing a response; bounded HTTPS redirects within the VEVO host allowlist then worked.
+Decision: Keep strict default behavior for invoice/cancellation callers. Add bounded reporting-only metadata retries and safe scalar diagnostics. A reporting-only full-scan terminal exception must require exactly one excess reported record, original maximum-ID anchor, exact prior identity overlap, matching reverse suffix, a verified empty end page and repeated matching ASC tail, all within the original page/time budget. Never normalize away the raw metadata or accept a general count mismatch. An independent complete ASC/DESC identity comparison must pass before release.
+Known issues: Latest published generation is still `20261110T003316Z`, through 2026-11-09. No new calculation has been published. The shared scanner change, negative regressions and independent audit remain in progress. No local dev server is needed.
+Next exact step: Commit/run the bounded independent audit, finish/review strict scanner regressions, push the repair PR and pass CI. After exact merged-source image build, use the existing release controller for isolated candidate then one live no-email/no-invoice publication through 2026-11-10, verify scheduler/lease/HTTP and then UI. Record/clean up all owned processes and preserve private evidence.
+
 ## 2026-11-07 — Scheduled report rejected before publication and email
 
 Date: 2026-11-07
