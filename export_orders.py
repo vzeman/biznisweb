@@ -848,6 +848,7 @@ def scan_reporting_order_inventory(read, validate_order, *, budget, label, logge
     """Explicit host-audit boundary; only the complete trusted scan may return."""
     return scan_order_inventory(
         read, validate_order, budget=budget, label=label, logger=logger,
+        metadata_retries=2, reconcile_terminal_count=True,
     )
 
 
