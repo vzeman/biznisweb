@@ -2,7 +2,7 @@
 
 Date: 2026-11-11
 Repo: `vzeman/biznisweb`
-Branch: `codex/vevo-pagination-release-handoff-20261111` (documentation only; keep PR #666 unmerged pending final evidence review)
+Branch: `codex/vevo-pagination-release-handoff-20261111` (documentation-only terminal incident handoff; PR #666)
 
 What changed: PR #665 merged the reviewed reporting-only repair as source `66a332325d892d3fcaa68c976171c8cd46e649b7`. Its six PR checks passed, including Linux/Windows regressions. Exact-source ECR build `42946389886` succeeded with image `sha256:0f75ee1cda06d688b52da20de04a04426336fc1f00779a52a199b53fa1d5d8af`. The source checkout remains frozen at that commit. Superseded incident draft #664 is closed. The candidate proved the pagination repair, but a separate Meta source-evidence gate stopped this release before promotion or a live report task. No new publication or email occurred.
 
@@ -22,7 +22,7 @@ Process state: Audit Python PID 49432, controller PID 8380 and its parent PID 44
 
 Archive limitation: Automatic approval review rejected the attempted additional raw-log archive upload because of a potential sensitive export to a destination not specifically authorized for that content. The upload command did not execute and created no object; no new terminal archive exists. The action was not retried through another tool or agent. Essential candidate-host, failure, publication-quality and source-proof receipts are already durable in AWS, raw logs remain in CloudWatch, and the pre-release archive above remains verified. The local independent terminal readback reproduces queryable AWS state, with its exact hash recorded here; process-closure facts are documented in Git. No deploy-critical artifact depends only on that local copy. Raw logs were not added to Git.
 
-Next exact step: Review the existing durable failure receipts and independent restoration evidence. Diagnose the missing or rejected Meta source proof without weakening its gate. Any later authorized recovery requires a reviewed new release and fresh host gates; never replay this failed release ID automatically. Require a passing live publication through 2026-11-10, enabled scheduler, released lease and terminal process verification before HTTP/UI completion. Keep the source checkout unchanged and PR #666 unmerged until the final evidence is reviewed.
+Next exact step: Review the existing durable failure receipts and independent restoration evidence. Diagnose the missing or rejected Meta source proof without weakening its gate. Any later authorized recovery requires a reviewed new release and fresh host gates; never replay this failed release ID automatically. Require a passing live publication through 2026-11-10, enabled scheduler, released lease and terminal process verification before HTTP/UI completion. The release controller has ended. After this documentation-only handoff passes review and CI, merge it through PR #666; begin any later implementation from a clean, fetched/rebased main and a new branch.
 
 ## 2026-11-11 - VEVO pagination resilience implemented and reviewed; not deployed
 
