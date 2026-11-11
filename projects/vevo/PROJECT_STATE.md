@@ -1,3 +1,20 @@
+## 2026-11-11 - Meta repair merged and preflight verified; new release pending
+
+Date: 2026-11-11
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-meta-release-handoff-20261111` (documentation only; keep draft PR unmerged during release)
+
+What changed: PR #668 merged the Meta source-proof correction as `a06077a823a847f99c49f6f921aaed054d0728ec`. It includes the earlier reporting-only pagination repair. Both the recorder and independent country verifier now admit evidenced v25 native paging metadata while actual requests and response receipts remain v21. Account, scope, cursor, monetary-byte, credential and publication checks remain strict. Failure summaries expose only a finite allowlist of internal reasons. These source changes are not yet deployed; the goal remains a verified publication through 2026-11-10.
+
+What is verified: Independent review passed and reran all 69 focused source/pagination/verifier tests. Root verified 221 related regressions; changed-file Ruff and diff checks passed. All six PR checks passed. Observability attempt 1 was cancelled during a slow dependency download; attempt 2 passed. An actual read-only full-range Meta preflight through both updated guards completed 3 requests: currency plus pages of 500 and 131 rows, totaling 631 native rows across 557 calendar days. The existing Facebook client received the unchanged provider responses and continued using its original v21 request URL and server cursor. This proves source admission, not a completed candidate or live publication.
+
+Current state: Exact-source image build `42957389843` is in progress. The source checkout is clean and frozen at `a06077a823a847f99c49f6f921aaed054d0728ec`; only this separate documentation worktree may change. No new release ID or candidate host is recorded yet. The restored baseline remains VEVO definition :58 and published generation `20261110T003316Z`, through 2026-11-09. The earlier failed release `2b60706fc5b4444d84ea9b26677f75c9` remains historical and must not be replayed. The requested incremental architecture is a separate, unimplemented follow-up.
+
+Known issues: Fresh candidate/live host, source and financial gates, publication through 2026-11-10 and authenticated HTTP/UI verification remain pending. No new email or invoice action is requested. The previously rejected additional raw-log archive upload remains unexecuted; use existing durable AWS receipts and sanitized Git documentation.
+
+Next exact step: Verify the successful exact-source build and immutable image, then record and monitor one new controlled release ID. Require candidate and live task/IP/service/path/source/localhost proof, all four period publication checks, an enabled daily scheduler, released lease, terminal tasks and owned-process cleanup before HTTP/UI completion. Update this handoff with observed runtime progress. Do not edit the frozen source checkout, switch its branch, merge this documentation PR or merge other changes into main until the release reaches a verified terminal state.
+
+
 ## 2026-11-11 - Authorized continuation to publish 10 November; Meta paging mismatch reproduced
 
 Date: 2026-11-11
