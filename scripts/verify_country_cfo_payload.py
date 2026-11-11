@@ -90,7 +90,7 @@ def window_dates(first: str, last: str, key: str) -> list[str]:
 def _meta_paging_cursor(value: Any, params: dict, direction: str, cursors: dict) -> str:
     """Check native link metadata independently; request receipts stay on v21.
 
-    Meta may advertise its upgraded v24 endpoint in a response to a v21 request.
+    Meta may advertise its v24 or v25 endpoint in a response to a v21 request.
     The provider follows only the cursor using its original request URL.
     """
     if not isinstance(value, str):
@@ -101,7 +101,7 @@ def _meta_paging_cursor(value: Any, params: dict, direction: str, cursors: dict)
     cursor = cursors.get(cursor_key)
     base = {key: item for key, item in params.items() if key != "after"}
     if (endpoint.scheme != "https" or endpoint.netloc != "graph.facebook.com" or endpoint.fragment or endpoint.params
-            or endpoint.path not in {f"/{version}/{ACCOUNT}/insights" for version in ("v21.0", "v24.0")}
+            or endpoint.path not in {f"/{version}/{ACCOUNT}/insights" for version in ("v21.0", "v24.0", "v25.0")}
             or len(pairs) != len(dict(pairs)) or set(dict(pairs)) != set(base) | {cursor_key}
             or not isinstance(cursor, str) or not cursor):
         raise ValueError("meta_daily_cursor")

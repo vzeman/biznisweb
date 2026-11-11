@@ -97,7 +97,9 @@ class CountryDailySnapshotTests(unittest.TestCase):
 
 
 class NativePagingVersionTests(unittest.TestCase):
-    """Regression for Meta's native v24 paging metadata on v21 requests."""
+    """Run the same scope/cursor/byte contract for each admitted native version."""
+
+    paging_version = 'v24.0'
 
     def setUp(self):
         self.fixture = fixtures.MetaSourceSnapshotTests()
@@ -105,10 +107,11 @@ class NativePagingVersionTests(unittest.TestCase):
         self.addCleanup(self.fixture.doCleanups)
         self.audit = self.fixture.audit
 
-    @staticmethod
-    def paging_url(query, cursor='next', *, version='v24.0', direction='next'):
+    @classmethod
+    def paging_url(cls, query, cursor='next', *, version=None, direction='next'):
         public = {key: value for key, value in query.items() if key != 'after'}
         public['after' if direction == 'next' else 'before'] = cursor
+        version = version or cls.paging_version
         return f'{snapshot.ORIGIN}/{version}/{snapshot.ACCOUNT}/insights?' + urlencode(public)
 
     def fresh(self):
@@ -127,19 +130,20 @@ class NativePagingVersionTests(unittest.TestCase):
         self.audit.observe(req, res)
         return req, res
 
-    def test_minimal_captured_v24_native_shape_is_admitted_without_changing_request(self):
-        # Reduced from the credential-free 2026-10-27 reproduction: the account,
-        # query, dates, cursor, API version, and first native row are unchanged.
-        native_url = ('https://graph.facebook.com/v24.0/act_1131531703632101/insights?'
+    def test_minimal_captured_native_shape_is_admitted_without_changing_request(self):
+        # Public endpoint/query shape observed on 2026-10-27 and 2026-11-11;
+        # the monetary row is a synthetic fixture, not new provider evidence.
+        end = '2026-11-10' if self.paging_version == 'v25.0' else '2026-10-26'
+        native_url = (f'https://graph.facebook.com/{self.paging_version}/act_1131531703632101/insights?'
                       'fields=spend&level=account&breakdowns=country&time_increment=1&'
                       'time_range=%7B%22since%22%3A+%222025-05-03%22%2C+%22until%22%3A+'
-                      '%222026-10-26%22%7D&limit=500&after=NDk5')
+                      f'%22{end}%22%7D&limit=500&after=NDk5')
         self.audit = snapshot.MetaSourceSnapshot(
             fixtures.IDENTITY, snapshot.sha(snapshot.canonical(fixtures.IDENTITY)),
-            '2025-05-03', '2026-10-26', fixtures.PREFIX, self.fixture.put,
+            '2025-05-03', end, fixtures.PREFIX, self.fixture.put,
             source_paths=(self.fixture.source,))
         self.fixture.currency(self.audit)
-        query = fixtures.params('country', '2025-05-03', '2026-10-26', time_increment=1)
+        query = fixtures.params('country', '2025-05-03', end, time_increment=1)
         req, res = self.observe_page(query, url=native_url, cursor='NDk5', rows=[
             fixtures.row('country', start='2025-05-03', end='2025-05-03', spend='34.99')])
         self.assertEqual('/v21.0/' + snapshot.ACCOUNT + '/insights', urlparse(req.url).path)
@@ -148,14 +152,14 @@ class NativePagingVersionTests(unittest.TestCase):
         self.assertEqual(res.json()['data'], saved['data'])
         self.assertEqual([], self.audit.errors)
 
-    def test_500_row_first_page_v24_previous_and_v21_cursor_requests_complete_all_ranges(self):
+    def test_500_row_first_page_native_previous_and_v21_cursor_requests_complete_all_ranges(self):
         self.fixture.fill()
         query = fixtures.params('country', time_increment=1)
         rows = [fixtures.row('country', start=day, end=day, country=country, spend='1.234567890123456789')
                 for offset in range(250)
                 for day in [(date.fromisoformat(fixtures.START) + timedelta(days=offset)).isoformat()]
                 for country in ('SK', 'CZ')]
-        original_requests = []
+        original_requests, original_responses = [], []
         client = SimpleNamespace()
 
         def get_json(url, params, _context):
@@ -169,6 +173,7 @@ class NativePagingVersionTests(unittest.TestCase):
                         'paging': {'cursors': {'before': 'prior', 'after': 'last'},
                                    'previous': self.paging_url(params, 'prior', direction='previous')}}
             res = fixtures.response(req, body)
+            original_responses.append(res.content)
             self.audit.observe(req, res)
             return res.json()
 
@@ -186,11 +191,17 @@ class NativePagingVersionTests(unittest.TestCase):
         manifest = json.loads(self.fixture.stored[reference['key']])
         self.assertEqual(4, sum(group['kind'] == 'country_daily' for group in manifest['query_groups'].values()))
         self.assertTrue(all(group['complete'] for group in manifest['query_groups'].values()))
+        self.assertTrue(all(record['path'].startswith('/v21.0/') for record in manifest['native_responses']))
+        full_pages = [record for record in manifest['native_responses'] if record['kind'] == 'country_daily'][:2]
+        for record, native in zip(full_pages, original_responses):
+            self.assertEqual(snapshot.sha(native), record['original_response_sha256'])
+            self.assertEqual(json.loads(native)['data'], json.loads(self.fixture.stored[record['key']])['data'])
+            self.assertFalse(record['credential_redaction'])
         self.assertIn(b'1.234567890123456789', b''.join(self.fixture.stored.values()))
 
-    def test_request_and_response_urls_still_reject_v24(self):
+    def test_request_and_response_urls_still_reject_native_paging_version(self):
         query = fixtures.params('country', time_increment=1)
-        for request_version, response_version in (('v24.0', 'v24.0'), ('v21.0', 'v24.0')):
+        for request_version, response_version in ((self.paging_version, self.paging_version), ('v21.0', self.paging_version)):
             self.fresh()
             req = fixtures.request(query, url=fixtures.INSIGHTS.replace('/v21.0/', f'/{request_version}/'))
             response_url = req.url.replace(f'/{request_version}/', f'/{response_version}/')
@@ -210,7 +221,8 @@ class NativePagingVersionTests(unittest.TestCase):
                  native.replace(snapshot.ACCOUNT, 'act_9'),
                  native.replace('/insights?', '?'), native.replace('/insights?', '/insights/edge?'),
                  native.replace('/insights?', '/insights;extra?'),
-                 native.replace('/v24.0/', '/v25.0/'), native.replace('/v24.0/', '/v20.0/'),
+                 native.replace(f'/{self.paging_version}/', '/v26.0/'),
+                 native.replace(f'/{self.paging_version}/', '/v20.0/'),
                  native + '#fragment', native + '&after=again', native + '&unknown=value']
         for url in cases:
             self.fresh()
@@ -241,7 +253,7 @@ class NativePagingVersionTests(unittest.TestCase):
         self.observe_page(query, url=self.paging_url(equivalent), rows=[fixtures.row()])
         self.assertEqual([], self.audit.errors)
 
-    def test_missing_changed_or_repeated_cursor_stays_fatal_for_v24(self):
+    def test_missing_changed_or_repeated_cursor_stays_fatal_for_native_version(self):
         query = fixtures.params('country', time_increment=1)
         for direction in ('next', 'previous'):
             self.fresh()
@@ -263,21 +275,27 @@ class NativePagingVersionTests(unittest.TestCase):
         query = fixtures.params('country', time_increment=1, access_token=token, appsecret_proof=proof)
         req = fixtures.request(query)
         native = (b'{"data":[{"date_start":"2026-01-01","date_stop":"2026-01-01",'
-                  b'"country":"SK","spend":1.234567890123456789}],"paging":{"cursors":{"after":"next"},"next":'
-                  + json.dumps(self.paging_url(query)).encode() + b'}}')
+                  b'"country":"SK","spend":1.234567890123456789}],"paging":{"cursors":{"after":"next","before":"prior"},"next":'
+                  + json.dumps(self.paging_url(query)).encode() + b',"previous":'
+                  + json.dumps(self.paging_url(query, 'prior', direction='previous')).encode() + b'}}')
         res = fixtures.response(req, {}, raw=native)
         self.audit.observe(req, res)
         self.assertEqual(native, res.content)
         record = self.audit.pages[-1]
         saved = self.fixture.stored[record['key']]
         self.assertIn(b'1.234567890123456789', saved)
-        public = dict(parse_qsl(urlparse(json.loads(saved)['paging']['next']).query))
-        self.assertNotIn('access_token', public)
-        self.assertNotIn('appsecret_proof', public)
+        for direction in ('next', 'previous'):
+            public = dict(parse_qsl(urlparse(json.loads(saved)['paging'][direction]).query))
+            self.assertNotIn('access_token', public)
+            self.assertNotIn('appsecret_proof', public)
         self.assertTrue(record['credential_redaction'])
         self.assertEqual(snapshot.sha(native), record['original_response_sha256'])
         self.assertNotIn(token.encode(), b''.join(self.fixture.stored.values()))
         self.assertNotIn(proof.encode(), b''.join(self.fixture.stored.values()))
+
+
+class NativeV25PagingVersionTests(NativePagingVersionTests):
+    paging_version = 'v25.0'
 
 
 if __name__ == '__main__':
