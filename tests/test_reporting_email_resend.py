@@ -68,15 +68,20 @@ class Fixture:
                 "secrets": [{"name": name, "valueFrom": SECRET + ":" + name + "::"} for name in mail.CONTACTS]}]}
         self.contacts = {"REPORT_EMAIL_FROM": "reports@example.test", "REPORT_EMAIL_TO": "owner@example.test,second@example.test"}
         self.manifest = {"schema_version": 1, "project": "vevo", "generation_id": GENERATION, "artifacts": {}}
-        for period in ("latest", "7d", "30d", "90d"):
+        for period_index, period in enumerate(("latest", "7d", "30d", "90d"), 1):
             payload = {"project": "vevo", "date_from": "2025-05-03", "date_to": DAY,
                 "period_switcher": {"current_key": "full" if period == "latest" else period},
                 "source_health": {"is_partial": False, "qa_status": "ok", "qa_failure_count": 0, "qa_errors": []},
                 "dashboard": {"kpis": {"countries": {country: {"status": "ok", "windows": {
-                    name: {} for name in ("daily", "weekly", "monthly", "all_time")}} for country in ("sk", "cz", "hu")}}}}
+                    name: {"metrics": {"orders": period_index}, "trend": {
+                        "dates": [DAY], "metrics": {"orders": [period_index]}}}
+                    for name in ("daily", "weekly", "monthly", "all_time")}} for country in ("sk", "cz", "hu")}}}}
+            payload["dashboard"]["title"] = "Prehľad <obdobia>"
             raw = mail.canonical(payload)
+            # Match the renderer's dashboard-only, non-ASCII, script-safe JSON.
+            embedded = json.dumps(payload["dashboard"], ensure_ascii=False, indent=2).replace("<", "\\u003c").encode()
             for name, content in ((f"dashboard_payload_{period}.json", raw),
-                                  (f"report_{period}.html", b'<html><script id="report-dashboard-json" type="application/json">' + raw + b'</script></html>')):
+                                  (f"report_{period}.html", b'<html><script id="report-dashboard-json" type="application/json">' + embedded + b'</script></html>')):
                 key = f"{mail.VEVO.sink}/{GENERATION}/{name}"
                 self.s3.objects[key] = content
                 self.manifest["artifacts"][name] = {"key": key, "size": len(content), "sha256": mail.sha(content)}
@@ -104,6 +109,19 @@ class Fixture:
         self.clients["ecs"].describe_task_definition.side_effect = lambda **_args: {"taskDefinition": deepcopy(self.definition)}
         self.clients["secretsmanager"].get_secret_value.side_effect = lambda **_args: {"SecretString": json.dumps(self.contacts)}
         self.clients["ses"].send_raw_email.return_value = {"MessageId": "ses-test-message"}
+
+    def refresh_manifest(self):
+        self.manifest_raw = mail.canonical(self.manifest)
+        self.manifest_sha = mail.sha(self.manifest_raw)
+        self.s3.objects[mail.VEVO.sink + "/latest/generation.json"] = self.manifest_raw
+        self.live["generation_manifest_sha256"] = self.manifest_sha
+        self.s3.objects[self.journal_key(2, "live-complete")] = mail.canonical(self.live)
+
+    def replace_artifact(self, name, raw):
+        entry = self.manifest["artifacts"][name]
+        self.s3.objects[entry["key"]] = raw
+        entry.update(size=len(raw), sha256=mail.sha(raw))
+        self.refresh_manifest()
 
     @staticmethod
     def journal_key(index, phase):
@@ -153,6 +171,72 @@ class ReportingEmailResendTests(unittest.TestCase):
         self.assertEqual(["report_latest.html"], [item.get_filename() for item in attachments])
         expected = self.fixture.s3.objects[self.fixture.manifest["artifacts"]["report_latest.html"]["key"]]
         self.assertEqual(expected, attachments[0].get_payload(decode=True))
+
+    def assert_preparation_rejected(self, reason):
+        with self.assertRaisesRegex(RuntimeError, reason):
+            self.prepare()
+        self.assertFalse((self.root / "data/prepared").exists())
+        self.assertEqual([], self.fixture.s3.puts)
+        self.fixture.clients["ses"].send_raw_email.assert_not_called()
+
+    def test_prepare_accepts_real_dashboard_only_html_shape_for_all_periods(self):
+        result = self.prepare()
+        output = Path(result["prepared"]).parent
+        for period in ("latest", "7d", "30d", "90d"):
+            payload = json.loads((output / f"dashboard_payload_{period}.json").read_bytes())
+            html = (output / f"report_{period}.html").read_bytes()
+            self.assertIn(b"\\u003c", html)
+            embedded = mail.country_payload(html, html=True)
+            self.assertNotIn("project", embedded)
+            self.assertNotIn("date_to", embedded)
+            self.assertEqual(payload["dashboard"], embedded)
+        self.assertFalse(result["email_sent"])
+        self.assertEqual([], self.fixture.s3.puts)
+        self.fixture.clients["ses"].send_raw_email.assert_not_called()
+
+    def test_hash_consistent_changed_or_swapped_html_dashboard_is_rejected(self):
+        for change in ("nested-value", "numeric-type", "other-period", "outer-wrapper"):
+            with self.subTest(change=change):
+                self.fixture = Fixture()
+                period = "30d" if change == "other-period" else "latest"
+                key = self.fixture.manifest["artifacts"]["dashboard_payload_latest.json"]["key"]
+                payload = json.loads(self.fixture.s3.objects[key])
+                embedded = payload["dashboard"]
+                if change == "nested-value":
+                    embedded["kpis"]["countries"]["sk"]["windows"]["daily"]["metrics"]["orders"] = 999
+                elif change == "numeric-type":
+                    embedded["kpis"]["countries"]["sk"]["windows"]["daily"]["metrics"]["orders"] = True
+                elif change == "outer-wrapper":
+                    embedded = payload
+                raw = b'<html><script id="report-dashboard-json" type="application/json">' + mail.canonical(embedded) + b'</script></html>'
+                self.fixture.replace_artifact(f"report_{period}.html", raw)
+                self.assert_preparation_rejected("email-html-dashboard-mismatch")
+
+    def test_hash_consistent_wrong_or_missing_json_metadata_is_rejected(self):
+        for period in ("latest", "7d", "30d", "90d"):
+            for field, value, reason in (("project", "roy", "image-release-payload-project"),
+                                         ("project", None, "image-release-payload-project"),
+                                         ("date_to", "2026-10-25", "image-release-payload-end-date"),
+                                         ("date_to", None, "image-release-payload-end-date"),
+                                         ("period_switcher", {"current_key": "wrong"}, "image-release-payload-period")):
+                with self.subTest(period=period, field=field, value=value):
+                    self.fixture = Fixture()
+                    name = f"dashboard_payload_{period}.json"
+                    payload = json.loads(self.fixture.s3.objects[self.fixture.manifest["artifacts"][name]["key"]])
+                    if value is None:
+                        payload.pop(field)
+                    else:
+                        payload[field] = value
+                    self.fixture.replace_artifact(name, mail.canonical(payload))
+                    self.assert_preparation_rejected(reason)
+
+    def test_missing_html_or_json_pair_is_rejected_before_output(self):
+        for name in ("report_7d.html", "dashboard_payload_7d.json"):
+            with self.subTest(name=name):
+                self.fixture = Fixture()
+                del self.fixture.manifest["artifacts"][name]
+                self.fixture.refresh_manifest()
+                self.assert_preparation_rejected("image-release-manifest-identity")
 
     def test_core_html_zip_threshold_is_preserved(self):
         with patch("dotenv.load_dotenv", return_value=False):
