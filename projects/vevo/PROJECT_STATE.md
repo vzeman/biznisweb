@@ -2,9 +2,9 @@
 
 Date: 2026-11-11
 Repo: `vzeman/biznisweb`
-Branch: `codex/vevo-meta-release-handoff-20261111` (documentation only; draft PR #669 awaits final review)
+Branch: `codex/vevo-meta-release-handoff-20261111` (documentation only; PR #669 awaits final review)
 
-What changed: Release `0e23dada805b4aa49c71f6096c74b983` completed at 05:22:42 UTC. It deployed source `a06077a823a847f99c49f6f921aaed054d0728ec` from PR #668, including the earlier pagination correction, using exact build `42957389843` and immutable image `sha256:3ef3848db9060148515601a8e44cb475778214811929c3a00a0f95e0cc891869`. The requested calculation is published as generation `20261111T052140Z`, generated at 05:21:41.830810 UTC and covering through 2026-11-10. All four periods contain their actual 10 November daily row. This completes the missing publication; the separate incremental-reporting architecture is not implemented.
+What changed: Release `0e23dada805b4aa49c71f6096c74b983` completed at 05:22:20.384491 UTC and was independently verified at 05:22:42 UTC. It deployed source `a06077a823a847f99c49f6f921aaed054d0728ec` from PR #668, including the earlier pagination correction, using exact build `42957389843` and immutable image `sha256:3ef3848db9060148515601a8e44cb475778214811929c3a00a0f95e0cc891869`. The requested calculation is published as generation `20261111T052140Z`, generated at 05:21:41.830810 UTC and covering through 2026-11-10. All four periods contain their actual 10 November daily row. This completes the missing publication; the separate incremental-reporting architecture is not implemented.
 
 What is verified: The candidate and live tasks both stopped with exit 0. Candidate `d2b7635f8dd942b99fb236b7f6fa22ce` used definition :60 and IP `172.31.29.1`; live task `0c9711fa5f0d4cf0b9a6926720c83f1a` used definition :60 and IP `172.31.34.126`. Both had independently verified exact source/image, instance N/A:Fargate, service `vevo-daily-report-email`, path `/app` and on-host localhost markers before provider work. Candidate pagination proof at 04:43:07 UTC verified offset 10440, 19 rows, reported total 10460 and 3 independent proof reads. The live host's unique marker, localhost-before-marker ordering, overrides and email/invoice/inline-guard skip flags were independently checked.
 
@@ -32,7 +32,7 @@ Approval-review limits: The attempted additional raw-log archive upload and atte
 
 Known issues: The visual browser check remains unverified because of the local Computer Use module failure. The requested daily incremental behavior remains a separate unfinished architecture requirement: the deployed schedule still follows the supported full-history workflow. A new publication is not evidence that incremental collection/replay has been implemented.
 
-Next exact step: Complete independent review of this final handoff and merge documentation PR #669. No rerun or duplicate release is needed for the completed 10 November publication. A visual check may be repeated when the browser tool works. For the separate incremental scope, establish durable canonical source facts, verified change-cursor/overlap semantics, bounded correction windows and reproducible recalculation before changing the daily workflow. Preserve the failed earlier release as history and do not replay it. The active release is terminal and the source freeze is released.
+Next exact step: Complete independent review of this final handoff and merge documentation PR #669 if it is still open. No rerun or duplicate release is needed for the completed 10 November publication. A visual check may be repeated when the browser tool works. For the separate incremental scope, establish durable canonical source facts, verified change-cursor/overlap semantics, bounded correction windows and reproducible recalculation before changing the daily workflow. Preserve the failed earlier release as history and do not replay it. The active release is terminal and the source freeze is released.
 
 ## 2026-11-11 - Authorized continuation to publish 10 November; Meta paging mismatch reproduced
 
