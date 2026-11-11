@@ -1,0 +1,324 @@
+{
+  "batch": "batch-36",
+  "verified_at": "2026-07-09T05:32:07.507Z",
+  "articles": [
+    {
+      "title": "Ako prať chránič matraca: pot, prach, roztoče a správne sušenie",
+      "link": "ako-prat-chranic-matraca-pot-prach-roztoce-a-spravne-susenie",
+      "note": "final batch audit",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-chranic-matraca-pot-prach-roztoce-a-spravne-susenie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "fast_answer": true,
+      "has_table": true,
+      "has_inline_style": true,
+      "has_product_link": true,
+      "has_category_link": true,
+      "has_perfume_link": true,
+      "has_external_source": true,
+      "bad_escaped_html": false,
+      "single_letter_paragraph_issue": false,
+      "body_len": 134214,
+      "ok": true
+    },
+    {
+      "title": "Ako prať paplón a prikrývku: veľkosť bubna, výplň a sušenie bez zápachu",
+      "link": "ako-prat-paplon-a-prikryvku-velkost-bubna-vypln-a-susenie-bez-zapachu",
+      "note": "final batch audit",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-paplon-a-prikryvku-velkost-bubna-vypln-a-susenie-bez-zapachu",
+      "clean_url_ok": true,
+      "title_present": true,
+      "fast_answer": true,
+      "has_table": true,
+      "has_inline_style": true,
+      "has_product_link": true,
+      "has_category_link": true,
+      "has_perfume_link": true,
+      "has_external_source": true,
+      "bad_escaped_html": false,
+      "single_letter_paragraph_issue": false,
+      "body_len": 132870,
+      "ok": true
+    },
+    {
+      "title": "Ako prať plachtu s gumou: rohy, pot, zrazenie a sušenie bez pokrčenia",
+      "link": "ako-prat-plachtu-s-gumou-rohy-pot-zrazenie-a-susenie-bez-pokrcenia",
+      "note": "final batch audit",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-plachtu-s-gumou-rohy-pot-zrazenie-a-susenie-bez-pokrcenia",
+      "clean_url_ok": true,
+      "title_present": true,
+      "fast_answer": true,
+      "has_table": true,
+      "has_inline_style": true,
+      "has_product_link": true,
+      "has_category_link": true,
+      "has_perfume_link": true,
+      "has_external_source": true,
+      "bad_escaped_html": false,
+      "single_letter_paragraph_issue": false,
+      "body_len": 132886,
+      "ok": true
+    },
+    {
+      "title": "Ako prať prehoz na posteľ: prach, chlpy, objem a sušenie",
+      "link": "ako-prat-prehoz-na-postel-prach-chlpy-objem-a-susenie",
+      "note": "final batch audit",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-prehoz-na-postel-prach-chlpy-objem-a-susenie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "fast_answer": true,
+      "has_table": true,
+      "has_inline_style": true,
+      "has_product_link": true,
+      "has_category_link": true,
+      "has_perfume_link": true,
+      "has_external_source": true,
+      "bad_escaped_html": false,
+      "single_letter_paragraph_issue": false,
+      "body_len": 132875,
+      "ok": true
+    },
+    {
+      "title": "Ako prať posteľnú sukňu a textílie okolo postele: prach, chlpy a sezónne pranie",
+      "link": "ako-prat-postelnu-suknu-a-textilie-okolo-postele-prach-chlpy-a-sezonne-pranie",
+      "note": "final batch audit",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-postelnu-suknu-a-textilie-okolo-postele-prach-chlpy-a-sezonne-pranie",
+      "clean_url_ok": true,
+      "title_present": true,
+      "fast_answer": true,
+      "has_table": true,
+      "has_inline_style": true,
+      "has_product_link": true,
+      "has_category_link": true,
+      "has_perfume_link": true,
+      "has_external_source": true,
+      "bad_escaped_html": false,
+      "single_letter_paragraph_issue": false,
+      "body_len": 132935,
+      "ok": true
+    }
+  ],
+  "publish_log": [
+    {
+      "index": 1,
+      "title": "Ako prať paplón a prikrývku: veľkosť bubna, výplň a sušenie bez zápachu",
+      "link": "ako-prat-paplon-a-prikryvku-velkost-bubna-vypln-a-susenie-bez-zapachu",
+      "preSave": {
+        "date_posted_xdate": {
+          "len": 0,
+          "value": ""
+        },
+        "description": {
+          "len": 146,
+          "value": "Paplón perte doma iba vtedy, keď sa voľne zmestí do bubna a štítok to povoľuje. Najdôležitejšie je dôkladné vypláchnutie a úplné vysušenie v"
+        },
+        "link": {
+          "len": 69,
+          "value": "ako-prat-paplon-a-prikryvku-velkost-bubna-vypln-a-susenie-bez-zapachu"
+        },
+        "long": {
+          "len": 16049,
+          "value": "<p><strong>Rýchla odpoveď:</strong> Paplón alebo prikrývku perte podľa výplne a štítku. Duté vlákno často zvládne domáce pranie, páperie, vl"
+        },
+        "short": {
+          "len": 146,
+          "value": "Paplón perte doma iba vtedy, keď sa voľne zmestí do bubna a štítok to povoľuje. Najdôležitejšie je dôkladné vypláchnutie a úplné vysušenie v"
+        },
+        "time_posted": {
+          "len": 8,
+          "value": "9.7.2026"
+        },
+        "title": {
+          "len": 71,
+          "value": "Ako prať paplón a prikrývku: veľkosť bubna, výplň a sušenie bez zápachu"
+        },
+        "title_tag": {
+          "len": 71,
+          "value": "Ako prať paplón a prikrývku: veľkosť bubna, výplň a sušenie bez zápachu"
+        }
+      },
+      "closed": true,
+      "verify": {
+        "title": "Ako prať paplón a prikrývku: veľkosť bubna, výplň a sušenie bez zápachu",
+        "link": "ako-prat-paplon-a-prikryvku-velkost-bubna-vypln-a-susenie-bez-zapachu",
+        "note": "manual continuation attempt 1",
+        "status": 200,
+        "final_url": "https://www.vevo.sk/n/ako-prat-paplon-a-prikryvku-velkost-bubna-vypln-a-susenie-bez-zapachu",
+        "clean_url_ok": true,
+        "title_present": true,
+        "fast_answer": true,
+        "has_table": true,
+        "has_inline_style": true,
+        "has_product_link": true,
+        "has_category_link": true,
+        "has_perfume_link": true,
+        "has_external_source": true,
+        "bad_escaped_html": false,
+        "single_letter_paragraph_issue": false,
+        "body_len": 132870,
+        "ok": true
+      }
+    },
+    {
+      "index": 2,
+      "title": "Ako prať plachtu s gumou: rohy, pot, zrazenie a sušenie bez pokrčenia",
+      "link": "ako-prat-plachtu-s-gumou-rohy-pot-zrazenie-a-susenie-bez-pokrcenia",
+      "preSave": {
+        "description": {
+          "len": 149,
+          "value": "Plachtu s gumou perte naruby alebo voľne rozloženú, nepreplňte bubon a po praní ju hneď vytraste. Najviac trpia rohy, guma a miesta, kde sa "
+        },
+        "link": {
+          "len": 66,
+          "value": "ako-prat-plachtu-s-gumou-rohy-pot-zrazenie-a-susenie-bez-pokrcenia"
+        },
+        "long": {
+          "len": 16069,
+          "value": "<p><strong>Rýchla odpoveď:</strong> Plachtu s gumou perte podľa materiálu a štítku, najlepšie s podobnou posteľnou bielizňou, ale nie v prep"
+        },
+        "short": {
+          "len": 149,
+          "value": "Plachtu s gumou perte naruby alebo voľne rozloženú, nepreplňte bubon a po praní ju hneď vytraste. Najviac trpia rohy, guma a miesta, kde sa "
+        },
+        "title": {
+          "len": 69,
+          "value": "Ako prať plachtu s gumou: rohy, pot, zrazenie a sušenie bez pokrčenia"
+        },
+        "title_tag": {
+          "len": 69,
+          "value": "Ako prať plachtu s gumou: rohy, pot, zrazenie a sušenie bez pokrčenia"
+        }
+      },
+      "closed": true,
+      "verify": {
+        "title": "Ako prať plachtu s gumou: rohy, pot, zrazenie a sušenie bez pokrčenia",
+        "link": "ako-prat-plachtu-s-gumou-rohy-pot-zrazenie-a-susenie-bez-pokrcenia",
+        "note": "manual continuation attempt 1",
+        "status": 200,
+        "final_url": "https://www.vevo.sk/n/ako-prat-plachtu-s-gumou-rohy-pot-zrazenie-a-susenie-bez-pokrcenia",
+        "clean_url_ok": true,
+        "title_present": true,
+        "fast_answer": true,
+        "has_table": true,
+        "has_inline_style": true,
+        "has_product_link": true,
+        "has_category_link": true,
+        "has_perfume_link": true,
+        "has_external_source": true,
+        "bad_escaped_html": false,
+        "single_letter_paragraph_issue": false,
+        "body_len": 132886,
+        "ok": true
+      }
+    },
+    {
+      "index": 3,
+      "title": "Ako prať prehoz na posteľ: prach, chlpy, objem a sušenie",
+      "link": "ako-prat-prehoz-na-postel-prach-chlpy-objem-a-susenie",
+      "preSave": {
+        "description": {
+          "len": 167,
+          "value": "Prehoz na posteľ perte podľa materiálu, objemu a množstva prachu alebo chlpov. Pred praním ho vytraste, odstráňte chlpy a neperte ho v malom"
+        },
+        "link": {
+          "len": 53,
+          "value": "ako-prat-prehoz-na-postel-prach-chlpy-objem-a-susenie"
+        },
+        "long": {
+          "len": 16072,
+          "value": "<p><strong>Rýchla odpoveď:</strong> Prehoz na posteľ pred praním vytraste, odstráňte chlpy a skontrolujte štítok. Ľahký bavlnený alebo synte"
+        },
+        "short": {
+          "len": 167,
+          "value": "Prehoz na posteľ perte podľa materiálu, objemu a množstva prachu alebo chlpov. Pred praním ho vytraste, odstráňte chlpy a neperte ho v malom"
+        },
+        "title": {
+          "len": 56,
+          "value": "Ako prať prehoz na posteľ: prach, chlpy, objem a sušenie"
+        },
+        "title_tag": {
+          "len": 56,
+          "value": "Ako prať prehoz na posteľ: prach, chlpy, objem a sušenie"
+        }
+      },
+      "closed": true,
+      "verify": {
+        "title": "Ako prať prehoz na posteľ: prach, chlpy, objem a sušenie",
+        "link": "ako-prat-prehoz-na-postel-prach-chlpy-objem-a-susenie",
+        "note": "attempt 1",
+        "status": 200,
+        "final_url": "https://www.vevo.sk/n/ako-prat-prehoz-na-postel-prach-chlpy-objem-a-susenie",
+        "clean_url_ok": true,
+        "title_present": true,
+        "fast_answer": true,
+        "has_table": true,
+        "has_inline_style": true,
+        "has_product_link": true,
+        "has_category_link": true,
+        "has_perfume_link": true,
+        "has_external_source": true,
+        "bad_escaped_html": false,
+        "single_letter_paragraph_issue": false,
+        "body_len": 132875,
+        "ok": true
+      }
+    },
+    {
+      "index": 4,
+      "title": "Ako prať posteľnú sukňu a textílie okolo postele: prach, chlpy a sezónne pranie",
+      "link": "ako-prat-postelnu-suknu-a-textilie-okolo-postele-prach-chlpy-a-sezonne-pranie",
+      "preSave": {
+        "description": {
+          "len": 185,
+          "value": "Posteľná sukňa, volány a textílie okolo postele zbierajú prach pri podlahe, chlpy a nečistoty zo spálne. Pred praním ich vytraste, skontrolu"
+        },
+        "link": {
+          "len": 77,
+          "value": "ako-prat-postelnu-suknu-a-textilie-okolo-postele-prach-chlpy-a-sezonne-pranie"
+        },
+        "long": {
+          "len": 15855,
+          "value": "<p><strong>Rýchla odpoveď:</strong> Posteľnú sukňu a textílie okolo postele perte podľa materiálu a spôsobu uchytenia. Najprv ich zložte, vy"
+        },
+        "short": {
+          "len": 185,
+          "value": "Posteľná sukňa, volány a textílie okolo postele zbierajú prach pri podlahe, chlpy a nečistoty zo spálne. Pred praním ich vytraste, skontrolu"
+        },
+        "title": {
+          "len": 79,
+          "value": "Ako prať posteľnú sukňu a textílie okolo postele: prach, chlpy a sezónne pranie"
+        },
+        "title_tag": {
+          "len": 79,
+          "value": "Ako prať posteľnú sukňu a textílie okolo postele: prach, chlpy a sezónne pranie"
+        }
+      },
+      "closed": true,
+      "verify": {
+        "title": "Ako prať posteľnú sukňu a textílie okolo postele: prach, chlpy a sezónne pranie",
+        "link": "ako-prat-postelnu-suknu-a-textilie-okolo-postele-prach-chlpy-a-sezonne-pranie",
+        "note": "attempt 1",
+        "status": 200,
+        "final_url": "https://www.vevo.sk/n/ako-prat-postelnu-suknu-a-textilie-okolo-postele-prach-chlpy-a-sezonne-pranie",
+        "clean_url_ok": true,
+        "title_present": true,
+        "fast_answer": true,
+        "has_table": true,
+        "has_inline_style": true,
+        "has_product_link": true,
+        "has_category_link": true,
+        "has_perfume_link": true,
+        "has_external_source": true,
+        "bad_escaped_html": false,
+        "single_letter_paragraph_issue": false,
+        "body_len": 132935,
+        "ok": true
+      }
+    }
+  ]
+}

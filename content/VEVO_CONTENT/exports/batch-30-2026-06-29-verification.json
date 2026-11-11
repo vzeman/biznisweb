@@ -1,0 +1,189 @@
+{
+  "batch": "batch-30",
+  "created_at": "2026-06-29T13:12:12.732618+00:00",
+  "source": "content\\VEVO_CONTENT\\imports\\batch-30-2026-06-29-articles.json",
+  "checks": [
+    {
+      "post_id": "2271",
+      "title": "Ako prať kúpeľňovú predložku: guma, vlhkosť, chlpy a zápach po sprchovaní",
+      "slug": "ako-prat-kupelnovu-predlozku-guma-vlhkost-chlpy-a-zapach-po-sprchovani",
+      "url": "https://www.vevo.sk/n/ako-prat-kupelnovu-predlozku-guma-vlhkost-chlpy-a-zapach-po-sprchovani",
+      "status": 200,
+      "comment_ids": [
+        "2271"
+      ],
+      "datePublished": [
+        "2025-09-22T08:00:00"
+      ],
+      "expectedDatePublished": "2025-09-22T08:00:00",
+      "title_ok": true,
+      "body_length": 14837,
+      "quick_answer": true,
+      "styled_blocks": true,
+      "table_count": 2,
+      "product_category_link_count": 2,
+      "article_link_count": 5,
+      "fixed_price_hits": [],
+      "forbidden_public_terms": [],
+      "escaped_html": false,
+      "alt_maekky_status": null,
+      "ok": true
+    },
+    {
+      "post_id": "2272",
+      "title": "Ako prať župan, aby zostal mäkký, savý a nezatuchol po sprche",
+      "slug": "ako-prat-zupan-aby-zostal-makky-savy-a-nezatuchol-po-sprche",
+      "url": "https://www.vevo.sk/n/ako-prat-zupan-aby-zostal-makky-savy-a-nezatuchol-po-sprche",
+      "status": 200,
+      "comment_ids": [
+        "2272"
+      ],
+      "datePublished": [
+        "2025-09-22T08:12:00"
+      ],
+      "expectedDatePublished": "2025-09-22T08:12:00",
+      "title_ok": true,
+      "body_length": 16199,
+      "quick_answer": true,
+      "styled_blocks": true,
+      "table_count": 2,
+      "product_category_link_count": 2,
+      "article_link_count": 5,
+      "fixed_price_hits": [],
+      "forbidden_public_terms": [],
+      "escaped_html": false,
+      "alt_maekky_status": 404,
+      "ok": true
+    },
+    {
+      "post_id": "2273",
+      "title": "Ako osviežiť posteľ medzi praniami: vetranie, pyžamo, matrac a jemná vôňa",
+      "slug": "ako-osviezit-postel-medzi-praniami-vetranie-pyzamo-matrac-a-jemna-vona",
+      "url": "https://www.vevo.sk/n/ako-osviezit-postel-medzi-praniami-vetranie-pyzamo-matrac-a-jemna-vona",
+      "status": 200,
+      "comment_ids": [
+        "2273"
+      ],
+      "datePublished": [
+        "2025-09-22T08:24:00"
+      ],
+      "expectedDatePublished": "2025-09-22T08:24:00",
+      "title_ok": true,
+      "body_length": 15900,
+      "quick_answer": true,
+      "styled_blocks": true,
+      "table_count": 2,
+      "product_category_link_count": 2,
+      "article_link_count": 5,
+      "fixed_price_hits": [],
+      "forbidden_public_terms": [],
+      "escaped_html": false,
+      "alt_maekky_status": null,
+      "ok": true
+    }
+  ],
+  "link_results": {
+    "https://www.energy.gov/energysaver/laundry": {
+      "status": 200,
+      "final_url": "https://www.energy.gov/energysaver/laundry"
+    },
+    "https://www.epa.gov/indoor-air-quality-iaq/volatile-organic-compounds-impact-indoor-air-quality": {
+      "status": 200,
+      "final_url": "https://www.epa.gov/indoor-air-quality-iaq/volatile-organic-compounds-impact-indoor-air-quality"
+    },
+    "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home": {
+      "status": 200,
+      "final_url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home"
+    },
+    "https://www.ginetex.net/GB/labelling/labelling.asp": {
+      "status": 200,
+      "final_url": "https://www.ginetex.net/GB/labelling/labelling.asp"
+    },
+    "https://www.usgs.gov/water-science-school/science/hardness-water": {
+      "status": 200,
+      "final_url": "https://www.usgs.gov/water-science-school/science/hardness-water"
+    },
+    "https://www.vevo.sk/c/vevo-fragrance/interierovy-sprej": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-fragrance/interierovy-sprej"
+    },
+    "https://www.vevo.sk/c/vevo-home-care/pranie/avivaz/octova-avivaz": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/avivaz/octova-avivaz"
+    },
+    "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel"
+    },
+    "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo"
+    },
+    "https://www.vevo.sk/n/ako-odstranit-mastnu-mast-z-uteraka-pyzama-a-tricka": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-mastnu-mast-z-uteraka-pyzama-a-tricka"
+    },
+    "https://www.vevo.sk/n/ako-odstranit-moc-z-matraca-plachty-a-detskeho-pyzama": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-moc-z-matraca-plachty-a-detskeho-pyzama"
+    },
+    "https://www.vevo.sk/n/ako-prat-oblecenie-pri-pelovej-alergii-po-prichode-zvonka": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-oblecenie-pri-pelovej-alergii-po-prichode-zvonka"
+    },
+    "https://www.vevo.sk/n/ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia"
+    },
+    "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou"
+    },
+    "https://www.vevo.sk/n/ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie"
+    },
+    "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-filter-pracky-ked-bielizen-zapacha-alebo-voda-odteka-pomaly"
+    },
+    "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo"
+    },
+    "https://www.vevo.sk/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke"
+    },
+    "https://www.vevo.sk/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu"
+    },
+    "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach"
+    },
+    "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia"
+    },
+    "https://www.vevo.sk/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha"
+    },
+    "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+    },
+    "https://www.vevo.sk/p-1585/interierovy-sprej-vevo-premium-skorica-ihlicie": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1585/interierovy-sprej-vevo-premium-skorica-ihlicie"
+    },
+    "https://www.vevo.sk/p-1626/prava-octova-avivaz-lesna-zmes-1l": {
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1626/prava-octova-avivaz-lesna-zmes-1l"
+    }
+  },
+  "all_links_ok": true,
+  "all_ok": true
+}

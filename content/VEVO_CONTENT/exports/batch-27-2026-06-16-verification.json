@@ -1,0 +1,312 @@
+{
+  "batch": "batch-27",
+  "verified_at": "2026-06-16T06:11:55.487265+00:00",
+  "post_count": 5,
+  "all_ok": true,
+  "results": [
+    {
+      "post_id": "2260",
+      "url": "https://www.vevo.sk/n/ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-davkovat-praci-gel-podla-tvrdosti-vody-naplne-a-znecistenia",
+      "title_present": true,
+      "date_published": "2025-09-25T08:00:00",
+      "date_matches_expected": true,
+      "quick_answer_present": true,
+      "fanout_heading_present": true,
+      "diagnostic_table_present": true,
+      "product_block_present": true,
+      "styled_cards_present": true,
+      "product_hrefs_present": true,
+      "category_hrefs_present": true,
+      "no_internal_jargon_in_article_source": true,
+      "no_fixed_prices_in_article_source": true,
+      "no_escaped_quote_artifacts": true,
+      "source_malformed_href_count": 0,
+      "expected_article_length": 11436,
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "ok": true
+    },
+    {
+      "post_id": "2261",
+      "url": "https://www.vevo.sk/n/praci-gel-alebo-praci-prasok-kedy-co-funguje-lepsie-a-preco",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/praci-gel-alebo-praci-prasok-kedy-co-funguje-lepsie-a-preco",
+      "title_present": true,
+      "date_published": "2025-09-25T08:12:00",
+      "date_matches_expected": true,
+      "quick_answer_present": true,
+      "fanout_heading_present": true,
+      "diagnostic_table_present": true,
+      "product_block_present": true,
+      "styled_cards_present": true,
+      "product_hrefs_present": true,
+      "category_hrefs_present": true,
+      "no_internal_jargon_in_article_source": true,
+      "no_fixed_prices_in_article_source": true,
+      "no_escaped_quote_artifacts": true,
+      "source_malformed_href_count": 0,
+      "expected_article_length": 10980,
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "ok": true
+    },
+    {
+      "post_id": "2262",
+      "url": "https://www.vevo.sk/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/extra-oplach-v-pracke-kedy-pomoze-pri-zapachu-tvrdej-bielizni-a-citlivej-pokozke",
+      "title_present": true,
+      "date_published": "2025-09-25T08:24:00",
+      "date_matches_expected": true,
+      "quick_answer_present": true,
+      "fanout_heading_present": true,
+      "diagnostic_table_present": true,
+      "product_block_present": true,
+      "styled_cards_present": true,
+      "product_hrefs_present": true,
+      "category_hrefs_present": true,
+      "no_internal_jargon_in_article_source": true,
+      "no_fixed_prices_in_article_source": true,
+      "no_escaped_quote_artifacts": true,
+      "source_malformed_href_count": 0,
+      "expected_article_length": 10975,
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/hypoalergenne-pracie-prostriedky"
+      ],
+      "ok": true
+    },
+    {
+      "post_id": "2263",
+      "url": "https://www.vevo.sk/n/kratky-program-v-pracke-kedy-staci-a-kedy-zhorsuje-zvysky-pracieho-prostriedku",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/kratky-program-v-pracke-kedy-staci-a-kedy-zhorsuje-zvysky-pracieho-prostriedku",
+      "title_present": true,
+      "date_published": "2025-09-25T08:36:00",
+      "date_matches_expected": true,
+      "quick_answer_present": true,
+      "fanout_heading_present": true,
+      "diagnostic_table_present": true,
+      "product_block_present": true,
+      "styled_cards_present": true,
+      "product_hrefs_present": true,
+      "category_hrefs_present": true,
+      "no_internal_jargon_in_article_source": true,
+      "no_fixed_prices_in_article_source": true,
+      "no_escaped_quote_artifacts": true,
+      "source_malformed_href_count": 0,
+      "expected_article_length": 10845,
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "ok": true
+    },
+    {
+      "post_id": "2264",
+      "url": "https://www.vevo.sk/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/kolko-bielizne-dat-do-pracky-prakticka-kapacita-podla-uterakov-obliecok-a-sportu",
+      "title_present": true,
+      "date_published": "2025-09-25T08:48:00",
+      "date_matches_expected": true,
+      "quick_answer_present": true,
+      "fanout_heading_present": true,
+      "diagnostic_table_present": true,
+      "product_block_present": true,
+      "styled_cards_present": true,
+      "product_hrefs_present": true,
+      "category_hrefs_present": true,
+      "no_internal_jargon_in_article_source": true,
+      "no_fixed_prices_in_article_source": true,
+      "no_escaped_quote_artifacts": true,
+      "source_malformed_href_count": 0,
+      "expected_article_length": 10652,
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "ok": true
+    }
+  ],
+  "link_checks": [
+    {
+      "href": "/c/vevo-home-care/pranie/hypoalergenne-pracie-prostriedky",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/hypoalergenne-pracie-prostriedky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/hypoalergenne-pracie-prostriedky",
+      "ok": true
+    },
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-casto-prat-postelne-pradlo",
+      "url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "url": "https://www.vevo.sk/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-funguje-praci-gel-tenzidy-enzymy-ph-a-davkovanie-pri-beznom-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-biele-smuhy-od-pracieho-prasku-z-cierneho-oblecenia",
+      "url": "https://www.vevo.sk/n/ako-odstranit-biele-smuhy-od-pracieho-prasku-z-cierneho-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-biele-smuhy-od-pracieho-prasku-z-cierneho-oblecenia",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "url": "https://www.vevo.sk/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-bielu-bielizen-aby-nezosedla-a-nezapachala",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-detske-oblecenie-a-oblecenie-pre-babaetko-bez-podrazdenia-pokozky",
+      "url": "https://www.vevo.sk/n/ako-prat-detske-oblecenie-a-oblecenie-pre-babaetko-bez-podrazdenia-pokozky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-detske-oblecenie-a-oblecenie-pre-babaetko-bez-podrazdenia-pokozky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "url": "https://www.vevo.sk/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-zasobnik-pracky-od-usadenin-pracieho-gelu-a-avivaze",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-uteraky-zapachaju-aj-po-prani-zatuchnuty-pach-tvrdost-a-strata-savosti",
+      "ok": true
+    },
+    {
+      "href": "/n/predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "url": "https://www.vevo.sk/n/predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/predpieranie-v-pracke-kedy-ma-zmysel-a-kedy-len-mina-vodu-cas-a-praci-prostriedok",
+      "ok": true
+    },
+    {
+      "href": "/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "url": "https://www.vevo.sk/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preplnena-pracka-preco-sa-bielizen-nevyperie-neoplachne-a-zapacha",
+      "ok": true
+    },
+    {
+      "href": "/n/tvrda-voda-a-pranie-preco-je-bielizen-tvrda-siva-a-bez-vone",
+      "url": "https://www.vevo.sk/n/tvrda-voda-a-pranie-preco-je-bielizen-tvrda-siva-a-bez-vone",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/tvrda-voda-a-pranie-preco-je-bielizen-tvrda-siva-a-bez-vone",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "href": "https://www.energy.gov/energysaver/laundry",
+      "url": "https://www.energy.gov/energysaver/laundry",
+      "status": 200,
+      "final_url": "https://www.energy.gov/energysaver/laundry",
+      "ok": true
+    },
+    {
+      "href": "https://www.energystar.gov/products/clothes_washers",
+      "url": "https://www.energystar.gov/products/clothes_washers",
+      "status": 200,
+      "final_url": "https://www.energystar.gov/products/clothes_washers",
+      "ok": true
+    },
+    {
+      "href": "https://www.epa.gov/saferchoice/learn-about-safer-choice-label",
+      "url": "https://www.epa.gov/saferchoice/learn-about-safer-choice-label",
+      "status": 200,
+      "final_url": "https://www.epa.gov/saferchoice/learn-about-safer-choice-label",
+      "ok": true
+    },
+    {
+      "href": "https://www.epa.gov/saferchoice/safer-choice-criteria-surfactants",
+      "url": "https://www.epa.gov/saferchoice/safer-choice-criteria-surfactants",
+      "status": 200,
+      "final_url": "https://www.epa.gov/saferchoice/safer-choice-criteria-surfactants",
+      "ok": true
+    },
+    {
+      "href": "https://www.ftc.gov/business-guidance/resources/clothes-captioning-complying-care-labeling-rule",
+      "url": "https://www.ftc.gov/business-guidance/resources/clothes-captioning-complying-care-labeling-rule",
+      "status": 200,
+      "final_url": "https://www.ftc.gov/business-guidance/resources/clothes-captioning-complying-care-labeling-rule",
+      "ok": true
+    },
+    {
+      "href": "https://www.usgs.gov/water-science-school/science/hardness-water",
+      "url": "https://www.usgs.gov/water-science-school/science/hardness-water",
+      "status": 200,
+      "final_url": "https://www.usgs.gov/water-science-school/science/hardness-water",
+      "ok": true
+    }
+  ],
+  "links_checked": 23
+}

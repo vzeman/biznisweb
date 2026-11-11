@@ -1,0 +1,378 @@
+{
+  "project": "VEVO_CONTENT",
+  "created_at": "2026-06-17T12:45:39.279246+00:00",
+  "wave_file": "content\\VEVO_CONTENT\\exports\\retrofit-wave-26-car-glitter-insoles-rack-pollen-five-2026-06-17.json",
+  "article_count": 5,
+  "link_count": 35,
+  "all_ok": true,
+  "articles": [
+    {
+      "post_id": "2212",
+      "slug": "ako-vycistit-navlek-na-autosedacku-po-zime-a-posypovej-soli",
+      "url": "https://www.vevo.sk/n/ako-vycistit-navlek-na-autosedacku-po-zime-a-posypovej-soli",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-navlek-na-autosedacku-po-zime-a-posypovej-soli",
+      "title_present": true,
+      "required_fragments": [
+        "Odpor",
+        "Kontrol",
+        "Kedy nepokra"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2181",
+      "slug": "ako-odstranit-trblietky-z-siat-saka-a-kabata-po-oslave",
+      "url": "https://www.vevo.sk/n/ako-odstranit-trblietky-z-siat-saka-a-kabata-po-oslave",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-trblietky-z-siat-saka-a-kabata-po-oslave",
+      "title_present": true,
+      "required_fragments": [
+        "Odpor",
+        "Kontrol",
+        "Kedy nepokra"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-fragrance/parfum-do-prania",
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2210",
+      "slug": "ako-vycistit-textilne-vlozky-do-topanok-po-zime",
+      "url": "https://www.vevo.sk/n/ako-vycistit-textilne-vlozky-do-topanok-po-zime",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-textilne-vlozky-do-topanok-po-zime",
+      "title_present": true,
+      "required_fragments": [
+        "Odpor",
+        "Kontrol",
+        "Kedy nepokra"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+        "/p-1585/interierovy-sprej-vevo-premium-skorica-ihlicie"
+      ],
+      "category_hrefs": [
+        "/c/vevo-fragrance/interierovy-sprej",
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2223",
+      "slug": "ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo",
+      "url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo",
+      "title_present": true,
+      "required_fragments": [
+        "Odpor",
+        "Kontrol",
+        "Kedy nepokra"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+        "/p-1626/prava-octova-avivaz-lesna-zmes-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/avivaz/octova-avivaz",
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    },
+    {
+      "post_id": "2221",
+      "slug": "ako-striast-pel-z-bundy-a-mikiny-po-prechadzke-pred-pranim",
+      "url": "https://www.vevo.sk/n/ako-striast-pel-z-bundy-a-mikiny-po-prechadzke-pred-pranim",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-striast-pel-z-bundy-a-mikiny-po-prechadzke-pred-pranim",
+      "title_present": true,
+      "required_fragments": [
+        "Odpor",
+        "Kontrol",
+        "Kedy nepokra"
+      ],
+      "missing_fragments": [],
+      "product_hrefs": [
+        "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_hrefs": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "missing_product_or_category_hrefs": [],
+      "forbidden_hits": [],
+      "ok": true
+    }
+  ],
+  "links": [
+    {
+      "href": "/c/vevo-fragrance/interierovy-sprej",
+      "url": "https://www.vevo.sk/c/vevo-fragrance/interierovy-sprej",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-fragrance/interierovy-sprej",
+      "ok": true
+    },
+    {
+      "href": "/c/vevo-fragrance/parfum-do-prania",
+      "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "ok": true
+    },
+    {
+      "href": "/c/vevo-home-care/pranie/avivaz/octova-avivaz",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/avivaz/octova-avivaz",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/avivaz/octova-avivaz",
+      "ok": true
+    },
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-dostat-kusky-papierovej-vreckovky-z-ciernych-nohavic-a-mikiny",
+      "url": "https://www.vevo.sk/n/ako-dostat-kusky-papierovej-vreckovky-z-ciernych-nohavic-a-mikiny",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-dostat-kusky-papierovej-vreckovky-z-ciernych-nohavic-a-mikiny",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-kombinovat-praci-gel-a-parfum-do-prania",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-hrdzave-flaky-od-stipcov-a-snury-na-bielizen",
+      "url": "https://www.vevo.sk/n/ako-odstranit-hrdzave-flaky-od-stipcov-a-snury-na-bielizen",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-hrdzave-flaky-od-stipcov-a-snury-na-bielizen",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-prach-z-textilii-po-malovani-alebo-rekonstrukcii",
+      "url": "https://www.vevo.sk/n/ako-odstranit-prach-z-textilii-po-malovani-alebo-rekonstrukcii",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-prach-z-textilii-po-malovani-alebo-rekonstrukcii",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-zapach-z-ponoziek-a-sportovej-obuvi-po-treningu",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-ponoziek-a-sportovej-obuvi-po-treningu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-ponoziek-a-sportovej-obuvi-po-treningu",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-zapach-z-topanok-a-textilii-v-predsieni",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-topanok-a-textilii-v-predsieni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-topanok-a-textilii-v-predsieni",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-detske-karnevalove-kostymy-bez-poskodenia",
+      "url": "https://www.vevo.sk/n/ako-prat-detske-karnevalove-kostymy-bez-poskodenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-detske-karnevalove-kostymy-bez-poskodenia",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-oblecenie-pri-pelovej-alergii-po-prichode-zvonka",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-pri-pelovej-alergii-po-prichode-zvonka",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-oblecenie-pri-pelovej-alergii-po-prichode-zvonka",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-oblecenie-s-flitrami-koralkami-a-aplikaciami",
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-s-flitrami-koralkami-a-aplikaciami",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-oblecenie-s-flitrami-koralkami-a-aplikaciami",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-spolocenske-saty-doma-a-kedy-zvolit-cistiaren",
+      "url": "https://www.vevo.sk/n/ako-prat-spolocenske-saty-doma-a-kedy-zvolit-cistiaren",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-spolocenske-saty-doma-a-kedy-zvolit-cistiaren",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-textilne-navleky-na-kocik-po-prechadzke-v-dazdi",
+      "url": "https://www.vevo.sk/n/ako-prat-textilne-navleky-na-kocik-po-prechadzke-v-dazdi",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-textilne-navleky-na-kocik-po-prechadzke-v-dazdi",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-topanky",
+      "url": "https://www.vevo.sk/n/ako-prat-topanky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-topanky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "url": "https://www.vevo.sk/n/ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-pripravit-kupelnove-textilie-pre-navstevu",
+      "url": "https://www.vevo.sk/n/ako-pripravit-kupelnove-textilie-pre-navstevu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-pripravit-kupelnove-textilie-pre-navstevu",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-susit-bielizen-v-malom-byte-bez-zatuchnutia",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "url": "https://www.vevo.sk/n/ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-bubon-pracky-po-prani-pelechu-topanok-alebo-pracovnych-veci",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vycistit-rohozku-a-textilie-v-predsieni-od-posypovej-soli",
+      "url": "https://www.vevo.sk/n/ako-vycistit-rohozku-a-textilie-v-predsieni-od-posypovej-soli",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-rohozku-a-textilie-v-predsieni-od-posypovej-soli",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo",
+      "url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-susiak-na-bielizen-aby-neprenasal-spinu-na-pradlo",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vycistit-textil-v-aute-po-detskom-jedle-a-rozliatom-napoji",
+      "url": "https://www.vevo.sk/n/ako-vycistit-textil-v-aute-po-detskom-jedle-a-rozliatom-napoji",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-textil-v-aute-po-detskom-jedle-a-rozliatom-napoji",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vycistit-textilne-koberceky-v-aute-a-odstranit-pach",
+      "url": "https://www.vevo.sk/n/ako-vycistit-textilne-koberceky-v-aute-a-odstranit-pach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vycistit-textilne-koberceky-v-aute-a-odstranit-pach",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vyprat-stare-skvrny-kompletny-sprievodca-pre-ciste-oblecenie",
+      "url": "https://www.vevo.sk/n/ako-vyprat-stare-skvrny-kompletny-sprievodca-pre-ciste-oblecenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vyprat-stare-skvrny-kompletny-sprievodca-pre-ciste-oblecenie",
+      "ok": true
+    },
+    {
+      "href": "/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/casto-kladene-otazky-skvrny-na-obleceni-po-prani",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-je-bielizen-po-prani-tvrda-alebo-lepkava-zvysky-gelu-davkovanie-a-oplach",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-moje-oblecenie-zapacha-po-prani-priciny-a-riesenia",
+      "ok": true
+    },
+    {
+      "href": "/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
+      "url": "https://www.vevo.sk/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1531/parfum-do-prania-vevo-no-07-ylang-absolute",
+      "ok": true
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    },
+    {
+      "href": "/p-1585/interierovy-sprej-vevo-premium-skorica-ihlicie",
+      "url": "https://www.vevo.sk/p-1585/interierovy-sprej-vevo-premium-skorica-ihlicie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1585/interierovy-sprej-vevo-premium-skorica-ihlicie",
+      "ok": true
+    },
+    {
+      "href": "/p-1626/prava-octova-avivaz-lesna-zmes-1l",
+      "url": "https://www.vevo.sk/p-1626/prava-octova-avivaz-lesna-zmes-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1626/prava-octova-avivaz-lesna-zmes-1l",
+      "ok": true
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "existing_count": 823,
+  "excluded_batch": 43,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Krčivosť textilu: prečo sa látky krčia a čo znamená odolnosť proti pokrčeniu",
+      "slug": "krcivost-textilu-preco-sa-latky-krcia-a-co-znamena-odolnost-proti-pokrceniu",
+      "status": "review",
+      "clusters": [],
+      "issues": [
+        {
+          "type": "similar_title",
+          "severity": "review",
+          "matches": [
+            {
+              "score": 0.286,
+              "title": "Odolnosť textilu proti oderu: čo znamená Martindale pri oblečení a bytových látkach",
+              "link": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+              "slug": "odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+              "sources": [
+                "local:batch-41-2026-07-21-articles.json",
+                "rss"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Pevnosť textilu v ťahu a proti roztrhnutiu: čo skúšky hovoria o odolnosti",
+      "slug": "pevnost-textilu-v-tahu-a-proti-roztrhnutiu-co-skusky-hovoria-o-odolnosti",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Splývavosť textilu: prečo niektoré látky držia tvar a iné kopírujú postavu",
+      "slug": "splyvavost-textilu-preco-niektore-latky-drzia-tvar-a-ine-kopiruju-postavu",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Tepelný odpor textilu: prečo niektoré vrstvy hrejú viac pri rovnakej hrúbke",
+      "slug": "tepelny-odpor-textilu-preco-niektore-vrstvy-hreju-viac-pri-rovnakej-hrubke",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Ochrana textilu pred UV žiarením: čo znamená UPF a čo ju znižuje",
+      "slug": "ochrana-textilu-pred-uv-ziarenim-co-znamena-upf-a-co-ju-znizuje",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Rozmerová stabilita textilu: prečo sa oblečenie po praní krúti, skracuje alebo vyťahuje",
+      "slug": "rozmerova-stabilita-textilu-preco-sa-oblecenie-po-prani-kruti-skracuje-alebo-vytahuje",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Odolnosť textilu proti vode: rozdiel medzi vodoodpudivosťou a vodotesnosťou",
+      "slug": "odolnost-textilu-proti-vode-rozdiel-medzi-vodoodpudivostou-a-vodotesnostou",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Tuhosť textilu: prečo látka pôsobí mäkko, pevne alebo papierovo",
+      "slug": "tuhost-textilu-preco-latka-posobi-makko-pevne-alebo-papierovo",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}

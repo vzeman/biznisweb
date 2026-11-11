@@ -1,0 +1,31 @@
+{
+  "batch": "batch-30",
+  "created_at": "2026-06-29T12:49:48.256190+00:00",
+  "block_id": "765",
+  "posts": [
+    {
+      "id": "2271",
+      "title": "Ako prať kúpeľňovú predložku: guma, vlhkosť, chlpy a zápach po sprchovaní",
+      "slug": "ako-prat-kupelnovu-predlozku-guma-vlhkost-chlpy-a-zapach-po-sprchovani",
+      "date_posted": "2025-09-22",
+      "time_posted": "08:00:00",
+      "url": "https://www.vevo.sk/n/ako-prat-kupelnovu-predlozku-guma-vlhkost-chlpy-a-zapach-po-sprchovani"
+    },
+    {
+      "id": "2272",
+      "title": "Ako prať župan, aby zostal mäkký, savý a nezatuchol po sprche",
+      "slug": "ako-prat-zupan-aby-zostal-makky-savy-a-nezatuchol-po-sprche",
+      "date_posted": "2025-09-22",
+      "time_posted": "08:12:00",
+      "url": "https://www.vevo.sk/n/ako-prat-zupan-aby-zostal-makky-savy-a-nezatuchol-po-sprche"
+    },
+    {
+      "id": "2273",
+      "title": "Ako osviežiť posteľ medzi praniami: vetranie, pyžamo, matrac a jemná vôňa",
+      "slug": "ako-osviezit-postel-medzi-praniami-vetranie-pyzamo-matrac-a-jemna-vona",
+      "date_posted": "2025-09-22",
+      "time_posted": "08:24:00",
+      "url": "https://www.vevo.sk/n/ako-osviezit-postel-medzi-praniami-vetranie-pyzamo-matrac-a-jemna-vona"
+    }
+  ]
+}

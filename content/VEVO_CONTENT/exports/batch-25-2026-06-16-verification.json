@@ -1,0 +1,288 @@
+{
+  "generated_at": "2026-06-16T03:58:18.462557+00:00",
+  "project": "VEVO_CONTENT",
+  "batch": 25,
+  "summary": {
+    "article_count": 5,
+    "verified_public_http_200": true,
+    "verified_dates": true,
+    "verified_rich_html": true,
+    "verified_product_and_category_cards": true,
+    "verified_no_cta_or_fixed_prices": true,
+    "unique_article_links_checked": 23,
+    "all_article_links_200": true,
+    "errors": []
+  },
+  "records": [
+    {
+      "news_id": "2250",
+      "title": "Ako čítať štítok na oblečení: materiál, symboly prania a správny program",
+      "url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "status_code": 200,
+      "h1": "Ako čítať štítok na oblečení: materiál, symboly prania a správny program",
+      "datePublished": "2025-09-27T08:00:00",
+      "expected_datePublished": "2025-09-27T08:00:00",
+      "content_html_length": 9237,
+      "content_text_length": 5024,
+      "article_link_count": 8,
+      "checks": {
+        "http_200": true,
+        "title_matches": true,
+        "datePublished_matches": true,
+        "html_not_empty": true,
+        "has_quick_answer": true,
+        "has_warm_summary_box": true,
+        "has_recommendation_box": true,
+        "has_product_card": true,
+        "has_category_card": true,
+        "no_cta_literal": true,
+        "no_fixed_euro_price": true,
+        "all_article_links_200": true
+      }
+    },
+    {
+      "news_id": "2251",
+      "title": "Symboly prania na štítku: čo znamená vanička, trojuholník, kruh, štvorec a žehlička",
+      "url": "https://www.vevo.sk/n/symboly-prania-na-stitku-co-znamena-vanicka-trojuholnik-kruh-stvorec-a-zehlicka",
+      "status_code": 200,
+      "h1": "Symboly prania na štítku: čo znamená vanička, trojuholník, kruh, štvorec a žehlička",
+      "datePublished": "2025-09-27T08:12:00",
+      "expected_datePublished": "2025-09-27T08:12:00",
+      "content_html_length": 8874,
+      "content_text_length": 4369,
+      "article_link_count": 7,
+      "checks": {
+        "http_200": true,
+        "title_matches": true,
+        "datePublished_matches": true,
+        "html_not_empty": true,
+        "has_quick_answer": true,
+        "has_warm_summary_box": true,
+        "has_recommendation_box": true,
+        "has_product_card": true,
+        "has_category_card": true,
+        "no_cta_literal": true,
+        "no_fixed_euro_price": true,
+        "all_article_links_200": true
+      }
+    },
+    {
+      "news_id": "2252",
+      "title": "Prečo sa oblečenie zrazí po praní: teplota, vlákna, sušička a prevencia",
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "status_code": 200,
+      "h1": "Prečo sa oblečenie zrazí po praní: teplota, vlákna, sušička a prevencia",
+      "datePublished": "2025-09-27T08:24:00",
+      "expected_datePublished": "2025-09-27T08:24:00",
+      "content_html_length": 8576,
+      "content_text_length": 4480,
+      "article_link_count": 7,
+      "checks": {
+        "http_200": true,
+        "title_matches": true,
+        "datePublished_matches": true,
+        "html_not_empty": true,
+        "has_quick_answer": true,
+        "has_warm_summary_box": true,
+        "has_recommendation_box": true,
+        "has_product_card": true,
+        "has_category_card": true,
+        "no_cta_literal": true,
+        "no_fixed_euro_price": true,
+        "all_article_links_200": true
+      }
+    },
+    {
+      "news_id": "2253",
+      "title": "Ako prať nové oblečenie prvýkrát: farby, chemický pach, zrážanie a štítok",
+      "url": "https://www.vevo.sk/n/ako-prat-nove-oblecenie-prvykrat-farby-chemicky-pach-zrazanie-a-stitok",
+      "status_code": 200,
+      "h1": "Ako prať nové oblečenie prvýkrát: farby, chemický pach, zrážanie a štítok",
+      "datePublished": "2025-09-27T08:36:00",
+      "expected_datePublished": "2025-09-27T08:36:00",
+      "content_html_length": 8624,
+      "content_text_length": 4529,
+      "article_link_count": 7,
+      "checks": {
+        "http_200": true,
+        "title_matches": true,
+        "datePublished_matches": true,
+        "html_not_empty": true,
+        "has_quick_answer": true,
+        "has_warm_summary_box": true,
+        "has_recommendation_box": true,
+        "has_product_card": true,
+        "has_category_card": true,
+        "no_cta_literal": true,
+        "no_fixed_euro_price": true,
+        "all_article_links_200": true
+      }
+    },
+    {
+      "news_id": "2254",
+      "title": "Certifikáty na textile: OEKO-TEX, GOTS, recyklované vlákna a čo znamenajú pri praní",
+      "url": "https://www.vevo.sk/n/certifikaty-na-textile-oeko-tex-gots-recyklovane-vlakna-a-co-znamenaju-pri-prani",
+      "status_code": 200,
+      "h1": "Certifikáty na textile: OEKO-TEX, GOTS, recyklované vlákna a čo znamenajú pri praní",
+      "datePublished": "2025-09-27T08:48:00",
+      "expected_datePublished": "2025-09-27T08:48:00",
+      "content_html_length": 9188,
+      "content_text_length": 4992,
+      "article_link_count": 8,
+      "checks": {
+        "http_200": true,
+        "title_matches": true,
+        "datePublished_matches": true,
+        "html_not_empty": true,
+        "has_quick_answer": true,
+        "has_warm_summary_box": true,
+        "has_recommendation_box": true,
+        "has_product_card": true,
+        "has_category_card": true,
+        "no_cta_literal": true,
+        "no_fixed_euro_price": true,
+        "all_article_links_200": true
+      }
+    }
+  ],
+  "link_checks": [
+    {
+      "href": "/c/vevo-home-care/pranie/praci-gel",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "error": null
+    },
+    {
+      "href": "/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-obnovit-impregnaciu-softshellu-po-prani-a-kedy-ju-neriesit",
+      "error": null
+    },
+    {
+      "href": "/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-kasmirovy-sveter-doma-bez-zrazenia-a-zmolkov",
+      "error": null
+    },
+    {
+      "href": "/n/ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "error": null
+    },
+    {
+      "href": "/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-softshell-bundu-a-nohavice-bez-poskodenia-membrany",
+      "error": null
+    },
+    {
+      "href": "/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "error": null
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "error": null
+    },
+    {
+      "href": "/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "error": null
+    },
+    {
+      "href": "/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "error": null
+    },
+    {
+      "href": "/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyester-a-ako-ho-prat-aby-nezapachal",
+      "error": null
+    },
+    {
+      "href": "/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-zmesovy-material-preco-sa-oblecenie-zraza-alebo-sprava-inak-nez-cakate",
+      "error": null
+    },
+    {
+      "href": "/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/kedy-nepouzivat-avivaz-uteraky-sportove-oblecenie-softshell-aj-detska-bielizen",
+      "error": null
+    },
+    {
+      "href": "/n/organicka-bavlna-co-znamena-a-ci-sa-perie-inak-ako-bezna-bavlna",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/organicka-bavlna-co-znamena-a-ci-sa-perie-inak-ako-bezna-bavlna",
+      "error": null
+    },
+    {
+      "href": "/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "error": null
+    },
+    {
+      "href": "/n/recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/n/recyklovany-polyester-co-znamena-ake-ma-vyhody-a-ako-sa-on-starat",
+      "error": null
+    },
+    {
+      "href": "/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status_code": 200,
+      "final_url": "https://www.vevo.sk/p-1551/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "error": null
+    },
+    {
+      "href": "https://textileexchange.org/knowledge-center/reports/materials-market-report-2024/",
+      "status_code": 200,
+      "final_url": "https://textileexchange.org/knowledge-center/reports/materials-market-report-2024/",
+      "error": null
+    },
+    {
+      "href": "https://textileexchange.org/organic-cotton-certification/",
+      "status_code": 200,
+      "final_url": "https://textileexchange.org/organic-cotton-certification/",
+      "error": null
+    },
+    {
+      "href": "https://www.ftc.gov/business-guidance/resources/clothes-captioning-complying-care-labeling-rule",
+      "status_code": 200,
+      "final_url": "https://www.ftc.gov/business-guidance/resources/clothes-captioning-complying-care-labeling-rule",
+      "error": null
+    },
+    {
+      "href": "https://www.ftc.gov/legal-library/browse/rules/care-labeling-textile-wearing-apparel-certain-piece-goods-text",
+      "status_code": 200,
+      "final_url": "https://www.ftc.gov/legal-library/browse/rules/care-labeling-textile-wearing-apparel-certain-piece-goods-text",
+      "error": null
+    },
+    {
+      "href": "https://www.ginetex.net/GB/labelling/labelling.asp",
+      "status_code": 200,
+      "final_url": "https://www.ginetex.net/GB/labelling/labelling.asp",
+      "error": null
+    },
+    {
+      "href": "https://www.ginetex.net/gb/labelling/care-symbols.asp",
+      "status_code": 200,
+      "final_url": "https://www.ginetex.net/gb/labelling/care-symbols.asp",
+      "error": null
+    },
+    {
+      "href": "https://www.oeko-tex.com/en/our-standards/oeko-tex-standard-100/",
+      "status_code": 200,
+      "final_url": "https://www.oeko-tex.com/en/our-standards/oeko-tex-standard-100/",
+      "error": null
+    }
+  ]
+}

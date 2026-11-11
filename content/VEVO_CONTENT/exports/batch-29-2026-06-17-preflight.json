@@ -1,0 +1,182 @@
+{
+  "batch": "batch-29",
+  "generated_at": "2026-06-17T15:56:58.930642+00:00",
+  "article_count": 3,
+  "json": "content\\VEVO_CONTENT\\imports\\batch-29-2026-06-17-articles.json",
+  "xls": "C:\\Users\\Patrik jankech\\AppData\\Local\\Temp\\vevo-batch-29-fragrance-use-cases-clean-urls.xls",
+  "date_posted": "2025-09-23",
+  "slugs": [
+    "najcastejsie-chyby-pri-parfumoch-do-prania-privela-vone-zly-oplach-a-miesanie-s-avivazou",
+    "ako-prevonat-oblecenie-do-kancelarie-jemna-vona-kosela-pri-krku-a-pradlo-bez-tazkej-parfumacie",
+    "vona-oblecenia-v-kufri-ako-balit-cistu-bielizen-na-cestu-aby-nezatuchla"
+  ],
+  "lengths": {
+    "Najčastejšie chyby pri parfumoch do prania: priveľa vône, zlý oplach a miešanie s avivážou": 16280,
+    "Ako prevoňať oblečenie do kancelárie: jemná vôňa, košeľa pri krku a prádlo bez ťažkej parfumácie": 16162,
+    "Vôňa oblečenia v kufri: ako baliť čistú bielizeň na cestu, aby nezatuchla": 15896
+  },
+  "link_count": 23,
+  "links": [
+    {
+      "href": "/c/vevo-fragrance/parfum-do-prania",
+      "url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-fragrance/parfum-do-prania",
+      "ok": true
+    },
+    {
+      "href": "/c/vzorky/parfum-do-prania-vzorky",
+      "url": "https://www.vevo.sk/c/vzorky/parfum-do-prania-vzorky",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vzorky/parfum-do-prania-vzorky",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-davkovat-parfum-do-prania-podla-mnozstva-bielizne",
+      "url": "https://www.vevo.sk/n/ako-davkovat-parfum-do-prania-podla-mnozstva-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-davkovat-parfum-do-prania-podla-mnozstva-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-parfumovy-flak-z-oblecenia-a-jemnych-latok",
+      "url": "https://www.vevo.sk/n/ako-odstranit-parfumovy-flak-z-oblecenia-a-jemnych-latok",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-parfumovy-flak-z-oblecenia-a-jemnych-latok",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+      "url": "https://www.vevo.sk/n/ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-podkladovy-krem-z-goliera-bluzky-a-kosele",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-odstranit-zapach-z-cestovneho-vankusa-po-lietadle",
+      "url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-cestovneho-vankusa-po-lietadle",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-odstranit-zapach-z-cestovneho-vankusa-po-lietadle",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-cestovne-oblecenie-po-dlhom-lete-alebo-vlaku",
+      "url": "https://www.vevo.sk/n/ako-prat-cestovne-oblecenie-po-dlhom-lete-alebo-vlaku",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-cestovne-oblecenie-po-dlhom-lete-alebo-vlaku",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-sako-doma-a-kedy-ho-radsej-dat-do-cistiarne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prejst-z-avivaze-na-parfum-do-prania-bez-sklamania",
+      "url": "https://www.vevo.sk/n/ako-prejst-z-avivaze-na-parfum-do-prania-bez-sklamania",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prejst-z-avivaze-na-parfum-do-prania-bez-sklamania",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "url": "https://www.vevo.sk/n/ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prevonat-bielizen-v-malej-kupelni-vlhkost-susenie-a-jemna-vona-bez-zatuchnutia",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-praci-gel-podla-typu-bielizne",
+      "ok": true
+    },
+    {
+      "href": "/n/ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "url": "https://www.vevo.sk/n/ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-vybrat-vonu-do-prania-na-zimu-deky-svetre-saly-a-sezonne-textilie",
+      "ok": true
+    },
+    {
+      "href": "/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "url": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/parfum-do-prania-co-to-je-a-ako-funguje",
+      "ok": true
+    },
+    {
+      "href": "/n/parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "url": "https://www.vevo.sk/n/parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/parfum-do-prania-pri-citlivej-pokozke-kedy-volit-jemnu-vonu-a-kedy-radsej-bez-parfumacie",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-boli-hlava-z-vone-a-ako-pouzivat-vone-doma-jemnejsie",
+      "url": "https://www.vevo.sk/n/preco-boli-hlava-z-vone-a-ako-pouzivat-vone-doma-jemnejsie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-boli-hlava-z-vone-a-ako-pouzivat-vone-doma-jemnejsie",
+      "ok": true
+    },
+    {
+      "href": "/n/preco-vona-z-prania-rychlo-vyprcha-a-ako-ju-udrzat-dlhsie",
+      "url": "https://www.vevo.sk/n/preco-vona-z-prania-rychlo-vyprcha-a-ako-ju-udrzat-dlhsie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-vona-z-prania-rychlo-vyprcha-a-ako-ju-udrzat-dlhsie",
+      "ok": true
+    },
+    {
+      "href": "/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+      "url": "https://www.vevo.sk/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1574/sada-vzoriek-najpredavanejsich-voni-vevo-3-x-10ml",
+      "ok": true
+    },
+    {
+      "href": "https://dermnetnz.org/topics/fragrance-allergy",
+      "url": "https://dermnetnz.org/topics/fragrance-allergy",
+      "status": 200,
+      "final_url": "https://dermnetnz.org/topics/fragrance-allergy",
+      "ok": true
+    },
+    {
+      "href": "https://dermnetnz.org/topics/textile-contact-dermatitis",
+      "url": "https://dermnetnz.org/topics/textile-contact-dermatitis",
+      "status": 200,
+      "final_url": "https://dermnetnz.org/topics/textile-contact-dermatitis",
+      "ok": true
+    },
+    {
+      "href": "https://pubmed.ncbi.nlm.nih.gov/21245015/",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/21245015/",
+      "status": 200,
+      "final_url": "https://pubmed.ncbi.nlm.nih.gov/21245015/",
+      "ok": true
+    },
+    {
+      "href": "https://www.energy.gov/energysaver/laundry",
+      "url": "https://www.energy.gov/energysaver/laundry",
+      "status": 200,
+      "final_url": "https://www.energy.gov/energysaver/laundry",
+      "ok": true
+    },
+    {
+      "href": "https://www.epa.gov/indoor-air-quality-iaq/volatile-organic-compounds-impact-indoor-air-quality",
+      "url": "https://www.epa.gov/indoor-air-quality-iaq/volatile-organic-compounds-impact-indoor-air-quality",
+      "status": 200,
+      "final_url": "https://www.epa.gov/indoor-air-quality-iaq/volatile-organic-compounds-impact-indoor-air-quality",
+      "ok": true
+    },
+    {
+      "href": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "status": 200,
+      "final_url": "https://www.epa.gov/mold/brief-guide-mold-moisture-and-your-home",
+      "ok": true
+    }
+  ]
+}

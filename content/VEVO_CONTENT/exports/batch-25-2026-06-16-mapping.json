@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-06-16T03:47:24.296443+00:00",
+  "project": "VEVO_CONTENT",
+  "batch": 25,
+  "news_block_id": "765",
+  "records": [
+    {
+      "news_id": "2250",
+      "title": "Ako čítať štítok na oblečení: materiál, symboly prania a správny program",
+      "slug": "ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "url": "https://www.vevo.sk/n/ako-citat-stitok-na-obleceni-material-symboly-prania-a-spravny-program",
+      "date_posted": "2025-09-27",
+      "time_posted": "08:00:00"
+    },
+    {
+      "news_id": "2251",
+      "title": "Symboly prania na štítku: čo znamená vanička, trojuholník, kruh, štvorec a žehlička",
+      "slug": "symboly-prania-na-stitku-co-znamena-vanicka-trojuholnik-kruh-stvorec-a-zehlicka",
+      "url": "https://www.vevo.sk/n/symboly-prania-na-stitku-co-znamena-vanicka-trojuholnik-kruh-stvorec-a-zehlicka",
+      "date_posted": "2025-09-27",
+      "time_posted": "08:12:00"
+    },
+    {
+      "news_id": "2252",
+      "title": "Prečo sa oblečenie zrazí po praní: teplota, vlákna, sušička a prevencia",
+      "slug": "preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zrazi-po-prani-teplota-vlakna-susicka-a-prevencia",
+      "date_posted": "2025-09-27",
+      "time_posted": "08:24:00"
+    },
+    {
+      "news_id": "2253",
+      "title": "Ako prať nové oblečenie prvýkrát: farby, chemický pach, zrážanie a štítok",
+      "slug": "ako-prat-nove-oblecenie-prvykrat-farby-chemicky-pach-zrazanie-a-stitok",
+      "url": "https://www.vevo.sk/n/ako-prat-nove-oblecenie-prvykrat-farby-chemicky-pach-zrazanie-a-stitok",
+      "date_posted": "2025-09-27",
+      "time_posted": "08:36:00"
+    },
+    {
+      "news_id": "2254",
+      "title": "Certifikáty na textile: OEKO-TEX, GOTS, recyklované vlákna a čo znamenajú pri praní",
+      "slug": "certifikaty-na-textile-oeko-tex-gots-recyklovane-vlakna-a-co-znamenaju-pri-prani",
+      "url": "https://www.vevo.sk/n/certifikaty-na-textile-oeko-tex-gots-recyklovane-vlakna-a-co-znamenaju-pri-prani",
+      "date_posted": "2025-09-27",
+      "time_posted": "08:48:00"
+    }
+  ]
+}

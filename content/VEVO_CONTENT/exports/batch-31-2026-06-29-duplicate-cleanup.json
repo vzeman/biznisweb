@@ -1,0 +1,50 @@
+{
+  "project": "VEVO_CONTENT",
+  "batch": "batch-31",
+  "created_at": "2026-06-29",
+  "issue": "Duplicate admin news posts were created for flanel and mansester after an unclear create response was retried.",
+  "root_cause": "The first create attempt likely succeeded, but the response was parsed from the wrong JSON path. A second create attempt then created another flanel and mansester post.",
+  "deleted_extra_post_ids": [
+    2276,
+    2277
+  ],
+  "delete_results": [
+    {
+      "post_id": 2276,
+      "success": true,
+      "message": "Successfully deleted news post with ID: 2276"
+    },
+    {
+      "post_id": 2277,
+      "success": true,
+      "message": "Successfully deleted news post with ID: 2277"
+    }
+  ],
+  "kept_post_ids": [
+    2275,
+    2278,
+    2279
+  ],
+  "public_verification_after_cleanup": {
+    "saten_clean_url": {
+      "url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "status": 200
+    },
+    "flanel_clean_url": {
+      "url": "https://www.vevo.sk/n/co-je-flanel-preco-hreje-ako-sa-perie-a-preco-moze-zmolkovat",
+      "status": 404
+    },
+    "mansester_clean_url": {
+      "url": "https://www.vevo.sk/n/co-je-mansester-rebrovana-latka-prach-v-rebrach-a-spravne-pranie",
+      "status": 404
+    },
+    "numeric_url_range_checked": "https://www.vevo.sk/n/108 through https://www.vevo.sk/n/120",
+    "numeric_urls_public": false
+  },
+  "guardrail_added": [
+    "Never retry biznisweb-add_news_post for the same article after a null or malformed response.",
+    "Parse create responses only from result.content[0].text and persist the real news_post.id immediately.",
+    "If a create response is unclear, stop and inspect admin/API state before any retry.",
+    "Direct API creation is allowed only for hidden drafts unless slug/date-safe publication is verified."
+  ]
+}

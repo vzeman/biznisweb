@@ -1,0 +1,381 @@
+{
+  "batch": "batch-42",
+  "verified_at": "2026-07-22T04:25:00.215652+00:00",
+  "article_count": 4,
+  "all_ok": true,
+  "articles": [
+    {
+      "title": "Stálofarebnosť textilu: prečo farby blednú pri praní, svetle a trení",
+      "slug": "stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3561,
+      "h2_count": 27,
+      "table_count": 2,
+      "styled_block_count": 23,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://www.aatcc.org/learn/online-test-method-training/colorfastness-module",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.iso.org/standard/51276.html",
+        "https://www.iso.org/standard/65207.html",
+        "https://www.iso.org/standard/65209.html"
+      ],
+      "body_length": 94839,
+      "ok": true
+    },
+    {
+      "title": "Pevnosť šva a posun nití: prečo oblečenie praská pri švoch",
+      "slug": "pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3584,
+      "h2_count": 27,
+      "table_count": 2,
+      "styled_block_count": 23,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://store.astm.org/d4034_d4034m-26.html",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.iso.org/standard/36416.html",
+        "https://www.iso.org/standard/37219.html",
+        "https://www.iso.org/standard/88344.html"
+      ],
+      "body_length": 94514,
+      "ok": true
+    },
+    {
+      "title": "Zatrhávanie textilu: prečo vznikajú vytiahnuté očká a ako im predchádzať",
+      "slug": "zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3466,
+      "h2_count": 27,
+      "table_count": 2,
+      "styled_block_count": 23,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://store.astm.org/d3939_d3939m-26.html",
+        "https://store.astm.org/d5362-13.html",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.iso.org/standard/75376.html"
+      ],
+      "body_length": 94008,
+      "ok": true
+    },
+    {
+      "title": "Počet nití pri obliečkach: čo znamená thread count a čo o kvalite nehovorí",
+      "slug": "pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pocet-niti-pri-oblieckach-co-znamena-thread-count-a-co-o-kvalite-nehovori",
+      "clean_url_ok": true,
+      "title_present": true,
+      "quick_answer_present": true,
+      "visible_word_count": 3490,
+      "h2_count": 27,
+      "table_count": 2,
+      "styled_block_count": 23,
+      "product_links_present": true,
+      "category_links_present": true,
+      "external_sources_present": true,
+      "bad_escaped_html": false,
+      "malformed_href_count": 0,
+      "short_paragraph_count": 1,
+      "max_short_paragraph_run": 1,
+      "product_links": [
+        "/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l"
+      ],
+      "category_links": [
+        "/c/vevo-home-care/pranie/praci-gel"
+      ],
+      "external_links": [
+        "https://cottonworks.com/wp-content/uploads/2021/03/Cotton-Sheets-Buying-Guide_Spreads.pdf",
+        "https://store.astm.org/d3775-17.html",
+        "https://www.ginetex.net/share/article/4201/care-symbols",
+        "https://www.iso.org/standard/74893.html",
+        "https://www.iso.org/standard/86700.html"
+      ],
+      "body_length": 94140,
+      "ok": true
+    }
+  ],
+  "link_checks": [
+    {
+      "url": "https://cottonworks.com/wp-content/uploads/2021/03/Cotton-Sheets-Buying-Guide_Spreads.pdf",
+      "status": 200,
+      "final_url": "https://cottonworks.com/wp-content/uploads/2021/03/Cotton-Sheets-Buying-Guide_Spreads.pdf",
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d3775-17.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d3775-17.html",
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d3939_d3939m-26.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d3939_d3939m-26.html",
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d4034_d4034m-26.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d4034_d4034m-26.html",
+      "ok": true
+    },
+    {
+      "url": "https://store.astm.org/d5362-13.html",
+      "status": 200,
+      "final_url": "https://store.astm.org/d5362-13.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.aatcc.org/learn/online-test-method-training/colorfastness-module",
+      "status": 200,
+      "final_url": "https://www.aatcc.org/learn/online-test-method-training/colorfastness-module",
+      "ok": true
+    },
+    {
+      "url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "status": 200,
+      "final_url": "https://www.ginetex.net/share/article/4201/care-symbols",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/36416.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/36416.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/37219.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/37219.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/51276.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/51276.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/65207.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/65207.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/65209.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/65209.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/74893.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/74893.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/75376.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/75376.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/86700.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/86700.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.iso.org/standard/88344.html",
+      "status": 200,
+      "final_url": "https://www.iso.org/standard/88344.html",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/c/vevo-home-care/pranie/praci-gel",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-casto-prat-postelne-pradlo",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-cierne-oblecenie-aby-nevybledlo",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-cierne-oblecenie-aby-nevybledlo",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-oblecenie-so-zipsami-a-suchym-zipsom-bez-zatrhnutia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-oblecenie-so-zipsami-a-suchym-zipsom-bez-zatrhnutia",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-podprsenku-a-jemnu-spodnu-bielizen-bez-deformacie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-prat-riflovu-bundu-a-tmave-dzinsy-aby-nepustali-farbu",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-predist-dierkam-v-trickach-po-prani-a-suseni",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-spravne-prat-obliecky-kompletny-sprievodca-starostlivostou",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/ako-zabranit-pustaniu-farby-pri-prani-noveho-oblecenia",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/bavlna-lan-saten-alebo-flanel-ake-obliecky-vybrat-podla-sezony-a-potenia",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-bavlna-vlastnosti-vyhody-nevyhody-a-starostlivost",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-polyamid-alebo-nylon-vlastnosti-odolnost-a-pranie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/co-je-saten-nie-je-to-vzdy-hodvab-a-ako-ho-spravne-prat",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/gramaz-latky-co-znamena-gsm-pri-uterakoch-oblieckach-a-trickach",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pevnost-sva-a-posun-niti-preco-oblecenie-praska-pri-svoch",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/preco-sa-oblecenie-zmolkuje-vlakna-trenie-pranie-a-susenie",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/pustila-farba-v-pracke-co-urobit-s-bielym-trickom-a-ruzovou-bieliznou",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/stalofarebnost-textilu-preco-farby-blednu-pri-prani-svetle-a-treni",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/n/zatrhavanie-textilu-preco-vznikaju-vytiahnute-ocka-a-ako-im-predchadzat",
+      "ok": true
+    },
+    {
+      "url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "status": 200,
+      "final_url": "https://www.vevo.sk/p-1627/praci-gel-hypoalergenny-z-marseillskeho-mydla-1l",
+      "ok": true
+    }
+  ]
+}

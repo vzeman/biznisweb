@@ -1,0 +1,40 @@
+{
+  "existing_count": 815,
+  "excluded_batch": 41,
+  "catalog_health": {
+    "duplicate_title_group_count": 0,
+    "duplicate_titles": [],
+    "bad_slug_count": 0,
+    "bad_slugs": []
+  },
+  "results": [
+    {
+      "title": "Bavlna a elastan: starostlivosť o tričká, rifle a spodnú bielizeň",
+      "slug": "bavlna-a-elastan-starostlivost-o-tricka-rifle-a-spodnu-bielizen",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Vlna a polyamid: prečo sa miešajú vlákna a ako to ovplyvňuje pranie",
+      "slug": "vlna-a-polyamid-preco-sa-miesaju-vlakna-a-ako-to-ovplyvnuje-pranie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Statická elektrina v oblečení: prečo látky priľnú a ako obmedziť iskrenie",
+      "slug": "staticka-elektrina-v-obleceni-preco-latky-prilnu-a-ako-obmedzit-iskrenie",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    },
+    {
+      "title": "Odolnosť textilu proti oderu: čo znamená Martindale pri oblečení a bytových látkach",
+      "slug": "odolnost-textilu-proti-oderu-co-znamena-martindale-pri-obleceni-a-bytovych-latkach",
+      "status": "ok",
+      "clusters": [],
+      "issues": []
+    }
+  ]
+}
