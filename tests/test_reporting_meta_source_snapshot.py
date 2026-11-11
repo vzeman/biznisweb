@@ -197,6 +197,49 @@ class MetaSourceSnapshotTests(unittest.TestCase):
             with self.subTest(currency=currency, account=account), self.assertRaises(RuntimeError):
                 self.currency(audit, currency=currency, account=account)
 
+    def test_finalize_retains_only_exact_allowlisted_internal_rejection(self):
+        self.fill()
+        query = params('country', time_increment=1)
+        native_url = request(query | {'after': 'safe-cursor'},
+                             url=INSIGHTS.replace('/v21.0/', '/v26.0/')).url
+        with self.assertRaisesRegex(RuntimeError, 'account-version-path'):
+            self.observe('country', query=query, body={'data': [row('country', end=START)],
+                'paging': {'cursors': {'after': 'safe-cursor'}, 'next': native_url}})
+        self.assertEqual(['account-version-path'], self.audit.errors)
+        with self.assertRaises(RuntimeError) as raised:
+            self.audit.finalize()
+        self.assertEqual('probe-meta-source-incomplete-or-rejected:account-version-path', str(raised.exception))
+        self.assertNotIn(native_url, str(raised.exception))
+        self.assertFalse(any(key.endswith('source-manifest.json') for key in self.stored))
+
+    def test_arbitrary_exception_text_is_never_copied_to_failure_diagnostics(self):
+        sentinel = 'private-token-or-url-with-cursor'
+        for error in (RuntimeError(sentinel), ValueError(sentinel),
+                      RuntimeError('probe-meta-source-account-version-path:' + sentinel),
+                      RuntimeError('probe-meta-source-' + sentinel)):
+            with self.subTest(error_type=type(error).__name__):
+                def fail_put(_key, _raw):
+                    raise error
+                audit = self.new(put=fail_put)
+                with self.assertRaises(type(error)):
+                    self.currency(audit)
+                self.assertEqual(['selected-response-rejected'], audit.errors)
+                with self.assertRaises(RuntimeError) as raised:
+                    audit.finalize()
+                self.assertEqual('probe-meta-source-incomplete-or-rejected:selected-response-rejected',
+                                 str(raised.exception))
+                self.assertNotIn(sentinel, str(raised.exception))
+
+    def test_finalize_failure_projection_is_finite_and_filters_unknown_error_values(self):
+        self.fill()
+        self.audit.observe_failure(request(params()))
+        self.audit.errors.extend(['private-value', {'url': 'private-value'}] * 100)
+        with self.assertRaises(RuntimeError) as raised:
+            self.audit.finalize()
+        self.assertEqual('probe-meta-source-incomplete-or-rejected:selected-response-rejected,selected-transport-failure',
+                         str(raised.exception))
+        self.assertFalse(any(key.endswith('source-manifest.json') for key in self.stored))
+
     def test_missing_country_window_or_full_daily_source_stays_incomplete(self):
         self.currency()
         self.observe()

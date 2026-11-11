@@ -2,6 +2,7 @@
 import copy
 from datetime import date, timedelta
 import json
+from itertools import product
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -101,7 +102,7 @@ def meta_fixture(directory, paging_version=None):
         body = {"data": [dict(country=country.upper(), spend="10", date_start=LAST, date_stop=LAST) for country in COUNTRIES]}
         if paging_version:
             url = f"https://graph.facebook.com/{paging_version}/{ACCOUNT}/insights?"
-            # Native Meta shape: a v21 request's next link may name v24. The
+            # Native Meta shape: a v21 request's link may name v24 or v25. The
             # JSON object's order/spacing may differ without changing scope.
             native_params = {**record_params, "time_range": json.dumps({"until": last, "since": first}, separators=(",", ":"))}
             first_body = {"data": body["data"][:1], "paging": {
@@ -259,8 +260,8 @@ class CountryCfoVerificationTests(unittest.TestCase):
         (self.folder / f"{index:04d}-receipt.json").write_bytes(
             json.dumps(record, sort_keys=True, separators=(",", ":")).encode())
 
-    def test_native_v21_and_v24_paging_metadata_preserves_v21_request_proof(self):
-        for version in ("v21.0", "v24.0"):
+    def test_admitted_native_paging_versions_preserve_v21_request_proof(self):
+        for version in ("v21.0", "v24.0", "v25.0"):
             with self.subTest(version=version):
                 self.meta = meta_fixture(self.folder, paging_version=version)
                 proof = self.verify()
@@ -274,7 +275,7 @@ class CountryCfoVerificationTests(unittest.TestCase):
             "host": lambda url: url.replace("graph.facebook.com", "example.test"),
             "scheme": lambda url: url.replace("https:", "http:"),
             "account": lambda url: url.replace(ACCOUNT, "act_999"),
-            "version": lambda url: url.replace("/v24.0/", "/v25.0/"),
+            "version": lambda url: url.replace("/v24.0/", "/v26.0/").replace("/v25.0/", "/v26.0/"),
             "path": lambda url: url.replace("/insights?", "/campaigns?"),
             "path-params": lambda url: url.replace("/insights?", "/insights;extra?"),
             "port": lambda url: url.replace("graph.facebook.com", "graph.facebook.com:443"),
@@ -287,18 +288,18 @@ class CountryCfoVerificationTests(unittest.TestCase):
             "cursor": lambda url: url.replace("after=NDk5", "after=wrong"),
             "empty": lambda url: "",
         }
-        for name, mutate in mutations.items():
-            with self.subTest(mutation=name):
-                self.meta = meta_fixture(self.folder, paging_version="v24.0")
+        for version, (name, mutate) in product(("v24.0", "v25.0"), mutations.items()):
+            with self.subTest(version=version, mutation=name):
+                self.meta = meta_fixture(self.folder, paging_version=version)
                 self.rewrite_native_page(2, lambda body: body["paging"].update(next=mutate(body["paging"]["next"])))
                 proof = self.verify()
                 self.assertFalse(proof["passed"], name)
                 self.assertIn("native_meta_source_invalid", proof["errors"])
 
     def test_native_paging_cannot_change_dates_or_drop_request_parameters(self):
-        for change in ("date", "missing"):
-            with self.subTest(change=change):
-                self.meta = meta_fixture(self.folder, paging_version="v24.0")
+        for version, change in product(("v24.0", "v25.0"), ("date", "missing")):
+            with self.subTest(version=version, change=change):
+                self.meta = meta_fixture(self.folder, paging_version=version)
                 def mutate(body):
                     endpoint = urlparse(body["paging"]["next"])
                     query = dict(parse_qsl(endpoint.query))
@@ -311,9 +312,9 @@ class CountryCfoVerificationTests(unittest.TestCase):
                 self.assertFalse(self.verify()["passed"])
 
     def test_previous_direction_and_cursor_are_independently_validated(self):
-        for change in ("direction", "cursor", "host"):
-            with self.subTest(change=change):
-                self.meta = meta_fixture(self.folder, paging_version="v24.0")
+        for version, change in product(("v24.0", "v25.0"), ("direction", "cursor", "host")):
+            with self.subTest(version=version, change=change):
+                self.meta = meta_fixture(self.folder, paging_version=version)
                 def mutate(body):
                     url = body["paging"]["previous"]
                     if change == "direction":
@@ -327,16 +328,16 @@ class CountryCfoVerificationTests(unittest.TestCase):
                 self.assertFalse(self.verify()["passed"])
 
     def test_paging_chain_cannot_repeat_cursor_or_upgrade_actual_request(self):
-        for change in ("cursor", "path", "request-after"):
-            with self.subTest(change=change):
-                self.meta = meta_fixture(self.folder, paging_version="v24.0")
+        for version, change in product(("v24.0", "v25.0"), ("cursor", "path", "request-after")):
+            with self.subTest(version=version, change=change):
+                self.meta = meta_fixture(self.folder, paging_version=version)
                 if change == "cursor":
                     first = json.loads((self.folder / "0002-response.json").read_bytes())
                     self.rewrite_native_page(3, lambda body: body.update(paging=first["paging"]))
                 else:
                     def mutate_record(record):
                         if change == "path":
-                            record["path"] = record["path"].replace("/v21.0/", "/v24.0/")
+                            record["path"] = record["path"].replace("/v21.0/", f"/{version}/")
                         else:
                             record["public_params"]["after"] = "wrong"
                     self.rewrite_native_page(3, mutate_record=mutate_record)

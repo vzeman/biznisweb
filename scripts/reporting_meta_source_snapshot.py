@@ -17,7 +17,7 @@ ORIGIN = 'https://graph.facebook.com'
 VERSION = 'v21.0'
 # Meta may advertise a newer version in native paging metadata. Requests still
 # use VERSION and the provider follows only cursors against its original URL.
-PAGING_VERSIONS = frozenset({VERSION, 'v24.0'})
+PAGING_VERSIONS = frozenset({VERSION, 'v24.0', 'v25.0'})
 PUBLIC_PARAMS = frozenset({'fields', 'level', 'time_range', 'time_increment', 'breakdowns', 'limit', 'after'})
 AUTH_PARAMS = frozenset({'access_token', 'appsecret_proof'})
 DAILY_FIELDS = frozenset({'spend', 'impressions', 'clicks', 'cpc', 'cpm', 'ctr', 'reach',
@@ -25,6 +25,15 @@ DAILY_FIELDS = frozenset({'spend', 'impressions', 'clicks', 'cpc', 'cpm', 'ctr',
 PRIMARY_DAILY_FIELDS = frozenset({'spend', 'impressions', 'clicks', 'cpc', 'cpm', 'ctr'})
 IDENTITY_FIELDS = frozenset({'id', 'currency', 'timezone_name'})
 MAX_BODY = 8 * 1024 * 1024
+SAFE_REJECTION_REASONS = frozenset({
+    'account-version-path', 'endpoint', 'paging-shape', 'paging-query-duplicates',
+    'paging-query-key', 'paging-query-scope', 'paging-query-fields',
+    'server-cursor-mismatch', 'nonadvancing-cursor', 'first-page-cursor',
+    'repeated-or-wrong-page', 'response-status-size',
+})
+SAFE_FAILURE_REASONS = SAFE_REJECTION_REASONS | {
+    'selected-response-rejected', 'selected-transport-failure', 'manifest-write-rejected',
+}
 
 
 def require(condition, reason):
@@ -362,13 +371,23 @@ class MetaSourceSnapshot:
             if group is not None:
                 group['pages'].append(number)
             return True
-        except BaseException:
-            self.errors.append('selected-response-rejected')
+        except BaseException as exc:
+            # Match only complete internal predicate literals. Never stringify
+            # provider exceptions or persist their URL/body/cursor/credentials.
+            reason = 'selected-response-rejected'
+            if type(exc) is RuntimeError and len(exc.args) == 1 and type(exc.args[0]) is str:
+                reason = next((name for name in SAFE_REJECTION_REASONS
+                               if exc.args[0] == 'probe-meta-source-' + name), reason)
+            self.errors.append(reason)
             raise
 
     def finalize(self):
         self._source_gate()
-        require(not self.errors and self.currency_reads and self.groups, 'incomplete-or-rejected')
+        if self.errors:
+            reasons = sorted({reason if type(reason) is str and reason in SAFE_FAILURE_REASONS
+                              else 'selected-response-rejected' for reason in self.errors})
+            require(False, 'incomplete-or-rejected:' + ','.join(reasons))
+        require(self.currency_reads and self.groups, 'incomplete-or-rejected')
         require(all(group['complete'] for group in self.groups.values()), 'unfinished-pagination')
         country_ranges = {(group['query']['time_range']['since'], group['query']['time_range']['until'])
                           for group in self.groups.values() if group['kind'] == 'country'}
