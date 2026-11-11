@@ -1,3 +1,39 @@
+## 2026-11-11 - VEVO publication through 10 November completed
+
+Date: 2026-11-11
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-meta-release-handoff-20261111` (documentation only; PR #669 awaits final review)
+
+What changed: Release `0e23dada805b4aa49c71f6096c74b983` completed at 05:22:20.384491 UTC and was independently verified at 05:22:42 UTC. It deployed source `a06077a823a847f99c49f6f921aaed054d0728ec` from PR #668, including the earlier pagination correction, using exact build `42957389843` and immutable image `sha256:3ef3848db9060148515601a8e44cb475778214811929c3a00a0f95e0cc891869`. The requested calculation is published as generation `20261111T052140Z`, generated at 05:21:41.830810 UTC and covering through 2026-11-10. All four periods contain their actual 10 November daily row. This completes the missing publication; the separate incremental-reporting architecture is not implemented.
+
+What is verified: The candidate and live tasks both stopped with exit 0. Candidate `d2b7635f8dd942b99fb236b7f6fa22ce` used definition :60 and IP `172.31.29.1`; live task `0c9711fa5f0d4cf0b9a6926720c83f1a` used definition :60 and IP `172.31.34.126`. Both had independently verified exact source/image, instance N/A:Fargate, service `vevo-daily-report-email`, path `/app` and on-host localhost markers before provider work. Candidate pagination proof at 04:43:07 UTC verified offset 10440, 19 rows, reported total 10460 and 3 independent proof reads. The live host's unique marker, localhost-before-marker ordering, overrides and email/invoice/inline-guard skip flags were independently checked.
+
+Source and publication verification: Candidate and live source reconstruction passed in bounded memory. The live manifest contains 21 native responses: 4 daily, 8 identity, 4 country and 5 country_daily, covering all four expected ranges through 2026-11-10. Native v25 paging metadata is admitted while actual Meta requests and receipt paths stay v21. The live payloads pass QA, expose the country cards and match their native Meta country totals; generated HTML embeds match the verified payloads. No source rows, amounts or missing data were fabricated. Publication manifest SHA256 is `6c9c1f09c411c1e2bbb26ece42ef847371d482f431b5adf7f0255bac37bec3ae`; live Meta source-manifest SHA256 is `125c6aa38bed80ff3183eea47dc583308882c124df74f653bb13a9ee4201f6bd`.
+
+Runtime: The daily VEVO schedule is ENABLED on `vevo-reporting-daily:60` with its dynamic report date; its only configuration change is the task-definition target. The task definition changed only its image. The release lease is released and the temporary probe role is absent. All 12 protected schedules, the ROY lease and 9 ROY publication objects are unchanged. App Runner remains unchanged and RUNNING. No additional email, invoice or inline-guard action ran in this controlled release.
+
+HTTP verification: Authenticated requests passed for all four API periods, each byte-matching its immutable artifact. Served HTML matches the expected transformed bytes and embedded data. The 10 November row appears exactly once and is final in every period. Health is OK, unauthenticated API access returns 401, and the latest-generation pointer remained stable during verification.
+
+Visual UI limitation: A visual check was attempted only after host and HTTP verification. Computer Use failed before browser inventory with `MODULE_NOT_FOUND` for `kernel.js`; no browser mutation occurred and no rendered visual pass is claimed. This tooling limitation does not undo the independently verified publication and HTTP results.
+
+Process closure: At 05:23:46 UTC, controller PID 35084 and parent PID 40324 were independently absent with no listening ports. They ended naturally; no process was killed. No local dev server, worker, watcher or tunnel was started. The production daily schedule intentionally remains enabled.
+
+Evidence: Durable authority is the existing AWS release receipts, source records and published artifacts. Sanitized local summaries are under `data/vevo-meta-completion-20261111`; no new raw local export was created. Relevant SHA256 records:
+
+- `0019-release-complete`: `2e6af590a28ca012c491f595b814d658a7fad3de08b7f8ab199a9bc21f57deea`.
+- `live-host-independent.json`: `ec7877c3d061d9e1a6d7965bef83d40f0d6a6a1bc71655680b98574675c54125`.
+- `live-publication-independent.json`: `0ad8d3011c6c63480bb662fb6f4dcce8775cb1ab9bdb30c84912bca532ce13f7`.
+- Independent terminal-runtime proof: `1150ccc485c78dc8c3be35d8d0494c7327d353ba6e735b8e40319d2e4cce29fe`.
+- HTTP summary: `37668a02772fa96ae957b6546750840c1d8b3b2ccc15d742156bfa91c79beccd`.
+- `local-process-closure.json`: `2c34d4093a92c7350bd7b5f8505a5d975888df74489cb6a0a50a99a2650ae60f`.
+- `ui-attempt.json`: `3211fde3a6cb0b3b2477dfc266330ace2529e5162721eb1780ffd4853c089705`.
+
+Approval-review limits: The attempted additional raw-log archive upload and attempted local persistence of raw candidate artifacts were rejected before execution. Neither created an object/file or was retried through another tool or agent. Verification used authorized bounded in-memory reads and sanitized summaries instead; raw artifacts and logs remain in their existing AWS stores.
+
+Known issues: The visual browser check remains unverified because of the local Computer Use module failure. The requested daily incremental behavior remains a separate unfinished architecture requirement: the deployed schedule still follows the supported full-history workflow. A new publication is not evidence that incremental collection/replay has been implemented.
+
+Next exact step: Complete independent review of this final handoff and merge documentation PR #669 if it is still open. No rerun or duplicate release is needed for the completed 10 November publication. A visual check may be repeated when the browser tool works. For the separate incremental scope, establish durable canonical source facts, verified change-cursor/overlap semantics, bounded correction windows and reproducible recalculation before changing the daily workflow. Preserve the failed earlier release as history and do not replay it. The active release is terminal and the source freeze is released.
+
 ## 2026-11-11 - Authorized continuation to publish 10 November; Meta paging mismatch reproduced
 
 Date: 2026-11-11
