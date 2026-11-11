@@ -202,6 +202,39 @@ class ReportingInventoryTests(unittest.TestCase):
                     self.fetch()
                 self.assert_no_cache()
 
+    def test_one_extra_terminal_count_requires_proof_before_complete_cache(self):
+        self.api.rows = {i: order(i) for i in range(1, 49)}
+        def extra_count(api, variables, result):
+            result["getOrderList"]["pageInfo"]["totalRecords"] += 1
+        self.api.after = extra_count
+        rows = self.fetch()
+        self.assertEqual(list(range(1, 49)), [int(row["id"]) for row in rows])
+        self.assertEqual(rows, self.exp.load_from_cache(DAY))
+        stored = json.loads(self.exp.get_cache_filename(DAY).read_text(encoding="utf-8"))
+        self.assertEqual(48, stored["complete_inventory"]["inventory_count"])
+        self.assertEqual(8, stored["complete_inventory"]["pages"])
+        self.assertEqual({"limit": 30, "order_by": "order_id", "sort": "ASC", "cursor": 48},
+                         self.api.pages[-1]["params"])
+
+    def test_failed_terminal_proof_never_creates_partial_cache(self):
+        for failure in ("repeat", "reverse", "empty", "count-two"):
+            with self.subTest(failure=failure):
+                self.api.rows = {i: order(i) for i in range(1, 49)}
+                self.api.pages.clear()
+                def alter(api, variables, result):
+                    payload = result["getOrderList"]
+                    payload["pageInfo"]["totalRecords"] += 2 if failure == "count-two" else 1
+                    stage = {"repeat": 6, "reverse": 7, "empty": 8}.get(failure)
+                    if len(api.pages) == stage:
+                        if failure == "empty":
+                            payload["data"] = [order(49)]
+                        else:
+                            payload["data"][0]["order_num"] = "wrong-proof-identity"
+                self.api.after = alter
+                with self.assertRaises(RuntimeError):
+                    self.fetch()
+                self.assert_no_cache()
+
     def test_invalid_native_membership_or_date_anywhere_fails_entire_scan(self):
         for changes in ({"id": True}, {"order_num": ""}, {"pur_date": "2025-02-30"},
                         {"pur_date": "2025-01-01 99:00:00"}, {"pur_date": None}):

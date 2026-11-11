@@ -205,6 +205,8 @@ class HostGateTests(unittest.TestCase):
         query = gql('query Orders { getOrderList { data { id order_num } pageInfo { hasNextPage nextCursor totalRecords } } }')
         reduced = gql('query ReducedOrders { getOrderList { data { id order_num } pageInfo { hasNextPage nextCursor totalRecords } } }')
         rows = [{'id': str(i), 'order_num': f'private-synthetic-{i}'} for i in range(1, 60)]
+        if scenario in ('terminal-count-extra', 'terminal-count-proof-invalid'):
+            rows = rows[:48]
         client, other_client, calls, result, s3 = object(), object(), [], [], S3()
 
         def execute(_client, _query, *args, **kwargs):
@@ -226,6 +228,10 @@ class HostGateTests(unittest.TestCase):
                 more = True
             value = {'getOrderList': {'data': page, 'pageInfo': {'hasNextPage': more,
                      'nextCursor': offset + len(page) if more else None, 'totalRecords': len(ordered)}}}
+            if scenario in ('terminal-count-extra', 'terminal-count-proof-invalid'):
+                value['getOrderList']['pageInfo']['totalRecords'] += 1
+                if scenario == 'terminal-count-proof-invalid' and len(calls) == 7:
+                    page[0]['order_num'] = 'different-anchor-number'
             if params['sort'] == 'ASC':
                 if scenario == 'missing-id':
                     page[0].pop('id')
@@ -281,6 +287,14 @@ class HostGateTests(unittest.TestCase):
                          'malformed-page', 'different-client', 'different-variables'):
             with self.subTest(scenario=scenario):
                 self.scoped_probe(scenario, expect_rejection=True)
+
+    def test_narrow_terminal_proof_is_scoped_and_only_complete_proof_can_publish(self):
+        with patch('order_inventory.time.sleep'):
+            result, published, s3 = self.scoped_probe('terminal-count-extra')
+            self.assertEqual([str(i) for i in range(1, 49)], [row['id'] for row in result])
+            published.assert_called_once()
+            self.assertEqual([], s3.puts)
+            self.scoped_probe('terminal-count-proof-invalid', expect_rejection=True)
 
     def test_unproven_or_nested_scanner_cannot_publish(self):
         import export_orders
