@@ -214,10 +214,17 @@ def prepare(clients, *, release_id, manifest_sha256, to_date, scope, output):
         return raw
     verify_artifacts(manifest, fetch, prefix=VEVO.sink + "/" + context["generation_id"] + "/", to_date=to_date, probe=False)
     require(set(artifacts) == EXPECTED_ARTIFACTS, "email-artifact-inventory")
-    for name, raw in artifacts.items():
-        parsed = country_payload(raw, html=name.endswith(".html"))
-        require(parsed.get("project") == "vevo" and str(parsed.get("date_to", ""))[:10] == to_date, "email-artifact-dates")
-    payload = decode(artifacts["dashboard_payload_latest.json"])
+    payloads = {}
+    for period in ("latest", "7d", "30d", "90d"):
+        payload = country_payload(artifacts[f"dashboard_payload_{period}.json"])
+        require(payload.get("project") == "vevo" and str(payload.get("date_to", ""))[:10] == to_date, "email-artifact-dates")
+        require(isinstance(payload.get("dashboard"), dict), "email-json-dashboard")
+        # Published JSON wraps project/date metadata; HTML embeds only its
+        # dashboard. Bind every HTML period to that exact validated JSON object.
+        embedded = country_payload(artifacts[f"report_{period}.html"], html=True)
+        require(canonical(embedded) == canonical(payload["dashboard"]), "email-html-dashboard-mismatch")
+        payloads[period] = payload
+    payload = payloads["latest"]
     quality = payload["source_health"]
     verify_quality(quality)
     output.mkdir(parents=True)

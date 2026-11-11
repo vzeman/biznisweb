@@ -1,3 +1,14 @@
+## 2026-11-11 - Report email pending; paired HTML/JSON preparation repaired
+
+Date: 2026-11-11
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-mail-artifact-contract-20261111`
+What changed: The owner requested the usual report email after publication through 2026-11-10. Preflight verified three runtime recipients and no matching existing intent/acceptance. The first helper prepare stopped at `email-artifact-dates` before output-directory creation, intent or SES; no email was sent. Published generation `20261111T052140Z` and enabled definition :60 remain unchanged.
+Cause and repair: JSON artifacts wrap project/date metadata around dashboard, while HTML embeds only dashboard. The helper now checks each JSON wrapper and exact canonical equality of its paired HTML dashboard. All eight artifact hashes, dates/project/period/QA, country availability, runtime/contact binding and once-only send protection remain strict. No metadata or published data is altered.
+What is verified: Bounded read-only review confirmed all four real published pairs match this contract. Realistic fixtures cover renderer escaping/formatting, nested value/type substitutions, period swaps, wrong/missing metadata and missing pairs; rejection precedes output creation/S3 writes/SES. Resend/cohort tests pass (35), independent related coverage passes (38), and changed-file Ruff/diff checks pass. Existing corrected cohort wording is unchanged. No background process was started.
+Known issues: Email remains pending. The helper keeps its existing shorter generation/creditnote body and usual formatter/verified HTML attachment; it does not rebuild the CSV-based executive summary. Visual UI and incremental reporting remain separate unfinished work.
+Next exact step: Review/merge this helper-only repair after CI, then prepare the existing generation under fixed scope `20261111-report-through-20261110`, inspect private MIME/current recipients, and perform one authorized SES attempt. Preserve exact prepared hash and immutable intent/acceptance; never change scope to bypass an uncertain send. New explicit email preparation includes private local artifacts/MIME, not either previously rejected raw archival operation. Record SES acceptance separately from inbox delivery. No report rerun or production deployment is needed.
+
 ## 2026-11-11 - VEVO publication through 10 November completed
 
 Date: 2026-11-11
