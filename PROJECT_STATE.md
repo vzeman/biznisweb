@@ -1,3 +1,15 @@
+## 2026-11-11 - VEVO refresh stopped on inconsistent order pagination
+
+Date: 2026-11-11
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-pagination-incident-20261111` (documentation-only diagnosis)
+What changed: Recorded the cause of the missing 10 November data; no application or AWS configuration change, rerun, deployment or email.
+What is verified: Fresh AWS readback in account `919341186960`, region `eu-central-1`, confirms `vevo-daily-report-email` ENABLED at `cron(0 1 * * ? *)` / `Europe/Bratislava`, definition `vevo-reporting-daily:58`, image `sha256:5ef3bfbcbff2f5254e52f1a50ba28b4529dd2d1a75989331c07bb4d68fae4325`, path `/app`. The scheduled log `/ecs/vevo-reporting-daily`, stream `ecs/reporting/4cf7255c234543e6ab6c576e1b985385`, starts at 01:00:42 CET and fails at 01:26:29 CET with `RuntimeError: Reporting order inventory has inconsistent pagination metadata at offset 10440`. The runner then reports exporter exit code 1. The inventory failure occurs before successful report creation/publication.
+Publication state: S3 `daily-reports/vevo/latest/generation.json` remains generation `20261110T003316Z`, generated `2026-11-10T00:33:18.028585Z` (01:33 CET). Its latest payload ends on `2026-11-09`; the refresh for 10 November did not publish. No RUNNING or retained STOPPED tasks were listed for the exact VEVO family. No current task private IP, terminal ECS status or localhost marker is claimed; this was read-only diagnosis, not an infrastructure intervention.
+Known issues: `order_inventory.py` rejects a returned page whose length/position contradicts `pageInfo.totalRecords` or `hasNextPage`. Offset 10440 is a pagination position, not an order number. The log does not preserve the actual metadata values, so the exact predicate/provider cause or concurrent source change cannot be proven. Earlier warnings about retrying without `price_elements` do not establish the cause. This failure is distinct from the 7 November 90-day publication-QA failure.
+Next exact step: On repair continuation, preserve the strict completeness gate and capture only bounded non-sensitive pagination evidence (offset, requested limit, returned count, totalRecords and hasNextPage) in a reviewed isolated diagnostic. Establish fresh task/IP/service/path and localhost identity before runtime intervention. Determine the exact source/reader mismatch before a fix or new publication; do not blindly rerun or disable completeness validation.
+Process state: No dev server, worker, watcher, tunnel or ECS task was started. Finite read commands completed. The existing production scheduler was left enabled.
+
 ## 2026-11-07 — VEVO daily email not sent; 90-day publication gate failed closed
 
 Date: 2026-11-07
