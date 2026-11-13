@@ -85,3 +85,21 @@ changed. No local server, worker or tunnel is started.
 
 Methodological reference:
 [Microsoft Research: External Validity of Online Experiments](https://www.microsoft.com/en-us/research/articles/external-validity-of-online-experiments-can-we-predict-the-future/).
+
+## First-purchase basket follow-up
+
+The owner requested distinguishing acquisition share from sample-stage skipping.
+The output now groups identified new customers into four exclusive baskets:
+full-size perfume without samples, full-size plus samples, samples without
+full-size, and neither. Full-size includes bundles containing full-size laundry
+perfume; the mixed discovery bundle counts as samples. Positive-quantity free
+samples count as samples. A sample-stage skip is the first group; buying full-size
+immediately with samples is a separate broader measure.
+
+New-customer identity follows the report's normalized email (strip/lower) and
+exact earliest realized-order timestamp. Multiple first orders tied at that
+same timestamp are combined into one customer basket. Anonymous first orders
+are counted separately, not silently treated as identified new customers.
+Available history starts 2025-05-03, so this is first purchase in the recorded
+realized history, not guaranteed lifetime acquisition. Identities stay in memory;
+only aggregate counts, ratios and basket economics are emitted privately.

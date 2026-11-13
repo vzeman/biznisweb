@@ -99,6 +99,8 @@ def item_review(rows, start, end, categories):
             "first": row["is_customer_first_order"].lower() == "true",
             "returning": row["is_returning_customer_order"].lower() == "true",
             "product_contribution": 0,
+            "customer_key": row["customer_email"].strip().lower(),
+            "basket_categories": set(),
         })
         require(abs(order["revenue"] - number(row, "order_revenue_net")) < 0.001,
                 "Inconsistent repeated order revenue")
@@ -109,6 +111,8 @@ def item_review(rows, start, end, categories):
             "quantity": 0, "revenue": 0, "cost": 0, "orders": set(), "unit_prices": set(),
         })
         category = categories[row["item_label"]]  # Reviewed exact labels; no fuzzy fallback.
+        if number(row, "item_quantity") > 0:
+            order["basket_categories"].add(category)
         group = groups.setdefault(category, {
             "quantity": 0, "revenue": 0, "cost": 0, "orders": set(),
         })
@@ -141,6 +145,37 @@ def item_review(rows, start, end, categories):
         cohorts[cohort]["orders"] += 1
         for key in ("revenue", "product_contribution"):
             cohorts[cohort][key] += order[key]
+    # Customer identities stay in memory. Timestamp-tied first orders are one buyer.
+    new_buyers = {}
+    for order in orders.values():
+        if not order["first"] or not order["customer_key"]:
+            continue
+        buyer = new_buyers.setdefault(order["customer_key"], {
+            "orders": 0, "revenue": 0, "product_contribution": 0, "categories": set(),
+        })
+        buyer["orders"] += 1
+        buyer["revenue"] += order["revenue"]
+        buyer["product_contribution"] += order["product_contribution"]
+        buyer["categories"].update(order["basket_categories"])
+    new_baskets = {
+        key: {"customers": 0, "revenue": 0, "product_contribution": 0}
+        for key in ("full_no_samples", "full_and_samples", "samples_no_full", "other")
+    }
+    for buyer in new_buyers.values():
+        full = bool(buyer["categories"] & {"single_perfume", "perfume_bundle"})
+        sample = bool(buyer["categories"] & {"samples", "mixed_discovery_bundle"})
+        group = (
+            "full_no_samples" if full and not sample else
+            "full_and_samples" if full else
+            "samples_no_full" if sample else "other"
+        )
+        new_baskets[group]["customers"] += 1
+        for key in ("revenue", "product_contribution"):
+            new_baskets[group][key] += buyer[key]
+    for group in new_baskets.values():
+        group["share_of_new_customers"] = (
+            group["customers"] / len(new_buyers) if new_buyers else None
+        )
     revenues = sorted((o["revenue"] for o in orders.values()), reverse=True)
     return {
         "orders": len(orders),
@@ -152,6 +187,12 @@ def item_review(rows, start, end, categories):
         "maximum_order_net": max(revenues) if revenues else None,
         "top_three_order_revenue": sum(revenues[:3]),
         "cohorts": dict(cohorts),
+        "new_customer_baskets": {
+            "distinct_known_customers": len(new_buyers),
+            "customers_with_tied_first_orders": sum(b["orders"] > 1 for b in new_buyers.values()),
+            "first_orders_without_email": sum(o["first"] and not o["customer_key"] for o in orders.values()),
+            "groups": new_baskets,
+        },
         "categories": groups,
         "fallback_lines": fallback,
         "skus": sorted(sku_output, key=lambda r: r["revenue"], reverse=True),
