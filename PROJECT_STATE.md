@@ -1,3 +1,15 @@
+## 2026-11-13 - Read-only review of the 9 November laundry-perfume price change
+
+Date: 2026-11-13
+Repo: `vzeman/biznisweb`
+Branch: `codex/vevo-price-analysis-20261113`
+What changed: Added a reproducible, read-only review under `projects/vevo/analysis/` for the owner's 9 November afternoon laundry-perfume price reduction. Owner confirms no other deliberate campaign, coupon or shipping change. The analysis uses the existing immutable publication through 12 November, excludes the mixed-price transition day and partial current day, and compares matched weekdays plus a four-block baseline. No production or financial calculation rules changed.
+What is verified: Source hashes and Gmail/published HTML equality; selected CSV eligibility, deduplicated order counts/revenue, credits, country/company reconciliation, SKU/size/currency separation, basket mix and first/returning cohorts. The pinned-source script run, country/company and order reconciliations, independent data-contract review, Ruff and diff checks passed. Financial results, country/cohort conclusions and cost-coverage findings are provided privately; no derived business performance is published in Git.
+Source of truth: Existing AWS generation `20261113T003223Z` and pinned hashes in the committed analysis script; method and limitations in `projects/vevo/analysis/PRICE_REVIEW_20261113.md`. Repository visibility was verified public, so business aggregates, customer data, credentials and raw exports are excluded from Git. No unique raw local copy is needed.
+Known issues: No measured traffic denominator or pricing control group was used. Country sample adequacy must be assessed from the private output. Three full days cannot distinguish durable demand from purchases brought forward. Do not infer unit volume from dashboard `items`, which counts analytical rows. The quick order-statistics connector includes payment-expired records and was not used for financial totals.
+Next exact step: Deliver the private numeric findings and caveats to the owner. A later requested follow-up should compare further complete weeks and repeat-purchase cohorts using matched country/product/spend conditions; no automatic monitoring, deployment, regeneration or email is pending from this analysis request. Earlier incremental-reporting and visual-UI limitations remain separate scopes.
+Process closure: Only finite read/analysis/Git commands were used. No local server, worker, watcher or tunnel was started.
+
 ## 2026-11-11 - Requested VEVO report email accepted by SES
 
 Date: 2026-11-11
