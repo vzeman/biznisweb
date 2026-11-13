@@ -228,10 +228,25 @@ def main():
     baseline = enrich({key: sum(block[key] for block in blocks[1:5]) / 4 for key in MONEY_FIELDS})
     details = {}
     countries = {}
+    advertising_delivery = {}
     for label, weeks in (("after", 0), ("before", 1)):
         start, end = POST_START - timedelta(weeks=weeks), POST_END - timedelta(weeks=weeks)
         detail = item_review(rows, start, end, categories)
         financials = blocks[weeks]
+        delivery = period(dashboard["fb_daily"], start, end, ("spend", "clicks", "impressions"))
+        require(abs(delivery["spend"] - financials["fb_ads"]) < 0.03,
+                "Meta delivery/financial spend reconciliation failed")
+        advertising_delivery[label] = {
+            "meta_spend": delivery["spend"],
+            "meta_all_ad_clicks": delivery["clicks"],
+            "meta_impressions": delivery["impressions"],
+            "meta_cost_per_all_ad_click": (
+                delivery["spend"] / delivery["clicks"] if delivery["clicks"] else None
+            ),
+            "blended_spend_per_realized_order": (
+                financials["total_ads"] / financials["orders"] if financials["orders"] else None
+            ),
+        }
         require(detail["orders"] == financials["orders"], "Order count reconciliation failed")
         require(abs(detail["order_revenue"] - financials["revenue"]) < 0.03,
                 "Order revenue reconciliation failed")
@@ -257,6 +272,7 @@ def main():
         "blocks_after_then_previous_eight": blocks,
         "previous_four_blocks_mean": baseline,
         "countries": countries,
+        "advertising_delivery": advertising_delivery,
         "details": details,
         "interpretation": {
             "design": "Observational before/after; not a randomized pricing experiment",
@@ -265,6 +281,7 @@ def main():
             "items_warning": "Dashboard items counts analytical rows, not product units",
             "cost_warning": "SKU contribution excludes packaging, shipping, ads and fixed costs",
             "persistence": "Three complete days cannot establish a lasting causal effect",
+            "traffic": "Meta native all ad clicks are not visits; no website CVR is calculated",
         },
     }
     print(json.dumps(result, ensure_ascii=True, sort_keys=True))

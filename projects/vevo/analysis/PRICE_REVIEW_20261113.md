@@ -103,3 +103,20 @@ are counted separately, not silently treated as identified new customers.
 Available history starts 2025-05-03, so this is first purchase in the recorded
 realized history, not guaranteed lifetime acquisition. Identities stay in memory;
 only aggregate counts, ratios and basket economics are emitted privately.
+
+## Advertising efficiency versus website conversion
+
+The follow-up compares Meta delivery from the same pinned publication with the
+financial spend. Native Meta `clicks` means all ad clicks, not link clicks,
+outbound clicks, landing-page views or website sessions. Sum spend, impressions
+and clicks; derive pooled CPC from sums. Do not sum daily reach as period-unique
+people. The output's blended spend/order ratio uses all realized shop orders and
+is neither attributed Meta CPA nor new-customer CAC.
+
+An unchanged marketing budget does not establish unchanged website traffic or
+conversion. More orders per unit spend establishes better observed blended
+spend efficiency; traffic composition and volume remain unknown. The script does
+not calculate website conversion from BiznisWeb orders divided by Meta clicks.
+No contemporaneous session denominator has been verified. Historical GA4 and
+experiment-specific GrowthBook exposure records are not substitutes for a matched
+November website session/purchase cohort with verified measurement coverage.
