@@ -193,6 +193,50 @@ class ReportingFinancialAdjustmentTests(unittest.TestCase):
                     detail.assert_not_called()
         self.assertEqual({}, self.exporter._credit_adjustments_by_order)
 
+    def test_full_huf_credit_reverses_merchandise_once_while_leaving_costs(self):
+        self.exporter = BizniWebExporter(
+            api_url="https://example.test/api/graphql", api_token="synthetic",
+            project_name="vevo", enable_period_bundle=False, order_facts_only=True,
+        )
+        self.exporter.project_settings["currency_rates_to_eur"] = {"HUF": ".0025"}
+        self.exporter.project_settings["creditnote_fulfillment_costs"] = {"enabled": False}
+        order, document = self.source()
+        order["sum"] = {"value": 17780, "currency": {"code": "HUF"}}
+        order["vat_summary"] = [{"tax_base": 14000, "amount": 3780, "tax_rate": 27}]
+        document.update(price="14000", taxed_price="17.780 Ft")
+        proof = self.prepare_credit(order, document, order)
+        self.assertEqual(Decimal("17780"), proof["credit_gross_original"])
+        self.assertEqual("issued_full_credit_adjusted", proof["status"])
+        self.assertEqual(Decimal("-35.00"), proof["revenue_credit_adjustment"])
+
+        raw = self.frame()
+        mask = raw["order_num"].eq(order["order_num"])
+        raw.loc[mask, "item_total_without_tax"] = [20, 5]
+        raw.loc[mask, "item_total_with_tax"] = [25.40, 6.35]
+        raw.loc[mask, "profit_before_ads"] = raw.loc[mask, "item_total_without_tax"] - raw.loc[mask, "total_expense"]
+        rows = self.exporter._add_order_credit_adjustment_columns(raw.copy())
+        rows = self.exporter.add_order_revenue_net_column(rows)
+        credited_sales = rows.loc[mask].drop_duplicates("order_num").iloc[0]
+        self.assertEqual(0, credited_sales["order_revenue_net"])
+        self.assertEqual(-25, credited_sales["order_credit_net_adjustment"])
+        self.assertEqual(-31.75, credited_sales["order_credit_gross_adjustment"])
+        self.assertEqual(-6.75, credited_sales["order_credit_tax_adjustment"])
+        self.assertEqual(raw["total_expense"].tolist(), rows["total_expense"].tolist())
+        with tempfile.TemporaryDirectory() as directory:
+            self.exporter.data_dir = Path(directory)
+            _, days, _, _, _ = self.exporter.create_aggregated_reports(
+                rows, datetime(2026, 9, 2), datetime(2026, 9, 2), {}, {},
+            )
+        self.assertEqual(-25, days["revenue_credit_adjustment"].sum())
+        self.assertEqual(30, days["total_revenue"].sum())
+        self.assertEqual(2, days["unique_orders"].sum())
+        self.assertEqual(52, days["product_expense"].sum())
+
+        raw.loc[mask, "item_total_without_tax"] = [27, 9]
+        raw.loc[mask, "item_total_with_tax"] = [34.29, 11.43]
+        with self.assertRaisesRegex(CreditAdjustmentError, "credit_full_order_merchandise_not_covered"):
+            self.exporter._add_order_credit_adjustment_columns(raw)
+
     def test_money_country_counts_and_shared_costs_reconcile_without_fake_items(self):
         self.exporter._credit_adjustments_by_order = {"SYNTHETIC-101": {
             "revenue_credit_adjustment": Decimal("-10"), "credit_gross_adjustment": Decimal("-12.30"),

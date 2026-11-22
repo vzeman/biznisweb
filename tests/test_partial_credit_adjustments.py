@@ -91,6 +91,20 @@ class PartialCreditAdjustmentTests(unittest.TestCase):
         self.assertRejected("full_credit_on_included_order_requires_reconciliation",
                             documents=[self.document(amount=144, net_amount=120)])
 
+    def test_opted_in_full_credit_requires_matching_net_and_gross(self):
+        full = self.document(amount=144, net_amount=120)
+        verified = self.calculate(documents=[full], allow_verified_full_credit=True)
+        self.assertEqual("issued_full_credit_adjusted", verified["status"])
+        self.assertEqual(-120, verified["revenue_credit_adjustment"])
+        self.assertEqual(-144, verified["credit_gross_adjustment"])
+        self.assertEqual(0, verified["cogs_adjustment"])
+        for number in (119, Decimal("119.99")):
+            with self.subTest(net=number):
+                self.assertRejected(
+                    "full_credit_on_included_order_requires_reconciliation",
+                    documents=[{**full, "net_amount": number}], allow_verified_full_credit=True,
+                )
+
     def test_full_credit_uses_payable_boundary_despite_vat_summary_cent(self):
         order = self.order()
         order["vat_summary"][0]["amount"] = "23.99"

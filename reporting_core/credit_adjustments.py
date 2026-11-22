@@ -1,4 +1,4 @@
-"""Pure, source-bound revenue adjustments for issued partial credit notes.
+"""Pure, source-bound revenue adjustments for issued credit notes.
 
 An issued credit is document evidence, not proof of a cash repayment or stock
 return. Its net amount reduces order-level contribution. Without credited line
@@ -120,6 +120,7 @@ def build_order_credit_adjustment(
     financially_included: bool,
     currency_rates_to_eur: Mapping[str, Any],
     verified_order_totals: Mapping[str, Any] | None = None,
+    allow_verified_full_credit: bool = False,
 ) -> dict[str, Any]:
     """Return one adjustment for an order from a verified complete document set.
 
@@ -127,8 +128,9 @@ def build_order_credit_adjustment(
     state, order_num, order_id, invoice_number, currency, amount (gross) and
     net_amount. Draft/open and voided notes do not reduce revenue. Excluded
     orders are audit-only: their revenue has already been removed by the caller.
-    A full credit on an included order needs explicit eligibility reconciliation
-    and fails closed instead of silently changing the inclusion policy.
+    Full credits on included orders fail closed by default. An opted-in
+    reporting caller can admit a full credit when both native totals match,
+    and then reverse only the revenue included in its own reporting basis.
 
     Returned monetary amounts are Decimal. EUR adjustments are negative and
     satisfy net + tax == gross after cent rounding. COGS is always unchanged.
@@ -239,7 +241,8 @@ def build_order_credit_adjustment(
         })
     if gross > original_gross or net > original_net + Decimal("0.01"):
         _fail("credit_exceeds_original_order")
-    if gross == original_gross:
+    full_credit = gross == original_gross
+    if full_credit and (allow_verified_full_credit is not True or net != original_net):
         _fail("full_credit_on_included_order_requires_reconciliation")
     if gross - net > original_gross - original_net + Decimal("0.01"):
         _fail("credit_tax_exceeds_original_order")
@@ -260,7 +263,7 @@ def build_order_credit_adjustment(
         "documents": sorted(fingerprint_documents, key=lambda d: d["id"]),
     }
     result.update({
-        "status": "issued_partial_credit_adjusted",
+        "status": "issued_full_credit_adjusted" if full_credit else "issued_partial_credit_adjusted",
         "creditnote_ids": sorted(str(d["id"]) for d in issued),
         "creditnote_numbers": sorted(str(d["number"]) for d in issued),
         "native_currency": currency, "credit_net_original": net,
