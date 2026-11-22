@@ -1,3 +1,23 @@
+## 2026-11-22 - Daily VEVO reporting restored and verified
+
+Date: 2026-11-22 Europe/Bratislava
+Repo: vzeman/biznisweb
+Branch: codex/vevo-creditnote-report-handoff-20261122
+
+What changed: PR #673 merged after six successful checks as 64ece34b05add95ccb930fe5400998a559aa9f41. Exact ECR build 44985159915 produced sha256:120151e84cf2ab259cbdffe161bede8b755ffe1bdd1e4c876fa4f40d24c2c93c. Report release 4e28df5f396c482e8021cf881c64dbd7 completed at 06:53:32 CET. The production generation 20261122T055250Z covers through 21 November, supplying the three dates missing since the 19 November delivery. Source state, shipments and accounting documents remain authoritative. The verified full credit reduced the credited order's reported merchandise net to zero once while retaining positive product costs and its shipped status. The original issued document remains distinct from repayment evidence.
+
+What is verified: Fargate instance N/A, service vevo-daily-report-email, path /app, active definition :61. Probe ae2fdf9ff746465298a7f8dd15186a7d at 172.31.16.216 and live 2a94afc8e104403b95912b4669c7c076 at 172.31.45.176 both passed exact-image, ECS task/IP and localhost curl-marker verification and exited 0. Isolated probe receipt 0011 SHA256 6b912e11bff081552de86be958d497c6ed36e0d22d5415cfe7b221dc51dff465, terminal receipt 0019 SHA256 e5906c1e8f71d816941a7b332df477e1435e490364b983d42c00f134286c5bb8. Private immutable release receipts are under data/vevo/reporting/image-releases/4e28df5f396c482e8021cf881c64dbd7/ in the existing reporting bucket.
+
+Publication and dashboard: Manifest SHA256 2c4698f93f3f73ca73733a41ae6ebf4cf36c2ca4c1eee408e599ee1eb40df140. The eight immutable HTML/JSON outputs match their hashes. Full, 7d, 30d and 90d end on 21 November, with zero failures, non-partial data and warning counts 6/3/4/4. The published daily CSV contains each of 19, 20 and 21 November. The live item CSV independently verifies the order-level full credit and costs. All eight authenticated dashboard API/HTML requests match the published JSON and embedded dashboard data; health is 200 and an unauthorized API request returns 401. No visual browser inspection was performed.
+
+Schedule and co-deployment: VEVO is ENABLED on :61 at 01:00 Europe/Bratislava with the dynamic previous-day cutoff and existing daily email configuration. The controlled probe/live runs did not perform a manual SES send. The twelve protected schedules, including the ROY daily report, passed release exclusion checks. The shared credit-note parser also triggered the existing monthly-accounting workflow 44985159945 on merge. Ahead of the daily release it passed readback on monthly-creditnote-export:68 using task 77265cd48d66479ea833b62b959ce9bb, 172.31.1.231, curl marker CREDITNOTE_EXPORT_MARKER_OK and exit 0. Its test ran in email dry-run mode. The monthly schedule now targets :68 and is enabled.
+
+Process closure: The release lease was released and the temporary probe role removed. No report tasks remain active. Local PID 2884 and parent PID 21796 exited naturally. Independent process and listener checks found both absent and zero owned listening ports. No persistent local service or tunnel was started.
+
+Known issues: The next normal email delivery has not yet occurred at this verification. The credit-note status guard and GrowthBook issues recorded below are separate. The restored reporting does not depend on a manual order mutation.
+
+Next exact step: The next ordinary schedule is 23 November at 01:00 CET. Use its task and SES evidence if another delivery question arises. For an explicitly requested resend, use the current verified generation and existing once-only send flow. No additional report run is needed for 19-21 November.
+
 ## 2026-11-22 - Missing daily VEVO reports, credit-note repair in validation
 
 Date: 2026-11-22
