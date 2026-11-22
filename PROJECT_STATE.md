@@ -1,3 +1,21 @@
+## 2026-11-22 - Missing daily VEVO reports, credit-note repair in validation
+
+Date: 2026-11-22
+Repo: vzeman/biznisweb
+Branch: codex/vevo-creditnote-report-recovery-20261122
+
+What changed: The reports scheduled for 20-22 November stopped before publication and email with credit_document_amount_invalid. The last successful report arrived on 19 November at 01:30 Europe/Bratislava and covers through 18 November. Its generation is 20261119T002958Z, manifest SHA256 edb0f4a212b9cceb769f0bfb08ef30c53881563eb9baa5d1707994b6323ae2d0. The enabled 01:00 scheduler was operating.
+
+What is verified: The matching failed CloudWatch streams are ecs/reporting/a314de2dc8fc4960ae73aec3bd19b345, ecs/reporting/da3d7c25513b446992a5d58a288923b7 and ecs/reporting/a7978aa0b37249709c2b2ce580c12e89 under /ecs/vevo-reporting-daily. A complete read of 406 credit-note rows confirmed 15 issued HUF records whose dotted formatted gross amounts match their whole-forint numeric fields. Fourteen related orders are excluded by existing status rules. An included shipped COD order has one issued full credit, bound to the original invoice and matching its native net, tax and gross. The original reader divides its gross by 1,000. Correcting the amount alone reveals the existing full-credit guard. The invoice also contains shipping and payment fees outside reported merchandise revenue. The document proves an issued credit and has no positive recorded repayment; it does not establish a cash refund or returned inventory.
+
+Repair: Parse verified dotted whole-forint amounts in the BizniWeb credit-note grid. With an explicit VEVO reporting setting and normal order-revenue reconciliation, admit an issued full credit only when both native totals exactly match. Record the reversal once per order on the reconciled merchandise revenue basis, retain product and fulfillment costs and leave source documents and order statuses to their existing workflows. Other projects keep the default full-credit rejection. Partial-credit behavior and safety checks remain in effect. The 150 focused tests passed, including native formatting, aggregate reconciliation with fees, VAT amount conflicts, repeat rows, and neighboring guards.
+
+Runtime hard gate: AWS account 919341186960, region eu-central-1, Fargate instance N/A, service vevo-daily-report-email, path /app. The identity-only task 8b382e5dda8c406b91b0fdf03f34a8bb on active definition :60, image sha256:3ef3848db9060148515601a8e44cb475778214811929c3a00a0f95e0cc891869, source a06077a823a847f99c49f6f921aaed054d0728ec, had private IP 172.31.41.169. Confirmed exact source/image, ECS attachment, curl localhost marker VEVO_CREDIT_PARSER_BASELINE_HOST_OK, zero provider requests and terminal exit 0. Schedule and manifest readbacks matched. An earlier probe request was rejected locally by the SDK before dispatch because of Scheduler-to-ECS network key casing; the verified request used the repository's existing mapping. Initial authenticated API diagnosis was read-only and succeeded after applying the existing BW-API-Key header and allowlisted HTTPS redirect handling. Neither reads nor the host-only task produce a report or an email.
+
+Known issues: Publication has not been restored at this commit. The separate scheduled credit-note guard logs one order requiring review, without identifying it in aggregate logs. Keep its source-write workflow separate. GrowthBook reconciliation's raw event limit failure is a separate task sharing the log group.
+
+Next exact step: Merge the tested repair through PR and build the immutable exact-source ECR image. Use the existing isolated probe and live report-only release through 21 November. Require host and localhost verification, validate all four views and the credited order's merchandise revenue/costs, and confirm the enabled daily schedule and released lease. A newly composed or manual report email is a separate operation from restoring the daily job. No local dev server or tunnel is needed.
+
 ## 2026-11-11 - Requested VEVO report email accepted by SES
 
 Date: 2026-11-11

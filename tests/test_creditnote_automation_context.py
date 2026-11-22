@@ -99,6 +99,12 @@ class CreditnoteAutomationContextTests(unittest.TestCase):
         self.assertIsNone(row["amount"])
         self.assertIsNone(row["net_amount"])
 
+    def test_native_forint_grouping_keeps_other_decimal_formats(self):
+        self.assertEqual((17800.0, "Ft"), parse_money("17.800 Ft"))
+        self.assertEqual((-1002003.0, "Ft"), parse_money("-1.002.003 Ft"))
+        self.assertEqual((12.34, "Ft"), parse_money("12.34 Ft"))
+        self.assertEqual((12.345, "EUR"), parse_money("12.345 EUR"))
+
     def test_numeric_zero_is_a_valid_amount(self):
         self.assertEqual((0.0, ""), parse_money(0))
         row = normalize_creditnote_automation_context([

@@ -6650,7 +6650,7 @@ class BizniWebExporter:
         return copy.deepcopy(self._creditnote_source_snapshot)
 
     def _prepare_order_credit_adjustments(self, orders, date_to):
-        """Bind issued partial credits to included orders without allocating products."""
+        """Bind issued credits to included orders without allocating products."""
         from collections.abc import Mapping
 
         from creditnote_export import normalize_creditnote_automation_context, parse_creditnote_datetime
@@ -6705,6 +6705,10 @@ class BizniWebExporter:
                 detail, documents, project=self.project_name, source_project=self.project_name,
                 source_complete=True, financially_included=True,
                 currency_rates_to_eur=self.project_settings.get("currency_rates_to_eur") or CURRENCY_RATES_TO_EUR,
+                allow_verified_full_credit=(
+                    self.project_settings.get("reporting_reconcile_verified_full_credits") is True
+                    and self.project_settings.get("order_revenue_reconciliation_enabled") is True
+                ),
             )
             self._credit_adjustments_by_order[order_num] = adjustment
 
@@ -6737,6 +6741,28 @@ class BizniWebExporter:
             df[column] = df["order_num"].map(
                 {number: float(row[key]) for number, row in adjustments.items()}
             ).fillna(0.0)
+        full_orders = {number for number, row in adjustments.items() if row.get("status") == "issued_full_credit_adjusted"}
+        full_rows = df["order_num"].isin(full_orders)
+        if full_rows.any():
+            from reporting_core.credit_adjustments import CreditAdjustmentError
+
+            # A full document includes fees that can be outside merchandise
+            # revenue. Reverse the reconciled sales actually in the report,
+            # retaining the shipment, cost and original credit-note evidence.
+            sales = df.loc[full_rows, ["item_total_without_tax", "item_total_with_tax"]]
+            if not np.isfinite(sales.to_numpy(dtype=float)).all():
+                raise CreditAdjustmentError("credit_full_order_merchandise_invalid")
+            totals = sales.groupby(df.loc[full_rows, "order_num"]).transform("sum").round(2)
+            net, gross = totals["item_total_without_tax"], totals["item_total_with_tax"]
+            if (
+                (net < 0).any() or (gross < net).any()
+                or (net > df.loc[full_rows, "order_credit_net_adjustment"].abs() + 0.01).any()
+                or (gross > df.loc[full_rows, "order_credit_gross_adjustment"].abs() + 0.01).any()
+            ):
+                raise CreditAdjustmentError("credit_full_order_merchandise_not_covered")
+            df.loc[full_rows, "order_credit_net_adjustment"] = -net
+            df.loc[full_rows, "order_credit_gross_adjustment"] = -gross
+            df.loc[full_rows, "order_credit_tax_adjustment"] = (net - gross).round(2)
         df["order_credit_allocation"] = "unallocated_order_credit"
         return df
 

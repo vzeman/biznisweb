@@ -194,7 +194,11 @@ def parse_money(value: Any) -> Tuple[Optional[float], str]:
     normalized = re.sub(r"[^\d,\.\-+]", "", text)
     if not normalized:
         return None, currency
-    if "," in normalized and "." in normalized:
+    # The BizniWeb credit-note grid formats whole forints with dot grouping
+    # (for example "13.400 Ft"); other currencies keep their decimal parsing.
+    if re.fullmatch(r"[+-]?[1-9][0-9]{0,2}(?:\.[0-9]{3})+\s+Ft", text):
+        normalized = normalized.replace(".", "")
+    elif "," in normalized and "." in normalized:
         if normalized.rfind(",") > normalized.rfind("."):
             normalized = normalized.replace(".", "").replace(",", ".")
         else:

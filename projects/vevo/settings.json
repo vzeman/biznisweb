@@ -44,6 +44,7 @@
   "expense_alias_fallback": true,
   "measured_country_ads_enabled": true,
   "order_revenue_reconciliation_enabled": true,
+  "reporting_reconcile_verified_full_credits": true,
   "order_currency_rounding_precision": {
     "EUR": 2,
     "CZK": 1,
