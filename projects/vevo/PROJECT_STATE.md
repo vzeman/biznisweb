@@ -1,3 +1,13 @@
+## 2026-11-24 - VEVO ROAS target analysis
+
+Date: 2026-11-24 Europe/Bratislava
+Repo: vzeman/biznisweb
+Branch: codex/vevo-roas-note-20261124
+What changed: Documented the method for evaluating a proposed purchase-value bidding target from published generation 20261123T003445Z through 22 November.
+What is verified: The source covers the complete post-price-change days 10-22 November, the most recent full week 16-22 November, and a four-week comparison 26 October-22 November. Use sums of realized net revenue, all advertising spend, pre-ad contribution and shared fixed costs over the same dates. With contribution margin m, period fixed costs F and period ad spend A, blended break-even is 1/m before fixed costs and (1+F/A)/m after fixed costs when spend and margin are held constant.
+Known limits: Business-wide net merchandise revenue and platform-attributed purchase value have different scopes. A campaign target depends on the campaign's own purchase-value basis, spend, attribution window and historical delivery. Private financial results and campaign settings stay outside this public repository.
+Next exact step: Evaluate the owner-selected platform's attributed purchase value per unit of spend under the intended attribution settings alongside the business-wide profitability threshold.
+
 ## 2026-11-22 - Daily VEVO reporting restored and verified
 
 Date: 2026-11-22 Europe/Bratislava
